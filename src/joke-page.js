@@ -1,3 +1,5 @@
+/// <reference path="../types/aiwebengine.d.ts" />
+
 // Joke page
 // Handles HTTP requests and returns a random joke as an HTML page
 // Includes feedback system with thumbs up/down voting per individual joke and persistent storage
@@ -160,6 +162,5 @@ function init(context) {
   console.log('Initializing joke page script');
   routeRegistry.registerRoute('/joke', 'serveJoke', 'GET');
   routeRegistry.registerRoute('/joke/feedback', 'handleFeedback', 'POST');
-  graphQLRegistry.registerQuery('getJoke', 'type Query { getJoke: JokeResult! } type JokeResult { success: Boolean! joke: String! thumbsUp: Int! thumbsDown: Int! error: String }', 'resolveGetJoke');
-  return { success: true };
+  graphQLRegistry.registerQuery('getJoke', 'type Query { getJoke: JokeResult! } type JokeResult { success: Boolean! joke: String! thumbsUp: Int! thumbsDown: Int! error: String }', 'resolveGetJoke', 'external');
 }

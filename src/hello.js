@@ -1,4 +1,4 @@
-/// <reference path="https://softagen.com/api/types/v0.1.0/aiwebengine.d.ts" />
+/// <reference path="../types/aiwebengine.d.ts" />
 
 /**
  * @param {HandlerContext} context

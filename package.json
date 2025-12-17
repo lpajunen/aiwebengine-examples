@@ -1,0 +1,7 @@
+{
+  "name": "aiwebengine-demo",
+  "version": "1.0.0",
+  "scripts": {
+    "fetch-types": "curl https://softagen.com/api/types/v0.1.0/aiwebengine.d.ts -o types/aiwebengine.d.ts"
+  }
+}

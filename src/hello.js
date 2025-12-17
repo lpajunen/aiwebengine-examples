@@ -11,7 +11,7 @@ function helloHandler(context) {
   const name = req.query.name || "World";
   
   // IDE knows about Response.text() and its parameters
-  return Response.text(`Hello, ${name}!`);
+  return ResponseBuilder.text(`Hello, ${name}!`);
 }
 
 function init() {

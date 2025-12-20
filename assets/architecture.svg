@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <!-- Define gradients -->
+  <defs>
+    <linearGradient id="userGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="scriptGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#7ED321;stop-opacity:1" />
+      <stop offset="100%" y2="100%" style="stop-color:#5FA018;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="engineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5A623;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D68910;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#B8E986;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7ED321;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="600" fill="#f0f2f5"/>
+
+  <!-- Title -->
+  <text x="400" y="30" font-size="24" font-weight="bold" text-anchor="middle" fill="#333">Architecture Overview</text>
+
+  <!-- End User Section -->
+  <g>
+    <!-- User Icon Container -->
+    <rect x="300" y="60" width="200" height="100" rx="8" fill="url(#userGradient)" stroke="#357ABD" stroke-width="2"/>
+    
+    <!-- User Head -->
+    <circle cx="400" cy="85" r="15" fill="#fff"/>
+    
+    <!-- User Body -->
+    <rect x="390" y="105" width="20" height="35" fill="#fff" rx="4"/>
+    
+    <!-- User Arms -->
+    <line x1="380" y1="115" x2="360" y2="125" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="420" y1="115" x2="440" y2="125" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Label -->
+    <text x="400" y="155" font-size="16" font-weight="bold" text-anchor="middle" fill="#333">End User</text>
+  </g>
+
+  <!-- Connection Arrow 1 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666"/>
+    </marker>
+  </defs>
+  <line x1="400" y1="160" x2="400" y2="210" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+  <text x="420" y="190" font-size="12" fill="#666">HTTP Request</text>
+
+  <!-- Solution Script Section -->
+  <g>
+    <rect x="275" y="210" width="250" height="120" rx="8" fill="url(#scriptGradient)" stroke="#5FA018" stroke-width="2"/>
+    
+    <!-- Script Icon -->
+    <rect x="315" y="235" width="50" height="65" fill="#fff" rx="3" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="245" x2="360" y2="245" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="255" x2="360" y2="255" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="265" x2="355" y2="265" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="275" x2="360" y2="275" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="285" x2="350" y2="285" stroke="#333" stroke-width="1"/>
+    <line x1="320" y1="295" x2="360" y2="295" stroke="#333" stroke-width="1"/>
+    
+    <!-- Handler Functions -->
+    <circle cx="395" cy="245" r="25" fill="#fff" stroke="#333" stroke-width="1.5"/>
+    <text x="395" y="252" font-size="11" text-anchor="middle" fill="#333">Handler</text>
+    
+    <circle cx="450" cy="245" r="25" fill="#fff" stroke="#333" stroke-width="1.5"/>
+    <text x="450" y="252" font-size="11" text-anchor="middle" fill="#333">Logic</text>
+    
+    <!-- Arrow between -->
+    <line x1="420" y1="245" x2="425" y2="245" stroke="#333" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- Response -->
+    <rect x="380" y="280" width="80" height="30" fill="#fff" rx="3" stroke="#333" stroke-width="1.5"/>
+    <text x="420" y="302" font-size="12" font-weight="bold" text-anchor="middle" fill="#333">Response</text>
+    
+    <!-- Label -->
+    <text x="400" y="340" font-size="16" font-weight="bold" text-anchor="middle" fill="#333">Solution Script</text>
+  </g>
+
+  <!-- Connection Arrow 2 -->
+  <line x1="400" y1="330" x2="400" y2="380" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+  <text x="420" y="360" font-size="12" fill="#666">Execution</text>
+
+  <!-- Engine in Cloud Section -->
+  <g>
+    <!-- Cloud Background -->
+    <path d="M 220 410 Q 220 380, 240 380 Q 260 360, 290 360 Q 320 340, 350 360 Q 370 340, 400 340 Q 430 340, 450 360 Q 480 340, 510 360 Q 540 360, 560 380 Q 580 380, 580 410 Z" 
+          fill="url(#cloudGradient)" stroke="#7ED321" stroke-width="2"/>
+    
+    <!-- Engine Container -->
+    <rect x="275" y="395" width="250" height="130" rx="8" fill="url(#engineGradient)" stroke="#D68910" stroke-width="2"/>
+    
+    <!-- Server Icon 1 -->
+    <rect x="310" y="415" width="45" height="50" fill="#fff" rx="3" stroke="#333" stroke-width="1.5"/>
+    <circle cx="320" cy="430" r="3" fill="#FF6B6B"/>
+    <circle cx="335" cy="430" r="3" fill="#4ECDC4"/>
+    <rect x="315" y="440" width="20" height="3" fill="#333"/>
+    <rect x="315" y="450" width="20" height="3" fill="#333"/>
+    <text x="332" y="490" font-size="11" text-anchor="middle" font-weight="bold" fill="#333">Server</text>
+    
+    <!-- Server Icon 2 -->
+    <rect x="375" y="415" width="45" height="50" fill="#fff" rx="3" stroke="#333" stroke-width="1.5"/>
+    <circle cx="385" cy="430" r="3" fill="#FF6B6B"/>
+    <circle cx="400" cy="430" r="3" fill="#4ECDC4"/>
+    <rect x="380" y="440" width="20" height="3" fill="#333"/>
+    <rect x="380" y="450" width="20" height="3" fill="#333"/>
+    <text x="397" y="490" font-size="11" text-anchor="middle" font-weight="bold" fill="#333">Server</text>
+    
+    <!-- Server Icon 3 -->
+    <rect x="440" y="415" width="45" height="50" fill="#fff" rx="3" stroke="#333" stroke-width="1.5"/>
+    <circle cx="450" cy="430" r="3" fill="#FF6B6B"/>
+    <circle cx="465" cy="430" r="3" fill="#4ECDC4"/>
+    <rect x="445" y="440" width="20" height="3" fill="#333"/>
+    <rect x="445" y="450" width="20" height="3" fill="#333"/>
+    <text x="462" y="490" font-size="11" text-anchor="middle" font-weight="bold" fill="#333">Server</text>
+    
+    <!-- Database Icon -->
+    <circle cx="400" cy="530" r="20" fill="#fff" stroke="#333" stroke-width="1.5"/>
+    <ellipse cx="400" cy="515" rx="20" ry="8" fill="none" stroke="#333" stroke-width="1.5"/>
+    <line x1="380" y1="515" x2="380" y2="540" stroke="#333" stroke-width="1.5"/>
+    <line x1="420" y1="515" x2="420" y2="540" stroke="#333" stroke-width="1.5"/>
+    <text x="400" y="555" font-size="11" text-anchor="middle" font-weight="bold" fill="#333">Database</text>
+    
+    <!-- Label -->
+    <text x="400" y="580" font-size="16" font-weight="bold" text-anchor="middle" fill="#333">Engine (Cloud)</text>
+  </g>
+
+  <!-- Bottom Info -->
+  <text x="400" y="600" font-size="11" text-anchor="middle" fill="#999">aiwebengine - Server-Side JavaScript Architecture</text>
+</svg>

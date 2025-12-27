@@ -1,7 +1,8 @@
 {
-  "name": "aiwebengine-demo",
+  "name": "aiwebengine-examples",
   "version": "1.0.0",
   "scripts": {
-    "fetch-types": "curl https://softagen.com/api/types/v0.1.0/aiwebengine.d.ts -o types/aiwebengine.d.ts"
+    "fetch-types": "curl https://softagen.com/api/types/v0.1.0/aiwebengine.d.ts -o types/aiwebengine.d.ts",
+    "fetch-graphql-schema": "node scripts/fetch-graphql-schema.js"
   }
 }

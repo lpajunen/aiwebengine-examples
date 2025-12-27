@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login
 
 # Default target: fetch types, OpenAPI, and GraphQL schema
 all: fetch-types fetch-openapi fetch-graphql-schema
@@ -18,3 +18,6 @@ fetch-graphql-schema:
 	@mkdir -p schemas
 	node scripts/fetch-graphql-schema.js
 	@echo "✓ GraphQL schema downloaded to schemas/schema.json"
+
+oauth-login:
+	npm run oauth-login

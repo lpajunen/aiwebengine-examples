@@ -3,6 +3,10 @@ const path = require('path');
 
 const endpoint = process.env.SCHEMA_ENDPOINT || 'https://softagen.com/graphql';
 const accessToken = process.env.OAUTH_TOKEN || process.env.BEARER_TOKEN;
+const cookie = process.env.GRAPHQL_COOKIE || process.env.SESSION_COOKIE || process.env.COOKIE;
+const referer = process.env.GRAPHQL_REFERER;
+const csrfToken = process.env.CSRF_TOKEN || process.env.XSRF_TOKEN;
+const useGet = process.env.GRAPHQL_METHOD === 'GET' || process.env.SCHEMA_GET === '1';
 
 // Standard GraphQL introspection query (without descriptions) to export schema JSON.
 const introspectionQuery = `
@@ -99,22 +103,61 @@ const introspectionQuery = `
 `;
 
 async function main() {
-  const headers = { 'content-type': 'application/json' };
+  /** @type {Record<string, string>} */
+  const headers = { accept: 'application/json' };
+  if (!useGet) {
+    headers['content-type'] = 'application/json';
+  }
   if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+  if (cookie) {
+    headers['Cookie'] = cookie;
+  }
+  if (referer) {
+    headers['Referer'] = referer;
+  }
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+  // Helpful header to mimic browser-originated XHR
+  headers['X-Requested-With'] = 'XMLHttpRequest';
+
+  if (process.env.DRY_RUN) {
+    // Print computed configuration without performing a network request.
+    console.log('DRY_RUN enabled: showing request config only');
+    console.log(JSON.stringify({ endpoint, headers, body: { operationName: 'IntrospectionQuery' } }, null, 2));
+    return;
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ query: introspectionQuery, operationName: 'IntrospectionQuery' }),
-  });
+  let response;
+  if (useGet) {
+    const url = new URL(endpoint);
+    url.searchParams.set('query', introspectionQuery);
+    url.searchParams.set('operationName', 'IntrospectionQuery');
+    response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+  } else {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query: introspectionQuery, operationName: 'IntrospectionQuery' }),
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status} ${response.statusText}`);
   }
 
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (e) {
+    const text = await response.text();
+    throw new Error(`Failed to parse JSON. Status ${response.status}. Body: ${text.slice(0, 500)}`);
+  }
 
   if (payload.errors && payload.errors.length) {
     throw new Error(`GraphQL errors: ${JSON.stringify(payload.errors, null, 2)}`);

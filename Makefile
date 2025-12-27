@@ -1,7 +1,7 @@
-.PHONY: all fetch-types fetch-openapi
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema
 
-# Default target: fetch both types and OpenAPI
-all: fetch-types fetch-openapi
+# Default target: fetch types, OpenAPI, and GraphQL schema
+all: fetch-types fetch-openapi fetch-graphql-schema
 
 fetch-types:
 	@mkdir -p types
@@ -13,3 +13,8 @@ fetch-openapi:
 	@mkdir -p apis
 	curl https://softagen.com/engine/openapi.json -o apis/openapi.json
 	@echo "✓ OpenAPI description downloaded to apis/openapi.json"
+
+fetch-graphql-schema:
+	@mkdir -p schemas
+	node scripts/fetch-graphql-schema.js
+	@echo "✓ GraphQL schema downloaded to schemas/schema.json"

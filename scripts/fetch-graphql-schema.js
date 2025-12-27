@@ -2,11 +2,27 @@ const fs = require('fs');
 const path = require('path');
 
 const endpoint = process.env.SCHEMA_ENDPOINT || 'https://softagen.com/graphql';
-const accessToken = process.env.OAUTH_TOKEN || process.env.BEARER_TOKEN;
+let accessToken = process.env.OAUTH_TOKEN || process.env.BEARER_TOKEN;
 const cookie = process.env.GRAPHQL_COOKIE || process.env.SESSION_COOKIE || process.env.COOKIE;
 const referer = process.env.GRAPHQL_REFERER;
 const csrfToken = process.env.CSRF_TOKEN || process.env.XSRF_TOKEN;
 const useGet = process.env.GRAPHQL_METHOD === 'GET' || process.env.SCHEMA_GET === '1';
+
+// Load token from schemas/token.json if env var not provided
+try {
+  if (!accessToken) {
+    const tokenFile = path.join(__dirname, '..', 'schemas', 'token.json');
+    if (fs.existsSync(tokenFile)) {
+      const raw = fs.readFileSync(tokenFile, 'utf8');
+      const tok = JSON.parse(raw);
+      if (tok && tok.access_token) {
+        accessToken = tok.access_token;
+      }
+    }
+  }
+} catch (e) {
+  // ignore token file errors in runtime
+}
 
 // Standard GraphQL introspection query (without descriptions) to export schema JSON.
 const introspectionQuery = `

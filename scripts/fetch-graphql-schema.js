@@ -1,19 +1,23 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const endpoint = process.env.SCHEMA_ENDPOINT || 'https://softagen.com/graphql';
+const endpoint = process.env.SCHEMA_ENDPOINT || "https://softagen.com/graphql";
 let accessToken = process.env.OAUTH_TOKEN || process.env.BEARER_TOKEN;
-const cookie = process.env.GRAPHQL_COOKIE || process.env.SESSION_COOKIE || process.env.COOKIE;
+const cookie =
+  process.env.GRAPHQL_COOKIE ||
+  process.env.SESSION_COOKIE ||
+  process.env.COOKIE;
 const referer = process.env.GRAPHQL_REFERER;
 const csrfToken = process.env.CSRF_TOKEN || process.env.XSRF_TOKEN;
-const useGet = process.env.GRAPHQL_METHOD === 'GET' || process.env.SCHEMA_GET === '1';
+const useGet =
+  process.env.GRAPHQL_METHOD === "GET" || process.env.SCHEMA_GET === "1";
 
 // Load token from schemas/token.json if env var not provided
 try {
   if (!accessToken) {
-    const tokenFile = path.join(__dirname, '..', 'schemas', 'token.json');
+    const tokenFile = path.join(__dirname, "..", "schemas", "token.json");
     if (fs.existsSync(tokenFile)) {
-      const raw = fs.readFileSync(tokenFile, 'utf8');
+      const raw = fs.readFileSync(tokenFile, "utf8");
       const tok = JSON.parse(raw);
       if (tok && tok.access_token) {
         accessToken = tok.access_token;
@@ -120,51 +124,62 @@ const introspectionQuery = `
 
 async function main() {
   /** @type {Record<string, string>} */
-  const headers = { accept: 'application/json' };
+  const headers = { accept: "application/json" };
   if (!useGet) {
-    headers['content-type'] = 'application/json';
+    headers["content-type"] = "application/json";
   }
   if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
+    headers["Authorization"] = `Bearer ${accessToken}`;
   }
   if (cookie) {
-    headers['Cookie'] = cookie;
+    headers["Cookie"] = cookie;
   }
   if (referer) {
-    headers['Referer'] = referer;
+    headers["Referer"] = referer;
   }
   if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken;
+    headers["X-CSRF-Token"] = csrfToken;
   }
   // Helpful header to mimic browser-originated XHR
-  headers['X-Requested-With'] = 'XMLHttpRequest';
+  headers["X-Requested-With"] = "XMLHttpRequest";
 
   if (process.env.DRY_RUN) {
     // Print computed configuration without performing a network request.
-    console.log('DRY_RUN enabled: showing request config only');
-    console.log(JSON.stringify({ endpoint, headers, body: { operationName: 'IntrospectionQuery' } }, null, 2));
+    console.log("DRY_RUN enabled: showing request config only");
+    console.log(
+      JSON.stringify(
+        { endpoint, headers, body: { operationName: "IntrospectionQuery" } },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
   let response;
   if (useGet) {
     const url = new URL(endpoint);
-    url.searchParams.set('query', introspectionQuery);
-    url.searchParams.set('operationName', 'IntrospectionQuery');
+    url.searchParams.set("query", introspectionQuery);
+    url.searchParams.set("operationName", "IntrospectionQuery");
     response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers,
     });
   } else {
     response = await fetch(endpoint, {
-      method: 'POST',
+      method: "POST",
       headers,
-      body: JSON.stringify({ query: introspectionQuery, operationName: 'IntrospectionQuery' }),
+      body: JSON.stringify({
+        query: introspectionQuery,
+        operationName: "IntrospectionQuery",
+      }),
     });
   }
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Request failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   let payload;
@@ -172,22 +187,30 @@ async function main() {
     payload = await response.json();
   } catch (e) {
     const text = await response.text();
-    throw new Error(`Failed to parse JSON. Status ${response.status}. Body: ${text.slice(0, 500)}`);
+    throw new Error(
+      `Failed to parse JSON. Status ${response.status}. Body: ${text.slice(0, 500)}`,
+    );
   }
 
   if (payload.errors && payload.errors.length) {
-    throw new Error(`GraphQL errors: ${JSON.stringify(payload.errors, null, 2)}`);
+    throw new Error(
+      `GraphQL errors: ${JSON.stringify(payload.errors, null, 2)}`,
+    );
   }
 
   if (!payload.data) {
-    throw new Error('No data returned from GraphQL endpoint');
+    throw new Error("No data returned from GraphQL endpoint");
   }
 
-  const outDir = path.join(__dirname, '..', 'schemas');
+  const outDir = path.join(__dirname, "..", "schemas");
   await fs.promises.mkdir(outDir, { recursive: true });
 
-  const schemaPath = path.join(outDir, 'schema.json');
-  await fs.promises.writeFile(schemaPath, JSON.stringify(payload.data, null, 2), 'utf8');
+  const schemaPath = path.join(outDir, "schema.json");
+  await fs.promises.writeFile(
+    schemaPath,
+    JSON.stringify(payload.data, null, 2),
+    "utf8",
+  );
 
   const relativePath = path.relative(process.cwd(), schemaPath);
   console.log(`Saved GraphQL introspection schema to ${relativePath}`);

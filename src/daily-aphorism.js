@@ -18,7 +18,7 @@ const aphorisms = [
   "Do what you can, with what you have, where you are. - Theodore Roosevelt",
   "Everything you want is on the other side of fear. - Jack Canfield",
   "Believe in yourself. You are braver than you think, more talented than you know, and capable of more than you imagine. - Roy T. Bennett",
-  "I learned that courage was not the absence of fear, but the triumph over it. - Nelson Mandela"
+  "I learned that courage was not the absence of fear, but the triumph over it. - Nelson Mandela",
 ];
 
 function getDailyAphorism(context) {
@@ -28,16 +28,16 @@ function getDailyAphorism(context) {
     const diff = today.getTime() - startOfYear.getTime();
     const oneDay = 1000 * 60 * 60 * 24;
     const dayOfYear = Math.floor(diff / oneDay);
-    
+
     const aphorismIndex = dayOfYear % aphorisms.length;
     const todayAphorism = aphorisms[aphorismIndex];
-    const formattedDate = today.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const formattedDate = today.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
-    
+
     const html = `
       <!DOCTYPE html>
       <html lang="en">
@@ -142,16 +142,16 @@ function getDailyAphorism(context) {
       </body>
       </html>
     `;
-    
+
     return ResponseBuilder.html(html);
   } catch (error) {
-    console.error('Error: ' + error);
-    return ResponseBuilder.error(500, 'Failed to generate aphorism');
+    console.error("Error: " + error);
+    return ResponseBuilder.error(500, "Failed to generate aphorism");
   }
 }
 
 function init(context) {
-  console.log('Initializing daily aphorism page');
-  routeRegistry.registerRoute('/aphorism', 'getDailyAphorism', 'GET');
+  console.log("Initializing daily aphorism page");
+  routeRegistry.registerRoute("/aphorism", "getDailyAphorism", "GET");
   return { success: true };
 }

@@ -1,7 +1,7 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login format
 
 # Default target: fetch types, OpenAPI, and GraphQL schema
-all: fetch-types fetch-openapi fetch-graphql-schema
+all: fetch-types fetch-openapi fetch-graphql-schema format
 
 fetch-types:
 	@mkdir -p types
@@ -21,3 +21,7 @@ fetch-graphql-schema:
 
 oauth-login:
 	npm run oauth-login
+
+format:
+	npx prettier --write "**/*.js"
+	@echo "✓ JavaScript files formatted"

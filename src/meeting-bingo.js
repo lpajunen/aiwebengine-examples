@@ -5,21 +5,21 @@
 
 const bingoItems = [
   'Someone says "synergy"',
-  'PowerPoint fails',
-  'Someone joins late',
-  'Unmute yourself',
-  'Background blur activated',
-  'Meeting could be an email',
-  'Someone forgets to mute',
-  'AI mentioned',
-  'Budget cuts discussed',
-  'Action items assigned',
-  'Call dropped',
-  'Awkward silence',
+  "PowerPoint fails",
+  "Someone joins late",
+  "Unmute yourself",
+  "Background blur activated",
+  "Meeting could be an email",
+  "Someone forgets to mute",
+  "AI mentioned",
+  "Budget cuts discussed",
+  "Action items assigned",
+  "Call dropped",
+  "Awkward silence",
   'Someone says "circle back"',
-  'Camera off the whole time',
-  'Talking over each other',
-  'FREE SPACE'
+  "Camera off the whole time",
+  "Talking over each other",
+  "FREE SPACE",
 ];
 
 function getBingoPage(context) {
@@ -295,6 +295,6 @@ function getBingoPage(context) {
 }
 
 function init(context) {
-  routeRegistry.registerRoute('/bingo', 'getBingoPage', 'GET');
+  routeRegistry.registerRoute("/bingo", "getBingoPage", "GET");
   return { success: true };
 }

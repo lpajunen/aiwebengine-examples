@@ -2,3 +2,4 @@ types/*.d.ts
 apis/openapi.json
 schemas/schema.json
 schemas/token.json
+node_modules/

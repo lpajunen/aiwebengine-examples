@@ -5,5 +5,9 @@
     "fetch-types": "curl https://softagen.com/api/types/v0.1.0/aiwebengine.d.ts -o types/aiwebengine.d.ts",
     "fetch-graphql-schema": "node scripts/fetch-graphql-schema.js",
     "oauth-login": "node scripts/oauth_pkce_token.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "prettier": "^3.0.0"
   }
 }

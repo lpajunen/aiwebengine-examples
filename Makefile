@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login format
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login install format
 
 # Default target: fetch types, OpenAPI, and GraphQL schema
 all: fetch-types fetch-openapi fetch-graphql-schema format
@@ -22,6 +22,10 @@ fetch-graphql-schema:
 oauth-login:
 	npm run oauth-login
 
+install:
+	npm install
+	@echo "✓ Dependencies installed"
+
 format:
-	npx prettier --write "**/*.js"
+	./node_modules/.bin/prettier --write "**/*.js"
 	@echo "✓ JavaScript files formatted"

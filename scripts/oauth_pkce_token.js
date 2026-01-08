@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // OAuth2 Authorization Code with PKCE helper for softagen.com
 // - Discovers endpoints via /.well-known/oauth-authorization-server
 // - Optionally performs dynamic client registration if CLIENT_ID not provided

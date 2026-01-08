@@ -31,5 +31,5 @@ outdated:
 	@echo "✓ Checked for outdated packages"
 
 format:
-	./node_modules/.bin/prettier --write "**/*.js"
+	./node_modules/.bin/prettier --write "**/*.js" "**/*.ts" "**/*.json" "**/*.md"
 	@echo "✓ JavaScript files formatted"

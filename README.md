@@ -22,6 +22,15 @@ Or use MCP to upload scripts directly to your aiwebengine instance.
 - **graphql_ws_demo.js** - GraphQL subscription example using WebSocket (graphql-transport-ws protocol)
 - **script_updates_demo.js** - Script update demonstration
 
+## Security Note
+
+⚠️ **Important:** When working with OAuth tokens:
+
+- **Never commit `schemas/token.json`** - This file contains OAuth access tokens and is automatically generated locally
+- The `.gitignore` file is configured to exclude this file, but always verify before pushing
+- Use `scripts/oauth_pkce_token.js` to generate OAuth tokens for local development only
+- Tokens are session-specific and should not be shared or committed to version control
+
 ## Documentation
 
 For complete documentation, see:

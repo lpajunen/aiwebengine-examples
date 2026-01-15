@@ -13,23 +13,24 @@ function typescriptHandler(context: HandlerContext): HttpResponse {
       street: "123 Main St",
       city: "Anytown",
       zipCode: "12345",
-      country: "USA"
+      country: "USA",
     },
     {
       street: "456 Elm St",
       city: "Somewhere",
       zipCode: "67890",
-      country: "Canada"
+      country: "Canada",
     },
     {
       street: "789 Oak Ave",
       city: "Elsewhere",
       zipCode: "54321",
-      country: "UK"
-    }
+      country: "UK",
+    },
   ];
 
-  let html = "<html><head><title>Addresses</title></head><body><h1>Sample Addresses</h1><ul>";
+  let html =
+    "<html><head><title>Addresses</title></head><body><h1>Sample Addresses</h1><ul>";
 
   for (const addr of addresses) {
     html += `<li>${addr.street}, ${addr.city}, ${addr.zipCode}, ${addr.country}</li>`;

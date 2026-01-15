@@ -2,7 +2,7 @@
   "servers": {
     "aiwebengine-mcp": {
       "type": "http",
-      "url": "https://softagen.com/mcp"
+      "url": "https://example.com/mcp"
     }
   }
 }

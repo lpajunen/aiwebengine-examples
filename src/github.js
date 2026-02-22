@@ -23,7 +23,7 @@ class GitHubMcpClient {
     const resultJson = McpClient._callTool(
       JSON.stringify(this._clientData),
       toolName,
-      JSON.stringify(args)
+      JSON.stringify(args),
     );
     return JSON.parse(resultJson);
   }
@@ -40,7 +40,7 @@ function githubHandler(context) {
     // Using GitHub Copilot's MCP server
     const client = new GitHubMcpClient(
       "https://api.githubcopilot.com/mcp/",
-      "github_token"
+      "github_token",
     );
 
     // Get repository information from query params or use defaults
@@ -61,7 +61,7 @@ function githubHandler(context) {
           details: result.error,
           message: result.details || "Unknown error occurred",
         },
-        400
+        400,
       );
     }
 
@@ -80,7 +80,7 @@ function githubHandler(context) {
         error: "Internal server error",
         message: error.toString(),
       },
-      500
+      500,
     );
   }
 }
@@ -91,5 +91,7 @@ function githubHandler(context) {
 function init() {
   routeRegistry.registerRoute("/github", "githubHandler", "GET");
   console.log("GitHub MCP script initialized - registered /github route");
-  console.log("Is Github token available: " + secretStorage.exists("github_token"));
+  console.log(
+    "Is Github token available: " + secretStorage.exists("github_token"),
+  );
 }

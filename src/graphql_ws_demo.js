@@ -521,50 +521,36 @@ function wsSubscriptionDemoPage(context) {
 }
 
 // Initialization function - called when script is loaded or updated
-function init(context) {
-  try {
-    console.log(
-      `Initializing graphql_ws_demo.js script at ${new Date().toISOString()}`,
-    );
+function init() {
+  console.log(
+    `Initializing graphql_ws_demo.js script at ${new Date().toISOString()}`,
+  );
 
-    // Register a GraphQL subscription (external - used by clients over WebSocket)
-    graphQLRegistry.registerSubscription(
-      "liveMessages",
-      "type Subscription { liveMessages: String }",
-      "liveMessagesResolver",
-      "external",
-    );
+  // Register a GraphQL subscription (external - used by clients over WebSocket)
+  graphQLRegistry.registerSubscription(
+    "liveMessages",
+    "type Subscription { liveMessages: String }",
+    "liveMessagesResolver",
+    "external",
+  );
 
-    // Register a GraphQL mutation to trigger the subscription (external - used by clients)
-    graphQLRegistry.registerMutation(
-      "sendMessage",
-      "type Mutation { sendMessage(text: String!): String }",
-      "sendMessageResolver",
-      "external",
-    );
+  // Register a GraphQL mutation to trigger the subscription (external - used by clients)
+  graphQLRegistry.registerMutation(
+    "sendMessage",
+    "type Mutation { sendMessage(text: String!): String }",
+    "sendMessageResolver",
+    "external",
+  );
 
-    // Register HTTP endpoints for testing
-    routeRegistry.registerRoute(
-      "/trigger-message-ws",
-      "triggerMessageHandler",
-      "POST",
-    );
+  // Register HTTP endpoints for testing
+  routeRegistry.registerRoute(
+    "/trigger-message-ws",
+    "triggerMessageHandler",
+    "POST",
+  );
 
-    // WebSocket demo page
-    routeRegistry.registerRoute("/ws-demo", "wsSubscriptionDemoPage", "GET");
+  // WebSocket demo page
+  routeRegistry.registerRoute("/ws-demo", "wsSubscriptionDemoPage", "GET");
 
-    console.log("GraphQL WebSocket example script initialized successfully");
-
-    return {
-      success: true,
-      message: "GraphQL WebSocket example script initialized successfully",
-      registeredEndpoints: 2,
-      registeredGraphQLOperations: 2,
-    };
-  } catch (error) {
-    console.error(
-      `GraphQL WebSocket example script initialization failed: ${error.message}`,
-    );
-    throw error;
-  }
+  console.log("GraphQL WebSocket example script initialized successfully");
 }

@@ -23,9 +23,8 @@ function serveArchitecture(context) {
   }
 }
 
-function init(context) {
+function init() {
   console.log("Initializing architecture script");
   routeRegistry.registerRoute("/architecture.svg", "serveArchitecture", "GET");
   console.log("Architecture SVG endpoint registered at /architecture.svg");
-  return { success: true };
 }

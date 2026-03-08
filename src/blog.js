@@ -206,23 +206,11 @@ routeRegistry.registerRoute('/hello', 'hello_handler', 'GET');
 }
 
 // Initialization function - called when script is loaded or updated
-function init(context) {
-  try {
-    console.log(`Initializing blog.js script at ${new Date().toISOString()}`);
-    console.log(`Init context: ${JSON.stringify(context)}`);
+function init() {
+  console.log(`Initializing blog.js script at ${new Date().toISOString()}`);
 
-    // Register the blog endpoint
-    routeRegistry.registerRoute("/blog", "blog_handler", "GET");
+  // Register the blog endpoint
+  routeRegistry.registerRoute("/blog", "blog_handler", "GET");
 
-    console.log("Blog script initialized successfully");
-
-    return {
-      success: true,
-      message: "Blog script initialized successfully",
-      registeredEndpoints: 1,
-    };
-  } catch (error) {
-    console.error(`Blog script initialization failed: ${error.message}`);
-    throw error;
-  }
+  console.log("Blog script initialized successfully");
 }

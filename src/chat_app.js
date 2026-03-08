@@ -75,7 +75,9 @@ function channelsResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
 
     const channels = loadChannels();
     return channels;
@@ -90,7 +92,9 @@ function messagesResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
 
     const channelId = args.channelId;
     const limit = args.limit || 50;
@@ -111,11 +115,13 @@ function currentUserResolver(context) {
   const req = context.request || {};
   const args = context.args || {};
   try {
-    const user = req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
     return {
-      id: user.id,
-      name: user.name || user.email,
-      email: user.email,
+      id: req.auth.userId,
+      name: req.auth.name || req.auth.email,
+      email: req.auth.email,
     };
   } catch (error) {
     console.error("Error in currentUserResolver: " + error);
@@ -132,7 +138,14 @@ function createChannelResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    const user = req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
+    const user = {
+      id: req.auth.userId,
+      name: req.auth.name,
+      email: req.auth.email,
+    };
 
     const name = args.name;
     const isPrivate = args.isPrivate || false;
@@ -186,7 +199,14 @@ function sendMessageResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    const user = req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
+    const user = {
+      id: req.auth.userId,
+      name: req.auth.name,
+      email: req.auth.email,
+    };
 
     const channelId = args.channelId;
     const text = args.text;
@@ -271,8 +291,8 @@ function chatUpdatesResolver(context) {
       return {};
     }
 
-    // Check authentication manually (req.auth.requireAuth() not available in stream customization context)
-    if (!req.auth || !req.auth.isAuthenticated) {
+    // Check authentication manually
+    if (!req.auth) {
       console.error("Authentication check failed for channel subscription");
       throw new Error("Authentication required");
     }
@@ -312,7 +332,14 @@ function chatInterfaceHandler(context) {
   try {
     const req = context.request || {};
     // Require authentication
-    const user = req.auth.requireAuth();
+    if (!req.auth) {
+      throw new Error("Authentication required");
+    }
+    const user = {
+      id: req.auth.userId,
+      name: req.auth.name,
+      email: req.auth.email,
+    };
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -960,17 +987,6 @@ function init(context) {
 
     console.log("Chat application initialized successfully");
     console.log("Access the chat at /chat (authentication required)");
-
-    return {
-      success: true,
-      message: "Chat application initialized",
-      endpoints: ["/chat"],
-      graphqlOperations: {
-        queries: ["channels", "messages", "currentUser"],
-        mutations: ["createChannel", "sendMessage"],
-        subscriptions: ["chatUpdates"],
-      },
-    };
   } catch (error) {
     console.error("Error initializing chat application: " + error);
     throw error;

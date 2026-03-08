@@ -210,24 +210,24 @@ function feedback_submit_handler(context) {
   const req = context.request;
 
   // Validate required form fields
-  const name = req.form?.name;
+  const name = req.form && req.form.name;
   if (!name || name.trim() === "") {
     return ResponseBuilder.error(400, "Name is required");
   }
 
-  const email = req.form?.email;
+  const email = req.form && req.form.email;
   if (!email || email.trim() === "") {
     return ResponseBuilder.error(400, "Email is required");
   }
 
-  const message = req.form?.message;
+  const message = req.form && req.form.message;
   if (!message || message.trim() === "") {
     return ResponseBuilder.error(400, "Message is required");
   }
 
   // Optional fields with defaults
-  const rating = req.form?.rating || "5";
-  const category = req.form?.category || "general";
+  const rating = (req.form && req.form.rating) || "5";
+  const category = (req.form && req.form.category) || "general";
 
   // Log the feedback (in a real app, you'd store this in a database)
   console.log("Feedback received:");
@@ -331,7 +331,7 @@ function feedback_submit_handler(context) {
         <div class="thank-you-content">
             <div class="thank-you-emoji">🙏</div>
             <h1>Thank You!</h1>
-            <p>Thank you for your feedback, <strong>${name.value}</strong>! We appreciate you taking the time to share your thoughts about aiwebengine.</p>
+            <p>Thank you for your feedback, <strong>${name}</strong>! We appreciate you taking the time to share your thoughts about aiwebengine.</p>
             <p>Your input helps us improve and build better tools for developers like you.</p>
 
             <div class="thank-you-actions">
@@ -347,26 +347,12 @@ function feedback_submit_handler(context) {
 }
 
 // Initialization function - called when script is loaded or updated
-function init(context) {
-  try {
-    console.log(
-      `Initializing feedback.js script at ${new Date().toISOString()}`,
-    );
-    console.log(`Init context: ${JSON.stringify(context)}`);
+function init() {
+  console.log(`Initializing feedback.js script at ${new Date().toISOString()}`);
 
-    // Register both GET (form) and POST (submission) handlers
-    routeRegistry.registerRoute("/feedback", "feedback_form_handler", "GET");
-    routeRegistry.registerRoute("/feedback", "feedback_submit_handler", "POST");
+  // Register both GET (form) and POST (submission) handlers
+  routeRegistry.registerRoute("/feedback", "feedback_form_handler", "GET");
+  routeRegistry.registerRoute("/feedback", "feedback_submit_handler", "POST");
 
-    console.log("Feedback script initialized successfully");
-
-    return {
-      success: true,
-      message: "Feedback script initialized successfully",
-      registeredEndpoints: 2,
-    };
-  } catch (error) {
-    console.error(`Feedback script initialization failed: ${error.message}`);
-    throw error;
-  }
+  console.log("Feedback script initialized successfully");
 }

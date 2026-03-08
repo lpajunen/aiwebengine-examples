@@ -726,54 +726,33 @@ function update_response_handler(context) {
 // Initialization
 // ============================================
 
-function init(context) {
+function init() {
   console.log("Initializing meetup-planner.js at " + new Date().toISOString());
 
-  try {
-    // Register HTTP routes
-    routeRegistry.registerRoute("/meetup", "meetup_handler", "GET");
-    routeRegistry.registerRoute(
-      "/meetup/dashboard",
-      "meetup_dashboard_handler",
-      "GET",
-    );
-    routeRegistry.registerRoute(
-      "/meetup/create",
-      "create_meetup_handler",
-      "POST",
-    );
-    routeRegistry.registerRoute(
-      "/meetup/join/:id",
-      "join_meetup_handler",
-      "GET",
-    );
-    routeRegistry.registerRoute(
-      "/meetup/:id/response",
-      "update_response_handler",
-      "POST",
-    );
+  // Register HTTP routes
+  routeRegistry.registerRoute("/meetup", "meetup_handler", "GET");
+  routeRegistry.registerRoute(
+    "/meetup/dashboard",
+    "meetup_dashboard_handler",
+    "GET",
+  );
+  routeRegistry.registerRoute(
+    "/meetup/create",
+    "create_meetup_handler",
+    "POST",
+  );
+  routeRegistry.registerRoute("/meetup/join/:id", "join_meetup_handler", "GET");
+  routeRegistry.registerRoute(
+    "/meetup/:id/response",
+    "update_response_handler",
+    "POST",
+  );
 
-    console.log("Meetup planner initialized successfully");
-    console.log("Routes registered:");
-    console.log("- GET /meetup (public landing page)");
-    console.log("- GET /meetup/dashboard (requires login)");
-    console.log("- POST /meetup/create (create new meetup)");
-    console.log("- GET /meetup/join/:id (join meetup via public link)");
-    console.log("- POST /meetup/:id/response (update attendance response)");
-
-    return {
-      success: true,
-      message: "Meetup planner initialized",
-      routes: [
-        "/meetup",
-        "/meetup/dashboard",
-        "/meetup/create",
-        "/meetup/join/:id",
-        "/meetup/:id/response",
-      ],
-    };
-  } catch (error) {
-    console.error("Error initializing meetup planner: " + error);
-    throw error;
-  }
+  console.log("Meetup planner initialized successfully");
+  console.log("Routes registered:");
+  console.log("- GET /meetup (public landing page)");
+  console.log("- GET /meetup/dashboard (requires login)");
+  console.log("- POST /meetup/create (create new meetup)");
+  console.log("- GET /meetup/join/:id (join meetup via public link)");
+  console.log("- POST /meetup/:id/response (update attendance response)");
 }

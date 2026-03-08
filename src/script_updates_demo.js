@@ -466,31 +466,17 @@ function scriptUpdatesDemoPage(context) {
 }
 
 // Initialization function - called when script is loaded or updated
-function init(context) {
-  try {
-    console.log(
-      `Initializing script_updates_demo.js script at ${new Date().toISOString()}`,
-    );
-    console.log(`Init context: ${JSON.stringify(context)}`);
+function init() {
+  console.log(
+    `Initializing script_updates_demo.js script at ${new Date().toISOString()}`,
+  );
 
-    // Register the demo page endpoint
-    routeRegistry.registerRoute(
-      "/script-updates-demo",
-      "scriptUpdatesDemoPage",
-      "GET",
-    );
+  // Register the demo page endpoint
+  routeRegistry.registerRoute(
+    "/script-updates-demo",
+    "scriptUpdatesDemoPage",
+    "GET",
+  );
 
-    console.log("Script updates demo script initialized successfully");
-
-    return {
-      success: true,
-      message: "Script updates demo script initialized successfully",
-      registeredEndpoints: 1,
-    };
-  } catch (error) {
-    console.log(
-      `Script updates demo script initialization failed: ${error.message}`,
-    );
-    throw error;
-  }
+  console.log("Script updates demo script initialized successfully");
 }

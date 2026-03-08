@@ -5,15 +5,12 @@
 
 /**
  * Initialize fetch example routes
- * @param {HandlerContext} context - Initialization context
- * @returns {{success: boolean}} Initialization result
  */
-function init(context) {
+function init() {
   console.log("Initializing fetch_example.js");
   routeRegistry.registerRoute("/fetch/example", "fetchExample", "GET");
   routeRegistry.registerRoute("/fetch/with-secret", "fetchWithSecret", "GET");
   routeRegistry.registerRoute("/fetch/post", "fetchPost", "POST");
-  return { success: true };
 }
 
 // Example 1: Simple GET request
@@ -21,7 +18,7 @@ function fetchExample(context) {
   const req = context.request;
 
   // Validate query parameters
-  const url = req.query?.url;
+  const url = req.query && req.query.url;
   if (!url || url.trim() === "") {
     return ResponseBuilder.error(400, "URL parameter is required");
   }
@@ -62,11 +59,11 @@ function fetchWithSecret(context) {
   }
 
   try {
-    // Use {{secret:identifier}} syntax to inject the API key
+    // Use {{identifier}} syntax to inject the API key
     const options = {
       method: "GET",
       headers: {
-        "X-API-Key": "{{secret:example_api_key}}",
+        "X-API-Key": "{{example_api_key}}",
         "User-Agent": "aiwebengine/fetch-example",
       },
     };
@@ -99,12 +96,12 @@ function fetchPost(context) {
   console.log("Making POST request");
 
   // Validate required form parameters
-  const name = req.form?.name;
+  const name = req.form && req.form.name;
   if (!name || name.trim() === "") {
     return ResponseBuilder.error(400, "Name parameter is required");
   }
 
-  const email = req.form?.email;
+  const email = req.form && req.form.email;
   if (!email || email.trim() === "") {
     return ResponseBuilder.error(400, "Email parameter is required");
   }

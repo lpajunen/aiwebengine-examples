@@ -3,17 +3,17 @@
 /**
  * Authentication Roles Demo
  *
- * Demonstrates how to use the req.auth.isAdmin, req.auth.isEditor, and req.auth.isAuthenticated
- * properties in JavaScript handlers.
+ * Demonstrates how to use authentication and authorization features with
+ * the aiwebengine AuthContext API.
+ *
+ * Note: AuthContext provides: userId, email, name, provider, isAdmin, isEditor
  */
 
-export async function handleRequest(context) {
+function handleRequest(context) {
   const request = context.request || {};
-  if (!request.auth) {
-    throw new Error("Authentication context unavailable in handler");
-  }
+
   // Check if user is authenticated
-  if (!request.auth.isAuthenticated) {
+  if (!request.auth) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -23,19 +23,16 @@ export async function handleRequest(context) {
     );
   }
 
-  // Get current user information
-  const user = request.auth.user;
+  // Get current user information from AuthContext
+  const auth = request.auth;
 
   // Build response based on user roles
-  const roles = [];
-  if (request.auth.isAdmin) {
+  const roles = ["Authenticated"];
+  if (auth.isAdmin) {
     roles.push("Administrator");
   }
-  if (request.auth.isEditor) {
+  if (auth.isEditor) {
     roles.push("Editor");
-  }
-  if (roles.length === 0) {
-    roles.push("Viewer");
   }
 
   // Example: Restrict certain actions to editors or admins
@@ -44,7 +41,7 @@ export async function handleRequest(context) {
     request.method === "PUT" ||
     request.method === "DELETE"
   ) {
-    if (!request.auth.isEditor && !request.auth.isAdmin) {
+    if (!auth.isEditor && !auth.isAdmin) {
       return ResponseBuilder.json(
         {
           error: "Insufficient permissions",
@@ -55,8 +52,8 @@ export async function handleRequest(context) {
     }
   }
 
-  // Example: Restrict admin-only actions
-  if (request.path === "/admin/settings" && !request.auth.isAdmin) {
+  // Example: Restrict admin-only paths
+  if (request.path === "/admin/settings" && !auth.isAdmin) {
     return ResponseBuilder.json(
       {
         error: "Insufficient permissions",
@@ -69,32 +66,38 @@ export async function handleRequest(context) {
   // Return user info and capabilities
   return ResponseBuilder.json({
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      provider: user.provider,
+      id: auth.userId,
+      email: auth.email,
+      name: auth.name,
+      provider: auth.provider,
     },
     roles: roles,
     capabilities: {
       canView: true,
-      canEdit: request.auth.isEditor || request.auth.isAdmin,
-      canAdminister: request.auth.isAdmin,
+      canEdit: auth.isEditor || auth.isAdmin,
+      canAdminister: auth.isAdmin,
     },
-    message: `Welcome ${user.name || user.email}! You have ${roles.join(", ")} access.`,
+    message: `Welcome ${auth.name || auth.email}! You have ${roles.join(", ")} access.`,
   });
 }
 
 /**
  * Example: Editor-only endpoint
  */
-export async function editorOnly(context) {
+function editorOnly(context) {
   const request = context.request || {};
-  if (!request.auth) {
-    throw new Error("Authentication context unavailable in handler");
-  }
-  // Simple check using requireAuth
-  const user = request.auth.requireAuth(); // Throws if not authenticated
 
+  // Check authentication
+  if (!request.auth) {
+    return ResponseBuilder.json(
+      {
+        error: "Authentication required",
+      },
+      401,
+    );
+  }
+
+  // Check editor role (editors and admins can access)
   if (!request.auth.isEditor && !request.auth.isAdmin) {
     return ResponseBuilder.json(
       {
@@ -104,19 +107,28 @@ export async function editorOnly(context) {
     );
   }
 
-  return ResponseBuilder.text(`Hello ${user.name}, you have editor access!`);
+  return ResponseBuilder.text(
+    `Hello ${request.auth.name}, you have editor access!`,
+  );
 }
 
 /**
  * Example: Admin-only endpoint
  */
-export async function adminOnly(context) {
+function adminOnly(context) {
   const request = context.request || {};
-  if (!request.auth) {
-    throw new Error("Authentication context unavailable in handler");
-  }
-  const user = request.auth.requireAuth();
 
+  // Check authentication
+  if (!request.auth) {
+    return ResponseBuilder.json(
+      {
+        error: "Authentication required",
+      },
+      401,
+    );
+  }
+
+  // Check admin role
   if (!request.auth.isAdmin) {
     return ResponseBuilder.json(
       {
@@ -127,6 +139,12 @@ export async function adminOnly(context) {
   }
 
   return ResponseBuilder.text(
-    `Hello ${user.name}, you have administrator access!`,
+    `Hello ${request.auth.name}, you have administrator access!`,
   );
+}
+
+function init() {
+  routeRegistry.registerRoute("/auth/demo", "handleRequest", "GET");
+  routeRegistry.registerRoute("/auth/editor", "editorOnly", "GET");
+  routeRegistry.registerRoute("/auth/admin", "adminOnly", "GET");
 }

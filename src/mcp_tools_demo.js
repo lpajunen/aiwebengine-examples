@@ -205,10 +205,4 @@ function init(context) {
   console.log(
     "Registered 4 MCP tools: getCurrentTime, calculate, getWeather, generateId",
   );
-
-  return {
-    success: true,
-    message: "MCP tools demo initialized",
-    tools: ["getCurrentTime", "calculate", "getWeather", "generateId"],
-  };
 }

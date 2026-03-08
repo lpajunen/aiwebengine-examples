@@ -432,55 +432,40 @@ function subscriptionDemoPage(context) {
 }
 
 // Initialization function - called when script is loaded or updated
-function init(context) {
-  try {
-    console.log(
-      `Initializing graphql_subscription_demo.js script at ${new Date().toISOString()}`,
-    );
-    console.log(`Init context: ${JSON.stringify(context)}`);
+function init() {
+  console.log(
+    `Initializing graphql_subscription_demo.js script at ${new Date().toISOString()}`,
+  );
 
-    // Register a GraphQL subscription (external - used by clients)
-    graphQLRegistry.registerSubscription(
-      "liveMessages",
-      "type Subscription { liveMessages: String }",
-      "liveMessagesResolver",
-      "external",
-    );
+  // Register a GraphQL subscription (external - used by clients)
+  graphQLRegistry.registerSubscription(
+    "liveMessages",
+    "type Subscription { liveMessages: String }",
+    "liveMessagesResolver",
+    "external",
+  );
 
-    // Register a GraphQL mutation to trigger the subscription (external - used by clients)
-    graphQLRegistry.registerMutation(
-      "sendMessage",
-      "type Mutation { sendMessage(text: String!): String }",
-      "sendMessageResolver",
-      "external",
-    );
+  // Register a GraphQL mutation to trigger the subscription (external - used by clients)
+  graphQLRegistry.registerMutation(
+    "sendMessage",
+    "type Mutation { sendMessage(text: String!): String }",
+    "sendMessageResolver",
+    "external",
+  );
 
-    // Register HTTP endpoints for testing
-    routeRegistry.registerRoute(
-      "/trigger-message",
-      "triggerMessageHandler",
-      "POST",
-    );
+  // Register HTTP endpoints for testing
+  routeRegistry.registerRoute(
+    "/trigger-message",
+    "triggerMessageHandler",
+    "POST",
+  );
 
-    // Test page to demonstrate subscription usage
-    routeRegistry.registerRoute(
-      "/subscription-demo",
-      "subscriptionDemoPage",
-      "GET",
-    );
+  // Test page to demonstrate subscription usage
+  routeRegistry.registerRoute(
+    "/subscription-demo",
+    "subscriptionDemoPage",
+    "GET",
+  );
 
-    console.log("GraphQL subscription example script initialized successfully");
-
-    return {
-      success: true,
-      message: "GraphQL subscription example script initialized successfully",
-      registeredEndpoints: 2,
-      registeredGraphQLOperations: 2,
-    };
-  } catch (error) {
-    console.error(
-      `GraphQL subscription example script initialization failed: ${error.message}`,
-    );
-    throw error;
-  }
+  console.log("GraphQL subscription example script initialized successfully");
 }

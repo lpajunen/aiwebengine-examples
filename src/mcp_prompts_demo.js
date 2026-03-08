@@ -63,12 +63,6 @@ function init(context) {
 
   console.log("MCP prompts demo script initialized successfully");
   console.log("Registered 2 MCP prompts for common development tasks");
-
-  return {
-    success: true,
-    message: "MCP prompts demo initialized",
-    prompts: ["create_rest_endpoint", "add_graphql_query"],
-  };
 }
 
 // Handler for create_rest_endpoint prompt

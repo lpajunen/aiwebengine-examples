@@ -188,7 +188,7 @@ function greekGreeting(req) {
   };
 }
 
-function init(context) {
+function init() {
   console.log("Initializing jooss.js at " + new Date().toISOString());
   routeRegistry.registerRoute("/jooss", "handler", "GET");
   routeRegistry.registerRoute("/jooss/finnish", "finnishGreeting", "GET");
@@ -199,5 +199,4 @@ function init(context) {
   routeRegistry.registerRoute("/jooss/polish", "polishGreeting", "GET");
   routeRegistry.registerRoute("/jooss/greek", "greekGreeting", "GET");
   console.log("jooss.js endpoints registered");
-  return { success: true };
 }

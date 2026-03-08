@@ -180,7 +180,7 @@ function resolveGetJoke(args) {
   }
 }
 
-function init(context) {
+function init() {
   console.log("Initializing joke page script");
   routeRegistry.registerRoute("/joke", "serveJoke", "GET");
   routeRegistry.registerRoute("/joke/feedback", "handleFeedback", "POST");

@@ -294,7 +294,6 @@ function getBingoPage(context) {
   return ResponseBuilder.html(html);
 }
 
-function init(context) {
+function init() {
   routeRegistry.registerRoute("/bingo", "getBingoPage", "GET");
-  return { success: true };
 }

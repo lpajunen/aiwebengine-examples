@@ -77,6 +77,7 @@ function getVirtualWorldPage(context) {
 
   <div class="hud" id="hud-keys">
     Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> &nbsp;or&nbsp; <kbd>&uarr;</kbd><kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>
+    &nbsp;&nbsp;|&nbsp;&nbsp; Camera: <kbd>drag</kbd> to orbit &nbsp; <kbd>scroll</kbd> to zoom
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -125,8 +126,21 @@ function getVirtualWorldPage(context) {
     var mapCX = (COLS * TILE) / 2;
     var mapCZ = (ROWS * TILE) / 2;
     var camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 300);
-    camera.position.set(mapCX + 18, 20, mapCZ + 18);
-    camera.lookAt(mapCX, 0, mapCZ);
+
+    // Camera orbit state (spherical coordinates around map centre)
+    var camR     = 32;           // distance
+    var camTheta = Math.PI / 4;  // azimuth (horizontal rotation)
+    var camPhi   = 0.67;         // elevation above horizontal (radians)
+
+    function updateCamera() {
+      camera.position.set(
+        mapCX + camR * Math.cos(camPhi) * Math.sin(camTheta),
+        camR * Math.sin(camPhi),
+        mapCZ + camR * Math.cos(camPhi) * Math.cos(camTheta)
+      );
+      camera.lookAt(mapCX, 0, mapCZ);
+    }
+    updateCamera();
 
     // ── Lighting ─────────────────────────────────────────────────────────────
     var ambient = new THREE.AmbientLight(0xfff8e7, 0.55);
@@ -283,6 +297,34 @@ function getVirtualWorldPage(context) {
       keys[e.key] = false;
     });
 
+    // ── Camera orbit controls (drag + scroll) ────────────────────────────────
+    var isDragging = false;
+    var lastMouseX = 0, lastMouseY = 0;
+
+    document.addEventListener('mousedown', function(e) {
+      if (e.button === 0) {
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      var dx = e.clientX - lastMouseX;
+      var dy = e.clientY - lastMouseY;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      camTheta -= dx * 0.005;
+      camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
+    });
+    document.addEventListener('mouseup',    function() { isDragging = false; });
+    document.addEventListener('mouseleave', function() { isDragging = false; });
+
+    document.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      camR = Math.max(10, Math.min(60, camR + e.deltaY * 0.05));
+    }, { passive: false });
+
     // ── Game loop ────────────────────────────────────────────────────────────
     var moveTimer = 0;
     var clock = new THREE.Clock();
@@ -319,6 +361,7 @@ function getVirtualWorldPage(context) {
         avatar.position.y += (0 - avatar.position.y) * lerp;
       }
 
+      updateCamera();
       renderer.render(scene, camera);
     }
 

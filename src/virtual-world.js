@@ -82,27 +82,73 @@ function getVirtualWorldPage(context) {
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    // ── World map ────────────────────────────────────────────────────────────
+    // ── World map (procedurally generated 100×100) ───────────────────────────
     // 0 = ground   1 = wall   2 = tree
-    var MAP = [
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-      [1,0,2,0,0,0,1,0,2,0,0,2,0,0,1],
-      [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
-      [1,0,0,0,1,0,0,0,0,0,1,0,2,0,1],
-      [1,0,2,0,0,0,0,0,2,0,0,0,0,0,1],
-      [1,0,0,0,0,1,1,1,0,0,0,0,0,0,1],
-      [1,0,0,2,0,0,0,0,0,0,1,1,0,0,1],
-      [1,0,0,0,1,0,0,0,0,0,0,0,0,2,1],
-      [1,0,2,0,1,0,0,0,2,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,2,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-    ];
-
-    var ROWS = MAP.length;
-    var COLS = MAP[0].length;
-    var TILE = 2;           // world units per tile
+    var ROWS = 100;
+    var COLS = 100;
+    var TILE = 2;            // world units per tile
     var MOVE_INTERVAL = 160; // ms between steps
+
+    function generateMap() {
+      var map = [];
+      for (var r = 0; r < ROWS; r++) {
+        map[r] = [];
+        for (var c = 0; c < COLS; c++) map[r][c] = 0;
+      }
+      // Solid border
+      for (var r = 0; r < ROWS; r++) { map[r][0] = 1; map[r][COLS-1] = 1; }
+      for (var c = 0; c < COLS; c++) { map[0][c] = 1; map[ROWS-1][c] = 1; }
+
+      // Rectangular room outlines, each with a door on all four sides
+      for (var i = 0; i < 30; i++) {
+        var rr = 3 + Math.floor(Math.random() * (ROWS - 18));
+        var cc = 3 + Math.floor(Math.random() * (COLS - 18));
+        var rh = 4 + Math.floor(Math.random() * 9);
+        var rw = 4 + Math.floor(Math.random() * 9);
+        for (var dr = 0; dr <= rh; dr++) {
+          for (var dc = 0; dc <= rw; dc++) {
+            if ((dr === 0 || dr === rh || dc === 0 || dc === rw) && map[rr+dr][cc+dc] === 0)
+              map[rr+dr][cc+dc] = 1;
+          }
+        }
+        var mh = Math.floor(rh / 2), mw = Math.floor(rw / 2);
+        map[rr][cc + mw] = 0;       // top door
+        map[rr + rh][cc + mw] = 0;  // bottom door
+        map[rr + mh][cc] = 0;       // left door
+        map[rr + mh][cc + rw] = 0;  // right door
+      }
+
+      // Wall segments with a gap
+      for (var i = 0; i < 40; i++) {
+        if (Math.random() > 0.5) {
+          var r0 = 2 + Math.floor(Math.random() * (ROWS - 4));
+          var c0 = 2 + Math.floor(Math.random() * (COLS - 20));
+          var len = 6 + Math.floor(Math.random() * 14);
+          var gap = Math.floor(Math.random() * len);
+          for (var k = 0; k < len; k++)
+            if (k !== gap && c0+k < COLS-1 && map[r0][c0+k] === 0) map[r0][c0+k] = 1;
+        } else {
+          var r0 = 2 + Math.floor(Math.random() * (ROWS - 20));
+          var c0 = 2 + Math.floor(Math.random() * (COLS - 4));
+          var len = 6 + Math.floor(Math.random() * 14);
+          var gap = Math.floor(Math.random() * len);
+          for (var k = 0; k < len; k++)
+            if (k !== gap && r0+k < ROWS-1 && map[r0+k][c0] === 0) map[r0+k][c0] = 1;
+        }
+      }
+
+      // Scatter trees in open ground
+      for (var i = 0; i < 500; i++) {
+        var r = 1 + Math.floor(Math.random() * (ROWS - 2));
+        var c = 1 + Math.floor(Math.random() * (COLS - 2));
+        if (map[r][c] === 0) map[r][c] = 2;
+      }
+
+      // Always keep spawn area clear
+      map[1][1] = 0; map[1][2] = 0; map[2][1] = 0;
+      return map;
+    }
+    var MAP = generateMap();
 
     var avatarRow = 1;
     var avatarCol = 1;
@@ -128,7 +174,7 @@ function getVirtualWorldPage(context) {
     var camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 300);
 
     // Camera orbit state (spherical coordinates around map centre)
-    var camR     = 32;           // distance
+    var camR     = 50;           // distance
     var camTheta = Math.PI / 4;  // azimuth (horizontal rotation)
     var camPhi   = 0.67;         // elevation above horizontal (radians)
 
@@ -166,7 +212,7 @@ function getVirtualWorldPage(context) {
     scene.add(fill);
 
     // ── Large background ground plane ─────────────────────────────────────────
-    var bgGeo = new THREE.PlaneGeometry(300, 300);
+    var bgGeo = new THREE.PlaneGeometry(800, 800);
     var bgMat = new THREE.MeshLambertMaterial({ color: 0x4a7028 });
     var bgPlane = new THREE.Mesh(bgGeo, bgMat);
     bgPlane.rotation.x = -Math.PI / 2;
@@ -193,52 +239,67 @@ function getVirtualWorldPage(context) {
     var matFoliage1 = new THREE.MeshLambertMaterial({ color: 0x2d8a3e });
     var matFoliage2 = new THREE.MeshLambertMaterial({ color: 0x3dba4e });
 
-    // ── Build tiles ──────────────────────────────────────────────────────────
+    // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
     function tileX(col) { return col * TILE + TILE / 2; }
     function tileZ(row) { return row * TILE + TILE / 2; }
 
+    var dummy = new THREE.Object3D();
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+
+    // Count instances
+    var cntA = 0, cntB = 0, cntWall = 0, cntTree = 0;
     for (var r = 0; r < ROWS; r++) {
       for (var c = 0; c < COLS; c++) {
-        var tx = tileX(c);
-        var tz = tileZ(r);
-        var type = MAP[r][c];
+        if ((r + c) % 2 === 0) cntA++; else cntB++;
+        if (MAP[r][c] === 1) cntWall++;
+        if (MAP[r][c] === 2) cntTree++;
+      }
+    }
 
-        // Ground slab under every cell
-        var groundMat = ((r + c) % 2 === 0) ? matGroundA : matGroundB;
-        var groundMesh = new THREE.Mesh(geoGround, groundMat);
-        groundMesh.position.set(tx, -0.125, tz);
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
+    var iGroundA  = new THREE.InstancedMesh(geoGround,   matGroundA,  cntA);
+    var iGroundB  = new THREE.InstancedMesh(geoGround,   matGroundB,  cntB);
+    var iWall     = new THREE.InstancedMesh(geoWall,     matWall,     cntWall);
+    var iTrunk    = new THREE.InstancedMesh(geoTrunk,    matTrunk,    cntTree);
+    var iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, cntTree);
+    var iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, cntTree);
 
-        if (type === 1) {
-          // Wall
-          var wallMesh = new THREE.Mesh(geoWall, matWall);
-          wallMesh.position.set(tx, 0.85, tz);
-          wallMesh.castShadow = true;
-          wallMesh.receiveShadow = true;
-          scene.add(wallMesh);
+    iGroundA.receiveShadow = true;
+    iGroundB.receiveShadow = true;
+    iWall.castShadow = true;     iWall.receiveShadow = true;
+    iTrunk.castShadow = true;    iFoliage1.castShadow = true;    iFoliage2.castShadow = true;
 
-        } else if (type === 2) {
-          // Trunk
-          var trunk = new THREE.Mesh(geoTrunk, matTrunk);
-          trunk.position.set(tx, 0.45, tz);
-          trunk.castShadow = true;
-          scene.add(trunk);
+    var idxA = 0, idxB = 0, idxW = 0, idxT = 0;
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var tx = tileX(c), tz = tileZ(r);
 
-          // Lower foliage
-          var f1 = new THREE.Mesh(geoFoliage1, matFoliage1);
-          f1.position.set(tx, 1.1, tz);
-          f1.castShadow = true;
-          scene.add(f1);
+        dummy.position.set(tx, -0.125, tz);
+        dummy.updateMatrix();
+        if ((r + c) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
+        else                    iGroundB.setMatrixAt(idxB++, dummy.matrix);
 
-          // Upper foliage
-          var f2 = new THREE.Mesh(geoFoliage2, matFoliage2);
-          f2.position.set(tx, 1.78, tz);
-          f2.castShadow = true;
-          scene.add(f2);
+        if (MAP[r][c] === 1) {
+          dummy.position.set(tx, 0.85, tz);
+          dummy.updateMatrix();
+          iWall.setMatrixAt(idxW++, dummy.matrix);
+        } else if (MAP[r][c] === 2) {
+          dummy.position.set(tx, 0.45,  tz); dummy.updateMatrix(); iTrunk.setMatrixAt(idxT, dummy.matrix);
+          dummy.position.set(tx, 1.1,   tz); dummy.updateMatrix(); iFoliage1.setMatrixAt(idxT, dummy.matrix);
+          dummy.position.set(tx, 1.78,  tz); dummy.updateMatrix(); iFoliage2.setMatrixAt(idxT, dummy.matrix);
+          idxT++;
         }
       }
     }
+
+    iGroundA.instanceMatrix.needsUpdate  = true;
+    iGroundB.instanceMatrix.needsUpdate  = true;
+    iWall.instanceMatrix.needsUpdate     = true;
+    iTrunk.instanceMatrix.needsUpdate    = true;
+    iFoliage1.instanceMatrix.needsUpdate = true;
+    iFoliage2.instanceMatrix.needsUpdate = true;
+
+    scene.add(iGroundA, iGroundB, iWall, iTrunk, iFoliage1, iFoliage2);
 
     // ── Avatar ───────────────────────────────────────────────────────────────
     var avatar = new THREE.Group();
@@ -322,7 +383,7 @@ function getVirtualWorldPage(context) {
 
     document.addEventListener('wheel', function(e) {
       e.preventDefault();
-      camR = Math.max(10, Math.min(60, camR + e.deltaY * 0.05));
+      camR = Math.max(10, Math.min(150, camR + e.deltaY * 0.05));
     }, { passive: false });
 
     // ── Game loop ────────────────────────────────────────────────────────────

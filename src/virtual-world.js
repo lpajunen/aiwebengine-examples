@@ -179,14 +179,22 @@ function getVirtualWorldPage(context) {
     var camPhi   = 0.67;         // elevation above horizontal (radians)
 
     function updateCamera() {
+      var ax = avatar.position.x;
+      var az = avatar.position.z;
       camera.position.set(
-        mapCX + camR * Math.cos(camPhi) * Math.sin(camTheta),
+        ax + camR * Math.cos(camPhi) * Math.sin(camTheta),
         camR * Math.sin(camPhi),
-        mapCZ + camR * Math.cos(camPhi) * Math.cos(camTheta)
+        az + camR * Math.cos(camPhi) * Math.cos(camTheta)
       );
-      camera.lookAt(mapCX, 0, mapCZ);
+      camera.lookAt(ax, 0, az);
     }
-    updateCamera();
+    // Seed initial camera position using spawn coords (avatar not yet created here)
+    camera.position.set(
+      targetX + camR * Math.cos(camPhi) * Math.sin(camTheta),
+      camR * Math.sin(camPhi),
+      targetZ + camR * Math.cos(camPhi) * Math.cos(camTheta)
+    );
+    camera.lookAt(targetX, 0, targetZ);
 
     // ── Lighting ─────────────────────────────────────────────────────────────
     var ambient = new THREE.AmbientLight(0xfff8e7, 0.55);
@@ -421,6 +429,10 @@ function getVirtualWorldPage(context) {
         walkTime = 0;
         avatar.position.y += (0 - avatar.position.y) * lerp;
       }
+
+      // Keep background plane centered under avatar
+      bgPlane.position.x = avatar.position.x;
+      bgPlane.position.z = avatar.position.z;
 
       updateCamera();
       renderer.render(scene, camera);

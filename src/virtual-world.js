@@ -59,11 +59,29 @@ function getVirtualWorldPage(context) {
       font-size: 11px;
       font-family: inherit;
     }
+
+    #hud-portal {
+      bottom: 60px; right: 14px;
+      pointer-events: auto;
+    }
+    #hud-portal button {
+      background: rgba(255,130,0,0.82);
+      border: 1px solid rgba(255,200,80,0.45);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #hud-portal button:hover { background: rgba(255,160,0,1); }
   </style>
 </head>
 <body>
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
+    World: <span id="world-id-display">-</span><br>
     Position: <span id="pos-col">1</span>, <span id="pos-row">1</span>
   </div>
 
@@ -80,6 +98,10 @@ function getVirtualWorldPage(context) {
     &nbsp;&nbsp;|&nbsp;&nbsp; Camera: <kbd>drag</kbd> to orbit &nbsp; <kbd>scroll</kbd> to zoom
   </div>
 
+  <div class="hud" id="hud-portal">
+    <button onclick="goToRandomWorld()">&#9654; New World</button>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
     // ── World map (procedurally generated 100×100) ───────────────────────────
@@ -88,6 +110,24 @@ function getVirtualWorldPage(context) {
     var COLS = 100;
     var TILE = 2;            // world units per tile
     var MOVE_INTERVAL = 160; // ms between steps
+
+    // ── Seeded PRNG (mulberry32) — same world_id always produces same map ──────
+    function mulberry32(seed) {
+      return function() {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    var params = new URLSearchParams(window.location.search);
+    var worldId = params.get('world_id');
+    if (!worldId) {
+      worldId = String(Math.floor(Math.random() * 999999) + 1);
+      window.history.replaceState(null, '', window.location.pathname + '?world_id=' + worldId);
+    }
+    document.getElementById('world-id-display').textContent = worldId;
+    var rand = mulberry32(parseInt(worldId, 10));
 
     function generateMap() {
       var map = [];
@@ -101,10 +141,10 @@ function getVirtualWorldPage(context) {
 
       // Rectangular room outlines, each with a door on all four sides
       for (var i = 0; i < 30; i++) {
-        var rr = 3 + Math.floor(Math.random() * (ROWS - 18));
-        var cc = 3 + Math.floor(Math.random() * (COLS - 18));
-        var rh = 4 + Math.floor(Math.random() * 9);
-        var rw = 4 + Math.floor(Math.random() * 9);
+        var rr = 3 + Math.floor(rand() * (ROWS - 18));
+        var cc = 3 + Math.floor(rand() * (COLS - 18));
+        var rh = 4 + Math.floor(rand() * 9);
+        var rw = 4 + Math.floor(rand() * 9);
         for (var dr = 0; dr <= rh; dr++) {
           for (var dc = 0; dc <= rw; dc++) {
             if ((dr === 0 || dr === rh || dc === 0 || dc === rw) && map[rr+dr][cc+dc] === 0)
@@ -120,18 +160,18 @@ function getVirtualWorldPage(context) {
 
       // Wall segments with a gap
       for (var i = 0; i < 40; i++) {
-        if (Math.random() > 0.5) {
-          var r0 = 2 + Math.floor(Math.random() * (ROWS - 4));
-          var c0 = 2 + Math.floor(Math.random() * (COLS - 20));
-          var len = 6 + Math.floor(Math.random() * 14);
-          var gap = Math.floor(Math.random() * len);
+        if (rand() > 0.5) {
+          var r0 = 2 + Math.floor(rand() * (ROWS - 4));
+          var c0 = 2 + Math.floor(rand() * (COLS - 20));
+          var len = 6 + Math.floor(rand() * 14);
+          var gap = Math.floor(rand() * len);
           for (var k = 0; k < len; k++)
             if (k !== gap && c0+k < COLS-1 && map[r0][c0+k] === 0) map[r0][c0+k] = 1;
         } else {
-          var r0 = 2 + Math.floor(Math.random() * (ROWS - 20));
-          var c0 = 2 + Math.floor(Math.random() * (COLS - 4));
-          var len = 6 + Math.floor(Math.random() * 14);
-          var gap = Math.floor(Math.random() * len);
+          var r0 = 2 + Math.floor(rand() * (ROWS - 20));
+          var c0 = 2 + Math.floor(rand() * (COLS - 4));
+          var len = 6 + Math.floor(rand() * 14);
+          var gap = Math.floor(rand() * len);
           for (var k = 0; k < len; k++)
             if (k !== gap && r0+k < ROWS-1 && map[r0+k][c0] === 0) map[r0+k][c0] = 1;
         }
@@ -139,8 +179,8 @@ function getVirtualWorldPage(context) {
 
       // Scatter trees in open ground
       for (var i = 0; i < 500; i++) {
-        var r = 1 + Math.floor(Math.random() * (ROWS - 2));
-        var c = 1 + Math.floor(Math.random() * (COLS - 2));
+        var r = 1 + Math.floor(rand() * (ROWS - 2));
+        var c = 1 + Math.floor(rand() * (COLS - 2));
         if (map[r][c] === 0) map[r][c] = 2;
       }
 
@@ -354,6 +394,11 @@ function getVirtualWorldPage(context) {
         document.getElementById('pos-col').textContent = nc;
         document.getElementById('pos-row').textContent = nr;
       }
+    }
+
+    function goToRandomWorld() {
+      var newId = String(Math.floor(Math.random() * 999999) + 1);
+      window.location.href = window.location.pathname + '?world_id=' + newId;
     }
 
     // ── Input ────────────────────────────────────────────────────────────────

@@ -213,11 +213,13 @@ function getVirtualWorldPage(context) {
     sun.shadow.camera.bottom = -50;
     sun.shadow.bias = -0.0005;
     scene.add(sun);
+    scene.add(sun.target); // must be in scene for target.position updates to take effect
 
     // Secondary fill light from the opposite side
     var fill = new THREE.DirectionalLight(0xc8e8ff, 0.3);
     fill.position.set(14, 10, 14);
     scene.add(fill);
+    scene.add(fill.target);
 
     // ── Large background ground plane ─────────────────────────────────────────
     var bgGeo = new THREE.PlaneGeometry(800, 800);
@@ -433,6 +435,14 @@ function getVirtualWorldPage(context) {
       // Keep background plane centered under avatar
       bgPlane.position.x = avatar.position.x;
       bgPlane.position.z = avatar.position.z;
+
+      // Track avatar so sun shadows and highlights cover current location
+      sun.position.set(avatar.position.x - 12, 22, avatar.position.z - 8);
+      sun.target.position.set(avatar.position.x, 0, avatar.position.z);
+      sun.target.updateMatrixWorld();
+      fill.position.set(avatar.position.x + 14, 10, avatar.position.z + 14);
+      fill.target.position.set(avatar.position.x, 0, avatar.position.z);
+      fill.target.updateMatrixWorld();
 
       updateCamera();
       renderer.render(scene, camera);

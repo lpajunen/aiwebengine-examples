@@ -4,6 +4,12 @@
 // Move with WASD or arrow keys. Walls and trees block movement.
 
 function getVirtualWorldPage(context) {
+  const req = context.request;
+  if (!req.auth) {
+    const worldId = req.query && req.query.world_id;
+    const returnPath = worldId ? '/virtual-world?world_id=' + encodeURIComponent(worldId) : '/virtual-world';
+    return ResponseBuilder.redirect('/auth/login?redirect=' + encodeURIComponent(returnPath));
+  }
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -673,6 +679,9 @@ function saveWorldPlayers(worldId, players) {
 }
 
 function moveHandler(context) {
+  if (!context.request.auth) {
+    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+  }
   var body = JSON.parse(context.request.body);
   var worldId = body.world_id;
   var playerId = body.player_id;
@@ -689,6 +698,9 @@ function moveHandler(context) {
 }
 
 function leaveHandler(context) {
+  if (!context.request.auth) {
+    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+  }
   var body = JSON.parse(context.request.body);
   var worldId = body.world_id;
   var playerId = body.player_id;
@@ -703,6 +715,9 @@ function leaveHandler(context) {
 }
 
 function playersHandler(context) {
+  if (!context.request.auth) {
+    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+  }
   var worldId = context.request.query.world_id;
   var players = loadWorldPlayers(worldId);
   var now = Date.now();

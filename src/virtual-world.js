@@ -438,12 +438,32 @@ function getVirtualWorldPage(context) {
       }
     }
 
-    function postMove(row, col) {
+    var pendingMove = null;  // most-recent unsent position
+    var moveInFlight = false;
+
+    function flushMove() {
+      if (moveInFlight || !pendingMove) return;
+      var payload = pendingMove;
+      pendingMove = null;
+      moveInFlight = true;
       fetch('/virtual-world/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ world_id: worldId, player_id: playerId, row: row, col: col })
-      }).catch(function() {});
+        body: JSON.stringify({ world_id: worldId, player_id: playerId, row: payload.row, col: payload.col })
+      }).then(function() {
+        moveInFlight = false;
+        flushMove(); // send next queued move if any
+      }).catch(function() {
+        moveInFlight = false;
+        // Re-queue failed move and retry after 500 ms
+        if (!pendingMove) pendingMove = payload;
+        setTimeout(flushMove, 500);
+      });
+    }
+
+    function postMove(row, col) {
+      pendingMove = { row: row, col: col }; // always keep only the latest
+      flushMove();
     }
 
     function postLeave() {
@@ -452,8 +472,7 @@ function getVirtualWorldPage(context) {
                  { type: 'application/json' }));
     }
 
-    function initMultiplayer() {
-      // Fetch current players snapshot
+    function fetchSnapshot() {
       fetch('/virtual-world/players?world_id=' + encodeURIComponent(worldId))
         .then(function(r) { return r.json(); })
         .then(function(players) {
@@ -461,28 +480,47 @@ function getVirtualWorldPage(context) {
             upsertRemoteAvatar(p.player_id, p.row, p.col);
           });
         }).catch(function() {});
+    }
+
+    function initMultiplayer() {
+      fetchSnapshot();
 
       // Subscribe to real-time moves via GraphQL SSE
       var query = 'subscription{worldPlayerMoved(world_id:"' + worldId + '")}';
-      var es = new EventSource('/graphql/sse?query=' + encodeURIComponent(query));
-      es.onmessage = function(evt) {
-        try {
-          var obj = JSON.parse(evt.data);
-          var raw = obj.data.worldPlayerMoved;
-          var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-          if (payload.leaving) {
-            removeRemoteAvatar(payload.player_id);
-          } else {
-            upsertRemoteAvatar(payload.player_id, payload.row, payload.col);
-          }
-        } catch(e) {}
-      };
+      var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
+
+      function openSSE() {
+        var es = new EventSource(sseUrl);
+        es.onmessage = function(evt) {
+          try {
+            var obj = JSON.parse(evt.data);
+            var raw = obj.data.worldPlayerMoved;
+            var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            if (payload.leaving) {
+              removeRemoteAvatar(payload.player_id);
+            } else {
+              upsertRemoteAvatar(payload.player_id, payload.row, payload.col);
+            }
+          } catch(e) {}
+        };
+        es.onerror = function() {
+          es.close();
+          // Re-fetch snapshot so we don't miss players who joined while disconnected
+          setTimeout(function() { fetchSnapshot(); openSSE(); }, 3000);
+        };
+        return es;
+      }
+
+      openSSE();
 
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
-      // Heartbeat — keep presence alive every 15 s
-      setInterval(function() { postMove(avatarRow, avatarCol); }, 15000);
+      // Heartbeat — keep presence alive and resync snapshot every 15 s
+      setInterval(function() {
+        postMove(avatarRow, avatarCol);
+        fetchSnapshot();
+      }, 15000);
     }
 
     // ── Collision & movement ─────────────────────────────────────────────────

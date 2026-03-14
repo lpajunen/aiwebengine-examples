@@ -190,6 +190,13 @@ function getVirtualWorldPage(context) {
     }
     var MAP = generateMap();
 
+    // ── Player identity ─────────────────────────────────────────────────────
+    var playerId = sessionStorage.getItem('vworld_pid');
+    if (!playerId) {
+      playerId = 'p_' + Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem('vworld_pid', playerId);
+    }
+
     var avatarRow = 1;
     var avatarCol = 1;
     var targetX = avatarCol * TILE + TILE / 2;
@@ -377,6 +384,107 @@ function getVirtualWorldPage(context) {
     avatar.position.set(targetX, 0, targetZ);
     scene.add(avatar);
 
+    // ── Remote players ───────────────────────────────────────────────────────
+    var remoteAvatars = {}; // { pid: { group, targetX, targetZ } }
+
+    function avatarBodyColor(pid) {
+      var h = 0;
+      for (var i = 0; i < pid.length; i++) h = (Math.imul(31, h) + pid.charCodeAt(i)) | 0;
+      var hue = (h >>> 0) % 360;
+      // Shift away from ~200-240 (local avatar blue)
+      if (hue >= 200 && hue <= 240) hue = (hue + 80) % 360;
+      return new THREE.Color('hsl(' + hue + ',70%,55%)');
+    }
+
+    function makeRemoteAvatar(pid) {
+      var g = new THREE.Group();
+      function rp(w, h, d, color, px, py, pz) {
+        var mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshLambertMaterial({ color: color })
+        );
+        mesh.position.set(px, py, pz);
+        mesh.castShadow = true;
+        return mesh;
+      }
+      var bc = avatarBodyColor(pid);
+      g.add(rp(0.20, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
+      g.add(rp(0.20, 0.35, 0.22, 0x1a252f,  0.14, 0.175, 0));
+      g.add(rp(0.55, 0.65, 0.40, bc,         0,   0.525, 0));
+      g.add(rp(0.45, 0.45, 0.45, 0xf4c78c,   0,   0.975, 0));
+      g.add(rp(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
+      g.add(rp(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
+      return g;
+    }
+
+    function upsertRemoteAvatar(pid, row, col) {
+      if (pid === playerId) return;
+      var tx = tileX(col), tz = tileZ(row);
+      if (!remoteAvatars[pid]) {
+        var g = makeRemoteAvatar(pid);
+        g.position.set(tx, 0, tz);
+        scene.add(g);
+        remoteAvatars[pid] = { group: g, targetX: tx, targetZ: tz };
+      } else {
+        remoteAvatars[pid].targetX = tx;
+        remoteAvatars[pid].targetZ = tz;
+      }
+    }
+
+    function removeRemoteAvatar(pid) {
+      if (remoteAvatars[pid]) {
+        scene.remove(remoteAvatars[pid].group);
+        delete remoteAvatars[pid];
+      }
+    }
+
+    function postMove(row, col) {
+      fetch('/virtual-world/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ world_id: worldId, player_id: playerId, row: row, col: col })
+      }).catch(function() {});
+    }
+
+    function postLeave() {
+      navigator.sendBeacon('/virtual-world/leave',
+        new Blob([JSON.stringify({ world_id: worldId, player_id: playerId })],
+                 { type: 'application/json' }));
+    }
+
+    function initMultiplayer() {
+      // Fetch current players snapshot
+      fetch('/virtual-world/players?world_id=' + encodeURIComponent(worldId))
+        .then(function(r) { return r.json(); })
+        .then(function(players) {
+          players.forEach(function(p) {
+            upsertRemoteAvatar(p.player_id, p.row, p.col);
+          });
+        }).catch(function() {});
+
+      // Subscribe to real-time moves via GraphQL SSE
+      var query = 'subscription{worldPlayerMoved(world_id:"' + worldId + '")}';
+      var es = new EventSource('/graphql/sse?query=' + encodeURIComponent(query));
+      es.onmessage = function(evt) {
+        try {
+          var obj = JSON.parse(evt.data);
+          var raw = obj.data.worldPlayerMoved;
+          var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+          if (payload.leaving) {
+            removeRemoteAvatar(payload.player_id);
+          } else {
+            upsertRemoteAvatar(payload.player_id, payload.row, payload.col);
+          }
+        } catch(e) {}
+      };
+
+      // Announce departure
+      window.addEventListener('beforeunload', postLeave);
+
+      // Heartbeat — keep presence alive every 15 s
+      setInterval(function() { postMove(avatarRow, avatarCol); }, 15000);
+    }
+
     // ── Collision & movement ─────────────────────────────────────────────────
     function isWalkable(r, c) {
       return r >= 0 && r < ROWS && c >= 0 && c < COLS && MAP[r][c] === 0;
@@ -393,6 +501,7 @@ function getVirtualWorldPage(context) {
         avatar.rotation.y = angle;
         document.getElementById('pos-col').textContent = nc;
         document.getElementById('pos-row').textContent = nr;
+        postMove(avatarRow, avatarCol);
       }
     }
 
@@ -477,6 +586,13 @@ function getVirtualWorldPage(context) {
         avatar.position.y += (0 - avatar.position.y) * lerp;
       }
 
+      // Lerp remote avatars toward their targets
+      for (var pid in remoteAvatars) {
+        var ra = remoteAvatars[pid];
+        ra.group.position.x += (ra.targetX - ra.group.position.x) * lerp;
+        ra.group.position.z += (ra.targetZ - ra.group.position.z) * lerp;
+      }
+
       // Keep background plane centered under avatar
       bgPlane.position.x = avatar.position.x;
       bgPlane.position.z = avatar.position.z;
@@ -494,6 +610,7 @@ function getVirtualWorldPage(context) {
     }
 
     animate();
+    initMultiplayer();
 
     // ── Resize ───────────────────────────────────────────────────────────────
     window.addEventListener('resize', function() {
@@ -508,10 +625,76 @@ function getVirtualWorldPage(context) {
   return ResponseBuilder.html(html);
 }
 
+function loadWorldPlayers(worldId) {
+  var raw = sharedStorage.getItem('vworld:' + worldId);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function saveWorldPlayers(worldId, players) {
+  sharedStorage.setItem('vworld:' + worldId, JSON.stringify(players));
+}
+
+function moveHandler(context) {
+  var body = JSON.parse(context.request.body);
+  var worldId = body.world_id;
+  var playerId = body.player_id;
+  var row = Number(body.row);
+  var col = Number(body.col);
+  var players = loadWorldPlayers(worldId);
+  players[playerId] = { row: row, col: col, ts: Date.now() };
+  saveWorldPlayers(worldId, players);
+  var msg = JSON.stringify({ player_id: playerId, row: row, col: col });
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    'worldPlayerMoved', msg, JSON.stringify({ world_id: worldId })
+  );
+  return ResponseBuilder.json({ ok: true });
+}
+
+function leaveHandler(context) {
+  var body = JSON.parse(context.request.body);
+  var worldId = body.world_id;
+  var playerId = body.player_id;
+  var players = loadWorldPlayers(worldId);
+  delete players[playerId];
+  saveWorldPlayers(worldId, players);
+  var msg = JSON.stringify({ player_id: playerId, leaving: true });
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    'worldPlayerMoved', msg, JSON.stringify({ world_id: worldId })
+  );
+  return ResponseBuilder.json({ ok: true });
+}
+
+function playersHandler(context) {
+  var worldId = context.request.query.world_id;
+  var players = loadWorldPlayers(worldId);
+  var now = Date.now();
+  var active = Object.keys(players)
+    .filter(function(pid) { return now - players[pid].ts < 30000; })
+    .map(function(pid) { return { player_id: pid, row: players[pid].row, col: players[pid].col }; });
+  return ResponseBuilder.json(active);
+}
+
+function worldPlayerMovedResolver(context) {
+  var args = context.args || {};
+  var queryParams = (context.request && context.request.query) || {};
+  var worldId = args.world_id || queryParams.world_id;
+  if (!worldId) return {};
+  return { world_id: String(worldId) };
+}
+
 function init() {
   routeRegistry.registerRoute("/virtual-world", "getVirtualWorldPage", "GET", {
     summary: "2.5D Virtual World",
     description: "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys.",
     tags: ["Demo"]
   });
+  routeRegistry.registerRoute("/virtual-world/move",    "moveHandler",    "POST");
+  routeRegistry.registerRoute("/virtual-world/leave",   "leaveHandler",   "POST");
+  routeRegistry.registerRoute("/virtual-world/players", "playersHandler", "GET");
+  graphQLRegistry.registerSubscription(
+    "worldPlayerMoved",
+    "type Subscription { worldPlayerMoved(world_id: String!): String }",
+    "worldPlayerMovedResolver",
+    "external"
+  );
 }

@@ -3,22 +3,113 @@
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.
 
+// ── Server-side world generation ─────────────────────────────────────────────
+var ROWS = 100;
+var COLS = 100;
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateMap(worldId) {
+  var seed = parseInt(String(worldId), 10);
+  var rand = mulberry32(seed);
+  var map = [];
+  for (var r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (var c = 0; c < COLS; c++) map[r][c] = 0;
+  }
+  // Solid border
+  for (var r = 0; r < ROWS; r++) { map[r][0] = 1; map[r][COLS - 1] = 1; }
+  for (var c = 0; c < COLS; c++) { map[0][c] = 1; map[ROWS - 1][c] = 1; }
+
+  // Rectangular room outlines, each with a door on all four sides
+  for (var i = 0; i < 30; i++) {
+    var rr = 3 + Math.floor(rand() * (ROWS - 18));
+    var cc = 3 + Math.floor(rand() * (COLS - 18));
+    var rh = 4 + Math.floor(rand() * 9);
+    var rw = 4 + Math.floor(rand() * 9);
+    for (var dr = 0; dr <= rh; dr++) {
+      for (var dc = 0; dc <= rw; dc++) {
+        if ((dr === 0 || dr === rh || dc === 0 || dc === rw) && map[rr + dr][cc + dc] === 0)
+          map[rr + dr][cc + dc] = 1;
+      }
+    }
+    var mh = Math.floor(rh / 2), mw = Math.floor(rw / 2);
+    map[rr][cc + mw] = 0;
+    map[rr + rh][cc + mw] = 0;
+    map[rr + mh][cc] = 0;
+    map[rr + mh][cc + rw] = 0;
+  }
+
+  // Wall segments with a gap
+  for (var i = 0; i < 40; i++) {
+    if (rand() > 0.5) {
+      var r0 = 2 + Math.floor(rand() * (ROWS - 4));
+      var c0 = 2 + Math.floor(rand() * (COLS - 20));
+      var len = 6 + Math.floor(rand() * 14);
+      var gap = Math.floor(rand() * len);
+      for (var k = 0; k < len; k++)
+        if (k !== gap && c0 + k < COLS - 1 && map[r0][c0 + k] === 0) map[r0][c0 + k] = 1;
+    } else {
+      var r0 = 2 + Math.floor(rand() * (ROWS - 20));
+      var c0 = 2 + Math.floor(rand() * (COLS - 4));
+      var len = 6 + Math.floor(rand() * 14);
+      var gap = Math.floor(rand() * len);
+      for (var k = 0; k < len; k++)
+        if (k !== gap && r0 + k < ROWS - 1 && map[r0 + k][c0] === 0) map[r0 + k][c0] = 1;
+    }
+  }
+
+  // Scatter trees in open ground
+  for (var i = 0; i < 500; i++) {
+    var r = 1 + Math.floor(rand() * (ROWS - 2));
+    var c = 1 + Math.floor(rand() * (COLS - 2));
+    if (map[r][c] === 0) map[r][c] = 2;
+  }
+
+  // Always keep spawn area clear
+  map[1][1] = 0; map[1][2] = 0; map[2][1] = 0;
+  return map;
+}
+
+function getOrCreatePlayerWorld(userId) {
+  var key = "vworld_current:" + userId;
+  var worldId = sharedStorage.getItem(key);
+  if (!worldId) {
+    worldId = String(Math.floor(Math.random() * 999999) + 1);
+    sharedStorage.setItem(key, worldId);
+  }
+  return worldId;
+}
+
 function getVirtualWorldPage(context) {
   const req = context.request;
   if (!req.auth || !req.auth.isAuthenticated) {
-    const worldId = req.query && req.query.world_id;
-    const returnPath = worldId
-      ? "/virtual-world?world_id=" + encodeURIComponent(worldId)
-      : "/virtual-world";
     return ResponseBuilder.redirect(
-      "/auth/login?redirect=" + encodeURIComponent(returnPath),
+      "/auth/login?redirect=" + encodeURIComponent("/virtual-world"),
     );
   }
+  const userId = req.auth.userId;
   const authName = req.auth.userName || "";
   const authEmail =
     req.auth.userEmail && req.auth.userEmail !== authName
       ? req.auth.userEmail
       : "";
+
+  // ── Server-side state ─────────────────────────────────────────────────────
+  const worldId = getOrCreatePlayerWorld(userId);
+  const map = generateMap(worldId);
+  const players = loadWorldPlayers(worldId);
+  const savedPos = players[userId];
+  const initRow = savedPos ? savedPos.row : 1;
+  const initCol = savedPos ? savedPos.col : 1;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -98,8 +189,8 @@ function getVirtualWorldPage(context) {
     <strong>Virtual World</strong>
     ${authName ? `${authName}<br>` : ""}
     ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ""}
-    World: <span id="world-id-display">-</span><br>
-    Position: <span id="pos-col">1</span>, <span id="pos-row">1</span>
+    World: ${worldId}<br>
+    Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span>
   </div>
 
   <div class="hud" id="hud-legend">
@@ -116,106 +207,24 @@ function getVirtualWorldPage(context) {
   </div>
 
   <div class="hud" id="hud-portal">
-    <button onclick="goToRandomWorld()">&#9654; New World</button>
+    <button onclick="goToNewWorld()">&#9654; New World</button>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    // ── World map (procedurally generated 100×100) ───────────────────────────
-    // 0 = ground   1 = wall   2 = tree
+    // ── Server-injected game state ────────────────────────────────────────────
+    var MAP      = ${JSON.stringify(map)};
+    var worldId  = ${JSON.stringify(worldId)};
+    var playerId = ${JSON.stringify(userId)};
+
+    // ── Constants ─────────────────────────────────────────────────────────────
     var ROWS = 100;
     var COLS = 100;
     var TILE = 2;            // world units per tile
     var MOVE_INTERVAL = 160; // ms between steps
 
-    // ── Seeded PRNG (mulberry32) — same world_id always produces same map ──────
-    function mulberry32(seed) {
-      return function() {
-        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-        var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-      };
-    }
-    var params = new URLSearchParams(window.location.search);
-    var worldId = params.get('world_id');
-    if (!worldId) {
-      worldId = String(Math.floor(Math.random() * 999999) + 1);
-      window.history.replaceState(null, '', window.location.pathname + '?world_id=' + worldId);
-    }
-    document.getElementById('world-id-display').textContent = worldId;
-    var rand = mulberry32(parseInt(worldId, 10));
-
-    function generateMap() {
-      var map = [];
-      for (var r = 0; r < ROWS; r++) {
-        map[r] = [];
-        for (var c = 0; c < COLS; c++) map[r][c] = 0;
-      }
-      // Solid border
-      for (var r = 0; r < ROWS; r++) { map[r][0] = 1; map[r][COLS-1] = 1; }
-      for (var c = 0; c < COLS; c++) { map[0][c] = 1; map[ROWS-1][c] = 1; }
-
-      // Rectangular room outlines, each with a door on all four sides
-      for (var i = 0; i < 30; i++) {
-        var rr = 3 + Math.floor(rand() * (ROWS - 18));
-        var cc = 3 + Math.floor(rand() * (COLS - 18));
-        var rh = 4 + Math.floor(rand() * 9);
-        var rw = 4 + Math.floor(rand() * 9);
-        for (var dr = 0; dr <= rh; dr++) {
-          for (var dc = 0; dc <= rw; dc++) {
-            if ((dr === 0 || dr === rh || dc === 0 || dc === rw) && map[rr+dr][cc+dc] === 0)
-              map[rr+dr][cc+dc] = 1;
-          }
-        }
-        var mh = Math.floor(rh / 2), mw = Math.floor(rw / 2);
-        map[rr][cc + mw] = 0;       // top door
-        map[rr + rh][cc + mw] = 0;  // bottom door
-        map[rr + mh][cc] = 0;       // left door
-        map[rr + mh][cc + rw] = 0;  // right door
-      }
-
-      // Wall segments with a gap
-      for (var i = 0; i < 40; i++) {
-        if (rand() > 0.5) {
-          var r0 = 2 + Math.floor(rand() * (ROWS - 4));
-          var c0 = 2 + Math.floor(rand() * (COLS - 20));
-          var len = 6 + Math.floor(rand() * 14);
-          var gap = Math.floor(rand() * len);
-          for (var k = 0; k < len; k++)
-            if (k !== gap && c0+k < COLS-1 && map[r0][c0+k] === 0) map[r0][c0+k] = 1;
-        } else {
-          var r0 = 2 + Math.floor(rand() * (ROWS - 20));
-          var c0 = 2 + Math.floor(rand() * (COLS - 4));
-          var len = 6 + Math.floor(rand() * 14);
-          var gap = Math.floor(rand() * len);
-          for (var k = 0; k < len; k++)
-            if (k !== gap && r0+k < ROWS-1 && map[r0+k][c0] === 0) map[r0+k][c0] = 1;
-        }
-      }
-
-      // Scatter trees in open ground
-      for (var i = 0; i < 500; i++) {
-        var r = 1 + Math.floor(rand() * (ROWS - 2));
-        var c = 1 + Math.floor(rand() * (COLS - 2));
-        if (map[r][c] === 0) map[r][c] = 2;
-      }
-
-      // Always keep spawn area clear
-      map[1][1] = 0; map[1][2] = 0; map[2][1] = 0;
-      return map;
-    }
-    var MAP = generateMap();
-
-    // ── Player identity ─────────────────────────────────────────────────────
-    var playerId = sessionStorage.getItem('vworld_pid');
-    if (!playerId) {
-      playerId = 'p_' + Math.random().toString(36).slice(2, 10);
-      sessionStorage.setItem('vworld_pid', playerId);
-    }
-
-    var avatarRow = 1;
-    var avatarCol = 1;
+    var avatarRow = ${initRow};
+    var avatarCol = ${initCol};
     var targetX = avatarCol * TILE + TILE / 2;
     var targetZ = avatarRow * TILE + TILE / 2;
 
@@ -466,9 +475,20 @@ function getVirtualWorldPage(context) {
       fetch('/virtual-world/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ world_id: worldId, player_id: playerId, row: payload.row, col: payload.col })
-      }).then(function() {
+        // player_id is determined server-side from auth session
+        body: JSON.stringify({ world_id: worldId, row: payload.row, col: payload.col })
+      }).then(function(res) { return res.json(); }).then(function(result) {
         moveInFlight = false;
+        if (!result.ok) {
+          // Server rejected the move — snap back to canonical position
+          avatarRow = result.row;
+          avatarCol = result.col;
+          targetX = tileX(avatarCol);
+          targetZ = tileZ(avatarRow);
+          document.getElementById('pos-col').textContent = avatarCol;
+          document.getElementById('pos-row').textContent = avatarRow;
+          pendingMove = null; // discard any queued move after a rejection
+        }
         flushMove(); // send next queued move if any
       }).catch(function() {
         moveInFlight = false;
@@ -484,8 +504,9 @@ function getVirtualWorldPage(context) {
     }
 
     function postLeave() {
+      // player_id is determined server-side from auth session
       navigator.sendBeacon('/virtual-world/leave',
-        new Blob([JSON.stringify({ world_id: worldId, player_id: playerId })],
+        new Blob([JSON.stringify({ world_id: worldId })],
                  { type: 'application/json' }));
     }
 
@@ -549,6 +570,7 @@ function getVirtualWorldPage(context) {
       var nr = avatarRow + dr;
       var nc = avatarCol + dc;
       if (isWalkable(nr, nc)) {
+        // Optimistic client-side prediction — server may still reject
         avatarRow = nr;
         avatarCol = nc;
         targetX = tileX(nc);
@@ -560,9 +582,10 @@ function getVirtualWorldPage(context) {
       }
     }
 
-    function goToRandomWorld() {
-      var newId = String(Math.floor(Math.random() * 999999) + 1);
-      window.location.href = window.location.pathname + '?world_id=' + newId;
+    function goToNewWorld() {
+      fetch('/virtual-world/new-world', { method: 'POST' })
+        .then(function() { window.location.href = '/virtual-world'; })
+        .catch(function() { window.location.href = '/virtual-world'; });
     }
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -693,15 +716,56 @@ function moveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  var userId = context.request.auth.userId;
   var body = JSON.parse(context.request.body);
   var worldId = body.world_id;
-  var playerId = body.player_id;
   var row = Number(body.row);
   var col = Number(body.col);
+
+  // Validate world ownership — player must be in this world
+  var currentWorldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId || worldId !== currentWorldId) {
+    return ResponseBuilder.json({ error: "World mismatch" }, 400);
+  }
+
   var players = loadWorldPlayers(worldId);
-  players[playerId] = { row: row, col: col, ts: Date.now() };
+  var cur = players[userId] || { row: 1, col: 1 };
+
+  // Server-authoritative validation
+  var dr = Math.abs(row - cur.row);
+  var dc = Math.abs(col - cur.col);
+  var map = generateMap(worldId);
+  var withinBounds = row >= 0 && row < ROWS && col >= 0 && col < COLS;
+  var singleStep = dr + dc === 1;
+  var walkable = withinBounds && map[row][col] === 0;
+
+  if (!singleStep || !walkable) {
+    // Reject — return the canonical position so the client can snap back
+    return ResponseBuilder.json({ ok: false, row: cur.row, col: cur.col });
+  }
+
+  players[userId] = { row: row, col: col, ts: Date.now() };
   saveWorldPlayers(worldId, players);
-  var msg = JSON.stringify({ player_id: playerId, row: row, col: col });
+  var msg = JSON.stringify({ player_id: userId, row: row, col: col });
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    "worldPlayerMoved",
+    msg,
+    JSON.stringify({ world_id: worldId }),
+  );
+  return ResponseBuilder.json({ ok: true, row: row, col: col });
+}
+
+function leaveHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body = JSON.parse(context.request.body);
+  var worldId = body.world_id;
+  var players = loadWorldPlayers(worldId);
+  delete players[userId];
+  saveWorldPlayers(worldId, players);
+  var msg = JSON.stringify({ player_id: userId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
     msg,
@@ -710,22 +774,13 @@ function moveHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
-function leaveHandler(context) {
+function newWorldHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
-  var body = JSON.parse(context.request.body);
-  var worldId = body.world_id;
-  var playerId = body.player_id;
-  var players = loadWorldPlayers(worldId);
-  delete players[playerId];
-  saveWorldPlayers(worldId, players);
-  var msg = JSON.stringify({ player_id: playerId, leaving: true });
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldPlayerMoved",
-    msg,
-    JSON.stringify({ world_id: worldId }),
-  );
+  var userId = context.request.auth.userId;
+  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
+  sharedStorage.setItem("vworld_current:" + userId, newWorldId);
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -763,6 +818,7 @@ function init() {
   });
   routeRegistry.registerRoute("/virtual-world/move", "moveHandler", "POST");
   routeRegistry.registerRoute("/virtual-world/leave", "leaveHandler", "POST");
+  routeRegistry.registerRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   routeRegistry.registerRoute(
     "/virtual-world/players",
     "playersHandler",

@@ -26,8 +26,14 @@ function generateMap(worldId) {
     for (var c = 0; c < COLS; c++) map[r][c] = 0;
   }
   // Solid border
-  for (var r = 0; r < ROWS; r++) { map[r][0] = 1; map[r][COLS - 1] = 1; }
-  for (var c = 0; c < COLS; c++) { map[0][c] = 1; map[ROWS - 1][c] = 1; }
+  for (var r = 0; r < ROWS; r++) {
+    map[r][0] = 1;
+    map[r][COLS - 1] = 1;
+  }
+  for (var c = 0; c < COLS; c++) {
+    map[0][c] = 1;
+    map[ROWS - 1][c] = 1;
+  }
 
   // Rectangular room outlines, each with a door on all four sides
   for (var i = 0; i < 30; i++) {
@@ -37,11 +43,15 @@ function generateMap(worldId) {
     var rw = 4 + Math.floor(rand() * 9);
     for (var dr = 0; dr <= rh; dr++) {
       for (var dc = 0; dc <= rw; dc++) {
-        if ((dr === 0 || dr === rh || dc === 0 || dc === rw) && map[rr + dr][cc + dc] === 0)
+        if (
+          (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
+          map[rr + dr][cc + dc] === 0
+        )
           map[rr + dr][cc + dc] = 1;
       }
     }
-    var mh = Math.floor(rh / 2), mw = Math.floor(rw / 2);
+    var mh = Math.floor(rh / 2),
+      mw = Math.floor(rw / 2);
     map[rr][cc + mw] = 0;
     map[rr + rh][cc + mw] = 0;
     map[rr + mh][cc] = 0;
@@ -56,14 +66,16 @@ function generateMap(worldId) {
       var len = 6 + Math.floor(rand() * 14);
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
-        if (k !== gap && c0 + k < COLS - 1 && map[r0][c0 + k] === 0) map[r0][c0 + k] = 1;
+        if (k !== gap && c0 + k < COLS - 1 && map[r0][c0 + k] === 0)
+          map[r0][c0 + k] = 1;
     } else {
       var r0 = 2 + Math.floor(rand() * (ROWS - 20));
       var c0 = 2 + Math.floor(rand() * (COLS - 4));
       var len = 6 + Math.floor(rand() * 14);
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
-        if (k !== gap && r0 + k < ROWS - 1 && map[r0 + k][c0] === 0) map[r0 + k][c0] = 1;
+        if (k !== gap && r0 + k < ROWS - 1 && map[r0 + k][c0] === 0)
+          map[r0 + k][c0] = 1;
     }
   }
 
@@ -75,7 +87,9 @@ function generateMap(worldId) {
   }
 
   // Always keep spawn area clear
-  map[1][1] = 0; map[1][2] = 0; map[2][1] = 0;
+  map[1][1] = 0;
+  map[1][2] = 0;
+  map[2][1] = 0;
   return map;
 }
 
@@ -106,8 +120,10 @@ function getVirtualWorldPage(context) {
   // ── Server-side state ─────────────────────────────────────────────────────
   const worldId = getOrCreatePlayerWorld(userId);
   const map = generateMap(worldId);
-  const players = loadWorldPlayers(worldId);
-  const savedPos = players[userId];
+  // Read last known position from dedicated storage (survives page refresh).
+  // Falls back to spawn (1,1) only when the player enters a fresh new world.
+  const savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
+  const savedPos = savedPosRaw ? JSON.parse(savedPosRaw) : null;
   const initRow = savedPos ? savedPos.row : 1;
   const initCol = savedPos ? savedPos.col : 1;
   const html = `<!DOCTYPE html>
@@ -475,8 +491,8 @@ function getVirtualWorldPage(context) {
       fetch('/virtual-world/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // player_id is determined server-side from auth session
-        body: JSON.stringify({ world_id: worldId, row: payload.row, col: payload.col })
+        // world_id and player_id are determined server-side from auth session
+        body: JSON.stringify({ row: payload.row, col: payload.col })
       }).then(function(res) { return res.json(); }).then(function(result) {
         moveInFlight = false;
         if (!result.ok) {
@@ -504,14 +520,13 @@ function getVirtualWorldPage(context) {
     }
 
     function postLeave() {
-      // player_id is determined server-side from auth session
+      // world_id and player_id are determined server-side from auth session
       navigator.sendBeacon('/virtual-world/leave',
-        new Blob([JSON.stringify({ world_id: worldId })],
-                 { type: 'application/json' }));
+        new Blob(['{}'], { type: 'application/json' }));
     }
 
     function fetchSnapshot() {
-      fetch('/virtual-world/players?world_id=' + encodeURIComponent(worldId))
+      fetch('/virtual-world/players')
         .then(function(r) { return r.json(); })
         .then(function(players) {
           players.forEach(function(p) {
@@ -524,7 +539,8 @@ function getVirtualWorldPage(context) {
       fetchSnapshot();
 
       // Subscribe to real-time moves via GraphQL SSE
-      var query = 'subscription{worldPlayerMoved(world_id:"' + worldId + '")}';
+      // world_id is resolved server-side from the authenticated user's current world
+      var query = 'subscription{worldPlayerMoved}';
       var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
 
       function openSSE() {
@@ -718,14 +734,13 @@ function moveHandler(context) {
   }
   var userId = context.request.auth.userId;
   var body = JSON.parse(context.request.body);
-  var worldId = body.world_id;
   var row = Number(body.row);
   var col = Number(body.col);
 
-  // Validate world ownership — player must be in this world
-  var currentWorldId = sharedStorage.getItem("vworld_current:" + userId);
-  if (!worldId || worldId !== currentWorldId) {
-    return ResponseBuilder.json({ error: "World mismatch" }, 400);
+  // Derive world from server-side storage — never trust client for this
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) {
+    return ResponseBuilder.json({ ok: false, row: 1, col: 1 });
   }
 
   var players = loadWorldPlayers(worldId);
@@ -746,6 +761,11 @@ function moveHandler(context) {
 
   players[userId] = { row: row, col: col, ts: Date.now() };
   saveWorldPlayers(worldId, players);
+  // Persist position independently so page refresh restores it.
+  sharedStorage.setItem(
+    "vworld_pos:" + userId,
+    JSON.stringify({ row: row, col: col }),
+  );
   var msg = JSON.stringify({ player_id: userId, row: row, col: col });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -760,9 +780,13 @@ function leaveHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  var body = JSON.parse(context.request.body);
-  var worldId = body.world_id;
+  // Derive world from storage. newWorldHandler already broadcasts the leave when
+  // switching worlds, so by the time this fires after a New World navigation the
+  // player is no longer recorded in the new world — making this a safe no-op.
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return ResponseBuilder.json({ ok: true });
   var players = loadWorldPlayers(worldId);
+  if (!players[userId]) return ResponseBuilder.json({ ok: true });
   delete players[userId];
   saveWorldPlayers(worldId, players);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
@@ -779,8 +803,29 @@ function newWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
+
+  // Broadcast leave from the current world before switching.
+  // This must happen here because leaveHandler derives worldId from storage:
+  // by the time beforeunload fires after navigation, vworld_current already
+  // points to the new world, so the beacon would be a no-op there.
+  var oldWorldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (oldWorldId) {
+    var oldPlayers = loadWorldPlayers(oldWorldId);
+    if (oldPlayers[userId]) {
+      delete oldPlayers[userId];
+      saveWorldPlayers(oldWorldId, oldPlayers);
+      graphQLRegistry.sendSubscriptionMessageFiltered(
+        "worldPlayerMoved",
+        JSON.stringify({ player_id: userId, leaving: true }),
+        JSON.stringify({ world_id: oldWorldId }),
+      );
+    }
+  }
+
   var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
   sharedStorage.setItem("vworld_current:" + userId, newWorldId);
+  // Clear persisted position so the player spawns at (1,1) in the new world.
+  sharedStorage.removeItem("vworld_pos:" + userId);
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -788,7 +833,9 @@ function playersHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
-  var worldId = context.request.query.world_id;
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return ResponseBuilder.json([]);
   var players = loadWorldPlayers(worldId);
   var now = Date.now();
   var active = Object.keys(players)
@@ -802,11 +849,12 @@ function playersHandler(context) {
 }
 
 function worldPlayerMovedResolver(context) {
-  var args = context.args || {};
-  var queryParams = (context.request && context.request.query) || {};
-  var worldId = args.world_id || queryParams.world_id;
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return {};
-  return { world_id: String(worldId) };
+  return { world_id: worldId };
 }
 
 function init() {
@@ -818,7 +866,11 @@ function init() {
   });
   routeRegistry.registerRoute("/virtual-world/move", "moveHandler", "POST");
   routeRegistry.registerRoute("/virtual-world/leave", "leaveHandler", "POST");
-  routeRegistry.registerRoute("/virtual-world/new-world", "newWorldHandler", "POST");
+  routeRegistry.registerRoute(
+    "/virtual-world/new-world",
+    "newWorldHandler",
+    "POST",
+  );
   routeRegistry.registerRoute(
     "/virtual-world/players",
     "playersHandler",
@@ -826,7 +878,7 @@ function init() {
   );
   graphQLRegistry.registerSubscription(
     "worldPlayerMoved",
-    "type Subscription { worldPlayerMoved(world_id: String!): String }",
+    "type Subscription { worldPlayerMoved: String }",
     "worldPlayerMovedResolver",
     "external",
   );

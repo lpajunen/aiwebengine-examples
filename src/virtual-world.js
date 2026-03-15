@@ -744,7 +744,14 @@ function moveHandler(context) {
   }
 
   var players = loadWorldPlayers(worldId);
-  var cur = players[userId] || { row: 1, col: 1 };
+  // When players[userId] is absent (player reconnected after a refresh — leaveHandler
+  // removed the presence entry on the previous page close), restore from the persisted
+  // position key so the adjacency check doesn't incorrectly snap back to (1,1).
+  var cur = players[userId];
+  if (!cur) {
+    var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
+    cur = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
+  }
 
   // Server-authoritative validation
   var dr = Math.abs(row - cur.row);

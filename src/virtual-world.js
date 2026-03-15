@@ -126,6 +126,7 @@ function getVirtualWorldPage(context) {
   const savedPos = savedPosRaw ? JSON.parse(savedPosRaw) : null;
   const initRow = savedPos ? savedPos.row : 1;
   const initCol = savedPos ? savedPos.col : 1;
+  const initSeq = savedPos ? savedPos.seq || 0 : 0;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -243,6 +244,7 @@ function getVirtualWorldPage(context) {
     var avatarCol = ${initCol};
     var targetX = avatarCol * TILE + TILE / 2;
     var targetZ = avatarRow * TILE + TILE / 2;
+    var moveSeq = ${initSeq};  // last confirmed server sequence number
 
     // ── Renderer ─────────────────────────────────────────────────────────────
     var renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -480,42 +482,56 @@ function getVirtualWorldPage(context) {
       }
     }
 
-    var pendingMove = null;  // most-recent unsent position
+    var pendingMoves = [];   // FIFO queue of {row,col,seq} — one entry per step
     var moveInFlight = false;
 
     function flushMove() {
-      if (moveInFlight || !pendingMove) return;
-      var payload = pendingMove;
-      pendingMove = null;
+      if (moveInFlight || pendingMoves.length === 0) return;
+      var payload = pendingMoves.shift();
       moveInFlight = true;
       fetch('/virtual-world/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // world_id and player_id are determined server-side from auth session
-        body: JSON.stringify({ row: payload.row, col: payload.col })
+        body: JSON.stringify({ row: payload.row, col: payload.col, seq: payload.seq })
       }).then(function(res) { return res.json(); }).then(function(result) {
         moveInFlight = false;
         if (!result.ok) {
-          // Server rejected the move — snap back to canonical position
-          avatarRow = result.row;
-          avatarCol = result.col;
-          targetX = tileX(avatarCol);
-          targetZ = tileZ(avatarRow);
-          document.getElementById('pos-col').textContent = avatarCol;
-          document.getElementById('pos-row').textContent = avatarRow;
-          pendingMove = null; // discard any queued move after a rejection
+          if (result.stale) {
+            // Another tab took over — our queued moves are based on an old seq.
+            // Discard them silently; the SSE stream will deliver the true position.
+            pendingMoves = [];
+          } else {
+            // Server rejected the move (wall/bounds) — snap back to canonical position
+            // and discard queue since remaining steps are based on the invalid position.
+            avatarRow = result.row;
+            avatarCol = result.col;
+            targetX = tileX(avatarCol);
+            targetZ = tileZ(avatarRow);
+            document.getElementById('pos-col').textContent = avatarCol;
+            document.getElementById('pos-row').textContent = avatarRow;
+            pendingMoves = [];
+          }
+        } else {
+          // Confirmed — advance the local sequence number
+          moveSeq = result.seq;
         }
-        flushMove(); // send next queued move if any
+        flushMove(); // drain next step if any
       }).catch(function() {
         moveInFlight = false;
-        // Re-queue failed move and retry after 500 ms
-        if (!pendingMove) pendingMove = payload;
+        // Put the failed step back at the front and retry after 500 ms
+        pendingMoves.unshift(payload);
         setTimeout(flushMove, 500);
       });
     }
 
     function postMove(row, col) {
-      pendingMove = { row: row, col: col }; // always keep only the latest
+      // Each optimistic step gets the next expected seq number.
+      // Cap at 10 to avoid unbounded growth during a severe lag spike.
+      if (pendingMoves.length < 10) {
+        moveSeq++;
+        pendingMoves.push({ row: row, col: col, seq: moveSeq });
+      }
       flushMove();
     }
 
@@ -559,11 +575,12 @@ function getVirtualWorldPage(context) {
               // snap the position back and cause the very jump we want to fix.
               // Idle tabs (no moves queued) always accept the update, so they
               // are ready with the correct position when the user switches to them.
-              if (!moveInFlight && !pendingMove) {
+              if (!moveInFlight && pendingMoves.length === 0) {
                 avatarRow = payload.row;
                 avatarCol = payload.col;
                 targetX = tileX(avatarCol);
                 targetZ = tileZ(avatarRow);
+                moveSeq = payload.seq || moveSeq;
                 document.getElementById('pos-col').textContent = avatarCol;
                 document.getElementById('pos-row').textContent = avatarRow;
               }
@@ -767,7 +784,8 @@ function moveHandler(context) {
   var cur = players[userId];
   if (!cur) {
     var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
-    cur = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
+    var savedPos = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
+    cur = { row: savedPos.row, col: savedPos.col, seq: savedPos.seq || 0 };
   }
 
   // Server-authoritative validation
@@ -778,25 +796,50 @@ function moveHandler(context) {
   var singleStep = dr + dc === 1;
   var walkable = withinBounds && map[row][col] === 0;
 
-  if (!singleStep || !walkable) {
-    // Reject — return the canonical position so the client can snap back
-    return ResponseBuilder.json({ ok: false, row: cur.row, col: cur.col });
+  // Reject stale moves from a tab that is no longer the active mover.
+  // A stale move has a seq that doesn't continue from the stored seq.
+  // This is distinct from a wall/bounds rejection — the client should
+  // silently discard its queue rather than snapping back.
+  var expectedSeq = cur.seq + 1;
+  var clientSeq = body.seq !== undefined ? Number(body.seq) : expectedSeq;
+  if (clientSeq !== expectedSeq) {
+    return ResponseBuilder.json({ ok: false, stale: true });
   }
 
-  players[userId] = { row: row, col: col, ts: Date.now() };
+  if (!singleStep || !walkable) {
+    // Reject — return the canonical position so the client can snap back
+    return ResponseBuilder.json({
+      ok: false,
+      stale: false,
+      row: cur.row,
+      col: cur.col,
+    });
+  }
+
+  players[userId] = { row: row, col: col, seq: cur.seq + 1, ts: Date.now() };
   saveWorldPlayers(worldId, players);
   // Persist position independently so page refresh restores it.
   sharedStorage.setItem(
     "vworld_pos:" + userId,
-    JSON.stringify({ row: row, col: col }),
+    JSON.stringify({ row: row, col: col, seq: cur.seq + 1 }),
   );
-  var msg = JSON.stringify({ player_id: userId, row: row, col: col });
+  var msg = JSON.stringify({
+    player_id: userId,
+    row: row,
+    col: col,
+    seq: cur.seq + 1,
+  });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
     msg,
     JSON.stringify({ world_id: worldId }),
   );
-  return ResponseBuilder.json({ ok: true, row: row, col: col });
+  return ResponseBuilder.json({
+    ok: true,
+    row: row,
+    col: col,
+    seq: cur.seq + 1,
+  });
 }
 
 function leaveHandler(context) {
@@ -813,6 +856,7 @@ function leaveHandler(context) {
   if (!players[userId]) return ResponseBuilder.json({ ok: true });
   delete players[userId];
   saveWorldPlayers(worldId, players);
+  sharedStorage.removeItem("vworld_hb:" + userId);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -829,18 +873,11 @@ function heartbeatHandler(context) {
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return ResponseBuilder.json({ ok: true });
-  var players = loadWorldPlayers(worldId);
-  if (players[userId]) {
-    // Only refresh the timestamp — never change the canonical position
-    players[userId].ts = Date.now();
-  } else {
-    // Tab was quiet since page load (leaveHandler ran on the previous unload);
-    // restore from persisted position so the player re-appears in snapshots.
-    var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
-    var pos = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
-    players[userId] = { row: pos.row, col: pos.col, ts: Date.now() };
-  }
-  saveWorldPlayers(worldId, players);
+  // Write ONLY to a separate per-user timestamp key — never read-modify-write
+  // the shared players object.  A concurrent moveHandler write would otherwise
+  // be clobbered by this handler writing back a stale row/col, causing the
+  // server's canonical position to regress and the next move to be rejected.
+  sharedStorage.setItem("vworld_hb:" + userId, String(Date.now()));
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -860,6 +897,7 @@ function newWorldHandler(context) {
     if (oldPlayers[userId]) {
       delete oldPlayers[userId];
       saveWorldPlayers(oldWorldId, oldPlayers);
+      sharedStorage.removeItem("vworld_hb:" + userId);
       graphQLRegistry.sendSubscriptionMessageFiltered(
         "worldPlayerMoved",
         JSON.stringify({ player_id: userId, leaving: true }),
@@ -886,7 +924,11 @@ function playersHandler(context) {
   var now = Date.now();
   var active = Object.keys(players)
     .filter(function (pid) {
-      return now - players[pid].ts < 30000;
+      // A player is active if either their last move OR their last heartbeat
+      // is within the TTL window.  Heartbeat ts is stored separately to avoid
+      // racing with the move handler's write to the players object.
+      var hbTs = Number(sharedStorage.getItem("vworld_hb:" + pid) || 0);
+      return now - Math.max(players[pid].ts, hbTs) < 30000;
     })
     .map(function (pid) {
       return { player_id: pid, row: players[pid].row, col: players[pid].col };

@@ -75,7 +75,7 @@ function channelsResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
 
@@ -92,7 +92,7 @@ function messagesResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
 
@@ -115,13 +115,13 @@ function currentUserResolver(context) {
   const req = context.request || {};
   const args = context.args || {};
   try {
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     return {
       id: req.auth.userId,
-      name: req.auth.name || req.auth.email,
-      email: req.auth.email,
+      name: req.auth.userName || req.auth.userEmail,
+      email: req.auth.userEmail,
     };
   } catch (error) {
     console.error("Error in currentUserResolver: " + error);
@@ -138,13 +138,13 @@ function createChannelResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
       id: req.auth.userId,
-      name: req.auth.name,
-      email: req.auth.email,
+      name: req.auth.userName,
+      email: req.auth.userEmail,
     };
 
     const name = args.name;
@@ -199,13 +199,13 @@ function sendMessageResolver(context) {
   const args = context.args || {};
   try {
     // Require authentication
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
       id: req.auth.userId,
-      name: req.auth.name,
-      email: req.auth.email,
+      name: req.auth.userName,
+      email: req.auth.userEmail,
     };
 
     const channelId = args.channelId;
@@ -292,15 +292,15 @@ function chatUpdatesResolver(context) {
     }
 
     // Check authentication manually
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       console.error("Authentication check failed for channel subscription");
       throw new Error("Authentication required");
     }
 
     const user = {
       id: req.auth.userId,
-      name: req.auth.name,
-      email: req.auth.email,
+      name: req.auth.userName,
+      email: req.auth.userEmail,
     };
 
     console.log(
@@ -332,13 +332,13 @@ function chatInterfaceHandler(context) {
   try {
     const req = context.request || {};
     // Require authentication
-    if (!req.auth) {
+    if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
       id: req.auth.userId,
-      name: req.auth.name,
-      email: req.auth.email,
+      name: req.auth.userName,
+      email: req.auth.userEmail,
     };
 
     const html = `<!DOCTYPE html>

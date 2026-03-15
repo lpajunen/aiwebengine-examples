@@ -6,14 +6,15 @@
  * Demonstrates how to use authentication and authorization features with
  * the aiwebengine AuthContext API.
  *
- * Note: AuthContext provides: userId, email, name, provider, isAdmin, isEditor
+ * Note: AuthContext is always present; use isAuthenticated to check login status.
+ * Properties: isAuthenticated, isAdmin, isEditor, userId, userEmail, userName, provider
  */
 
 function handleRequest(context) {
   const request = context.request || {};
 
   // Check if user is authenticated
-  if (!request.auth) {
+  if (!request.auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -67,8 +68,8 @@ function handleRequest(context) {
   return ResponseBuilder.json({
     user: {
       id: auth.userId,
-      email: auth.email,
-      name: auth.name,
+      email: auth.userEmail,
+      name: auth.userName,
       provider: auth.provider,
     },
     roles: roles,
@@ -77,7 +78,7 @@ function handleRequest(context) {
       canEdit: auth.isEditor || auth.isAdmin,
       canAdminister: auth.isAdmin,
     },
-    message: `Welcome ${auth.name || auth.email}! You have ${roles.join(", ")} access.`,
+    message: `Welcome ${auth.userName || auth.userEmail}! You have ${roles.join(", ")} access.`,
   });
 }
 
@@ -88,7 +89,7 @@ function editorOnly(context) {
   const request = context.request || {};
 
   // Check authentication
-  if (!request.auth) {
+  if (!request.auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -108,7 +109,7 @@ function editorOnly(context) {
   }
 
   return ResponseBuilder.text(
-    `Hello ${request.auth.name}, you have editor access!`,
+    `Hello ${request.auth.userName}, you have editor access!`,
   );
 }
 
@@ -119,7 +120,7 @@ function adminOnly(context) {
   const request = context.request || {};
 
   // Check authentication
-  if (!request.auth) {
+  if (!request.auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -139,7 +140,7 @@ function adminOnly(context) {
   }
 
   return ResponseBuilder.text(
-    `Hello ${request.auth.name}, you have administrator access!`,
+    `Hello ${request.auth.userName}, you have administrator access!`,
   );
 }
 

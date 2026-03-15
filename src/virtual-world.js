@@ -7,11 +7,18 @@ function getVirtualWorldPage(context) {
   const req = context.request;
   if (!req.auth || !req.auth.isAuthenticated) {
     const worldId = req.query && req.query.world_id;
-    const returnPath = worldId ? '/virtual-world?world_id=' + encodeURIComponent(worldId) : '/virtual-world';
-    return ResponseBuilder.redirect('/auth/login?redirect=' + encodeURIComponent(returnPath));
+    const returnPath = worldId
+      ? "/virtual-world?world_id=" + encodeURIComponent(worldId)
+      : "/virtual-world";
+    return ResponseBuilder.redirect(
+      "/auth/login?redirect=" + encodeURIComponent(returnPath),
+    );
   }
-  const authName = req.auth.userName || '';
-  const authEmail = req.auth.userEmail && req.auth.userEmail !== authName ? req.auth.userEmail : '';
+  const authName = req.auth.userName || "";
+  const authEmail =
+    req.auth.userEmail && req.auth.userEmail !== authName
+      ? req.auth.userEmail
+      : "";
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,8 +96,8 @@ function getVirtualWorldPage(context) {
 <body>
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
-    ${authName ? `${authName}<br>` : ''}
-    ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ''}
+    ${authName ? `${authName}<br>` : ""}
+    ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ""}
     World: <span id="world-id-display">-</span><br>
     Position: <span id="pos-col">1</span>, <span id="pos-row">1</span>
   </div>
@@ -674,17 +681,17 @@ function getVirtualWorldPage(context) {
 }
 
 function loadWorldPlayers(worldId) {
-  var raw = sharedStorage.getItem('vworld:' + worldId);
+  var raw = sharedStorage.getItem("vworld:" + worldId);
   return raw ? JSON.parse(raw) : {};
 }
 
 function saveWorldPlayers(worldId, players) {
-  sharedStorage.setItem('vworld:' + worldId, JSON.stringify(players));
+  sharedStorage.setItem("vworld:" + worldId, JSON.stringify(players));
 }
 
 function moveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var body = JSON.parse(context.request.body);
   var worldId = body.world_id;
@@ -696,14 +703,16 @@ function moveHandler(context) {
   saveWorldPlayers(worldId, players);
   var msg = JSON.stringify({ player_id: playerId, row: row, col: col });
   graphQLRegistry.sendSubscriptionMessageFiltered(
-    'worldPlayerMoved', msg, JSON.stringify({ world_id: worldId })
+    "worldPlayerMoved",
+    msg,
+    JSON.stringify({ world_id: worldId }),
   );
   return ResponseBuilder.json({ ok: true });
 }
 
 function leaveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var body = JSON.parse(context.request.body);
   var worldId = body.world_id;
@@ -713,21 +722,27 @@ function leaveHandler(context) {
   saveWorldPlayers(worldId, players);
   var msg = JSON.stringify({ player_id: playerId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
-    'worldPlayerMoved', msg, JSON.stringify({ world_id: worldId })
+    "worldPlayerMoved",
+    msg,
+    JSON.stringify({ world_id: worldId }),
   );
   return ResponseBuilder.json({ ok: true });
 }
 
 function playersHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: 'Authentication required' }, 401);
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var worldId = context.request.query.world_id;
   var players = loadWorldPlayers(worldId);
   var now = Date.now();
   var active = Object.keys(players)
-    .filter(function(pid) { return now - players[pid].ts < 30000; })
-    .map(function(pid) { return { player_id: pid, row: players[pid].row, col: players[pid].col }; });
+    .filter(function (pid) {
+      return now - players[pid].ts < 30000;
+    })
+    .map(function (pid) {
+      return { player_id: pid, row: players[pid].row, col: players[pid].col };
+    });
   return ResponseBuilder.json(active);
 }
 
@@ -742,16 +757,21 @@ function worldPlayerMovedResolver(context) {
 function init() {
   routeRegistry.registerRoute("/virtual-world", "getVirtualWorldPage", "GET", {
     summary: "2.5D Virtual World",
-    description: "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys.",
-    tags: ["Demo"]
+    description:
+      "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys.",
+    tags: ["Demo"],
   });
-  routeRegistry.registerRoute("/virtual-world/move",    "moveHandler",    "POST");
-  routeRegistry.registerRoute("/virtual-world/leave",   "leaveHandler",   "POST");
-  routeRegistry.registerRoute("/virtual-world/players", "playersHandler", "GET");
+  routeRegistry.registerRoute("/virtual-world/move", "moveHandler", "POST");
+  routeRegistry.registerRoute("/virtual-world/leave", "leaveHandler", "POST");
+  routeRegistry.registerRoute(
+    "/virtual-world/players",
+    "playersHandler",
+    "GET",
+  );
   graphQLRegistry.registerSubscription(
     "worldPlayerMoved",
     "type Subscription { worldPlayerMoved(world_id: String!): String }",
     "worldPlayerMovedResolver",
-    "external"
+    "external",
   );
 }

@@ -552,6 +552,21 @@ function getVirtualWorldPage(context) {
             var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
             if (payload.leaving) {
               removeRemoteAvatar(payload.player_id);
+            } else if (payload.player_id === playerId) {
+              // Another tab moved us — sync local state ONLY when this tab has
+              // no moves in flight or queued. If we are in the middle of
+              // optimistic prediction, applying an SSE for an older step would
+              // snap the position back and cause the very jump we want to fix.
+              // Idle tabs (no moves queued) always accept the update, so they
+              // are ready with the correct position when the user switches to them.
+              if (!moveInFlight && !pendingMove) {
+                avatarRow = payload.row;
+                avatarCol = payload.col;
+                targetX = tileX(avatarCol);
+                targetZ = tileZ(avatarRow);
+                document.getElementById('pos-col').textContent = avatarCol;
+                document.getElementById('pos-row').textContent = avatarRow;
+              }
             } else {
               upsertRemoteAvatar(payload.player_id, payload.row, payload.col);
             }
@@ -572,7 +587,9 @@ function getVirtualWorldPage(context) {
 
       // Heartbeat — keep presence alive and resync snapshot every 15 s
       setInterval(function() {
-        postMove(avatarRow, avatarCol);
+        // Use dedicated heartbeat endpoint: only refreshes the presence TTL
+        // without sending a position, so idle tabs can't overwrite a moving tab.
+        fetch('/virtual-world/heartbeat', { method: 'POST' }).catch(function() {});
         fetchSnapshot();
       }, 15000);
     }
@@ -805,6 +822,28 @@ function leaveHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
+function heartbeatHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return ResponseBuilder.json({ ok: true });
+  var players = loadWorldPlayers(worldId);
+  if (players[userId]) {
+    // Only refresh the timestamp — never change the canonical position
+    players[userId].ts = Date.now();
+  } else {
+    // Tab was quiet since page load (leaveHandler ran on the previous unload);
+    // restore from persisted position so the player re-appears in snapshots.
+    var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
+    var pos = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
+    players[userId] = { row: pos.row, col: pos.col, ts: Date.now() };
+  }
+  saveWorldPlayers(worldId, players);
+  return ResponseBuilder.json({ ok: true });
+}
+
 function newWorldHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -882,6 +921,11 @@ function init() {
     "/virtual-world/players",
     "playersHandler",
     "GET",
+  );
+  routeRegistry.registerRoute(
+    "/virtual-world/heartbeat",
+    "heartbeatHandler",
+    "POST",
   );
   graphQLRegistry.registerSubscription(
     "worldPlayerMoved",

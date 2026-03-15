@@ -5,11 +5,13 @@
 
 function getVirtualWorldPage(context) {
   const req = context.request;
-  if (!req.auth) {
+  if (!req.auth || !req.auth.isAuthenticated) {
     const worldId = req.query && req.query.world_id;
     const returnPath = worldId ? '/virtual-world?world_id=' + encodeURIComponent(worldId) : '/virtual-world';
     return ResponseBuilder.redirect('/auth/login?redirect=' + encodeURIComponent(returnPath));
   }
+  const authName = req.auth.userName || '';
+  const authEmail = req.auth.userEmail && req.auth.userEmail !== authName ? req.auth.userEmail : '';
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,6 +89,8 @@ function getVirtualWorldPage(context) {
 <body>
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
+    ${authName ? `${authName}<br>` : ''}
+    ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ''}
     World: <span id="world-id-display">-</span><br>
     Position: <span id="pos-col">1</span>, <span id="pos-row">1</span>
   </div>
@@ -679,7 +683,7 @@ function saveWorldPlayers(worldId, players) {
 }
 
 function moveHandler(context) {
-  if (!context.request.auth) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: 'Authentication required' }, 401);
   }
   var body = JSON.parse(context.request.body);
@@ -698,7 +702,7 @@ function moveHandler(context) {
 }
 
 function leaveHandler(context) {
-  if (!context.request.auth) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: 'Authentication required' }, 401);
   }
   var body = JSON.parse(context.request.body);
@@ -715,7 +719,7 @@ function leaveHandler(context) {
 }
 
 function playersHandler(context) {
-  if (!context.request.auth) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: 'Authentication required' }, 401);
   }
   var worldId = context.request.query.world_id;

@@ -6,6 +6,7 @@
 // ── Server-side world generation ─────────────────────────────────────────────
 var ROWS = 100;
 var COLS = 100;
+var LEASE_TTL_MS = 30000;
 
 function mulberry32(seed) {
   return function () {
@@ -234,11 +235,20 @@ function getVirtualWorldPage(context) {
     var worldId  = ${JSON.stringify(worldId)};
     var playerId = ${JSON.stringify(userId)};
 
+    function createSessionId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+      return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+    }
+    var sessionId = createSessionId();
+
     // ── Constants ─────────────────────────────────────────────────────────────
     var ROWS = 100;
     var COLS = 100;
     var TILE = 2;            // world units per tile
     var MOVE_INTERVAL = 160; // ms between steps
+    var MAX_PENDING_MOVES = 40;
 
     var avatarRow = ${initRow};
     var avatarCol = ${initCol};
@@ -429,7 +439,7 @@ function getVirtualWorldPage(context) {
     scene.add(avatar);
 
     // ── Remote players ───────────────────────────────────────────────────────
-    var remoteAvatars = {}; // { pid: { group, targetX, targetZ } }
+    var remoteAvatars = {}; // { pid: { group, targetX, targetZ, seq } }
 
     function avatarBodyColor(pid) {
       var h = 0;
@@ -461,17 +471,27 @@ function getVirtualWorldPage(context) {
       return g;
     }
 
-    function upsertRemoteAvatar(pid, row, col) {
+    function upsertRemoteAvatar(pid, row, col, seq) {
       if (pid === playerId) return;
       var tx = tileX(col), tz = tileZ(row);
+      var incomingSeq = (seq !== undefined && seq !== null) ? Number(seq) : null;
+      if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
       if (!remoteAvatars[pid]) {
         var g = makeRemoteAvatar(pid);
         g.position.set(tx, 0, tz);
         scene.add(g);
-        remoteAvatars[pid] = { group: g, targetX: tx, targetZ: tz };
+        remoteAvatars[pid] = {
+          group: g,
+          targetX: tx,
+          targetZ: tz,
+          seq: incomingSeq !== null ? incomingSeq : 0,
+        };
       } else {
+        var knownSeq = Number(remoteAvatars[pid].seq || 0);
+        if (incomingSeq !== null && incomingSeq <= knownSeq) return;
         remoteAvatars[pid].targetX = tx;
         remoteAvatars[pid].targetZ = tz;
+        if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
       }
     }
 
@@ -493,13 +513,29 @@ function getVirtualWorldPage(context) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // world_id and player_id are determined server-side from auth session
-        body: JSON.stringify({ row: payload.row, col: payload.col, seq: payload.seq })
+        body: JSON.stringify({
+          row: payload.row,
+          col: payload.col,
+          seq: payload.seq,
+          session_id: sessionId,
+        })
       }).then(function(res) { return res.json(); }).then(function(result) {
         moveInFlight = false;
         if (!result.ok) {
           if (result.stale) {
             // Another tab took over — our queued moves are based on an old seq.
-            // Discard them silently; the SSE stream will deliver the true position.
+            // Reconcile to server canonical state, then discard queue.
+            if (typeof result.row === 'number' && typeof result.col === 'number') {
+              avatarRow = result.row;
+              avatarCol = result.col;
+              targetX = tileX(avatarCol);
+              targetZ = tileZ(avatarRow);
+              document.getElementById('pos-col').textContent = avatarCol;
+              document.getElementById('pos-row').textContent = avatarRow;
+            }
+            if (typeof result.seq === 'number' && isFinite(result.seq)) {
+              moveSeq = result.seq;
+            }
             pendingMoves = [];
           } else {
             // Server rejected the move (wall/bounds) — snap back to canonical position
@@ -527,12 +563,12 @@ function getVirtualWorldPage(context) {
 
     function postMove(row, col) {
       // Each optimistic step gets the next expected seq number.
-      // Cap at 10 to avoid unbounded growth during a severe lag spike.
-      if (pendingMoves.length < 10) {
-        moveSeq++;
-        pendingMoves.push({ row: row, col: col, seq: moveSeq });
-      }
+      // Never silently drop steps: if queue is full, caller must not move locally.
+      if (pendingMoves.length >= MAX_PENDING_MOVES) return false;
+      moveSeq++;
+      pendingMoves.push({ row: row, col: col, seq: moveSeq });
       flushMove();
+      return true;
     }
 
     function postLeave() {
@@ -546,7 +582,21 @@ function getVirtualWorldPage(context) {
         .then(function(r) { return r.json(); })
         .then(function(players) {
           players.forEach(function(p) {
-            upsertRemoteAvatar(p.player_id, p.row, p.col);
+            if (p.player_id === playerId) {
+              var snapSeq = Number(p.seq || 0);
+              // Snapshot healing for same-user tabs when SSE is delayed/flaky.
+              if (!moveInFlight && pendingMoves.length === 0) {
+                avatarRow = p.row;
+                avatarCol = p.col;
+                targetX = tileX(avatarCol);
+                targetZ = tileZ(avatarRow);
+                moveSeq = snapSeq;
+                document.getElementById('pos-col').textContent = avatarCol;
+                document.getElementById('pos-row').textContent = avatarRow;
+              }
+            } else {
+              upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq);
+            }
           });
         }).catch(function() {});
     }
@@ -558,6 +608,7 @@ function getVirtualWorldPage(context) {
       // world_id is resolved server-side from the authenticated user's current world
       var query = 'subscription{worldPlayerMoved}';
       var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
+      var reconnectTimer = null;
 
       function openSSE() {
         var es = new EventSource(sseUrl);
@@ -569,6 +620,8 @@ function getVirtualWorldPage(context) {
             if (payload.leaving) {
               removeRemoteAvatar(payload.player_id);
             } else if (payload.player_id === playerId) {
+              var incomingSeq = Number(payload.seq);
+              var hasIncomingSeq = isFinite(incomingSeq);
               // Another tab moved us — sync local state ONLY when this tab has
               // no moves in flight or queued. If we are in the middle of
               // optimistic prediction, applying an SSE for an older step would
@@ -580,19 +633,26 @@ function getVirtualWorldPage(context) {
                 avatarCol = payload.col;
                 targetX = tileX(avatarCol);
                 targetZ = tileZ(avatarRow);
-                moveSeq = payload.seq || moveSeq;
+                if (hasIncomingSeq) moveSeq = incomingSeq;
                 document.getElementById('pos-col').textContent = avatarCol;
                 document.getElementById('pos-row').textContent = avatarRow;
               }
             } else {
-              upsertRemoteAvatar(payload.player_id, payload.row, payload.col);
+              upsertRemoteAvatar(
+                payload.player_id,
+                payload.row,
+                payload.col,
+                payload.seq,
+              );
             }
           } catch(e) {}
         };
         es.onerror = function() {
           es.close();
-          // Re-fetch snapshot so we don't miss players who joined while disconnected
-          setTimeout(function() { fetchSnapshot(); openSSE(); }, 3000);
+          // Immediate healing snapshot, then short reconnect retry.
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          fetchSnapshot();
+          reconnectTimer = setTimeout(openSSE, 1000);
         };
         return es;
       }
@@ -606,9 +666,13 @@ function getVirtualWorldPage(context) {
       setInterval(function() {
         // Use dedicated heartbeat endpoint: only refreshes the presence TTL
         // without sending a position, so idle tabs can't overwrite a moving tab.
-        fetch('/virtual-world/heartbeat', { method: 'POST' }).catch(function() {});
+        fetch('/virtual-world/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId }),
+        }).catch(function() {});
         fetchSnapshot();
-      }, 15000);
+      }, 5000);
     }
 
     // ── Collision & movement ─────────────────────────────────────────────────
@@ -620,6 +684,7 @@ function getVirtualWorldPage(context) {
       var nr = avatarRow + dr;
       var nc = avatarCol + dc;
       if (isWalkable(nr, nc)) {
+        if (!postMove(nr, nc)) return false;
         // Optimistic client-side prediction — server may still reject
         avatarRow = nr;
         avatarCol = nc;
@@ -628,8 +693,9 @@ function getVirtualWorldPage(context) {
         avatar.rotation.y = angle;
         document.getElementById('pos-col').textContent = nc;
         document.getElementById('pos-row').textContent = nr;
-        postMove(avatarRow, avatarCol);
+        return true;
       }
+      return false;
     }
 
     function goToNewWorld() {
@@ -691,10 +757,10 @@ function getVirtualWorldPage(context) {
       moveTimer -= dt;
       if (moveTimer <= 0) {
         var moved = false;
-        if (keys['ArrowUp']    || keys['w'] || keys['W']) { tryMove(-1,  0, Math.PI);      moved = true; }
-        else if (keys['ArrowDown']  || keys['s'] || keys['S']) { tryMove( 1,  0, 0);             moved = true; }
-        else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { tryMove( 0, -1, Math.PI / 2);   moved = true; }
-        else if (keys['ArrowRight'] || keys['d'] || keys['D']) { tryMove( 0,  1, -Math.PI / 2);  moved = true; }
+        if (keys['ArrowUp']    || keys['w'] || keys['W']) { moved = tryMove(-1,  0, Math.PI); }
+        else if (keys['ArrowDown']  || keys['s'] || keys['S']) { moved = tryMove( 1,  0, 0); }
+        else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { moved = tryMove( 0, -1, Math.PI / 2); }
+        else if (keys['ArrowRight'] || keys['d'] || keys['D']) { moved = tryMove( 0,  1, -Math.PI / 2); }
 
         if (moved) moveTimer = MOVE_INTERVAL;
       }
@@ -762,20 +828,71 @@ function saveWorldPlayers(worldId, players) {
   sharedStorage.setItem("vworld:" + worldId, JSON.stringify(players));
 }
 
+var VW_DEBUG = false;
+
+function vwLog(msg, obj) {
+  if (!VW_DEBUG) return;
+  try {
+    if (obj !== undefined) {
+      console.log("[vworld] " + msg + " " + JSON.stringify(obj));
+    } else {
+      console.log("[vworld] " + msg);
+    }
+  } catch (e) {
+    console.log("[vworld] " + msg);
+  }
+}
+
 function moveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  var body = JSON.parse(context.request.body);
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
   var row = Number(body.row);
   var col = Number(body.col);
+  // Backward compatible fallback keeps legacy tabs functional.
+  var sessionId = body.session_id ? String(body.session_id) : "legacy";
 
   // Derive world from server-side storage — never trust client for this
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) {
     return ResponseBuilder.json({ ok: false, row: 1, col: 1 });
   }
+
+  var leaseKey = "vworld_lease:" + userId;
+  var leaseRaw = sharedStorage.getItem(leaseKey);
+  var lease = null;
+  if (leaseRaw) {
+    try {
+      lease = JSON.parse(leaseRaw);
+    } catch (e) {
+      lease = null;
+    }
+  }
+  var now = Date.now();
+  var leaseValid =
+    lease &&
+    typeof lease.session_id === "string" &&
+    Number(lease.expires_at || 0) > now;
+  if (leaseValid && lease.session_id !== sessionId) {
+    vwLog("move taking over lease", {
+      user_id: userId,
+      world_id: worldId,
+      previous_session: lease.session_id,
+      session_id: sessionId,
+    });
+  }
+  // Acquire or renew writer lease for this session before processing move.
+  sharedStorage.setItem(
+    leaseKey,
+    JSON.stringify({ session_id: sessionId, expires_at: now + LEASE_TTL_MS }),
+  );
 
   var players = loadWorldPlayers(worldId);
   // When players[userId] is absent (player reconnected after a refresh — leaveHandler
@@ -785,7 +902,12 @@ function moveHandler(context) {
   if (!cur) {
     var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
     var savedPos = savedPosRaw ? JSON.parse(savedPosRaw) : { row: 1, col: 1 };
-    cur = { row: savedPos.row, col: savedPos.col, seq: savedPos.seq || 0 };
+    cur = {
+      row: savedPos.row,
+      col: savedPos.col,
+      seq: savedPos.seq || 0,
+      session_id: savedPos.session_id || "",
+    };
   }
 
   // Server-authoritative validation
@@ -803,10 +925,38 @@ function moveHandler(context) {
   var expectedSeq = cur.seq + 1;
   var clientSeq = body.seq !== undefined ? Number(body.seq) : expectedSeq;
   if (clientSeq !== expectedSeq) {
-    return ResponseBuilder.json({ ok: false, stale: true });
+    vwLog("move rejected: stale seq", {
+      user_id: userId,
+      world_id: worldId,
+      session_id: sessionId,
+      expected_seq: expectedSeq,
+      client_seq: clientSeq,
+      cur_row: cur.row,
+      cur_col: cur.col,
+      req_row: row,
+      req_col: col,
+    });
+    return ResponseBuilder.json({
+      ok: false,
+      stale: true,
+      row: cur.row,
+      col: cur.col,
+      seq: cur.seq,
+    });
   }
 
   if (!singleStep || !walkable) {
+    vwLog("move rejected: invalid step", {
+      user_id: userId,
+      world_id: worldId,
+      session_id: sessionId,
+      from_row: cur.row,
+      from_col: cur.col,
+      to_row: row,
+      to_col: col,
+      single_step: singleStep,
+      walkable: walkable,
+    });
     // Reject — return the canonical position so the client can snap back
     return ResponseBuilder.json({
       ok: false,
@@ -816,12 +966,23 @@ function moveHandler(context) {
     });
   }
 
-  players[userId] = { row: row, col: col, seq: cur.seq + 1, ts: Date.now() };
+  players[userId] = {
+    row: row,
+    col: col,
+    seq: cur.seq + 1,
+    session_id: sessionId,
+    ts: Date.now(),
+  };
   saveWorldPlayers(worldId, players);
   // Persist position independently so page refresh restores it.
   sharedStorage.setItem(
     "vworld_pos:" + userId,
-    JSON.stringify({ row: row, col: col, seq: cur.seq + 1 }),
+    JSON.stringify({
+      row: row,
+      col: col,
+      seq: cur.seq + 1,
+      session_id: sessionId,
+    }),
   );
   var msg = JSON.stringify({
     player_id: userId,
@@ -834,6 +995,14 @@ function moveHandler(context) {
     msg,
     JSON.stringify({ world_id: worldId }),
   );
+  vwLog("move accepted", {
+    user_id: userId,
+    world_id: worldId,
+    session_id: sessionId,
+    row: row,
+    col: col,
+    seq: cur.seq + 1,
+  });
   return ResponseBuilder.json({
     ok: true,
     row: row,
@@ -857,6 +1026,7 @@ function leaveHandler(context) {
   delete players[userId];
   saveWorldPlayers(worldId, players);
   sharedStorage.removeItem("vworld_hb:" + userId);
+  sharedStorage.removeItem("vworld_lease:" + userId);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -873,6 +1043,50 @@ function heartbeatHandler(context) {
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return ResponseBuilder.json({ ok: true });
+
+  var sessionId = "";
+  try {
+    var body = JSON.parse(context.request.body || "{}");
+    sessionId = body.session_id ? String(body.session_id) : "";
+  } catch (e) {}
+
+  if (sessionId) {
+    var leaseKey = "vworld_lease:" + userId;
+    var leaseRaw = sharedStorage.getItem(leaseKey);
+    var lease = null;
+    if (leaseRaw) {
+      try {
+        lease = JSON.parse(leaseRaw);
+      } catch (e) {
+        lease = null;
+      }
+    }
+    var now = Date.now();
+    var leaseValid =
+      lease &&
+      typeof lease.session_id === "string" &&
+      Number(lease.expires_at || 0) > now;
+    // Heartbeat must not steal another tab's active writer lease.
+    // It can only renew if this session already owns the lease,
+    // or claim it when no valid lease exists.
+    if (!leaseValid || lease.session_id === sessionId) {
+      sharedStorage.setItem(
+        leaseKey,
+        JSON.stringify({
+          session_id: sessionId,
+          expires_at: now + LEASE_TTL_MS,
+        }),
+      );
+    } else {
+      vwLog("heartbeat ignored: lease owned by other session", {
+        user_id: userId,
+        world_id: worldId,
+        lease_session: lease.session_id,
+        session_id: sessionId,
+      });
+    }
+  }
+
   // Write ONLY to a separate per-user timestamp key — never read-modify-write
   // the shared players object.  A concurrent moveHandler write would otherwise
   // be clobbered by this handler writing back a stale row/col, causing the
@@ -898,6 +1112,7 @@ function newWorldHandler(context) {
       delete oldPlayers[userId];
       saveWorldPlayers(oldWorldId, oldPlayers);
       sharedStorage.removeItem("vworld_hb:" + userId);
+      sharedStorage.removeItem("vworld_lease:" + userId);
       graphQLRegistry.sendSubscriptionMessageFiltered(
         "worldPlayerMoved",
         JSON.stringify({ player_id: userId, leaving: true }),
@@ -908,6 +1123,7 @@ function newWorldHandler(context) {
 
   var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
   sharedStorage.setItem("vworld_current:" + userId, newWorldId);
+  sharedStorage.removeItem("vworld_lease:" + userId);
   // Clear persisted position so the player spawns at (1,1) in the new world.
   sharedStorage.removeItem("vworld_pos:" + userId);
   return ResponseBuilder.json({ ok: true });
@@ -921,9 +1137,25 @@ function playersHandler(context) {
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return ResponseBuilder.json([]);
   var players = loadWorldPlayers(worldId);
+  if (!players || typeof players !== "object") {
+    vwLog("playersHandler recovered malformed players payload", {
+      user_id: userId,
+      world_id: worldId,
+      type: typeof players,
+    });
+    players = {};
+  }
   var now = Date.now();
   var active = Object.keys(players)
     .filter(function (pid) {
+      if (!players[pid] || typeof players[pid] !== "object") {
+        vwLog("playersHandler skipped malformed player entry", {
+          user_id: userId,
+          world_id: worldId,
+          player_id: pid,
+        });
+        return false;
+      }
       // A player is active if either their last move OR their last heartbeat
       // is within the TTL window.  Heartbeat ts is stored separately to avoid
       // racing with the move handler's write to the players object.
@@ -931,7 +1163,12 @@ function playersHandler(context) {
       return now - Math.max(players[pid].ts, hbTs) < 30000;
     })
     .map(function (pid) {
-      return { player_id: pid, row: players[pid].row, col: players[pid].col };
+      return {
+        player_id: pid,
+        row: players[pid].row,
+        col: players[pid].col,
+        seq: players[pid].seq || 0,
+      };
     });
   return ResponseBuilder.json(active);
 }

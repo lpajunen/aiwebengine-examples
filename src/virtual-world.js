@@ -132,12 +132,23 @@ function getVirtualWorldPage(context) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Virtual World</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
-    canvas { display: block; }
+    body { 
+      background: #000; 
+      overflow: hidden; 
+      font-family: 'Segoe UI', sans-serif;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      overscroll-behavior: none;
+    }
+    canvas { 
+      display: block;
+      touch-action: none;
+    }
 
     .hud {
       position: absolute;
@@ -200,6 +211,50 @@ function getVirtualWorldPage(context) {
       font-family: inherit;
     }
     #hud-portal button:hover { background: rgba(255,160,0,1); }
+
+    #joystick-container {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      width: 140px;
+      height: 140px;
+      pointer-events: auto;
+      touch-action: auto;
+      display: block; /* Always visible for debugging */
+      z-index: 1000;
+    }
+    #joystick-base {
+      position: absolute;
+      width: 140px;
+      height: 140px;
+      background: rgba(0,0,0,0.4);
+      border: 3px solid rgba(255,255,255,0.4);
+      border-radius: 50%;
+      backdrop-filter: blur(4px);
+      touch-action: auto;
+    }
+    #joystick-stick {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(255,255,255,0.6);
+      border: 2px solid rgba(255,255,255,0.8);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: all 0.1s ease-out;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #joystick-stick.active {
+      background: rgba(41,128,185,0.8);
+      border-color: rgba(41,128,185,1);
+    }
+
+    /* Joystick always visible, can hide keyboard hints on touch devices */
+    @media (hover: none) and (pointer: coarse) {
+      #hud-keys { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -226,6 +281,11 @@ function getVirtualWorldPage(context) {
 
   <div class="hud" id="hud-portal">
     <button onclick="goToNewWorld()">&#9654; New World</button>
+  </div>
+
+  <div id="joystick-container">
+    <div id="joystick-base"></div>
+    <div id="joystick-stick"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -719,7 +779,10 @@ function getVirtualWorldPage(context) {
     // ── Camera orbit controls (drag + scroll) ────────────────────────────────
     var isDragging = false;
     var lastMouseX = 0, lastMouseY = 0;
+    var lastTouchX = 0, lastTouchY = 0;
+    var lastTouchDist = 0;
 
+    // Mouse controls (desktop)
     document.addEventListener('mousedown', function(e) {
       if (e.button === 0) {
         isDragging = true;
@@ -744,6 +807,165 @@ function getVirtualWorldPage(context) {
       camR = Math.max(10, Math.min(150, camR + e.deltaY * 0.05));
     }, { passive: false });
 
+    // ── Joystick element references (must be defined before touch handlers) ──
+    var joystickBase = document.getElementById('joystick-base');
+    var joystickStick = document.getElementById('joystick-stick');
+    var joystickActive = false;
+    var joystickMouseActive = false; // separate flag for mouse vs touch
+    var joystickDirection = { x: 0, y: 0 }; // normalized direction
+
+    // Touch controls (mobile) - for camera rotation and pinch-to-zoom
+    var isTouchRotating = false;
+    
+    function isTouchOnJoystick(touch) {
+      if (!joystickBase) return false;
+      var joystickRect = joystickBase.getBoundingClientRect();
+      return (
+        touch.clientX >= joystickRect.left &&
+        touch.clientX <= joystickRect.right &&
+        touch.clientY >= joystickRect.top &&
+        touch.clientY <= joystickRect.bottom
+      );
+    }
+
+    document.addEventListener('touchstart', function(e) {
+      // Ignore if touching the joystick
+      if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0])) {
+        e.preventDefault();
+        isTouchRotating = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        // Pinch to zoom
+        isTouchRotating = false;
+        var dx = e.touches[1].clientX - e.touches[0].clientX;
+        var dy = e.touches[1].clientY - e.touches[0].clientY;
+        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchmove', function(e) {
+      if (e.touches.length === 1 && isTouchRotating) {
+        e.preventDefault();
+        // Single finger drag for camera rotation
+        var dx = e.touches[0].clientX - lastTouchX;
+        var dy = e.touches[0].clientY - lastTouchY;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+        camTheta -= dx * 0.005;
+        camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        // Pinch to zoom
+        var dx = e.touches[1].clientX - e.touches[0].clientX;
+        var dy = e.touches[1].clientY - e.touches[0].clientY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var delta = lastTouchDist - dist;
+        lastTouchDist = dist;
+        camR = Math.max(10, Math.min(150, camR + delta * 0.2));
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', function(e) {
+      if (e.touches.length === 0) {
+        isTouchRotating = false;
+      } else if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0])) {
+        // Continuing with one finger after lifting second
+        isTouchRotating = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+    }, { passive: false });
+
+    // ── Joystick control functions ───────────────────────────────────────────
+    function updateJoystick(touchX, touchY) {
+      var rect = joystickBase.getBoundingClientRect();
+      var centerX = rect.left + rect.width / 2;
+      var centerY = rect.top + rect.height / 2;
+      var dx = touchX - centerX;
+      var dy = touchY - centerY;
+      var distance = Math.sqrt(dx * dx + dy * dy);
+      var maxDistance = 35; // max offset from center
+
+      if (distance > maxDistance) {
+        dx = (dx / distance) * maxDistance;
+        dy = (dy / distance) * maxDistance;
+      }
+
+      joystickStick.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
+      
+      // Normalize direction
+      if (distance > 10) { // dead zone
+        joystickDirection.x = dx / maxDistance;
+        joystickDirection.y = dy / maxDistance;
+      } else {
+        joystickDirection.x = 0;
+        joystickDirection.y = 0;
+      }
+    }
+
+    function resetJoystick() {
+      joystickStick.style.transform = 'translate(-50%, -50%)';
+      joystickDirection.x = 0;
+      joystickDirection.y = 0;
+      joystickActive = false;
+      joystickStick.classList.remove('active');
+    }
+
+    joystickBase.addEventListener('touchstart', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      joystickActive = true;
+      joystickStick.classList.add('active');
+      updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+
+    joystickBase.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (joystickActive) {
+        updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: false });
+
+    joystickBase.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      resetJoystick();
+    }, { passive: false });
+
+    joystickBase.addEventListener('touchcancel', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      resetJoystick();
+    }, { passive: false });
+
+    // Mouse event handlers for desktop
+    joystickBase.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      joystickActive = true;
+      joystickMouseActive = true;
+      joystickStick.classList.add('active');
+      updateJoystick(e.clientX, e.clientY);
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (joystickMouseActive) {
+        e.preventDefault();
+        updateJoystick(e.clientX, e.clientY);
+      }
+    });
+
+    document.addEventListener('mouseup', function(e) {
+      if (joystickMouseActive) {
+        e.preventDefault();
+        joystickMouseActive = false;
+        resetJoystick();
+      }
+    });
+
     // ── Game loop ────────────────────────────────────────────────────────────
     var moveTimer = 0;
     var clock = new THREE.Clock();
@@ -757,7 +979,20 @@ function getVirtualWorldPage(context) {
       moveTimer -= dt;
       if (moveTimer <= 0) {
         var moved = false;
-        if (keys['ArrowUp']    || keys['w'] || keys['W']) { moved = tryMove(-1,  0, Math.PI); }
+        
+        // Check joystick input first (for touch devices)
+        if (joystickActive && (Math.abs(joystickDirection.x) > 0.15 || Math.abs(joystickDirection.y) > 0.15)) {
+          // Determine primary direction based on joystick angle
+          if (Math.abs(joystickDirection.y) > Math.abs(joystickDirection.x)) {
+            if (joystickDirection.y < 0) { moved = tryMove(-1, 0, Math.PI); } // Up
+            else { moved = tryMove(1, 0, 0); } // Down
+          } else {
+            if (joystickDirection.x < 0) { moved = tryMove(0, -1, Math.PI / 2); } // Left
+            else { moved = tryMove(0, 1, -Math.PI / 2); } // Right
+          }
+        }
+        // Fallback to keyboard input
+        else if (keys['ArrowUp']    || keys['w'] || keys['W']) { moved = tryMove(-1,  0, Math.PI); }
         else if (keys['ArrowDown']  || keys['s'] || keys['S']) { moved = tryMove( 1,  0, 0); }
         else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { moved = tryMove( 0, -1, Math.PI / 2); }
         else if (keys['ArrowRight'] || keys['d'] || keys['D']) { moved = tryMove( 0,  1, -Math.PI / 2); }

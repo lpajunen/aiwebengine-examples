@@ -315,6 +315,7 @@ function getVirtualWorldPage(context) {
     var targetX = avatarCol * TILE + TILE / 2;
     var targetZ = avatarRow * TILE + TILE / 2;
     var moveSeq = ${initSeq};  // last confirmed server sequence number
+    var lastAssignedSeq = ${initSeq};  // last seq assigned to any move (queued or in-flight)
 
     // ── Renderer ─────────────────────────────────────────────────────────────
     var renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -574,8 +575,10 @@ function getVirtualWorldPage(context) {
         headers: { 'Content-Type': 'application/json' },
         // world_id and player_id are determined server-side from auth session
         body: JSON.stringify({
-          row: payload.row,
-          col: payload.col,
+          fromRow: payload.fromRow,
+          fromCol: payload.fromCol,
+          toRow: payload.toRow,
+          toCol: payload.toCol,
           seq: payload.seq,
           session_id: sessionId,
         })
@@ -595,22 +598,43 @@ function getVirtualWorldPage(context) {
             }
             if (typeof result.seq === 'number' && isFinite(result.seq)) {
               moveSeq = result.seq;
+              lastAssignedSeq = result.seq;
             }
             pendingMoves = [];
           } else {
-            // Server rejected the move (wall/bounds) — snap back to canonical position
-            // and discard queue since remaining steps are based on the invalid position.
-            avatarRow = result.row;
-            avatarCol = result.col;
+            // Server rejected the move (wall/bounds) — rebuild the queue by extracting
+            // the movement delta from each queued move and reapplying from the corrected position.
+            // This preserves the user's intended movement direction.
+            var lastPos = { row: result.row, col: result.col };
+            for (var i = 0; i < pendingMoves.length; i++) {
+              // Extract the intended movement direction (delta) from the original move
+              var deltaRow = pendingMoves[i].toRow - pendingMoves[i].fromRow;
+              var deltaCol = pendingMoves[i].toCol - pendingMoves[i].fromCol;
+              
+              // Reapply the delta from the corrected position
+              pendingMoves[i].fromRow = lastPos.row;
+              pendingMoves[i].fromCol = lastPos.col;
+              pendingMoves[i].toRow = lastPos.row + deltaRow;
+              pendingMoves[i].toCol = lastPos.col + deltaCol;
+              
+              lastPos = { row: pendingMoves[i].toRow, col: pendingMoves[i].toCol };
+            }
+            
+            // Update client state to match the end of the rebuilt queue for smooth continuation
+            avatarRow = lastPos.row;
+            avatarCol = lastPos.col;
             targetX = tileX(avatarCol);
             targetZ = tileZ(avatarRow);
             document.getElementById('pos-col').textContent = avatarCol;
             document.getElementById('pos-row').textContent = avatarRow;
-            pendingMoves = [];
           }
         } else {
-          // Confirmed — advance the local sequence number
-          moveSeq = result.seq;
+          // Confirmed — update the last confirmed server sequence number.
+          // Only update if this response is newer than what we've already confirmed.
+          // This prevents late responses from moving moveSeq backwards.
+          if (result.seq > moveSeq) {
+            moveSeq = result.seq;
+          }
         }
         flushMove(); // drain next step if any
       }).catch(function() {
@@ -621,12 +645,16 @@ function getVirtualWorldPage(context) {
       });
     }
 
-    function postMove(row, col) {
+    function postMove(fromRow, fromCol, toRow, toCol) {
       // Each optimistic step gets the next expected seq number.
       // Never silently drop steps: if queue is full, caller must not move locally.
       if (pendingMoves.length >= MAX_PENDING_MOVES) return false;
-      moveSeq++;
-      pendingMoves.push({ row: row, col: col, seq: moveSeq });
+      // Assign the next sequence number and track it separately from moveSeq.
+      // This ensures every move gets a unique seq even when moves are queued
+      // while previous moves are in-flight (before server confirms them).
+      var nextSeq = lastAssignedSeq + 1;
+      lastAssignedSeq = nextSeq;
+      pendingMoves.push({ fromRow: fromRow, fromCol: fromCol, toRow: toRow, toCol: toCol, seq: nextSeq });
       flushMove();
       return true;
     }
@@ -645,12 +673,14 @@ function getVirtualWorldPage(context) {
             if (p.player_id === playerId) {
               var snapSeq = Number(p.seq || 0);
               // Snapshot healing for same-user tabs when SSE is delayed/flaky.
-              if (!moveInFlight && pendingMoves.length === 0) {
+              // Only accept snapshot if we're idle AND it's not stale (older than our current state).
+              if (!moveInFlight && pendingMoves.length === 0 && snapSeq >= moveSeq) {
                 avatarRow = p.row;
                 avatarCol = p.col;
                 targetX = tileX(avatarCol);
                 targetZ = tileZ(avatarRow);
                 moveSeq = snapSeq;
+                lastAssignedSeq = snapSeq;
                 document.getElementById('pos-col').textContent = avatarCol;
                 document.getElementById('pos-row').textContent = avatarRow;
               }
@@ -689,13 +719,21 @@ function getVirtualWorldPage(context) {
               // Idle tabs (no moves queued) always accept the update, so they
               // are ready with the correct position when the user switches to them.
               if (!moveInFlight && pendingMoves.length === 0) {
-                avatarRow = payload.row;
-                avatarCol = payload.col;
-                targetX = tileX(avatarCol);
-                targetZ = tileZ(avatarRow);
-                if (hasIncomingSeq) moveSeq = incomingSeq;
-                document.getElementById('pos-col').textContent = avatarCol;
-                document.getElementById('pos-row').textContent = avatarRow;
+                // CRITICAL: Only accept SSE updates that are newer or equal to our current state.
+                // This prevents late-arriving SSE notifications from snapping us back to old positions
+                // after we've already moved further ahead (e.g., during rapid WASD movement).
+                if (!hasIncomingSeq || incomingSeq >= moveSeq) {
+                  avatarRow = payload.row;
+                  avatarCol = payload.col;
+                  targetX = tileX(avatarCol);
+                  targetZ = tileZ(avatarRow);
+                  if (hasIncomingSeq) {
+                    moveSeq = incomingSeq;
+                    lastAssignedSeq = incomingSeq;
+                  }
+                  document.getElementById('pos-col').textContent = avatarCol;
+                  document.getElementById('pos-row').textContent = avatarRow;
+                }
               }
             } else {
               upsertRemoteAvatar(
@@ -744,7 +782,8 @@ function getVirtualWorldPage(context) {
       var nr = avatarRow + dr;
       var nc = avatarCol + dc;
       if (isWalkable(nr, nc)) {
-        if (!postMove(nr, nc)) return false;
+        // Send current position AND destination to server for validation
+        if (!postMove(avatarRow, avatarCol, nr, nc)) return false;
         // Optimistic client-side prediction — server may still reject
         avatarRow = nr;
         avatarCol = nc;
@@ -1089,8 +1128,11 @@ function moveHandler(context) {
   } catch (e) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
-  var row = Number(body.row);
-  var col = Number(body.col);
+  // Support both old format (row/col) and new format (fromRow/fromCol/toRow/toCol)
+  var fromRow = body.fromRow !== undefined ? Number(body.fromRow) : null;
+  var fromCol = body.fromCol !== undefined ? Number(body.fromCol) : null;
+  var toRow = body.toRow !== undefined ? Number(body.toRow) : Number(body.row);
+  var toCol = body.toCol !== undefined ? Number(body.toCol) : Number(body.col);
   // Backward compatible fallback keeps legacy tabs functional.
   var sessionId = body.session_id ? String(body.session_id) : "legacy";
 
@@ -1145,18 +1187,10 @@ function moveHandler(context) {
     };
   }
 
-  // Server-authoritative validation
-  var dr = Math.abs(row - cur.row);
-  var dc = Math.abs(col - cur.col);
-  var map = generateMap(worldId);
-  var withinBounds = row >= 0 && row < ROWS && col >= 0 && col < COLS;
-  var singleStep = dr + dc === 1;
-  var walkable = withinBounds && map[row][col] === 0;
-
   // Reject stale moves from a tab that is no longer the active mover.
   // A stale move has a seq that doesn't continue from the stored seq.
-  // This is distinct from a wall/bounds rejection — the client should
-  // silently discard its queue rather than snapping back.
+  // This check must come BEFORE position validation to prevent false rejections
+  // during rapid sequential moves (where client has optimistically moved ahead).
   var expectedSeq = cur.seq + 1;
   var clientSeq = body.seq !== undefined ? Number(body.seq) : expectedSeq;
   if (clientSeq !== expectedSeq) {
@@ -1168,8 +1202,8 @@ function moveHandler(context) {
       client_seq: clientSeq,
       cur_row: cur.row,
       cur_col: cur.col,
-      req_row: row,
-      req_col: col,
+      req_row: toRow,
+      req_col: toCol,
     });
     return ResponseBuilder.json({
       ok: false,
@@ -1180,6 +1214,14 @@ function moveHandler(context) {
     });
   }
 
+  // Server-authoritative validation
+  var dr = Math.abs(toRow - cur.row);
+  var dc = Math.abs(toCol - cur.col);
+  var map = generateMap(worldId);
+  var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
+  var singleStep = dr + dc === 1;
+  var walkable = withinBounds && map[toRow][toCol] === 0;
+
   if (!singleStep || !walkable) {
     vwLog("move rejected: invalid step", {
       user_id: userId,
@@ -1187,8 +1229,8 @@ function moveHandler(context) {
       session_id: sessionId,
       from_row: cur.row,
       from_col: cur.col,
-      to_row: row,
-      to_col: col,
+      to_row: toRow,
+      to_col: toCol,
       single_step: singleStep,
       walkable: walkable,
     });
@@ -1202,8 +1244,8 @@ function moveHandler(context) {
   }
 
   players[userId] = {
-    row: row,
-    col: col,
+    row: toRow,
+    col: toCol,
     seq: cur.seq + 1,
     session_id: sessionId,
     ts: Date.now(),
@@ -1213,16 +1255,16 @@ function moveHandler(context) {
   sharedStorage.setItem(
     "vworld_pos:" + userId,
     JSON.stringify({
-      row: row,
-      col: col,
+      row: toRow,
+      col: toCol,
       seq: cur.seq + 1,
       session_id: sessionId,
     }),
   );
   var msg = JSON.stringify({
     player_id: userId,
-    row: row,
-    col: col,
+    row: toRow,
+    col: toCol,
     seq: cur.seq + 1,
   });
   graphQLRegistry.sendSubscriptionMessageFiltered(
@@ -1234,14 +1276,14 @@ function moveHandler(context) {
     user_id: userId,
     world_id: worldId,
     session_id: sessionId,
-    row: row,
-    col: col,
+    row: toRow,
+    col: toCol,
     seq: cur.seq + 1,
   });
   return ResponseBuilder.json({
     ok: true,
-    row: row,
-    col: col,
+    row: toRow,
+    col: toCol,
     seq: cur.seq + 1,
   });
 }

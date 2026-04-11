@@ -121,6 +121,7 @@ function getVirtualWorldPage(context) {
   // ── Server-side state ─────────────────────────────────────────────────────
   const worldId = getOrCreatePlayerWorld(userId);
   const map = generateMap(worldId);
+  const treeMods = loadWorldTrees(worldId);
   // Read last known position from dedicated storage (survives page refresh).
   // Falls back to spawn (1,1) only when the player enters a fresh new world.
   const savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
@@ -196,7 +197,7 @@ function getVirtualWorldPage(context) {
     }
 
     #hud-portal {
-      bottom: 60px; right: 14px;
+      top: 180px; right: 14px;
       pointer-events: auto;
     }
     #hud-portal button {
@@ -211,6 +212,33 @@ function getVirtualWorldPage(context) {
       font-family: inherit;
     }
     #hud-portal button:hover { background: rgba(255,160,0,1); }
+
+    #hud-tree-actions {
+      bottom: 14px; right: 14px;
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+    }
+    #hud-tree-actions button {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+    }
+    #btn-plant {
+      background: rgba(45,138,62,0.85);
+      border-color: rgba(61,186,78,0.5);
+    }
+    #btn-plant:hover { background: rgba(61,186,78,1); }
+    #btn-timber {
+      background: rgba(139,69,19,0.85);
+      border-color: rgba(160,82,45,0.5);
+    }
+    #btn-timber:hover { background: rgba(160,82,45,1); }
 
     #joystick-container {
       position: absolute;
@@ -283,6 +311,11 @@ function getVirtualWorldPage(context) {
     <button onclick="goToNewWorld()">&#9654; New World</button>
   </div>
 
+  <div class="hud" id="hud-tree-actions">
+    <button id="btn-plant" onclick="plantTree()">🌱 Plant</button>
+    <button id="btn-timber" onclick="cutTree()">🪓 Timber</button>
+  </div>
+
   <div id="joystick-container">
     <div id="joystick-base"></div>
     <div id="joystick-stick"></div>
@@ -292,6 +325,7 @@ function getVirtualWorldPage(context) {
   <script>
     // ── Server-injected game state ────────────────────────────────────────────
     var MAP      = ${JSON.stringify(map)};
+    var TREE_MODS = ${JSON.stringify(treeMods)};
     var worldId  = ${JSON.stringify(worldId)};
     var playerId = ${JSON.stringify(userId)};
 
@@ -302,6 +336,23 @@ function getVirtualWorldPage(context) {
       return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
     }
     var sessionId = createSessionId();
+
+    // ── Dynamic tree state (client-side) ──────────────────────────────────────
+    var dynamicTrees = TREE_MODS || {};
+    
+    // Apply tree modifications to MAP
+    for (var treeKey in dynamicTrees) {
+      var parts = treeKey.split('_');
+      var tr = parseInt(parts[0], 10);
+      var tc = parseInt(parts[1], 10);
+      if (tr >= 0 && tr < 100 && tc >= 0 && tc < 100) {
+        if (dynamicTrees[treeKey].action === 'plant') {
+          MAP[tr][tc] = 2; // Add tree
+        } else if (dynamicTrees[treeKey].action === 'cut') {
+          MAP[tr][tc] = 0; // Remove tree
+        }
+      }
+    }
 
     // ── Constants ─────────────────────────────────────────────────────────────
     var ROWS = 100;
@@ -473,6 +524,55 @@ function getVirtualWorldPage(context) {
 
     scene.add(iGroundA, iGroundB, iWall, iTrunk, iFoliage1, iFoliage2);
 
+    // ── Function to rebuild tree instances after tree modifications ───────────
+    function updateTreeInstances() {
+      // Remove old tree meshes from scene
+      scene.remove(iTrunk, iFoliage1, iFoliage2);
+      
+      // Dispose of old meshes to free memory
+      iTrunk.dispose();
+      iFoliage1.dispose();
+      iFoliage2.dispose();
+      
+      // Count trees in current MAP state
+      var newTreeCount = 0;
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          if (MAP[r][c] === 2) newTreeCount++;
+        }
+      }
+      
+      // Create new tree instances
+      iTrunk    = new THREE.InstancedMesh(geoTrunk,    matTrunk,    newTreeCount);
+      iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, newTreeCount);
+      iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, newTreeCount);
+      
+      iTrunk.castShadow = true;
+      iFoliage1.castShadow = true;
+      iFoliage2.castShadow = true;
+      
+      // Populate tree instances
+      var treeIdx = 0;
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          if (MAP[r][c] === 2) {
+            var tx = tileX(c), tz = tileZ(r);
+            dummy.position.set(tx, 0.45,  tz); dummy.updateMatrix(); iTrunk.setMatrixAt(treeIdx, dummy.matrix);
+            dummy.position.set(tx, 1.1,   tz); dummy.updateMatrix(); iFoliage1.setMatrixAt(treeIdx, dummy.matrix);
+            dummy.position.set(tx, 1.78,  tz); dummy.updateMatrix(); iFoliage2.setMatrixAt(treeIdx, dummy.matrix);
+            treeIdx++;
+          }
+        }
+      }
+      
+      iTrunk.instanceMatrix.needsUpdate    = true;
+      iFoliage1.instanceMatrix.needsUpdate = true;
+      iFoliage2.instanceMatrix.needsUpdate = true;
+      
+      // Add new tree meshes to scene
+      scene.add(iTrunk, iFoliage1, iFoliage2);
+    }
+
     // ── Avatar ───────────────────────────────────────────────────────────────
     var avatar = new THREE.Group();
 
@@ -498,6 +598,18 @@ function getVirtualWorldPage(context) {
 
     avatar.position.set(targetX, 0, targetZ);
     scene.add(avatar);
+
+    // ── Target indicator (shows where tree actions will occur) ───────────────
+    var targetIndicatorGeo = new THREE.BoxGeometry(TILE * 0.9, 0.3, TILE * 0.9);
+    var targetIndicatorMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide
+    });
+    var targetIndicator = new THREE.Mesh(targetIndicatorGeo, targetIndicatorMat);
+    targetIndicator.position.set(targetX, 0.15, targetZ);
+    scene.add(targetIndicator);
 
     // ── Remote players ───────────────────────────────────────────────────────
     var remoteAvatars = {}; // { pid: { group, targetX, targetZ, seq } }
@@ -757,6 +869,44 @@ function getVirtualWorldPage(context) {
 
       openSSE();
 
+      // Subscribe to tree changes via GraphQL SSE
+      var treeQuery = 'subscription{worldTreeChanged}';
+      var treeSseUrl = '/graphql/sse?query=' + encodeURIComponent(treeQuery);
+      var treeReconnectTimer = null;
+
+      function openTreeSSE() {
+        var treeEs = new EventSource(treeSseUrl);
+        treeEs.onmessage = function(evt) {
+          try {
+            var obj = JSON.parse(evt.data);
+            var raw = obj.data.worldTreeChanged;
+            var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            
+            var treeKey = payload.row + '_' + payload.col;
+            
+            if (payload.action === 'plant') {
+              MAP[payload.row][payload.col] = 2;
+              dynamicTrees[treeKey] = { action: 'plant', player_id: payload.player_id };
+            } else if (payload.action === 'cut') {
+              MAP[payload.row][payload.col] = 0;
+              dynamicTrees[treeKey] = { action: 'cut', player_id: payload.player_id };
+            }
+            
+            updateTreeInstances();
+          } catch(e) {
+            console.error('Tree SSE parse error:', e);
+          }
+        };
+        treeEs.onerror = function() {
+          treeEs.close();
+          if (treeReconnectTimer) clearTimeout(treeReconnectTimer);
+          treeReconnectTimer = setTimeout(openTreeSSE, 1000);
+        };
+        return treeEs;
+      }
+
+      openTreeSSE();
+
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
@@ -801,6 +951,46 @@ function getVirtualWorldPage(context) {
       fetch('/virtual-world/new-world', { method: 'POST' })
         .then(function() { window.location.href = '/virtual-world'; })
         .catch(function() { window.location.href = '/virtual-world'; });
+    }
+
+    function plantTree() {
+      fetch('/virtual-world/tree-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'plant',
+          row: avatarRow,
+          col: avatarCol,
+          rotation: avatar.rotation.y
+        })
+      }).then(function(res) { return res.json(); }).then(function(result) {
+        if (!result.ok) {
+          console.log('Plant failed:', result.error);
+          // TODO: Show user feedback
+        }
+      }).catch(function(err) {
+        console.error('Plant request failed:', err);
+      });
+    }
+
+    function cutTree() {
+      fetch('/virtual-world/tree-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cut',
+          row: avatarRow,
+          col: avatarCol,
+          rotation: avatar.rotation.y
+        })
+      }).then(function(res) { return res.json(); }).then(function(result) {
+        if (!result.ok) {
+          console.log('Cut failed:', result.error);
+          // TODO: Show user feedback
+        }
+      }).catch(function(err) {
+        console.error('Cut request failed:', err);
+      });
     }
 
     // ── Input ────────────────────────────────────────────────────────────────
@@ -867,9 +1057,29 @@ function getVirtualWorldPage(context) {
       );
     }
 
+    function isTouchOnButtons(touch) {
+      var treeActionsDiv = document.getElementById('hud-tree-actions');
+      if (treeActionsDiv) {
+        var rect = treeActionsDiv.getBoundingClientRect();
+        if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+            touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+          return true;
+        }
+      }
+      var portalDiv = document.getElementById('hud-portal');
+      if (portalDiv) {
+        var rect = portalDiv.getBoundingClientRect();
+        if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+            touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     document.addEventListener('touchstart', function(e) {
-      // Ignore if touching the joystick
-      if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0])) {
+      // Ignore if touching the joystick or buttons
+      if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0]) && !isTouchOnButtons(e.touches[0])) {
         e.preventDefault();
         isTouchRotating = true;
         lastTouchX = e.touches[0].clientX;
@@ -909,7 +1119,7 @@ function getVirtualWorldPage(context) {
     document.addEventListener('touchend', function(e) {
       if (e.touches.length === 0) {
         isTouchRotating = false;
-      } else if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0])) {
+      } else if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0]) && !isTouchOnButtons(e.touches[0])) {
         // Continuing with one finger after lifting second
         isTouchRotating = true;
         lastTouchX = e.touches[0].clientX;
@@ -1073,6 +1283,26 @@ function getVirtualWorldPage(context) {
       fill.target.position.set(avatar.position.x, 0, avatar.position.z);
       fill.target.updateMatrixWorld();
 
+      // Update target indicator position based on player rotation
+      var angle = avatar.rotation.y;
+      while (angle > Math.PI) angle -= 2 * Math.PI;
+      while (angle < -Math.PI) angle += 2 * Math.PI;
+      
+      var targetRow = avatarRow;
+      var targetCol = avatarCol;
+      if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
+        targetRow = avatarRow + 1; // South
+      } else if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) {
+        targetCol = avatarCol - 1; // West
+      } else if (angle >= 3 * Math.PI / 4 || angle < -3 * Math.PI / 4) {
+        targetRow = avatarRow - 1; // North
+      } else {
+        targetCol = avatarCol + 1; // East
+      }
+      
+      targetIndicator.position.x = tileX(targetCol);
+      targetIndicator.position.z = tileZ(targetRow);
+
       updateCamera();
       renderer.render(scene, camera);
     }
@@ -1100,6 +1330,34 @@ function loadWorldPlayers(worldId) {
 
 function saveWorldPlayers(worldId, players) {
   sharedStorage.setItem("vworld:" + worldId, JSON.stringify(players));
+}
+
+function loadWorldTrees(worldId) {
+  var raw = sharedStorage.getItem("vworld_trees:" + worldId);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function saveWorldTrees(worldId, trees) {
+  sharedStorage.setItem("vworld_trees:" + worldId, JSON.stringify(trees));
+}
+
+function getEffectiveMap(worldId) {
+  var map = generateMap(worldId);
+  var trees = loadWorldTrees(worldId);
+  // Apply tree modifications to the base map
+  for (var key in trees) {
+    var parts = key.split("_");
+    var row = parseInt(parts[0], 10);
+    var col = parseInt(parts[1], 10);
+    if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+      if (trees[key].action === "plant") {
+        map[row][col] = 2; // Add tree
+      } else if (trees[key].action === "cut") {
+        map[row][col] = 0; // Remove tree (make walkable)
+      }
+    }
+  }
+  return map;
 }
 
 var VW_DEBUG = false;
@@ -1450,7 +1708,142 @@ function playersHandler(context) {
   return ResponseBuilder.json(active);
 }
 
+function treeActionHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  var action = body.action; // "plant" or "cut"
+  var playerRow = Number(body.row);
+  var playerCol = Number(body.col);
+  var rotation = Number(body.rotation);
+
+  if (action !== "plant" && action !== "cut") {
+    return ResponseBuilder.json({ error: "Invalid action" }, 400);
+  }
+
+  // Derive world from server-side storage
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) {
+    return ResponseBuilder.json({ ok: false, error: "No world found" });
+  }
+
+  // Calculate target tile based on player rotation
+  // rotation: 0 = south (+row), Math.PI/2 = west (-col), Math.PI = north (-row), -Math.PI/2 = east (+col)
+  var targetRow = playerRow;
+  var targetCol = playerCol;
+
+  var angle = rotation;
+  // Normalize angle to [-π, π]
+  while (angle > Math.PI) angle -= 2 * Math.PI;
+  while (angle < -Math.PI) angle += 2 * Math.PI;
+
+  // Determine direction based on angle
+  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
+    targetRow = playerRow + 1; // South
+  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
+    targetCol = playerCol - 1; // West
+  } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
+    targetRow = playerRow - 1; // North
+  } else {
+    targetCol = playerCol + 1; // East
+  }
+
+  // Validate target is within bounds
+  if (
+    targetRow < 0 ||
+    targetRow >= ROWS ||
+    targetCol < 0 ||
+    targetCol >= COLS
+  ) {
+    return ResponseBuilder.json({ ok: false, error: "Target out of bounds" });
+  }
+
+  var map = generateMap(worldId);
+  var trees = loadWorldTrees(worldId);
+  var treeKey = targetRow + "_" + targetCol;
+
+  if (action === "plant") {
+    // Check if target is walkable ground (no wall, no tree)
+    var hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
+    var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
+    var baseHasTree = map[targetRow][targetCol] === 2;
+
+    // Can only plant on empty ground
+    if (map[targetRow][targetCol] !== 0 && !wasTreeCut) {
+      return ResponseBuilder.json({ ok: false, error: "Cannot plant here" });
+    }
+    if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
+      return ResponseBuilder.json({ ok: false, error: "Tree already exists" });
+    }
+
+    // Plant the tree
+    trees[treeKey] = {
+      action: "plant",
+      planted_by: userId,
+      timestamp: Date.now(),
+    };
+  } else if (action === "cut") {
+    // Check if target has a tree
+    var hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
+    var baseHasTree = map[targetRow][targetCol] === 2;
+    var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
+
+    if (!hasPlantedTree && !baseHasTree) {
+      return ResponseBuilder.json({ ok: false, error: "No tree to cut" });
+    }
+    if (alreadyCut) {
+      return ResponseBuilder.json({ ok: false, error: "Tree already cut" });
+    }
+
+    // Cut the tree
+    trees[treeKey] = {
+      action: "cut",
+      cut_by: userId,
+      timestamp: Date.now(),
+    };
+  }
+
+  saveWorldTrees(worldId, trees);
+
+  // Broadcast tree change
+  var msg = JSON.stringify({
+    action: action,
+    row: targetRow,
+    col: targetCol,
+    player_id: userId,
+  });
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    "worldTreeChanged",
+    msg,
+    JSON.stringify({ world_id: worldId }),
+  );
+
+  return ResponseBuilder.json({
+    ok: true,
+    action: action,
+    row: targetRow,
+    col: targetCol,
+  });
+}
+
 function worldPlayerMovedResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return {};
+  return { world_id: worldId };
+}
+
+function worldTreeChangedResolver(context) {
   var userId =
     context.request && context.request.auth && context.request.auth.userId;
   if (!userId) return {};
@@ -1483,10 +1876,21 @@ function init() {
     "heartbeatHandler",
     "POST",
   );
+  routeRegistry.registerRoute(
+    "/virtual-world/tree-action",
+    "treeActionHandler",
+    "POST",
+  );
   graphQLRegistry.registerSubscription(
     "worldPlayerMoved",
     "type Subscription { worldPlayerMoved: String }",
     "worldPlayerMovedResolver",
+    "external",
+  );
+  graphQLRegistry.registerSubscription(
+    "worldTreeChanged",
+    "type Subscription { worldTreeChanged: String }",
+    "worldTreeChangedResolver",
     "external",
   );
 }

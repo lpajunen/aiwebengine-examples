@@ -129,6 +129,10 @@ function getVirtualWorldPage(context) {
   const initRow = savedPos ? savedPos.row : 1;
   const initCol = savedPos ? savedPos.col : 1;
   const initSeq = savedPos ? savedPos.seq || 0 : 0;
+  const initRotation =
+    savedPos && Number.isFinite(Number(savedPos.rotation))
+      ? Number(savedPos.rotation)
+      : 0;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -597,6 +601,7 @@ function getVirtualWorldPage(context) {
     avatar.add(makePart(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
 
     avatar.position.set(targetX, 0, targetZ);
+    avatar.rotation.y = ${initRotation};
     scene.add(avatar);
 
     // ── Target indicator (shows where tree actions will occur) ───────────────
@@ -612,7 +617,7 @@ function getVirtualWorldPage(context) {
     scene.add(targetIndicator);
 
     // ── Remote players ───────────────────────────────────────────────────────
-    var remoteAvatars = {}; // { pid: { group, targetX, targetZ, seq } }
+    var remoteAvatars = {}; // { pid: { group, targetX, targetZ, targetRot, seq } }
 
     function avatarBodyColor(pid) {
       var h = 0;
@@ -644,19 +649,23 @@ function getVirtualWorldPage(context) {
       return g;
     }
 
-    function upsertRemoteAvatar(pid, row, col, seq) {
+    function upsertRemoteAvatar(pid, row, col, seq, rotation) {
       if (pid === playerId) return;
       var tx = tileX(col), tz = tileZ(row);
+      var incomingRot = Number(rotation);
+      var hasIncomingRot = isFinite(incomingRot);
       var incomingSeq = (seq !== undefined && seq !== null) ? Number(seq) : null;
       if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
       if (!remoteAvatars[pid]) {
         var g = makeRemoteAvatar(pid);
         g.position.set(tx, 0, tz);
+        g.rotation.y = hasIncomingRot ? incomingRot : 0;
         scene.add(g);
         remoteAvatars[pid] = {
           group: g,
           targetX: tx,
           targetZ: tz,
+          targetRot: hasIncomingRot ? incomingRot : 0,
           seq: incomingSeq !== null ? incomingSeq : 0,
         };
       } else {
@@ -664,6 +673,7 @@ function getVirtualWorldPage(context) {
         if (incomingSeq !== null && incomingSeq <= knownSeq) return;
         remoteAvatars[pid].targetX = tx;
         remoteAvatars[pid].targetZ = tz;
+        if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
         if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
       }
     }
@@ -691,6 +701,7 @@ function getVirtualWorldPage(context) {
           fromCol: payload.fromCol,
           toRow: payload.toRow,
           toCol: payload.toCol,
+          rotation: payload.rotation,
           seq: payload.seq,
           session_id: sessionId,
         })
@@ -757,7 +768,7 @@ function getVirtualWorldPage(context) {
       });
     }
 
-    function postMove(fromRow, fromCol, toRow, toCol) {
+    function postMove(fromRow, fromCol, toRow, toCol, rotation) {
       // Each optimistic step gets the next expected seq number.
       // Never silently drop steps: if queue is full, caller must not move locally.
       if (pendingMoves.length >= MAX_PENDING_MOVES) return false;
@@ -766,7 +777,14 @@ function getVirtualWorldPage(context) {
       // while previous moves are in-flight (before server confirms them).
       var nextSeq = lastAssignedSeq + 1;
       lastAssignedSeq = nextSeq;
-      pendingMoves.push({ fromRow: fromRow, fromCol: fromCol, toRow: toRow, toCol: toCol, seq: nextSeq });
+      pendingMoves.push({
+        fromRow: fromRow,
+        fromCol: fromCol,
+        toRow: toRow,
+        toCol: toCol,
+        rotation: rotation,
+        seq: nextSeq,
+      });
       flushMove();
       return true;
     }
@@ -791,13 +809,16 @@ function getVirtualWorldPage(context) {
                 avatarCol = p.col;
                 targetX = tileX(avatarCol);
                 targetZ = tileZ(avatarRow);
+                if (isFinite(Number(p.rotation))) {
+                  avatar.rotation.y = Number(p.rotation);
+                }
                 moveSeq = snapSeq;
                 lastAssignedSeq = snapSeq;
                 document.getElementById('pos-col').textContent = avatarCol;
                 document.getElementById('pos-row').textContent = avatarRow;
               }
             } else {
-              upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq);
+              upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
             }
           });
         }).catch(function() {});
@@ -839,6 +860,9 @@ function getVirtualWorldPage(context) {
                   avatarCol = payload.col;
                   targetX = tileX(avatarCol);
                   targetZ = tileZ(avatarRow);
+                  if (isFinite(Number(payload.rotation))) {
+                    avatar.rotation.y = Number(payload.rotation);
+                  }
                   if (hasIncomingSeq) {
                     moveSeq = incomingSeq;
                     lastAssignedSeq = incomingSeq;
@@ -853,6 +877,7 @@ function getVirtualWorldPage(context) {
                 payload.row,
                 payload.col,
                 payload.seq,
+                payload.rotation,
               );
             }
           } catch(e) {}
@@ -933,7 +958,7 @@ function getVirtualWorldPage(context) {
       var nc = avatarCol + dc;
       if (isWalkable(nr, nc)) {
         // Send current position AND destination to server for validation
-        if (!postMove(avatarRow, avatarCol, nr, nc)) return false;
+        if (!postMove(avatarRow, avatarCol, nr, nc, angle)) return false;
         // Optimistic client-side prediction — server may still reject
         avatarRow = nr;
         avatarCol = nc;
@@ -1269,6 +1294,10 @@ function getVirtualWorldPage(context) {
         var ra = remoteAvatars[pid];
         ra.group.position.x += (ra.targetX - ra.group.position.x) * lerp;
         ra.group.position.z += (ra.targetZ - ra.group.position.z) * lerp;
+        var rotDelta = ra.targetRot - ra.group.rotation.y;
+        while (rotDelta > Math.PI) rotDelta -= 2 * Math.PI;
+        while (rotDelta < -Math.PI) rotDelta += 2 * Math.PI;
+        ra.group.rotation.y += rotDelta * lerp;
       }
 
       // Keep background plane centered under avatar
@@ -1391,6 +1420,7 @@ function moveHandler(context) {
   var fromCol = body.fromCol !== undefined ? Number(body.fromCol) : null;
   var toRow = body.toRow !== undefined ? Number(body.toRow) : Number(body.row);
   var toCol = body.toCol !== undefined ? Number(body.toCol) : Number(body.col);
+  var rotation = Number(body.rotation);
   // Backward compatible fallback keeps legacy tabs functional.
   var sessionId = body.session_id ? String(body.session_id) : "legacy";
 
@@ -1441,9 +1471,12 @@ function moveHandler(context) {
       row: savedPos.row,
       col: savedPos.col,
       seq: savedPos.seq || 0,
+      rotation: isFinite(Number(savedPos.rotation)) ? Number(savedPos.rotation) : 0,
       session_id: savedPos.session_id || "",
     };
   }
+  if (!isFinite(rotation)) rotation = Number(cur && cur.rotation);
+  if (!isFinite(rotation)) rotation = 0;
 
   // Reject stale moves from a tab that is no longer the active mover.
   // A stale move has a seq that doesn't continue from the stored seq.
@@ -1506,6 +1539,7 @@ function moveHandler(context) {
     row: toRow,
     col: toCol,
     seq: cur.seq + 1,
+    rotation: rotation,
     session_id: sessionId,
     ts: Date.now(),
   };
@@ -1517,6 +1551,7 @@ function moveHandler(context) {
       row: toRow,
       col: toCol,
       seq: cur.seq + 1,
+      rotation: rotation,
       session_id: sessionId,
     }),
   );
@@ -1525,6 +1560,7 @@ function moveHandler(context) {
     row: toRow,
     col: toCol,
     seq: cur.seq + 1,
+    rotation: rotation,
   });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -1544,6 +1580,7 @@ function moveHandler(context) {
     row: toRow,
     col: toCol,
     seq: cur.seq + 1,
+    rotation: rotation,
   });
 }
 
@@ -1704,6 +1741,9 @@ function playersHandler(context) {
         row: players[pid].row,
         col: players[pid].col,
         seq: players[pid].seq || 0,
+        rotation: isFinite(Number(players[pid].rotation))
+          ? Number(players[pid].rotation)
+          : 0,
       };
     });
   return ResponseBuilder.json(active);

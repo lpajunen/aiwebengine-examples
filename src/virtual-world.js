@@ -972,6 +972,36 @@ function getVirtualWorldPage(context) {
       return false;
     }
 
+    function tryMoveCameraRelative(inputX, inputY) {
+      // Build camera-relative forward/right vectors on the XZ plane.
+      var fx = avatar.position.x - camera.position.x;
+      var fz = avatar.position.z - camera.position.z;
+      var flen = Math.sqrt(fx * fx + fz * fz);
+      if (flen < 1e-6) return false;
+      fx /= flen;
+      fz /= flen;
+
+      // Right vector on XZ plane (for screen-relative left/right mapping).
+      var rx = -fz;
+      var rz = fx;
+
+      var vx = fx * inputY + rx * inputX;
+      var vz = fz * inputY + rz * inputX;
+      if (Math.abs(vx) < 1e-6 && Math.abs(vz) < 1e-6) return false;
+
+      var dr = 0;
+      var dc = 0;
+      var angle = 0;
+      if (Math.abs(vz) >= Math.abs(vx)) {
+        dr = vz > 0 ? 1 : -1;
+        angle = dr > 0 ? 0 : Math.PI;
+      } else {
+        dc = vx > 0 ? 1 : -1;
+        angle = dc > 0 ? -Math.PI / 2 : Math.PI / 2;
+      }
+      return tryMove(dr, dc, angle);
+    }
+
     function goToNewWorld() {
       fetch('/virtual-world/new-world', { method: 'POST' })
         .then(function() { window.location.href = '/virtual-world'; })
@@ -1256,20 +1286,18 @@ function getVirtualWorldPage(context) {
         
         // Check joystick input first (for touch devices)
         if (joystickActive && (Math.abs(joystickDirection.x) > 0.15 || Math.abs(joystickDirection.y) > 0.15)) {
-          // Determine primary direction based on joystick angle
-          if (Math.abs(joystickDirection.y) > Math.abs(joystickDirection.x)) {
-            if (joystickDirection.y < 0) { moved = tryMove(-1, 0, Math.PI); } // Up
-            else { moved = tryMove(1, 0, 0); } // Down
-          } else {
-            if (joystickDirection.x < 0) { moved = tryMove(0, -1, Math.PI / 2); } // Left
-            else { moved = tryMove(0, 1, -Math.PI / 2); } // Right
-          }
+          moved = tryMoveCameraRelative(joystickDirection.x, -joystickDirection.y);
         }
-        // Fallback to keyboard input
-        else if (keys['ArrowUp']    || keys['w'] || keys['W']) { moved = tryMove(-1,  0, Math.PI); }
-        else if (keys['ArrowDown']  || keys['s'] || keys['S']) { moved = tryMove( 1,  0, 0); }
-        else if (keys['ArrowLeft']  || keys['a'] || keys['A']) { moved = tryMove( 0, -1, Math.PI / 2); }
-        else if (keys['ArrowRight'] || keys['d'] || keys['D']) { moved = tryMove( 0,  1, -Math.PI / 2); }
+        // Fallback to keyboard input (camera-relative)
+        else {
+          var inputX = 0;
+          var inputY = 0;
+          if (keys['ArrowUp'] || keys['w'] || keys['W']) inputY += 1;
+          if (keys['ArrowDown'] || keys['s'] || keys['S']) inputY -= 1;
+          if (keys['ArrowLeft'] || keys['a'] || keys['A']) inputX -= 1;
+          if (keys['ArrowRight'] || keys['d'] || keys['D']) inputX += 1;
+          if (inputX !== 0 || inputY !== 0) moved = tryMoveCameraRelative(inputX, inputY);
+        }
 
         if (moved) moveTimer = MOVE_INTERVAL;
       }
@@ -1471,7 +1499,9 @@ function moveHandler(context) {
       row: savedPos.row,
       col: savedPos.col,
       seq: savedPos.seq || 0,
-      rotation: isFinite(Number(savedPos.rotation)) ? Number(savedPos.rotation) : 0,
+      rotation: isFinite(Number(savedPos.rotation))
+        ? Number(savedPos.rotation)
+        : 0,
       session_id: savedPos.session_id || "",
     };
   }

@@ -1475,7 +1475,8 @@ function moveHandler(context) {
   // Server-authoritative validation
   var dr = Math.abs(toRow - cur.row);
   var dc = Math.abs(toCol - cur.col);
-  var map = generateMap(worldId);
+  // Movement must respect tree modifications (planted/cut), not just base terrain.
+  var map = getEffectiveMap(worldId);
   var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
   var singleStep = dr + dc === 1;
   var walkable = withinBounds && map[toRow][toCol] === 0;

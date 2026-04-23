@@ -953,6 +953,10 @@ function getVirtualWorldPage(context) {
       return r >= 0 && r < ROWS && c >= 0 && c < COLS && MAP[r][c] === 0;
     }
 
+    var lastMoveIntentKey = null;
+    var lastMoveAxis = null; // 'horizontal' | 'vertical'
+    var lastForwardCardinal = null;
+
     function tryMove(dr, dc, angle) {
       var nr = avatarRow + dr;
       var nc = avatarCol + dc;
@@ -972,33 +976,74 @@ function getVirtualWorldPage(context) {
       return false;
     }
 
+    function getCameraForwardCardinal() {
+      // Quantize camera forward to one grid cardinal with hysteresis so
+      // near-diagonal default angles do not flip direction frame-to-frame.
+      var fx = -Math.sin(camTheta);
+      var fz = -Math.cos(camTheta);
+      var ax = Math.abs(fx);
+      var az = Math.abs(fz);
+      var hysteresis = 0.08;
+
+      var candidate = null;
+      if (az >= ax) {
+        candidate = { dr: fz >= 0 ? 1 : -1, dc: 0 };
+      } else {
+        candidate = { dr: 0, dc: fx >= 0 ? 1 : -1 };
+      }
+
+      // First use must come from actual camera heading (no fallback bias).
+      if (!lastForwardCardinal) {
+        lastForwardCardinal = candidate;
+        return { dr: lastForwardCardinal.dr, dc: lastForwardCardinal.dc };
+      }
+
+      if (Math.abs(az - ax) <= hysteresis) {
+        return { dr: lastForwardCardinal.dr, dc: lastForwardCardinal.dc };
+      }
+      lastForwardCardinal = candidate;
+      return { dr: lastForwardCardinal.dr, dc: lastForwardCardinal.dc };
+    }
+
     function tryMoveCameraRelative(inputX, inputY) {
-      // Build camera-relative forward/right vectors on the XZ plane.
-      var fx = avatar.position.x - camera.position.x;
-      var fz = avatar.position.z - camera.position.z;
-      var flen = Math.sqrt(fx * fx + fz * fz);
-      if (flen < 1e-6) return false;
-      fx /= flen;
-      fz /= flen;
+      if (Math.abs(inputX) < 1e-6 && Math.abs(inputY) < 1e-6) return false;
 
-      // Right vector on XZ plane (for screen-relative left/right mapping).
-      var rx = -fz;
-      var rz = fx;
+      var intentKey =
+        (inputX > 0 ? 1 : inputX < 0 ? -1 : 0) +
+        ',' +
+        (inputY > 0 ? 1 : inputY < 0 ? -1 : 0);
 
-      var vx = fx * inputY + rx * inputX;
-      var vz = fz * inputY + rz * inputX;
-      if (Math.abs(vx) < 1e-6 && Math.abs(vz) < 1e-6) return false;
+      var forward = getCameraForwardCardinal();
+      // Right direction in grid space for the current camera orientation.
+      var right = { dr: forward.dc, dc: -forward.dr };
+
+      var absX = Math.abs(inputX);
+      var absY = Math.abs(inputY);
+      var axis = null;
+      var axisBias = 0.12;
+      if (absX > absY + axisBias) axis = 'horizontal';
+      else if (absY > absX + axisBias) axis = 'vertical';
+      else if (lastMoveIntentKey === intentKey && lastMoveAxis) axis = lastMoveAxis;
+      else axis = absY >= absX ? 'vertical' : 'horizontal';
 
       var dr = 0;
       var dc = 0;
-      var angle = 0;
-      if (Math.abs(vz) >= Math.abs(vx)) {
-        dr = vz > 0 ? 1 : -1;
-        angle = dr > 0 ? 0 : Math.PI;
+      if (axis === 'horizontal') {
+        var sx = inputX > 0 ? 1 : -1;
+        dr = right.dr * sx;
+        dc = right.dc * sx;
       } else {
-        dc = vx > 0 ? 1 : -1;
-        angle = dc > 0 ? -Math.PI / 2 : Math.PI / 2;
+        var sy = inputY > 0 ? 1 : -1;
+        dr = forward.dr * sy;
+        dc = forward.dc * sy;
       }
+
+      var angle = 0;
+      if (dr !== 0) angle = dr > 0 ? 0 : Math.PI;
+      else angle = dc > 0 ? -Math.PI / 2 : Math.PI / 2;
+
+      lastMoveIntentKey = intentKey;
+      lastMoveAxis = axis;
       return tryMove(dr, dc, angle);
     }
 
@@ -1297,6 +1342,10 @@ function getVirtualWorldPage(context) {
           if (keys['ArrowLeft'] || keys['a'] || keys['A']) inputX -= 1;
           if (keys['ArrowRight'] || keys['d'] || keys['D']) inputX += 1;
           if (inputX !== 0 || inputY !== 0) moved = tryMoveCameraRelative(inputX, inputY);
+          else {
+            lastMoveIntentKey = null;
+            lastMoveAxis = null;
+          }
         }
 
         if (moved) moveTimer = MOVE_INTERVAL;

@@ -9,7 +9,8 @@
     "skipLibCheck": true,
     "allowJs": true,
     "checkJs": false,
-    "moduleResolution": "node",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "types": []
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.jsx", "types/**/*.d.ts"],

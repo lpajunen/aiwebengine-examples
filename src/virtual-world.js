@@ -8,6 +8,10 @@ var ROWS = 100;
 var COLS = 100;
 var LEASE_TTL_MS = 30000;
 
+/**
+ * @param {number} seed
+ * @returns {() => number}
+ */
 function mulberry32(seed) {
   return function () {
     seed |= 0;
@@ -18,9 +22,14 @@ function mulberry32(seed) {
   };
 }
 
+/**
+ * @param {string | number} worldId
+ * @returns {number[][]}
+ */
 function generateMap(worldId) {
   var seed = parseInt(String(worldId), 10);
   var rand = mulberry32(seed);
+  /** @type {number[][]} */
   var map = [];
   for (var r = 0; r < ROWS; r++) {
     map[r] = [];
@@ -94,6 +103,10 @@ function generateMap(worldId) {
   return map;
 }
 
+/**
+ * @param {string} userId
+ * @returns {string}
+ */
 function getOrCreatePlayerWorld(userId) {
   var key = "vworld_current:" + userId;
   var worldId = sharedStorage.getItem(key);
@@ -104,6 +117,9 @@ function getOrCreatePlayerWorld(userId) {
   return worldId;
 }
 
+/**
+ * @param {*} context
+ */
 function getVirtualWorldPage(context) {
   const req = context.request;
   if (!req.auth || !req.auth.isAuthenticated) {
@@ -1463,25 +1479,46 @@ function getVirtualWorldPage(context) {
   return ResponseBuilder.html(html);
 }
 
+/**
+ * @param {string} worldId
+ * @returns {Record<string, any>}
+ */
 function loadWorldPlayers(worldId) {
   var raw = sharedStorage.getItem("vworld:" + worldId);
   return raw ? JSON.parse(raw) : {};
 }
 
+/**
+ * @param {string} worldId
+ * @param {Record<string, any>} players
+ */
 function saveWorldPlayers(worldId, players) {
   sharedStorage.setItem("vworld:" + worldId, JSON.stringify(players));
 }
 
+/**
+ * @param {string} worldId
+ * @returns {Record<string, any>}
+ */
 function loadWorldTrees(worldId) {
   var raw = sharedStorage.getItem("vworld_trees:" + worldId);
   return raw ? JSON.parse(raw) : {};
 }
 
+/**
+ * @param {string} worldId
+ * @param {Record<string, any>} trees
+ */
 function saveWorldTrees(worldId, trees) {
   sharedStorage.setItem("vworld_trees:" + worldId, JSON.stringify(trees));
 }
 
+/**
+ * @param {string} worldId
+ * @returns {number[][]}
+ */
 function getEffectiveMap(worldId) {
+  /** @type {number[][]} */
   var map = generateMap(worldId);
   var trees = loadWorldTrees(worldId);
   // Apply tree modifications to the base map
@@ -1502,6 +1539,10 @@ function getEffectiveMap(worldId) {
 
 var VW_DEBUG = false;
 
+/**
+ * @param {string} msg
+ * @param {*} [obj]
+ */
 function vwLog(msg, obj) {
   if (!VW_DEBUG) return;
   try {
@@ -1515,6 +1556,9 @@ function vwLog(msg, obj) {
   }
 }
 
+/**
+ * @param {*} context
+ */
 function moveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1697,6 +1741,9 @@ function moveHandler(context) {
   });
 }
 
+/**
+ * @param {*} context
+ */
 function leaveHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1722,6 +1769,9 @@ function leaveHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
+/**
+ * @param {*} context
+ */
 function heartbeatHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1781,6 +1831,9 @@ function heartbeatHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
+/**
+ * @param {*} context
+ */
 function newWorldHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1820,6 +1873,9 @@ function newWorldHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
+/**
+ * @param {*} context
+ */
 function startWorldHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1855,6 +1911,9 @@ function startWorldHandler(context) {
   return ResponseBuilder.json({ ok: true });
 }
 
+/**
+ * @param {*} context
+ */
 function playersHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1902,6 +1961,9 @@ function playersHandler(context) {
   return ResponseBuilder.json(active);
 }
 
+/**
+ * @param {*} context
+ */
 function currentWorldHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -1911,6 +1973,9 @@ function currentWorldHandler(context) {
   return ResponseBuilder.json({ world_id: String(worldId) });
 }
 
+/**
+ * @param {*} context
+ */
 function treeActionHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -2037,6 +2102,10 @@ function treeActionHandler(context) {
   });
 }
 
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
 function worldPlayerMovedResolver(context) {
   var userId =
     context.request && context.request.auth && context.request.auth.userId;
@@ -2046,6 +2115,10 @@ function worldPlayerMovedResolver(context) {
   return { world_id: worldId };
 }
 
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
 function worldTreeChangedResolver(context) {
   var userId =
     context.request && context.request.auth && context.request.auth.userId;

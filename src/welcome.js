@@ -3,6 +3,9 @@
 // Welcome page
 // Serves a friendly welcome message at the root path
 
+/**
+ * @param {*} context
+ */
 function servePage(context) {
   const req = context.request;
   try {

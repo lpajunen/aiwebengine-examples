@@ -7,6 +7,11 @@
 var ROWS = 100;
 var COLS = 100;
 var LEASE_TTL_MS = 30000;
+var NPC_MIN_COUNT = 10;
+var NPC_MAX_COUNT = 20;
+var NPC_TICK_MS = 500;
+var NPC_ACTIVE_WORLD_TTL_MS = 120000;
+var npcTickerStarted = false;
 
 /**
  * @param {number} seed
@@ -136,8 +141,10 @@ function getVirtualWorldPage(context) {
 
   // ── Server-side state ─────────────────────────────────────────────────────
   const worldId = getOrCreatePlayerWorld(userId);
+  markNPCWorldActive(worldId);
   const map = generateMap(worldId);
   const treeMods = loadWorldTrees(worldId);
+  const npcs = getWorldNPCSnapshot(worldId);
   // Read last known position from dedicated storage (survives page refresh).
   // Falls back to spawn (1,1) only when the player enters a fresh new world.
   const savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
@@ -359,6 +366,7 @@ function getVirtualWorldPage(context) {
     // ── Server-injected game state ────────────────────────────────────────────
     var MAP      = ${JSON.stringify(map)};
     var TREE_MODS = ${JSON.stringify(treeMods)};
+    var NPCS = ${JSON.stringify(npcs)};
     var worldId  = ${JSON.stringify(worldId)};
     var playerId = ${JSON.stringify(userId)};
 
@@ -647,6 +655,7 @@ function getVirtualWorldPage(context) {
 
     // ── Remote players ───────────────────────────────────────────────────────
     var remoteAvatars = {}; // { pid: { group, targetX, targetZ, targetRot, seq } }
+    var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
 
     function avatarBodyColor(pid) {
       var h = 0;
@@ -712,6 +721,96 @@ function getVirtualWorldPage(context) {
         scene.remove(remoteAvatars[pid].group);
         delete remoteAvatars[pid];
       }
+    }
+
+    function npcBodyColor(npcId) {
+      var h = 0;
+      for (var i = 0; i < npcId.length; i++) {
+        h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
+      }
+      var hue = 25 + ((h >>> 0) % 80);
+      return new THREE.Color('hsl(' + hue + ',65%,52%)');
+    }
+
+    function makeNPCAvatar(npcId) {
+      var g = new THREE.Group();
+      function np(w, h, d, color, px, py, pz) {
+        var mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshLambertMaterial({ color: color })
+        );
+        mesh.position.set(px, py, pz);
+        mesh.castShadow = true;
+        return mesh;
+      }
+      var bc = npcBodyColor(npcId);
+      g.add(np(0.20, 0.35, 0.22, 0x5c4033, -0.14, 0.175, 0));
+      g.add(np(0.20, 0.35, 0.22, 0x5c4033,  0.14, 0.175, 0));
+      g.add(np(0.55, 0.65, 0.40, bc,         0,   0.525, 0));
+      g.add(np(0.45, 0.45, 0.45, 0xd9b38c,   0,   0.975, 0));
+      g.add(np(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
+      g.add(np(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
+      return g;
+    }
+
+    function upsertNPCAvatar(npcId, row, col, seq, rotation) {
+      if (!npcId || !isFinite(Number(row)) || !isFinite(Number(col))) return;
+      var tx = tileX(Number(col));
+      var tz = tileZ(Number(row));
+      var incomingRot = Number(rotation);
+      var hasIncomingRot = isFinite(incomingRot);
+      var incomingSeq = (seq !== undefined && seq !== null) ? Number(seq) : null;
+      if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
+
+      if (!npcAvatars[npcId]) {
+        var g = makeNPCAvatar(npcId);
+        g.position.set(tx, 0, tz);
+        g.rotation.y = hasIncomingRot ? incomingRot : 0;
+        scene.add(g);
+        npcAvatars[npcId] = {
+          group: g,
+          targetX: tx,
+          targetZ: tz,
+          targetRot: hasIncomingRot ? incomingRot : 0,
+          seq: incomingSeq !== null ? incomingSeq : 0,
+        };
+      } else {
+        var knownSeq = Number(npcAvatars[npcId].seq || 0);
+        if (incomingSeq !== null && incomingSeq <= knownSeq) return;
+        npcAvatars[npcId].targetX = tx;
+        npcAvatars[npcId].targetZ = tz;
+        if (hasIncomingRot) npcAvatars[npcId].targetRot = incomingRot;
+        if (incomingSeq !== null) npcAvatars[npcId].seq = incomingSeq;
+      }
+    }
+
+    function removeNPCAvatar(npcId) {
+      if (npcAvatars[npcId]) {
+        scene.remove(npcAvatars[npcId].group);
+        delete npcAvatars[npcId];
+      }
+    }
+
+    function syncNPCSnapshot(npcs) {
+      if (!Array.isArray(npcs)) return;
+      var seen = {};
+      for (var i = 0; i < npcs.length; i++) {
+        var n = npcs[i];
+        if (!n || typeof n.npc_id !== 'string') continue;
+        seen[n.npc_id] = true;
+        upsertNPCAvatar(n.npc_id, n.row, n.col, n.seq, n.rotation);
+      }
+      for (var npcId in npcAvatars) {
+        if (!seen[npcId]) removeNPCAvatar(npcId);
+      }
+    }
+
+    function fetchNPCSnapshot() {
+      fetch('/virtual-world/npcs')
+        .then(function(r) { return r.json(); })
+        .then(function(npcs) {
+          syncNPCSnapshot(npcs);
+        }).catch(function() {});
     }
 
     var pendingMoves = [];   // FIFO queue of {row,col,seq} — one entry per step
@@ -865,6 +964,8 @@ function getVirtualWorldPage(context) {
 
     function initMultiplayer() {
       fetchSnapshot();
+      syncNPCSnapshot(NPCS);
+      fetchNPCSnapshot();
 
       // Subscribe to real-time moves via GraphQL SSE
       // world_id is resolved server-side from the authenticated user's current world
@@ -975,6 +1076,43 @@ function getVirtualWorldPage(context) {
 
       openTreeSSE();
 
+      // Subscribe to NPC movement via GraphQL SSE
+      var npcQuery = 'subscription{worldNPCMoved}';
+      var npcSseUrl = '/graphql/sse?query=' + encodeURIComponent(npcQuery);
+      var npcReconnectTimer = null;
+
+      function openNPCSSE() {
+        var npcEs = new EventSource(npcSseUrl);
+        npcEs.onmessage = function(evt) {
+          try {
+            var obj = JSON.parse(evt.data);
+            var raw = obj.data.worldNPCMoved;
+            var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            if (!payload || typeof payload.npc_id !== 'string') return;
+            if (payload.despawn) {
+              removeNPCAvatar(payload.npc_id);
+            } else {
+              upsertNPCAvatar(
+                payload.npc_id,
+                payload.row,
+                payload.col,
+                payload.seq,
+                payload.rotation,
+              );
+            }
+          } catch (e) {}
+        };
+        npcEs.onerror = function() {
+          npcEs.close();
+          if (npcReconnectTimer) clearTimeout(npcReconnectTimer);
+          fetchNPCSnapshot();
+          npcReconnectTimer = setTimeout(openNPCSSE, 1000);
+        };
+        return npcEs;
+      }
+
+      openNPCSSE();
+
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
@@ -989,6 +1127,7 @@ function getVirtualWorldPage(context) {
         }).catch(function() {});
         ensureCurrentWorld();
         fetchSnapshot();
+        fetchNPCSnapshot();
       }, 5000);
     }
 
@@ -1427,6 +1566,17 @@ function getVirtualWorldPage(context) {
         ra.group.rotation.y += rotDelta * lerp;
       }
 
+      // Lerp NPC avatars toward their targets
+      for (var npcId in npcAvatars) {
+        var na = npcAvatars[npcId];
+        na.group.position.x += (na.targetX - na.group.position.x) * lerp;
+        na.group.position.z += (na.targetZ - na.group.position.z) * lerp;
+        var npcRotDelta = na.targetRot - na.group.rotation.y;
+        while (npcRotDelta > Math.PI) npcRotDelta -= 2 * Math.PI;
+        while (npcRotDelta < -Math.PI) npcRotDelta += 2 * Math.PI;
+        na.group.rotation.y += npcRotDelta * lerp;
+      }
+
       // Keep background plane centered under avatar
       bgPlane.position.x = avatar.position.x;
       bgPlane.position.z = avatar.position.z;
@@ -1515,6 +1665,47 @@ function saveWorldTrees(worldId, trees) {
 
 /**
  * @param {string} worldId
+ * @returns {Record<string, any>}
+ */
+function loadWorldNPCs(worldId) {
+  var raw = sharedStorage.getItem("vworld_npcs:" + worldId);
+  return raw ? JSON.parse(raw) : {};
+}
+
+/**
+ * @param {string} worldId
+ * @param {Record<string, any>} npcs
+ */
+function saveWorldNPCs(worldId, npcs) {
+  sharedStorage.setItem("vworld_npcs:" + worldId, JSON.stringify(npcs));
+}
+
+/**
+ * @returns {Record<string, number>}
+ */
+function loadNPCActiveWorlds() {
+  var raw = sharedStorage.getItem("vworld_npc_worlds");
+  return raw ? JSON.parse(raw) : {};
+}
+
+/**
+ * @param {Record<string, number>} worlds
+ */
+function saveNPCActiveWorlds(worlds) {
+  sharedStorage.setItem("vworld_npc_worlds", JSON.stringify(worlds));
+}
+
+/**
+ * @param {string} worldId
+ */
+function markNPCWorldActive(worldId) {
+  var worlds = loadNPCActiveWorlds();
+  worlds[String(worldId)] = Date.now();
+  saveNPCActiveWorlds(worlds);
+}
+
+/**
+ * @param {string} worldId
  * @returns {number[][]}
  */
 function getEffectiveMap(worldId) {
@@ -1535,6 +1726,259 @@ function getEffectiveMap(worldId) {
     }
   }
   return map;
+}
+
+/**
+ * @param {string} worldId
+ * @returns {Record<string, any>}
+ */
+function ensureWorldNPCs(worldId) {
+  var existing = loadWorldNPCs(worldId);
+  if (existing && Object.keys(existing).length > 0) return existing;
+
+  var map = getEffectiveMap(worldId);
+  var players = loadWorldPlayers(worldId);
+  /** @type {Record<string, boolean>} */
+  var occupied = {};
+  Object.keys(players).forEach(function (pid) {
+    var p = players[pid];
+    if (!p || !isFinite(Number(p.row)) || !isFinite(Number(p.col))) return;
+    occupied[p.row + "_" + p.col] = true;
+  });
+
+  var targetCount =
+    NPC_MIN_COUNT +
+    Math.floor(Math.random() * (NPC_MAX_COUNT - NPC_MIN_COUNT + 1));
+  /** @type {Record<string, any>} */
+  var npcs = {};
+  var attempts = 0;
+  var maxAttempts = 4000;
+
+  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
+    attempts++;
+    var row = 1 + Math.floor(Math.random() * (ROWS - 2));
+    var col = 1 + Math.floor(Math.random() * (COLS - 2));
+    var tileKey = row + "_" + col;
+    if (map[row][col] !== 0 || occupied[tileKey]) continue;
+    occupied[tileKey] = true;
+    var idx = Object.keys(npcs).length + 1;
+    var npcId = "npc_" + worldId + "_" + idx;
+    npcs[npcId] = {
+      row: row,
+      col: col,
+      seq: 0,
+      rotation: 0,
+      state: "idle",
+      ts: Date.now(),
+    };
+  }
+
+  saveWorldNPCs(worldId, npcs);
+  return npcs;
+}
+
+/**
+ * @param {number} dr
+ * @param {number} dc
+ * @returns {number}
+ */
+function directionToRotation(dr, dc) {
+  if (dr > 0) return 0;
+  if (dr < 0) return Math.PI;
+  if (dc > 0) return Math.PI / 2;
+  if (dc < 0) return -Math.PI / 2;
+  return 0;
+}
+
+/**
+ * @param {string} worldId
+ * @returns {Array<{npc_id: string, row: number, col: number, seq: number, rotation: number, state: string}>}
+ */
+function getWorldNPCSnapshot(worldId) {
+  markNPCWorldActive(worldId);
+  maybeTickWorldNPCs(worldId);
+  var npcs = ensureWorldNPCs(worldId);
+  return Object.keys(npcs).map(function (npcId) {
+    var n = npcs[npcId] || {};
+    return {
+      npc_id: npcId,
+      row: Number(n.row),
+      col: Number(n.col),
+      seq: Number(n.seq || 0),
+      rotation: isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
+      state: typeof n.state === "string" ? n.state : "idle",
+    };
+  });
+}
+
+/**
+ * @param {Array<{dr: number, dc: number}>} dirs
+ */
+function shuffleDirections(dirs) {
+  for (var i = dirs.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = dirs[i];
+    dirs[i] = dirs[j];
+    dirs[j] = t;
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @param {number} now
+ */
+function tickWorldNPCs(worldId, now) {
+  var npcs = ensureWorldNPCs(worldId);
+  var npcIds = Object.keys(npcs);
+  if (npcIds.length === 0) return;
+
+  var map = getEffectiveMap(worldId);
+  var players = loadWorldPlayers(worldId);
+  /** @type {Record<string, boolean>} */
+  var occupiedPlayers = {};
+  Object.keys(players).forEach(function (pid) {
+    var p = players[pid];
+    if (!p || !isFinite(Number(p.row)) || !isFinite(Number(p.col))) return;
+    occupiedPlayers[p.row + "_" + p.col] = true;
+  });
+
+  /** @type {Record<string, string>} */
+  var occupiedNPCs = {};
+  npcIds.forEach(function (npcId) {
+    var n = npcs[npcId];
+    if (!n) return;
+    occupiedNPCs[n.row + "_" + n.col] = npcId;
+  });
+
+  var hasChanges = false;
+  npcIds.forEach(function (npcId) {
+    var n = npcs[npcId];
+    if (!n) return;
+    if (Math.random() < 0.35) {
+      n.state = "idle";
+      n.ts = now;
+      return;
+    }
+
+    var dirs = [
+      { dr: 1, dc: 0 },
+      { dr: -1, dc: 0 },
+      { dr: 0, dc: 1 },
+      { dr: 0, dc: -1 },
+    ];
+    shuffleDirections(dirs);
+
+    var moved = false;
+    var fromKey = n.row + "_" + n.col;
+    delete occupiedNPCs[fromKey];
+
+    for (var i = 0; i < dirs.length; i++) {
+      var nr = n.row + dirs[i].dr;
+      var nc = n.col + dirs[i].dc;
+      var key = nr + "_" + nc;
+      var walkable =
+        nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && map[nr][nc] === 0;
+      if (!walkable) continue;
+      if (occupiedPlayers[key]) continue;
+      if (occupiedNPCs[key]) continue;
+
+      n.row = nr;
+      n.col = nc;
+      n.rotation = directionToRotation(dirs[i].dr, dirs[i].dc);
+      n.seq = Number(n.seq || 0) + 1;
+      n.state = "walking";
+      n.ts = now;
+      moved = true;
+      occupiedNPCs[key] = npcId;
+
+      graphQLRegistry.sendSubscriptionMessageFiltered(
+        "worldNPCMoved",
+        JSON.stringify({
+          npc_id: npcId,
+          row: n.row,
+          col: n.col,
+          seq: n.seq,
+          rotation: n.rotation,
+          state: n.state,
+        }),
+        JSON.stringify({ world_id: worldId }),
+      );
+      break;
+    }
+
+    if (!moved) {
+      occupiedNPCs[fromKey] = npcId;
+      n.state = "idle";
+      n.ts = now;
+    } else {
+      hasChanges = true;
+    }
+  });
+
+  if (hasChanges) {
+    saveWorldNPCs(worldId, npcs);
+    vwLog("npc tick moved", {
+      world_id: worldId,
+      npc_count: npcIds.length,
+    });
+  }
+}
+
+function runNPCTick() {
+  var worlds = loadNPCActiveWorlds();
+  var now = Date.now();
+  var changedWorldSet = false;
+
+  Object.keys(worlds).forEach(function (worldId) {
+    if (now - Number(worlds[worldId] || 0) > NPC_ACTIVE_WORLD_TTL_MS) {
+      delete worlds[worldId];
+      sharedStorage.removeItem("vworld_npcs:" + worldId);
+      changedWorldSet = true;
+      return;
+    }
+    tickWorldNPCs(worldId, now);
+  });
+
+  if (changedWorldSet) saveNPCActiveWorlds(worlds);
+}
+
+/**
+ * @param {string} worldId
+ */
+function maybeTickWorldNPCs(worldId) {
+  var key = "vworld_npc_last_tick:" + worldId;
+  var now = Date.now();
+  var lastTick = Number(sharedStorage.getItem(key) || 0);
+  if (now - lastTick < NPC_TICK_MS) return;
+  tickWorldNPCs(worldId, now);
+  sharedStorage.setItem(key, String(now));
+}
+
+function scheduleNextNPCTick() {
+  var runAt = new Date(Date.now() + NPC_TICK_MS).toISOString();
+  try {
+    schedulerService.registerOnce({
+      handler: "runNPCTickScheduledJob",
+      runAt: runAt,
+      name: "vworld-npc-tick",
+    });
+  } catch (e) {
+    vwLog("npc scheduler register failed", { error: String(e) });
+  }
+}
+
+/**
+ * @param {*} _context
+ */
+function runNPCTickScheduledJob(_context) {
+  runNPCTick();
+  scheduleNextNPCTick();
+}
+
+function startNPCTicker() {
+  if (npcTickerStarted) return;
+  npcTickerStarted = true;
+  scheduleNextNPCTick();
 }
 
 var VW_DEBUG = false;
@@ -1584,6 +2028,7 @@ function moveHandler(context) {
   if (!worldId) {
     return ResponseBuilder.json({ ok: false, row: 1, col: 1 });
   }
+  markNPCWorldActive(worldId);
 
   var leaseKey = "vworld_lease:" + userId;
   var leaseRaw = sharedStorage.getItem(leaseKey);
@@ -1779,6 +2224,8 @@ function heartbeatHandler(context) {
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return ResponseBuilder.json({ ok: true });
+  markNPCWorldActive(worldId);
+  maybeTickWorldNPCs(worldId);
 
   var sessionId = "";
   try {
@@ -1921,6 +2368,7 @@ function playersHandler(context) {
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) return ResponseBuilder.json([]);
+  markNPCWorldActive(worldId);
   var players = loadWorldPlayers(worldId);
   if (!players || typeof players !== "object") {
     vwLog("playersHandler recovered malformed players payload", {
@@ -1970,7 +2418,21 @@ function currentWorldHandler(context) {
   }
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId) || "10000";
+  markNPCWorldActive(worldId);
   return ResponseBuilder.json({ world_id: String(worldId) });
+}
+
+/**
+ * @param {*} context
+ */
+function npcsHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return ResponseBuilder.json([]);
+  return ResponseBuilder.json(getWorldNPCSnapshot(worldId));
 }
 
 /**
@@ -2128,7 +2590,21 @@ function worldTreeChangedResolver(context) {
   return { world_id: worldId };
 }
 
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
+function worldNPCMovedResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return {};
+  return { world_id: worldId };
+}
+
 function init() {
+  startNPCTicker();
   routeRegistry.registerRoute("/virtual-world", "getVirtualWorldPage", "GET", {
     summary: "2.5D Virtual World",
     description:
@@ -2157,6 +2633,7 @@ function init() {
     "currentWorldHandler",
     "GET",
   );
+  routeRegistry.registerRoute("/virtual-world/npcs", "npcsHandler", "GET");
   routeRegistry.registerRoute(
     "/virtual-world/heartbeat",
     "heartbeatHandler",
@@ -2177,6 +2654,12 @@ function init() {
     "worldTreeChanged",
     "type Subscription { worldTreeChanged: String }",
     "worldTreeChangedResolver",
+    "external",
+  );
+  graphQLRegistry.registerSubscription(
+    "worldNPCMoved",
+    "type Subscription { worldNPCMoved: String }",
+    "worldNPCMovedResolver",
     "external",
   );
 }

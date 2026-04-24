@@ -2465,8 +2465,9 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ ok: false, error: "No world found" });
   }
 
-  // Calculate target tile based on player rotation
-  // rotation: 0 = south (+row), Math.PI/2 = west (-col), Math.PI = north (-row), -Math.PI/2 = east (+col)
+  // Calculate target tile based on player rotation.
+  // Must match client indicator/movement mapping:
+  // 0 = south (+row), Math.PI/2 = east (+col), Math.PI = north (-row), -Math.PI/2 = west (-col)
   var targetRow = playerRow;
   var targetCol = playerCol;
 
@@ -2479,11 +2480,11 @@ function treeActionHandler(context) {
   if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
     targetRow = playerRow + 1; // South
   } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
-    targetCol = playerCol - 1; // West
+    targetCol = playerCol + 1; // East
   } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
     targetRow = playerRow - 1; // North
   } else {
-    targetCol = playerCol + 1; // East
+    targetCol = playerCol - 1; // West
   }
 
   // Validate target is within bounds

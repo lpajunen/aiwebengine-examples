@@ -98,7 +98,7 @@ function getOrCreatePlayerWorld(userId) {
   var key = "vworld_current:" + userId;
   var worldId = sharedStorage.getItem(key);
   if (!worldId) {
-    worldId = String(Math.floor(Math.random() * 999999) + 1);
+    worldId = "10000";
     sharedStorage.setItem(key, worldId);
   }
   return worldId;
@@ -204,6 +204,11 @@ function getVirtualWorldPage(context) {
       top: 180px; right: 14px;
       pointer-events: auto;
     }
+    #hud-portal .portal-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     #hud-portal button {
       background: rgba(255,130,0,0.82);
       border: 1px solid rgba(255,200,80,0.45);
@@ -216,6 +221,11 @@ function getVirtualWorldPage(context) {
       font-family: inherit;
     }
     #hud-portal button:hover { background: rgba(255,160,0,1); }
+    #hud-portal button.start-world {
+      background: rgba(40,120,220,0.85);
+      border-color: rgba(130,190,255,0.55);
+    }
+    #hud-portal button.start-world:hover { background: rgba(60,150,255,1); }
 
     #hud-tree-actions {
       bottom: 14px; right: 14px;
@@ -312,7 +322,10 @@ function getVirtualWorldPage(context) {
   </div>
 
   <div class="hud" id="hud-portal">
-    <button onclick="goToNewWorld()">&#9654; New World</button>
+    <div class="portal-buttons">
+      <button onclick="goToNewWorld()">&#9654; New World</button>
+      <button class="start-world" onclick="startWorld()">Start World</button>
+    </div>
   </div>
 
   <div class="hud" id="hud-tree-actions">
@@ -824,6 +837,16 @@ function getVirtualWorldPage(context) {
         }).catch(function() {});
     }
 
+    function ensureCurrentWorld() {
+      fetch('/virtual-world/current-world')
+        .then(function(r) { return r.json(); })
+        .then(function(state) {
+          if (state && state.world_id && String(state.world_id) !== String(worldId)) {
+            window.location.href = '/virtual-world';
+          }
+        }).catch(function() {});
+    }
+
     function initMultiplayer() {
       fetchSnapshot();
 
@@ -841,6 +864,10 @@ function getVirtualWorldPage(context) {
             var raw = obj.data.worldPlayerMoved;
             var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
             if (payload.leaving) {
+              if (payload.player_id === playerId && payload.switched_world) {
+                window.location.href = '/virtual-world';
+                return;
+              }
               removeRemoteAvatar(payload.player_id);
             } else if (payload.player_id === playerId) {
               var incomingSeq = Number(payload.seq);
@@ -944,6 +971,7 @@ function getVirtualWorldPage(context) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId }),
         }).catch(function() {});
+        ensureCurrentWorld();
         fetchSnapshot();
       }, 5000);
     }
@@ -1049,6 +1077,12 @@ function getVirtualWorldPage(context) {
 
     function goToNewWorld() {
       fetch('/virtual-world/new-world', { method: 'POST' })
+        .then(function() { window.location.href = '/virtual-world'; })
+        .catch(function() { window.location.href = '/virtual-world'; });
+    }
+
+    function startWorld() {
+      fetch('/virtual-world/start-world', { method: 'POST' })
         .then(function() { window.location.href = '/virtual-world'; })
         .catch(function() { window.location.href = '/virtual-world'; });
     }
@@ -1752,6 +1786,7 @@ function newWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
+  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
 
   // Broadcast leave from the current world before switching.
   // This must happen here because leaveHandler derives worldId from storage:
@@ -1767,16 +1802,55 @@ function newWorldHandler(context) {
       sharedStorage.removeItem("vworld_lease:" + userId);
       graphQLRegistry.sendSubscriptionMessageFiltered(
         "worldPlayerMoved",
-        JSON.stringify({ player_id: userId, leaving: true }),
+        JSON.stringify({
+          player_id: userId,
+          leaving: true,
+          switched_world: true,
+          target_world_id: newWorldId,
+        }),
         JSON.stringify({ world_id: oldWorldId }),
       );
     }
   }
 
-  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
   sharedStorage.setItem("vworld_current:" + userId, newWorldId);
   sharedStorage.removeItem("vworld_lease:" + userId);
   // Clear persisted position so the player spawns at (1,1) in the new world.
+  sharedStorage.removeItem("vworld_pos:" + userId);
+  return ResponseBuilder.json({ ok: true });
+}
+
+function startWorldHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+
+  // Broadcast leave from the current world before switching.
+  var oldWorldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (oldWorldId) {
+    var oldPlayers = loadWorldPlayers(oldWorldId);
+    if (oldPlayers[userId]) {
+      delete oldPlayers[userId];
+      saveWorldPlayers(oldWorldId, oldPlayers);
+      sharedStorage.removeItem("vworld_hb:" + userId);
+      sharedStorage.removeItem("vworld_lease:" + userId);
+      graphQLRegistry.sendSubscriptionMessageFiltered(
+        "worldPlayerMoved",
+        JSON.stringify({
+          player_id: userId,
+          leaving: true,
+          switched_world: true,
+          target_world_id: "10000",
+        }),
+        JSON.stringify({ world_id: oldWorldId }),
+      );
+    }
+  }
+
+  sharedStorage.setItem("vworld_current:" + userId, "10000");
+  sharedStorage.removeItem("vworld_lease:" + userId);
+  // Clear persisted position so the player spawns at (1,1) in start world.
   sharedStorage.removeItem("vworld_pos:" + userId);
   return ResponseBuilder.json({ ok: true });
 }
@@ -1826,6 +1900,15 @@ function playersHandler(context) {
       };
     });
   return ResponseBuilder.json(active);
+}
+
+function currentWorldHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId) || "10000";
+  return ResponseBuilder.json({ world_id: String(worldId) });
 }
 
 function treeActionHandler(context) {
@@ -1987,8 +2070,18 @@ function init() {
     "POST",
   );
   routeRegistry.registerRoute(
+    "/virtual-world/start-world",
+    "startWorldHandler",
+    "POST",
+  );
+  routeRegistry.registerRoute(
     "/virtual-world/players",
     "playersHandler",
+    "GET",
+  );
+  routeRegistry.registerRoute(
+    "/virtual-world/current-world",
+    "currentWorldHandler",
     "GET",
   );
   routeRegistry.registerRoute(

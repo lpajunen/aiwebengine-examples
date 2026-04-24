@@ -1068,7 +1068,7 @@ function getVirtualWorldPage(context) {
 
       var angle = 0;
       if (dr !== 0) angle = dr > 0 ? 0 : Math.PI;
-      else angle = dc > 0 ? -Math.PI / 2 : Math.PI / 2;
+      else angle = dc > 0 ? Math.PI / 2 : -Math.PI / 2;
 
       lastMoveIntentKey = intentKey;
       lastMoveAxis = axis;
@@ -1433,11 +1433,11 @@ function getVirtualWorldPage(context) {
       if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
         targetRow = avatarRow + 1; // South
       } else if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) {
-        targetCol = avatarCol - 1; // West
+        targetCol = avatarCol + 1; // East
       } else if (angle >= 3 * Math.PI / 4 || angle < -3 * Math.PI / 4) {
         targetRow = avatarRow - 1; // North
       } else {
-        targetCol = avatarCol + 1; // East
+        targetCol = avatarCol - 1; // West
       }
       
       targetIndicator.position.x = tileX(targetCol);

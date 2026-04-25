@@ -11,6 +11,8 @@ var NPC_MIN_COUNT = 10;
 var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
+var ITEM_TYPES = ["saw", "knife", "flower"];
+var WORLD_ITEM_SPAWN_COUNT = 10;
 var npcTickerStarted = false;
 
 /**
@@ -144,6 +146,9 @@ function getVirtualWorldPage(context) {
   markNPCWorldActive(worldId);
   const map = generateMap(worldId);
   const treeMods = loadWorldTrees(worldId);
+  ensureWorldItems(worldId);
+  const worldItems = loadWorldItems(worldId);
+  const playerInventory = loadPlayerInventory(userId);
   const npcs = getWorldNPCSnapshot(worldId);
   // Read last known position from dedicated storage (survives page refresh).
   // Falls back to spawn (1,1) only when the player enters a fresh new world.
@@ -276,6 +281,103 @@ function getVirtualWorldPage(context) {
       border-color: rgba(160,82,45,0.5);
     }
     #btn-timber:hover { background: rgba(160,82,45,1); }
+    #btn-pick {
+      background: rgba(25,115,72,0.85);
+      border-color: rgba(72,190,130,0.55);
+    }
+    #btn-pick:hover { background: rgba(32,145,92,1); }
+    #btn-items {
+      background: rgba(49,76,168,0.88);
+      border-color: rgba(130,165,255,0.55);
+    }
+    #btn-items:hover { background: rgba(67,100,200,1); }
+
+    #hud-inventory-panel {
+      right: 14px;
+      bottom: 70px;
+      width: min(340px, calc(100vw - 28px));
+      max-height: min(52vh, 460px);
+      overflow: hidden;
+      display: none;
+      pointer-events: auto;
+      padding: 10px;
+      z-index: 1001;
+    }
+    #hud-inventory-panel strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #a8d8ff;
+      font-size: 13px;
+    }
+    .inv-hands {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .inv-hand {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .inv-hand .name {
+      font-weight: 700;
+      color: #d2e8ff;
+    }
+    .inv-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    .inv-actions button,
+    .inv-row button,
+    #btn-close-items {
+      font-size: 11px;
+      line-height: 1.2;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.24);
+      color: #fff;
+      background: rgba(255,255,255,0.12);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .inv-actions button:hover,
+    .inv-row button:hover,
+    #btn-close-items:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    #inv-list {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 6px;
+      max-height: min(32vh, 250px);
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .inv-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px;
+    }
+    .inv-row:last-child { border-bottom: 0; }
+    .inv-row .label { color: #e6f3ff; word-break: break-word; }
+    #inv-footer {
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #cfdde7;
+    }
 
     #joystick-container {
       position: absolute;
@@ -328,7 +430,8 @@ function getVirtualWorldPage(context) {
     ${authName ? `${authName}<br>` : ""}
     ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ""}
     World: ${worldId}<br>
-    Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span>
+    Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
+    L: <span id="held-left">-</span> | R: <span id="held-right">-</span>
   </div>
 
   <div class="hud" id="hud-legend">
@@ -336,6 +439,7 @@ function getVirtualWorldPage(context) {
     <div class="leg"><div class="leg-box" style="background:#7ab648;"></div> Ground</div>
     <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Wall</div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Tree</div>
+    <div class="leg"><div class="leg-box" style="background:#f3ca40;"></div> Items</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
 
@@ -354,6 +458,21 @@ function getVirtualWorldPage(context) {
   <div class="hud" id="hud-tree-actions">
     <button id="btn-plant" onclick="plantTree()">🌱 Plant</button>
     <button id="btn-timber" onclick="cutTree()">🪓 Timber</button>
+    <button id="btn-pick" onclick="pickItemsOnTile()">📦 Pick</button>
+    <button id="btn-items" onclick="toggleInventoryPanel()">🎒 Items</button>
+  </div>
+
+  <div class="hud" id="hud-inventory-panel">
+    <strong>Inventory</strong>
+    <div class="inv-hands">
+      <div class="inv-hand" id="inv-left-hand"></div>
+      <div class="inv-hand" id="inv-right-hand"></div>
+    </div>
+    <div id="inv-list"></div>
+    <div id="inv-footer">
+      <span id="inv-count">0 items</span>
+      <button id="btn-close-items" onclick="closeInventoryPanel()">Close</button>
+    </div>
   </div>
 
   <div id="joystick-container">
@@ -366,6 +485,8 @@ function getVirtualWorldPage(context) {
     // ── Server-injected game state ────────────────────────────────────────────
     var MAP      = ${JSON.stringify(map)};
     var TREE_MODS = ${JSON.stringify(treeMods)};
+    var WORLD_ITEMS = ${JSON.stringify(worldItems)};
+    var PLAYER_INV = ${JSON.stringify(playerInventory)};
     var NPCS = ${JSON.stringify(npcs)};
     var worldId  = ${JSON.stringify(worldId)};
     var playerId = ${JSON.stringify(userId)};
@@ -393,6 +514,50 @@ function getVirtualWorldPage(context) {
           MAP[tr][tc] = 0; // Remove tree
         }
       }
+    }
+
+    function normalizeClientInventory(inv) {
+      if (!inv || typeof inv !== 'object') {
+        return { left_hand: null, right_hand: null, inventory: [] };
+      }
+      var out = {
+        left_hand: inv.left_hand && inv.left_hand.id ? inv.left_hand : null,
+        right_hand: inv.right_hand && inv.right_hand.id ? inv.right_hand : null,
+        inventory: Array.isArray(inv.inventory)
+          ? inv.inventory.filter(function(it) { return it && it.id && it.type; })
+          : [],
+      };
+      return out;
+    }
+
+    function normalizeClientWorldItems(items) {
+      var out = {};
+      if (!items || typeof items !== 'object') return out;
+      for (var tileKey in items) {
+        if (!Array.isArray(items[tileKey])) continue;
+        var filtered = items[tileKey].filter(function(it) {
+          return it && it.id && it.type;
+        });
+        if (filtered.length > 0) out[tileKey] = filtered;
+      }
+      return out;
+    }
+
+    var worldItemsByTile = normalizeClientWorldItems(WORLD_ITEMS || {});
+    var playerInventory = normalizeClientInventory(PLAYER_INV);
+    var inventoryPanelVisible = false;
+    var inventoryAutoHideTimer = null;
+
+    function inventoryItemLabel(item) {
+      if (!item || !item.type) return 'empty';
+      return String(item.type);
+    }
+
+    function updateHeldHud() {
+      document.getElementById('held-left').textContent =
+        playerInventory.left_hand ? inventoryItemLabel(playerInventory.left_hand) : '-';
+      document.getElementById('held-right').textContent =
+        playerInventory.right_hand ? inventoryItemLabel(playerInventory.right_hand) : '-';
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────
@@ -614,6 +779,58 @@ function getVirtualWorldPage(context) {
       scene.add(iTrunk, iFoliage1, iFoliage2);
     }
 
+    // ── Ground items (MVP visuals) ─────────────────────────────────────────
+    var itemGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+    var itemMatCache = {};
+    var itemMeshGroup = new THREE.Group();
+    scene.add(itemMeshGroup);
+
+    function itemTypeColor(type) {
+      if (type === 'saw') return 0xbfc6d0;
+      if (type === 'knife') return 0xd8dee8;
+      if (type === 'flower') return 0xec6ea4;
+      return 0xf3ca40;
+    }
+
+    function getItemMaterial(type) {
+      if (!itemMatCache[type]) {
+        itemMatCache[type] = new THREE.MeshLambertMaterial({ color: itemTypeColor(type) });
+      }
+      return itemMatCache[type];
+    }
+
+    function clearItemMeshes() {
+      while (itemMeshGroup.children.length > 0) {
+        var child = itemMeshGroup.children.pop();
+        if (child) itemMeshGroup.remove(child);
+      }
+    }
+
+    function rebuildItemMeshes() {
+      clearItemMeshes();
+      for (var tileKey in worldItemsByTile) {
+        var parts = tileKey.split('_');
+        var row = Number(parts[0]);
+        var col = Number(parts[1]);
+        if (!isFinite(row) || !isFinite(col)) continue;
+        var arr = worldItemsByTile[tileKey];
+        if (!Array.isArray(arr)) continue;
+        for (var i = 0; i < arr.length; i++) {
+          var item = arr[i];
+          var mesh = new THREE.Mesh(itemGeo, getItemMaterial(item.type));
+          var ox = ((i % 3) - 1) * 0.20;
+          var oz = (Math.floor(i / 3) % 3 - 1) * 0.20;
+          var oy = 0.20 + Math.floor(i / 9) * 0.16;
+          mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
+          mesh.castShadow = true;
+          mesh.receiveShadow = false;
+          itemMeshGroup.add(mesh);
+        }
+      }
+    }
+
+    rebuildItemMeshes();
+
     // ── Avatar ───────────────────────────────────────────────────────────────
     var avatar = new THREE.Group();
 
@@ -813,6 +1030,31 @@ function getVirtualWorldPage(context) {
         }).catch(function() {});
     }
 
+    function fetchItemSnapshot() {
+      fetch('/virtual-world/current-world')
+        .then(function(r) { return r.json(); })
+        .then(function(payload) {
+          if (!payload || typeof payload !== 'object') return;
+          if (payload.inventory) {
+            playerInventory = normalizeClientInventory(payload.inventory);
+          }
+          if (Array.isArray(payload.items)) {
+            var next = {};
+            for (var i = 0; i < payload.items.length; i++) {
+              var it = payload.items[i];
+              if (!it || !it.id || !it.type) continue;
+              var key = it.row + '_' + it.col;
+              if (!next[key]) next[key] = [];
+              next[key].push({ id: it.id, type: it.type });
+            }
+            worldItemsByTile = next;
+          }
+          rebuildItemMeshes();
+          updateHeldHud();
+          if (inventoryPanelVisible) renderInventoryPanel();
+        }).catch(function() {});
+    }
+
     var pendingMoves = [];   // FIFO queue of {row,col,seq} — one entry per step
     var moveInFlight = false;
 
@@ -963,9 +1205,12 @@ function getVirtualWorldPage(context) {
     }
 
     function initMultiplayer() {
+      updateHeldHud();
+      renderInventoryPanel();
       fetchSnapshot();
       syncNPCSnapshot(NPCS);
       fetchNPCSnapshot();
+      fetchItemSnapshot();
 
       // Subscribe to real-time moves via GraphQL SSE
       // world_id is resolved server-side from the authenticated user's current world
@@ -1113,6 +1358,28 @@ function getVirtualWorldPage(context) {
 
       openNPCSSE();
 
+      // Subscribe to item changes via GraphQL SSE
+      var itemQuery = 'subscription{worldItemChanged}';
+      var itemSseUrl = '/graphql/sse?query=' + encodeURIComponent(itemQuery);
+      var itemReconnectTimer = null;
+
+      function openItemSSE() {
+        var itemEs = new EventSource(itemSseUrl);
+        itemEs.onmessage = function(_evt) {
+          // Keep item sync authoritative by reloading snapshot on each event.
+          fetchItemSnapshot();
+        };
+        itemEs.onerror = function() {
+          itemEs.close();
+          if (itemReconnectTimer) clearTimeout(itemReconnectTimer);
+          fetchItemSnapshot();
+          itemReconnectTimer = setTimeout(openItemSSE, 1000);
+        };
+        return itemEs;
+      }
+
+      openItemSSE();
+
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
@@ -1128,6 +1395,7 @@ function getVirtualWorldPage(context) {
         ensureCurrentWorld();
         fetchSnapshot();
         fetchNPCSnapshot();
+        fetchItemSnapshot();
       }, 5000);
     }
 
@@ -1282,6 +1550,145 @@ function getVirtualWorldPage(context) {
       });
     }
 
+    function renderInventoryPanel() {
+      var leftDiv = document.getElementById('inv-left-hand');
+      var rightDiv = document.getElementById('inv-right-hand');
+      var listDiv = document.getElementById('inv-list');
+      var countDiv = document.getElementById('inv-count');
+
+      function handHtml(title, slot, item) {
+        var label = item ? inventoryItemLabel(item) : 'empty';
+        var html =
+          '<div class="name">' + title + '</div>' +
+          '<div>' + label + '</div>' +
+          '<div class="inv-actions">';
+        if (item) {
+          html += '<button onclick="dropFromSlot(\\'' + slot + '\\')">Drop</button>';
+          html += '<button onclick="equipToInventory(\\'' + slot + '\\')">Store</button>';
+        }
+        html += '</div>';
+        return html;
+      }
+
+      leftDiv.innerHTML = handHtml('Left Hand', 'left_hand', playerInventory.left_hand);
+      rightDiv.innerHTML = handHtml('Right Hand', 'right_hand', playerInventory.right_hand);
+
+      if (!Array.isArray(playerInventory.inventory) || playerInventory.inventory.length === 0) {
+        listDiv.innerHTML = '<div class="inv-row"><span class="label">Backpack empty</span></div>';
+      } else {
+        var rows = '';
+        for (var i = 0; i < playerInventory.inventory.length; i++) {
+          var item = playerInventory.inventory[i];
+          rows +=
+            '<div class="inv-row">' +
+            '<span class="label">' + inventoryItemLabel(item) + '</span>' +
+            '<span>' +
+            '<button onclick="equipFromInventory(' + i + ',\\'left_hand\\')">L</button> ' +
+            '<button onclick="equipFromInventory(' + i + ',\\'right_hand\\')">R</button> ' +
+            '<button onclick="dropFromInventory(' + i + ')">Drop</button>' +
+            '</span>' +
+            '</div>';
+        }
+        listDiv.innerHTML = rows;
+      }
+
+      countDiv.textContent = playerInventory.inventory.length + ' items';
+      updateHeldHud();
+    }
+
+    function showInventoryPanel(autoHideMs) {
+      inventoryPanelVisible = true;
+      document.getElementById('hud-inventory-panel').style.display = 'block';
+      renderInventoryPanel();
+      if (inventoryAutoHideTimer) {
+        clearTimeout(inventoryAutoHideTimer);
+        inventoryAutoHideTimer = null;
+      }
+      if (autoHideMs && autoHideMs > 0) {
+        inventoryAutoHideTimer = setTimeout(function() {
+          closeInventoryPanel();
+        }, autoHideMs);
+      }
+    }
+
+    function closeInventoryPanel() {
+      inventoryPanelVisible = false;
+      document.getElementById('hud-inventory-panel').style.display = 'none';
+      if (inventoryAutoHideTimer) {
+        clearTimeout(inventoryAutoHideTimer);
+        inventoryAutoHideTimer = null;
+      }
+    }
+
+    function toggleInventoryPanel() {
+      if (inventoryPanelVisible) closeInventoryPanel();
+      else showInventoryPanel(0);
+    }
+
+    function applyItemStateFromResult(result) {
+      if (!result || typeof result !== 'object') return;
+      if (result.inventory) {
+        playerInventory = normalizeClientInventory(result.inventory);
+      }
+      if (Array.isArray(result.items)) {
+        // Convert flat server snapshot into tile map.
+        var next = {};
+        for (var i = 0; i < result.items.length; i++) {
+          var it = result.items[i];
+          if (!it || !it.id || !it.type) continue;
+          var key = it.row + '_' + it.col;
+          if (!next[key]) next[key] = [];
+          next[key].push({ id: it.id, type: it.type });
+        }
+        worldItemsByTile = next;
+      }
+      rebuildItemMeshes();
+      renderInventoryPanel();
+    }
+
+    function postItemAction(payload, onSuccess) {
+      fetch('/virtual-world/tree-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function(res) {
+        return res.json();
+      }).then(function(result) {
+        if (!result || !result.ok) {
+          console.log('Item action failed:', result && result.error);
+          return;
+        }
+        applyItemStateFromResult(result);
+        if (typeof onSuccess === 'function') onSuccess(result);
+      }).catch(function(err) {
+        console.error('Item action request failed:', err);
+      });
+    }
+
+    function pickItemsOnTile() {
+      postItemAction({ action: 'pick' }, function(result) {
+        if (result && Number(result.picked_count || 0) > 0) {
+          showInventoryPanel(2500);
+        }
+      });
+    }
+
+    function dropFromSlot(slot) {
+      postItemAction({ action: 'drop', from: slot });
+    }
+
+    function dropFromInventory(index) {
+      postItemAction({ action: 'drop', from: 'inventory', index: index });
+    }
+
+    function equipToInventory(slot) {
+      postItemAction({ action: 'equip', from: slot, to: 'inventory' });
+    }
+
+    function equipFromInventory(index, slot) {
+      postItemAction({ action: 'equip', from: 'inventory', index: index, to: slot });
+    }
+
     // ── Input ────────────────────────────────────────────────────────────────
     var keys = {};
     var MOVE_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'];
@@ -1289,6 +1696,10 @@ function getVirtualWorldPage(context) {
     document.addEventListener('keydown', function(e) {
       keys[e.key] = true;
       if (MOVE_KEYS.indexOf(e.key) !== -1) e.preventDefault();
+      if (e.key === 'i' || e.key === 'I') {
+        e.preventDefault();
+        toggleInventoryPanel();
+      }
     });
     document.addEventListener('keyup', function(e) {
       keys[e.key] = false;
@@ -1360,6 +1771,14 @@ function getVirtualWorldPage(context) {
         var rect = portalDiv.getBoundingClientRect();
         if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
             touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+          return true;
+        }
+      }
+      var inventoryDiv = document.getElementById('hud-inventory-panel');
+      if (inventoryDiv && inventoryDiv.style.display !== 'none') {
+        var invRect = inventoryDiv.getBoundingClientRect();
+        if (touch.clientX >= invRect.left && touch.clientX <= invRect.right &&
+            touch.clientY >= invRect.top && touch.clientY <= invRect.bottom) {
           return true;
         }
       }
@@ -1664,6 +2083,217 @@ function saveWorldTrees(worldId, trees) {
 }
 
 /**
+ * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
+ */
+function createEmptyInventory() {
+  return {
+    left_hand: null,
+    right_hand: null,
+    inventory: [],
+  };
+}
+
+/**
+ * @param {*} item
+ * @returns {boolean}
+ */
+function isValidItem(item) {
+  return (
+    !!item &&
+    typeof item === "object" &&
+    typeof item.id === "string" &&
+    typeof item.type === "string"
+  );
+}
+
+/**
+ * @param {*} inv
+ * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
+ */
+function normalizeInventory(inv) {
+  var out = createEmptyInventory();
+  if (!inv || typeof inv !== "object") return out;
+  if (isValidItem(inv.left_hand)) out.left_hand = inv.left_hand;
+  if (isValidItem(inv.right_hand)) out.right_hand = inv.right_hand;
+  if (Array.isArray(inv.inventory)) {
+    out.inventory = inv.inventory.filter(isValidItem);
+  }
+  return out;
+}
+
+/**
+ * @param {string} userId
+ * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
+ */
+function loadPlayerInventory(userId) {
+  var raw = sharedStorage.getItem("vworld_inv:" + userId);
+  if (!raw) return createEmptyInventory();
+  try {
+    return normalizeInventory(JSON.parse(raw));
+  } catch (e) {
+    return createEmptyInventory();
+  }
+}
+
+/**
+ * @param {string} userId
+ * @param {*} inventory
+ */
+function savePlayerInventory(userId, inventory) {
+  sharedStorage.setItem(
+    "vworld_inv:" + userId,
+    JSON.stringify(normalizeInventory(inventory)),
+  );
+}
+
+/**
+ * @param {string} worldId
+ * @returns {Record<string, any[]>}
+ */
+function loadWorldItems(worldId) {
+  var raw = sharedStorage.getItem("vworld_items:" + worldId);
+  if (!raw) return {};
+  try {
+    var parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    /** @type {Record<string, any[]>} */
+    var out = {};
+    Object.keys(parsed).forEach(function (tileKey) {
+      var arr = parsed[tileKey];
+      if (!Array.isArray(arr)) return;
+      var filtered = arr.filter(isValidItem);
+      if (filtered.length > 0) out[tileKey] = filtered;
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @param {Record<string, any[]>} items
+ */
+function saveWorldItems(worldId, items) {
+  /** @type {Record<string, any[]>} */
+  var normalized = {};
+  if (items && typeof items === "object") {
+    Object.keys(items).forEach(function (tileKey) {
+      var arr = items[tileKey];
+      if (!Array.isArray(arr)) return;
+      var filtered = arr.filter(isValidItem);
+      if (filtered.length > 0) normalized[tileKey] = filtered;
+    });
+  }
+  sharedStorage.setItem("vworld_items:" + worldId, JSON.stringify(normalized));
+}
+
+/**
+ * @param {string} worldId
+ * @returns {number}
+ */
+function nextWorldItemId(worldId) {
+  var key = "vworld_item_seq:" + worldId;
+  var cur = Number(sharedStorage.getItem(key) || 0) + 1;
+  sharedStorage.setItem(key, String(cur));
+  return cur;
+}
+
+/**
+ * @param {string} worldId
+ */
+function ensureWorldItems(worldId) {
+  var seededKey = "vworld_items_seeded:" + worldId;
+  if (sharedStorage.getItem(seededKey) === "1") return;
+
+  var map = getEffectiveMap(worldId);
+  var items = loadWorldItems(worldId);
+  for (var i = 0; i < WORLD_ITEM_SPAWN_COUNT; i++) {
+    var attempts = 0;
+    while (attempts < 1000) {
+      attempts++;
+      var row = 1 + Math.floor(Math.random() * (ROWS - 2));
+      var col = 1 + Math.floor(Math.random() * (COLS - 2));
+      if (map[row][col] !== 0) continue;
+      var tileKey = row + "_" + col;
+      if (!items[tileKey]) items[tileKey] = [];
+      items[tileKey].push({
+        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+        type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
+        created_at: Date.now(),
+      });
+      break;
+    }
+  }
+  saveWorldItems(worldId, items);
+  sharedStorage.setItem(seededKey, "1");
+}
+
+/**
+ * @param {Record<string, any[]>} itemsByTile
+ * @returns {Array<{id: string, type: string, row: number, col: number}>}
+ */
+function flattenWorldItems(itemsByTile) {
+  /** @type {Array<{id: string, type: string, row: number, col: number}>} */
+  var out = [];
+  if (!itemsByTile || typeof itemsByTile !== "object") return out;
+  Object.keys(itemsByTile).forEach(function (tileKey) {
+    var parts = tileKey.split("_");
+    var row = Number(parts[0]);
+    var col = Number(parts[1]);
+    if (!isFinite(row) || !isFinite(col)) return;
+    var arr = itemsByTile[tileKey];
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (item) {
+      if (!isValidItem(item)) return;
+      out.push({
+        id: item.id,
+        type: item.type,
+        row: row,
+        col: col,
+      });
+    });
+  });
+  return out;
+}
+
+/**
+ * @param {string} worldId
+ * @param {string} actorType
+ * @param {string} actorId
+ * @param {string} action
+ * @param {number} row
+ * @param {number} col
+ * @param {Array<any>} items
+ */
+function broadcastItemChange(
+  worldId,
+  actorType,
+  actorId,
+  action,
+  row,
+  col,
+  items,
+) {
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    "worldItemChanged",
+    JSON.stringify({
+      actor_type: actorType,
+      actor_id: actorId,
+      action: action,
+      row: row,
+      col: col,
+      items: Array.isArray(items)
+        ? items.map(function (it) {
+            return { id: it.id, type: it.type };
+          })
+        : [],
+    }),
+    JSON.stringify({ world_id: worldId }),
+  );
+}
+
+/**
  * @param {string} worldId
  * @returns {Record<string, any>}
  */
@@ -1734,7 +2364,40 @@ function getEffectiveMap(worldId) {
  */
 function ensureWorldNPCs(worldId) {
   var existing = loadWorldNPCs(worldId);
-  if (existing && Object.keys(existing).length > 0) return existing;
+  if (existing && Object.keys(existing).length > 0) {
+    var hasNormalizationChanges = false;
+    Object.keys(existing).forEach(function (npcId) {
+      var n = existing[npcId];
+      if (!n || typeof n !== "object") {
+        existing[npcId] = {
+          row: 1,
+          col: 1,
+          seq: 0,
+          rotation: 0,
+          state: "idle",
+          ts: Date.now(),
+          left_hand: null,
+          right_hand: null,
+          inventory: [],
+        };
+        hasNormalizationChanges = true;
+        return;
+      }
+      var inv = normalizeInventory(n);
+      if (
+        n.left_hand !== inv.left_hand ||
+        n.right_hand !== inv.right_hand ||
+        !Array.isArray(n.inventory)
+      ) {
+        n.left_hand = inv.left_hand;
+        n.right_hand = inv.right_hand;
+        n.inventory = inv.inventory;
+        hasNormalizationChanges = true;
+      }
+    });
+    if (hasNormalizationChanges) saveWorldNPCs(worldId, existing);
+    return existing;
+  }
 
   var map = getEffectiveMap(worldId);
   var players = loadWorldPlayers(worldId);
@@ -1770,6 +2433,9 @@ function ensureWorldNPCs(worldId) {
       rotation: 0,
       state: "idle",
       ts: Date.now(),
+      left_hand: null,
+      right_hand: null,
+      inventory: [],
     };
   }
 
@@ -1792,7 +2458,7 @@ function directionToRotation(dr, dc) {
 
 /**
  * @param {string} worldId
- * @returns {Array<{npc_id: string, row: number, col: number, seq: number, rotation: number, state: string}>}
+ * @returns {Array<{npc_id: string, row: number, col: number, seq: number, rotation: number, state: string, left_hand: string, right_hand: string, inventory_count: number}>}
  */
 function getWorldNPCSnapshot(worldId) {
   markNPCWorldActive(worldId);
@@ -1807,6 +2473,11 @@ function getWorldNPCSnapshot(worldId) {
       seq: Number(n.seq || 0),
       rotation: isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
       state: typeof n.state === "string" ? n.state : "idle",
+      left_hand:
+        n.left_hand && n.left_hand.type ? String(n.left_hand.type) : "",
+      right_hand:
+        n.right_hand && n.right_hand.type ? String(n.right_hand.type) : "",
+      inventory_count: Array.isArray(n.inventory) ? n.inventory.length : 0,
     };
   });
 }
@@ -1828,11 +2499,14 @@ function shuffleDirections(dirs) {
  * @param {number} now
  */
 function tickWorldNPCs(worldId, now) {
+  ensureWorldItems(worldId);
   var npcs = ensureWorldNPCs(worldId);
   var npcIds = Object.keys(npcs);
   if (npcIds.length === 0) return;
 
   var map = getEffectiveMap(worldId);
+  var worldItems = loadWorldItems(worldId);
+  var itemChanges = false;
   var players = loadWorldPlayers(worldId);
   /** @type {Record<string, boolean>} */
   var occupiedPlayers = {};
@@ -1854,64 +2528,121 @@ function tickWorldNPCs(worldId, now) {
   npcIds.forEach(function (npcId) {
     var n = npcs[npcId];
     if (!n) return;
+    var npcInv = normalizeInventory(n);
+    n.left_hand = npcInv.left_hand;
+    n.right_hand = npcInv.right_hand;
+    n.inventory = npcInv.inventory;
     if (Math.random() < 0.35) {
       n.state = "idle";
       n.ts = now;
-      return;
-    }
-
-    var dirs = [
-      { dr: 1, dc: 0 },
-      { dr: -1, dc: 0 },
-      { dr: 0, dc: 1 },
-      { dr: 0, dc: -1 },
-    ];
-    shuffleDirections(dirs);
-
-    var moved = false;
-    var fromKey = n.row + "_" + n.col;
-    delete occupiedNPCs[fromKey];
-
-    for (var i = 0; i < dirs.length; i++) {
-      var nr = n.row + dirs[i].dr;
-      var nc = n.col + dirs[i].dc;
-      var key = nr + "_" + nc;
-      var walkable =
-        nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && map[nr][nc] === 0;
-      if (!walkable) continue;
-      if (occupiedPlayers[key]) continue;
-      if (occupiedNPCs[key]) continue;
-
-      n.row = nr;
-      n.col = nc;
-      n.rotation = directionToRotation(dirs[i].dr, dirs[i].dc);
-      n.seq = Number(n.seq || 0) + 1;
-      n.state = "walking";
-      n.ts = now;
-      moved = true;
-      occupiedNPCs[key] = npcId;
-
-      graphQLRegistry.sendSubscriptionMessageFiltered(
-        "worldNPCMoved",
-        JSON.stringify({
-          npc_id: npcId,
-          row: n.row,
-          col: n.col,
-          seq: n.seq,
-          rotation: n.rotation,
-          state: n.state,
-        }),
-        JSON.stringify({ world_id: worldId }),
-      );
-      break;
-    }
-
-    if (!moved) {
-      occupiedNPCs[fromKey] = npcId;
-      n.state = "idle";
-      n.ts = now;
     } else {
+      var dirs = [
+        { dr: 1, dc: 0 },
+        { dr: -1, dc: 0 },
+        { dr: 0, dc: 1 },
+        { dr: 0, dc: -1 },
+      ];
+      shuffleDirections(dirs);
+
+      var moved = false;
+      var fromKey = n.row + "_" + n.col;
+      delete occupiedNPCs[fromKey];
+
+      for (var i = 0; i < dirs.length; i++) {
+        var nr = n.row + dirs[i].dr;
+        var nc = n.col + dirs[i].dc;
+        var key = nr + "_" + nc;
+        var walkable =
+          nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && map[nr][nc] === 0;
+        if (!walkable) continue;
+        if (occupiedPlayers[key]) continue;
+        if (occupiedNPCs[key]) continue;
+
+        n.row = nr;
+        n.col = nc;
+        n.rotation = directionToRotation(dirs[i].dr, dirs[i].dc);
+        n.seq = Number(n.seq || 0) + 1;
+        n.state = "walking";
+        n.ts = now;
+        moved = true;
+        occupiedNPCs[key] = npcId;
+
+        graphQLRegistry.sendSubscriptionMessageFiltered(
+          "worldNPCMoved",
+          JSON.stringify({
+            npc_id: npcId,
+            row: n.row,
+            col: n.col,
+            seq: n.seq,
+            rotation: n.rotation,
+            state: n.state,
+          }),
+          JSON.stringify({ world_id: worldId }),
+        );
+        break;
+      }
+
+      if (!moved) {
+        occupiedNPCs[fromKey] = npcId;
+        n.state = "idle";
+        n.ts = now;
+      } else {
+        hasChanges = true;
+      }
+    }
+
+    // NPC item behavior: pick all from current tile, and occasionally drop one.
+    var tileKey = n.row + "_" + n.col;
+    var tileItems = Array.isArray(worldItems[tileKey])
+      ? worldItems[tileKey]
+      : [];
+    if (tileItems.length > 0 && Math.random() < 0.65) {
+      for (var pickIdx = 0; pickIdx < tileItems.length; pickIdx++) {
+        n.inventory.push(tileItems[pickIdx]);
+      }
+      delete worldItems[tileKey];
+      itemChanges = true;
       hasChanges = true;
+      broadcastItemChange(
+        worldId,
+        "npc",
+        npcId,
+        "pick",
+        n.row,
+        n.col,
+        tileItems,
+      );
+    }
+
+    if (!n.left_hand && n.inventory.length > 0) {
+      n.left_hand = n.inventory.shift();
+      hasChanges = true;
+    }
+    if (!n.right_hand && n.inventory.length > 0) {
+      n.right_hand = n.inventory.shift();
+      hasChanges = true;
+    }
+
+    if (Math.random() < 0.12) {
+      var dropItem = null;
+      if (n.inventory.length > 0) {
+        dropItem = n.inventory.shift();
+      } else if (n.left_hand) {
+        dropItem = n.left_hand;
+        n.left_hand = null;
+      } else if (n.right_hand) {
+        dropItem = n.right_hand;
+        n.right_hand = null;
+      }
+      if (dropItem) {
+        if (!worldItems[tileKey]) worldItems[tileKey] = [];
+        worldItems[tileKey].push(dropItem);
+        itemChanges = true;
+        hasChanges = true;
+        broadcastItemChange(worldId, "npc", npcId, "drop", n.row, n.col, [
+          dropItem,
+        ]);
+      }
     }
   });
 
@@ -1921,6 +2652,9 @@ function tickWorldNPCs(worldId, now) {
       world_id: worldId,
       npc_count: npcIds.length,
     });
+  }
+  if (itemChanges) {
+    saveWorldItems(worldId, worldItems);
   }
 }
 
@@ -1998,6 +2732,239 @@ function vwLog(msg, obj) {
   } catch (e) {
     console.log("[vworld] " + msg);
   }
+}
+
+/**
+ * @param {string} worldId
+ * @param {string} userId
+ * @returns {{row: number, col: number, seq: number, rotation: number}}
+ */
+function getCanonicalPlayerState(worldId, userId) {
+  var players = loadWorldPlayers(worldId);
+  var cur = players[userId];
+  if (cur && isFinite(Number(cur.row)) && isFinite(Number(cur.col))) {
+    return {
+      row: Number(cur.row),
+      col: Number(cur.col),
+      seq: Number(cur.seq || 0),
+      rotation: isFinite(Number(cur.rotation)) ? Number(cur.rotation) : 0,
+    };
+  }
+  var savedPosRaw = sharedStorage.getItem("vworld_pos:" + userId);
+  if (!savedPosRaw) {
+    return { row: 1, col: 1, seq: 0, rotation: 0 };
+  }
+  try {
+    var savedPos = JSON.parse(savedPosRaw);
+    return {
+      row: isFinite(Number(savedPos.row)) ? Number(savedPos.row) : 1,
+      col: isFinite(Number(savedPos.col)) ? Number(savedPos.col) : 1,
+      seq: isFinite(Number(savedPos.seq)) ? Number(savedPos.seq) : 0,
+      rotation: isFinite(Number(savedPos.rotation))
+        ? Number(savedPos.rotation)
+        : 0,
+    };
+  } catch (e) {
+    return { row: 1, col: 1, seq: 0, rotation: 0 };
+  }
+}
+
+/**
+ * @param {*} context
+ */
+function itemsHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) {
+    return ResponseBuilder.json({
+      items: [],
+      inventory: createEmptyInventory(),
+    });
+  }
+  ensureWorldItems(worldId);
+  return ResponseBuilder.json({
+    items: flattenWorldItems(loadWorldItems(worldId)),
+    inventory: loadPlayerInventory(userId),
+  });
+}
+
+/**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function handleItemActionForUser(userId, body) {
+  var action = String((body && body.action) || "");
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) {
+    return { status: 200, payload: { ok: false, error: "No world found" } };
+  }
+  ensureWorldItems(worldId);
+
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var tileKey = canonical.row + "_" + canonical.col;
+  var inv = loadPlayerInventory(userId);
+  var worldItems = loadWorldItems(worldId);
+
+  if (action === "pick") {
+    var picked = Array.isArray(worldItems[tileKey]) ? worldItems[tileKey] : [];
+    if (picked.length > 0) {
+      for (var i = 0; i < picked.length; i++) {
+        inv.inventory.push(picked[i]);
+      }
+      delete worldItems[tileKey];
+      saveWorldItems(worldId, worldItems);
+      savePlayerInventory(userId, inv);
+      broadcastItemChange(
+        worldId,
+        "player",
+        userId,
+        "pick",
+        canonical.row,
+        canonical.col,
+        picked,
+      );
+    }
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: "pick",
+        picked_count: picked.length,
+        inventory: inv,
+        items: flattenWorldItems(worldItems),
+      },
+    };
+  }
+
+  if (action === "drop") {
+    var from = String(body.from || "");
+    var index = Number(body.index);
+    var dropItem = null;
+    if (from === "left_hand" && inv.left_hand) {
+      dropItem = inv.left_hand;
+      inv.left_hand = null;
+    } else if (from === "right_hand" && inv.right_hand) {
+      dropItem = inv.right_hand;
+      inv.right_hand = null;
+    } else if (
+      from === "inventory" &&
+      isFinite(index) &&
+      index >= 0 &&
+      index < inv.inventory.length
+    ) {
+      dropItem = inv.inventory.splice(index, 1)[0];
+    } else {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Invalid drop source" },
+      };
+    }
+
+    if (!worldItems[tileKey]) worldItems[tileKey] = [];
+    worldItems[tileKey].push(dropItem);
+
+    savePlayerInventory(userId, inv);
+    saveWorldItems(worldId, worldItems);
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "drop",
+      canonical.row,
+      canonical.col,
+      [dropItem],
+    );
+
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: "drop",
+        inventory: inv,
+        items: flattenWorldItems(worldItems),
+      },
+    };
+  }
+
+  if (action === "equip") {
+    var fromSlot = String(body.from || "");
+    var toSlot = String(body.to || "");
+    var fromIndex = Number(body.index);
+    var movingItem = null;
+
+    if (fromSlot === "left_hand" && inv.left_hand) {
+      movingItem = inv.left_hand;
+      inv.left_hand = null;
+    } else if (fromSlot === "right_hand" && inv.right_hand) {
+      movingItem = inv.right_hand;
+      inv.right_hand = null;
+    } else if (
+      fromSlot === "inventory" &&
+      isFinite(fromIndex) &&
+      fromIndex >= 0 &&
+      fromIndex < inv.inventory.length
+    ) {
+      movingItem = inv.inventory.splice(fromIndex, 1)[0];
+    }
+
+    if (!movingItem) {
+      return { status: 200, payload: { ok: false, error: "No item to equip" } };
+    }
+
+    if (toSlot === "left_hand") {
+      if (inv.left_hand) inv.inventory.push(inv.left_hand);
+      inv.left_hand = movingItem;
+    } else if (toSlot === "right_hand") {
+      if (inv.right_hand) inv.inventory.push(inv.right_hand);
+      inv.right_hand = movingItem;
+    } else if (toSlot === "inventory") {
+      inv.inventory.push(movingItem);
+    } else {
+      if (fromSlot === "left_hand") inv.left_hand = movingItem;
+      else if (fromSlot === "right_hand") inv.right_hand = movingItem;
+      else inv.inventory.push(movingItem);
+      return {
+        status: 200,
+        payload: { ok: false, error: "Invalid destination slot" },
+      };
+    }
+
+    savePlayerInventory(userId, inv);
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: "equip",
+        inventory: inv,
+        items: flattenWorldItems(worldItems),
+      },
+    };
+  }
+
+  return { status: 400, payload: { ok: false, error: "Unknown action" } };
+}
+
+/**
+ * @param {*} context
+ */
+function itemActionHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  var handled = handleItemActionForUser(userId, body);
+  return ResponseBuilder.json(handled.payload, handled.status);
 }
 
 /**
@@ -2419,7 +3386,12 @@ function currentWorldHandler(context) {
   var userId = context.request.auth.userId;
   var worldId = sharedStorage.getItem("vworld_current:" + userId) || "10000";
   markNPCWorldActive(worldId);
-  return ResponseBuilder.json({ world_id: String(worldId) });
+  ensureWorldItems(worldId);
+  return ResponseBuilder.json({
+    world_id: String(worldId),
+    items: flattenWorldItems(loadWorldItems(worldId)),
+    inventory: loadPlayerInventory(userId),
+  });
 }
 
 /**
@@ -2454,6 +3426,11 @@ function treeActionHandler(context) {
   var playerRow = Number(body.row);
   var playerCol = Number(body.col);
   var rotation = Number(body.rotation);
+
+  if (action === "pick" || action === "drop" || action === "equip") {
+    var handled = handleItemActionForUser(userId, body);
+    return ResponseBuilder.json(handled.payload, handled.status);
+  }
 
   if (action !== "plant" && action !== "cut") {
     return ResponseBuilder.json({ error: "Invalid action" }, 400);
@@ -2604,60 +3581,104 @@ function worldNPCMovedResolver(context) {
   return { world_id: worldId };
 }
 
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
+function worldItemChangedResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return {};
+  return { world_id: worldId };
+}
+
 function init() {
   startNPCTicker();
-  routeRegistry.registerRoute("/virtual-world", "getVirtualWorldPage", "GET", {
+  /**
+   * @param {string} path
+   * @param {string} handler
+   * @param {string} method
+   * @param {*} [opts]
+   */
+  function safeRegisterRoute(path, handler, method, opts) {
+    try {
+      if (opts) {
+        routeRegistry.registerRoute(path, handler, method, opts);
+      } else {
+        routeRegistry.registerRoute(path, handler, method);
+      }
+    } catch (e) {
+      vwLog("route registration skipped", {
+        path: path,
+        method: method,
+        error: String(e),
+      });
+    }
+  }
+
+  /**
+   * @param {string} name
+   * @param {string} schema
+   * @param {string} resolver
+   * @param {string} type
+   */
+  function safeRegisterSubscription(name, schema, resolver, type) {
+    try {
+      graphQLRegistry.registerSubscription(name, schema, resolver, type);
+    } catch (e) {
+      vwLog("subscription registration skipped", {
+        name: name,
+        error: String(e),
+      });
+    }
+  }
+
+  // Register new endpoints first so they are available even in hot-reload sessions
+  // where older routes may already exist.
+  safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
+  safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
+
+  safeRegisterRoute("/virtual-world", "getVirtualWorldPage", "GET", {
     summary: "2.5D Virtual World",
     description:
       "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys.",
     tags: ["Demo"],
   });
-  routeRegistry.registerRoute("/virtual-world/move", "moveHandler", "POST");
-  routeRegistry.registerRoute("/virtual-world/leave", "leaveHandler", "POST");
-  routeRegistry.registerRoute(
-    "/virtual-world/new-world",
-    "newWorldHandler",
-    "POST",
-  );
-  routeRegistry.registerRoute(
-    "/virtual-world/start-world",
-    "startWorldHandler",
-    "POST",
-  );
-  routeRegistry.registerRoute(
-    "/virtual-world/players",
-    "playersHandler",
-    "GET",
-  );
-  routeRegistry.registerRoute(
+  safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");
+  safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");
+  safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
+  safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
+  safeRegisterRoute("/virtual-world/players", "playersHandler", "GET");
+  safeRegisterRoute(
     "/virtual-world/current-world",
     "currentWorldHandler",
     "GET",
   );
-  routeRegistry.registerRoute("/virtual-world/npcs", "npcsHandler", "GET");
-  routeRegistry.registerRoute(
-    "/virtual-world/heartbeat",
-    "heartbeatHandler",
-    "POST",
+  safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
+  safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
+  safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
+
+  safeRegisterSubscription(
+    "worldItemChanged",
+    "type Subscription { worldItemChanged: String }",
+    "worldItemChangedResolver",
+    "external",
   );
-  routeRegistry.registerRoute(
-    "/virtual-world/tree-action",
-    "treeActionHandler",
-    "POST",
-  );
-  graphQLRegistry.registerSubscription(
+  safeRegisterSubscription(
     "worldPlayerMoved",
     "type Subscription { worldPlayerMoved: String }",
     "worldPlayerMovedResolver",
     "external",
   );
-  graphQLRegistry.registerSubscription(
+  safeRegisterSubscription(
     "worldTreeChanged",
     "type Subscription { worldTreeChanged: String }",
     "worldTreeChangedResolver",
     "external",
   );
-  graphQLRegistry.registerSubscription(
+  safeRegisterSubscription(
     "worldNPCMoved",
     "type Subscription { worldNPCMoved: String }",
     "worldNPCMovedResolver",

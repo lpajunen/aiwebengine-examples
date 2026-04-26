@@ -136,10 +136,6 @@ function getVirtualWorldPage(context) {
   }
   const userId = req.auth.userId;
   const authName = req.auth.userName || "";
-  const authEmail =
-    req.auth.userEmail && req.auth.userEmail !== authName
-      ? req.auth.userEmail
-      : "";
 
   // ── Server-side state ─────────────────────────────────────────────────────
   const worldId = getOrCreatePlayerWorld(userId);
@@ -428,7 +424,6 @@ function getVirtualWorldPage(context) {
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
     ${authName ? `${authName}<br>` : ""}
-    ${authEmail ? `<span style="font-size:11px;opacity:0.7;">${authEmail}</span><br>` : ""}
     World: ${worldId}<br>
     Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
     L: <span id="held-left">-</span> | R: <span id="held-right">-</span>
@@ -439,7 +434,6 @@ function getVirtualWorldPage(context) {
     <div class="leg"><div class="leg-box" style="background:#7ab648;"></div> Ground</div>
     <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Wall</div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Tree</div>
-    <div class="leg"><div class="leg-box" style="background:#f3ca40;"></div> Items</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
 

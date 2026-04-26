@@ -229,6 +229,22 @@ function getVirtualWorldPage(context) {
       font-family: inherit;
     }
 
+    #hud-auth-status {
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 280px;
+      max-width: min(600px, calc(100vw - 28px));
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.5;
+      display: none;
+      z-index: 1010;
+      pointer-events: auto;
+      border-color: rgba(255, 196, 112, 0.6);
+      background: rgba(120, 70, 10, 0.86);
+    }
+
     #hud-portal {
       top: 180px; right: 14px;
       pointer-events: auto;
@@ -478,6 +494,8 @@ function getVirtualWorldPage(context) {
     &nbsp;&nbsp;|&nbsp;&nbsp; Camera: <kbd>drag</kbd> to orbit &nbsp; <kbd>scroll</kbd> to zoom
   </div>
 
+  <div class="hud" id="hud-auth-status" aria-live="polite"></div>
+
   <div class="hud" id="hud-portal">
     <div class="portal-buttons">
       <button onclick="goToNewWorld()">&#9654; New World</button>
@@ -532,6 +550,157 @@ function getVirtualWorldPage(context) {
       return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
     }
     var sessionId = createSessionId();
+
+    var AUTH_STATE_OK = 'ok';
+    var AUTH_STATE_EXTENDING = 'extending';
+    var AUTH_STATE_EXPIRED = 'expired';
+    var AUTH_STATE_REDIRECTING = 'redirecting';
+    var authState = AUTH_STATE_OK;
+    var authProbeRetryTimer = null;
+    var authProbeAttempts = 0;
+    var authProbeInFlight = false;
+    var authSseCheckPending = false;
+    var AUTH_PROBE_MAX_ATTEMPTS = 3;
+    var AUTH_LOGIN_REDIRECT_DELAY_MS = 800;
+
+    function setAuthStatusMessage(text, isError) {
+      var el = document.getElementById('hud-auth-status');
+      if (!el) return;
+      if (!text) {
+        el.style.display = 'none';
+        el.textContent = '';
+        return;
+      }
+      el.textContent = text;
+      el.style.display = 'block';
+      if (isError) {
+        el.style.background = 'rgba(130, 36, 26, 0.9)';
+        el.style.borderColor = 'rgba(255, 120, 100, 0.7)';
+      } else {
+        el.style.background = 'rgba(120, 70, 10, 0.86)';
+        el.style.borderColor = 'rgba(255, 196, 112, 0.6)';
+      }
+    }
+
+    function loginRedirectUrl() {
+      return '/auth/login?redirect=' + encodeURIComponent('/virtual-world');
+    }
+
+    function redirectToLogin() {
+      if (authState === AUTH_STATE_REDIRECTING) return;
+      authState = AUTH_STATE_REDIRECTING;
+      setAuthStatusMessage('Session expired. Redirecting to login...', true);
+      setTimeout(function() {
+        window.location.href = loginRedirectUrl();
+      }, AUTH_LOGIN_REDIRECT_DELAY_MS);
+    }
+
+    function handleAuthRecovery() {
+      authState = AUTH_STATE_OK;
+      authProbeAttempts = 0;
+      if (authProbeRetryTimer) {
+        clearTimeout(authProbeRetryTimer);
+        authProbeRetryTimer = null;
+      }
+      setAuthStatusMessage('', false);
+      flushMove();
+    }
+
+    function probeAuthStatus() {
+      return fetch('/virtual-world/current-world', {
+        method: 'GET',
+        cache: 'no-store',
+      }).then(function(res) {
+        if (res.status === 401) return false;
+        return res.ok;
+      }).catch(function() {
+        return false;
+      });
+    }
+
+    function runAuthProbeAttempt() {
+      if (authState !== AUTH_STATE_EXTENDING) return;
+      if (authProbeInFlight) return;
+      if (authProbeAttempts >= AUTH_PROBE_MAX_ATTEMPTS) {
+        authState = AUTH_STATE_EXPIRED;
+        redirectToLogin();
+        return;
+      }
+      var delay = authProbeAttempts === 0 ? 0 : Math.min(4000, Math.pow(2, authProbeAttempts - 1) * 1000);
+      authProbeRetryTimer = setTimeout(function() {
+        if (authState !== AUTH_STATE_EXTENDING) return;
+        authProbeInFlight = true;
+        probeAuthStatus().then(function(ok) {
+          authProbeInFlight = false;
+          if (ok) {
+            handleAuthRecovery();
+            return;
+          }
+          authProbeAttempts += 1;
+          runAuthProbeAttempt();
+        }).catch(function() {
+          authProbeInFlight = false;
+          authProbeAttempts += 1;
+          runAuthProbeAttempt();
+        });
+      }, delay);
+    }
+
+    function handleAuth401(source) {
+      if (authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED) return;
+      if (authState === AUTH_STATE_EXTENDING) return;
+      authState = AUTH_STATE_EXTENDING;
+      authProbeAttempts = 0;
+      setAuthStatusMessage('Session expired, trying to reconnect...', false);
+      console.warn('Auth expired during request:', source);
+      runAuthProbeAttempt();
+    }
+
+    function isAuthUnavailable() {
+      return authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED;
+    }
+
+    function fetchWithAuth(path, options) {
+      if (isAuthUnavailable()) {
+        var stoppedErr = new Error('auth_stopped');
+        stoppedErr.code = 'AUTH_STOPPED';
+        return Promise.reject(stoppedErr);
+      }
+      return fetch(path, options).then(function(res) {
+        if (res.status === 401) {
+          handleAuth401(path);
+          var authErr = new Error('auth_401');
+          authErr.code = 'AUTH_401';
+          throw authErr;
+        }
+        return res;
+      });
+    }
+
+    function fetchJsonWithAuth(path, options) {
+      return fetchWithAuth(path, options).then(function(res) {
+        return res.json();
+      });
+    }
+
+    function scheduleSSEAuthCheck(source) {
+      if (authState !== AUTH_STATE_OK || authSseCheckPending) return;
+      authSseCheckPending = true;
+      setTimeout(function() {
+        authSseCheckPending = false;
+        probeAuthStatus().then(function(ok) {
+          if (!ok) handleAuth401(source);
+        });
+      }, 250);
+    }
+
+    function getSSEReconnectDelayMs(retryCount) {
+      var capped = Math.min(retryCount, 5);
+      if (authState === AUTH_STATE_EXTENDING) {
+        return Math.min(10000, 1000 * Math.pow(2, capped));
+      }
+      return Math.min(6000, 600 * Math.pow(2, capped));
+    }
 
     // ── Lightweight i18n for UI labels ─────────────────────────────────────
     var I18N_MESSAGES = {
@@ -1231,16 +1400,18 @@ function getVirtualWorldPage(context) {
     }
 
     function fetchNPCSnapshot() {
-      fetch('/virtual-world/npcs')
-        .then(function(r) { return r.json(); })
+      if (authState !== AUTH_STATE_OK) return;
+      fetchJsonWithAuth('/virtual-world/npcs')
         .then(function(npcs) {
           syncNPCSnapshot(npcs);
-        }).catch(function() {});
+        }).catch(function(err) {
+          if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        });
     }
 
     function fetchItemSnapshot() {
-      fetch('/virtual-world/current-world')
-        .then(function(r) { return r.json(); })
+      if (authState !== AUTH_STATE_OK) return;
+      fetchJsonWithAuth('/virtual-world/current-world')
         .then(function(payload) {
           if (!payload || typeof payload !== 'object') return;
           if (payload.inventory) {
@@ -1260,17 +1431,20 @@ function getVirtualWorldPage(context) {
           rebuildItemMeshes();
           updateHeldHud();
           if (inventoryPanelVisible) renderInventoryPanel();
-        }).catch(function() {});
+        }).catch(function(err) {
+          if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        });
     }
 
     var pendingMoves = [];   // FIFO queue of {row,col,seq} — one entry per step
     var moveInFlight = false;
 
     function flushMove() {
+      if (authState !== AUTH_STATE_OK) return;
       if (moveInFlight || pendingMoves.length === 0) return;
       var payload = pendingMoves.shift();
       moveInFlight = true;
-      fetch('/virtual-world/move', {
+      fetchWithAuth('/virtual-world/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // world_id and player_id are determined server-side from auth session
@@ -1338,8 +1512,12 @@ function getVirtualWorldPage(context) {
           }
         }
         flushMove(); // drain next step if any
-      }).catch(function() {
+      }).catch(function(err) {
         moveInFlight = false;
+        if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) {
+          pendingMoves.unshift(payload);
+          return;
+        }
         // Put the failed step back at the front and retry after 500 ms
         pendingMoves.unshift(payload);
         setTimeout(flushMove, 500);
@@ -1374,8 +1552,8 @@ function getVirtualWorldPage(context) {
     }
 
     function fetchSnapshot() {
-      fetch('/virtual-world/players')
-        .then(function(r) { return r.json(); })
+      if (authState !== AUTH_STATE_OK) return;
+      fetchJsonWithAuth('/virtual-world/players')
         .then(function(players) {
           players.forEach(function(p) {
             if (p.player_id === playerId) {
@@ -1399,17 +1577,21 @@ function getVirtualWorldPage(context) {
               upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
             }
           });
-        }).catch(function() {});
+        }).catch(function(err) {
+          if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        });
     }
 
     function ensureCurrentWorld() {
-      fetch('/virtual-world/current-world')
-        .then(function(r) { return r.json(); })
+      if (authState !== AUTH_STATE_OK) return;
+      fetchJsonWithAuth('/virtual-world/current-world')
         .then(function(state) {
           if (state && state.world_id && String(state.world_id) !== String(worldId)) {
             window.location.href = '/virtual-world';
           }
-        }).catch(function() {});
+        }).catch(function(err) {
+          if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        });
     }
 
     function initMultiplayer() {
@@ -1425,10 +1607,12 @@ function getVirtualWorldPage(context) {
       var query = 'subscription{worldPlayerMoved}';
       var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
       var reconnectTimer = null;
+      var sseRetryCount = 0;
 
       function openSSE() {
         var es = new EventSource(sseUrl);
         es.onmessage = function(evt) {
+          sseRetryCount = 0;
           try {
             var obj = JSON.parse(evt.data);
             var raw = obj.data.worldPlayerMoved;
@@ -1481,10 +1665,13 @@ function getVirtualWorldPage(context) {
         };
         es.onerror = function() {
           es.close();
+          scheduleSSEAuthCheck('worldPlayerMoved');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
           // Immediate healing snapshot, then short reconnect retry.
           if (reconnectTimer) clearTimeout(reconnectTimer);
           fetchSnapshot();
-          reconnectTimer = setTimeout(openSSE, 1000);
+          sseRetryCount += 1;
+          reconnectTimer = setTimeout(openSSE, getSSEReconnectDelayMs(sseRetryCount));
         };
         return es;
       }
@@ -1495,10 +1682,12 @@ function getVirtualWorldPage(context) {
       var treeQuery = 'subscription{worldTreeChanged}';
       var treeSseUrl = '/graphql/sse?query=' + encodeURIComponent(treeQuery);
       var treeReconnectTimer = null;
+      var treeRetryCount = 0;
 
       function openTreeSSE() {
         var treeEs = new EventSource(treeSseUrl);
         treeEs.onmessage = function(evt) {
+          treeRetryCount = 0;
           try {
             var obj = JSON.parse(evt.data);
             var raw = obj.data.worldTreeChanged;
@@ -1531,8 +1720,11 @@ function getVirtualWorldPage(context) {
         };
         treeEs.onerror = function() {
           treeEs.close();
+          scheduleSSEAuthCheck('worldTreeChanged');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
           if (treeReconnectTimer) clearTimeout(treeReconnectTimer);
-          treeReconnectTimer = setTimeout(openTreeSSE, 1000);
+          treeRetryCount += 1;
+          treeReconnectTimer = setTimeout(openTreeSSE, getSSEReconnectDelayMs(treeRetryCount));
         };
         return treeEs;
       }
@@ -1543,10 +1735,12 @@ function getVirtualWorldPage(context) {
       var npcQuery = 'subscription{worldNPCMoved}';
       var npcSseUrl = '/graphql/sse?query=' + encodeURIComponent(npcQuery);
       var npcReconnectTimer = null;
+      var npcRetryCount = 0;
 
       function openNPCSSE() {
         var npcEs = new EventSource(npcSseUrl);
         npcEs.onmessage = function(evt) {
+          npcRetryCount = 0;
           try {
             var obj = JSON.parse(evt.data);
             var raw = obj.data.worldNPCMoved;
@@ -1567,9 +1761,12 @@ function getVirtualWorldPage(context) {
         };
         npcEs.onerror = function() {
           npcEs.close();
+          scheduleSSEAuthCheck('worldNPCMoved');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
           if (npcReconnectTimer) clearTimeout(npcReconnectTimer);
           fetchNPCSnapshot();
-          npcReconnectTimer = setTimeout(openNPCSSE, 1000);
+          npcRetryCount += 1;
+          npcReconnectTimer = setTimeout(openNPCSSE, getSSEReconnectDelayMs(npcRetryCount));
         };
         return npcEs;
       }
@@ -1580,18 +1777,23 @@ function getVirtualWorldPage(context) {
       var itemQuery = 'subscription{worldItemChanged}';
       var itemSseUrl = '/graphql/sse?query=' + encodeURIComponent(itemQuery);
       var itemReconnectTimer = null;
+      var itemRetryCount = 0;
 
       function openItemSSE() {
         var itemEs = new EventSource(itemSseUrl);
         itemEs.onmessage = function(_evt) {
+          itemRetryCount = 0;
           // Keep item sync authoritative by reloading snapshot on each event.
           fetchItemSnapshot();
         };
         itemEs.onerror = function() {
           itemEs.close();
+          scheduleSSEAuthCheck('worldItemChanged');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
           if (itemReconnectTimer) clearTimeout(itemReconnectTimer);
           fetchItemSnapshot();
-          itemReconnectTimer = setTimeout(openItemSSE, 1000);
+          itemRetryCount += 1;
+          itemReconnectTimer = setTimeout(openItemSSE, getSSEReconnectDelayMs(itemRetryCount));
         };
         return itemEs;
       }
@@ -1603,13 +1805,16 @@ function getVirtualWorldPage(context) {
 
       // Heartbeat — keep presence alive and resync snapshot every 15 s
       setInterval(function() {
+        if (authState !== AUTH_STATE_OK) return;
         // Use dedicated heartbeat endpoint: only refreshes the presence TTL
         // without sending a position, so idle tabs can't overwrite a moving tab.
-        fetch('/virtual-world/heartbeat', {
+        fetchWithAuth('/virtual-world/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId }),
-        }).catch(function() {});
+        }).catch(function(err) {
+          if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        });
         ensureCurrentWorld();
         fetchSnapshot();
         fetchNPCSnapshot();
@@ -1717,19 +1922,19 @@ function getVirtualWorldPage(context) {
     }
 
     function goToNewWorld() {
-      fetch('/virtual-world/new-world', { method: 'POST' })
+      fetchWithAuth('/virtual-world/new-world', { method: 'POST' })
         .then(function() { window.location.href = '/virtual-world'; })
         .catch(function() { window.location.href = '/virtual-world'; });
     }
 
     function startWorld() {
-      fetch('/virtual-world/start-world', { method: 'POST' })
+      fetchWithAuth('/virtual-world/start-world', { method: 'POST' })
         .then(function() { window.location.href = '/virtual-world'; })
         .catch(function() { window.location.href = '/virtual-world'; });
     }
 
     function postTreeAction(action) {
-      fetch('/virtual-world/tree-action', {
+      fetchWithAuth('/virtual-world/tree-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1743,6 +1948,7 @@ function getVirtualWorldPage(context) {
           console.log('Use failed:', result.error);
         }
       }).catch(function(err) {
+        if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
         console.error('Use request failed:', err);
       });
     }
@@ -1875,7 +2081,7 @@ function getVirtualWorldPage(context) {
     }
 
     function postItemAction(payload, onSuccess) {
-      fetch('/virtual-world/tree-action', {
+      fetchWithAuth('/virtual-world/tree-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1889,6 +2095,7 @@ function getVirtualWorldPage(context) {
         applyItemStateFromResult(result);
         if (typeof onSuccess === 'function') onSuccess(result);
       }).catch(function(err) {
+        if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
         console.error('Item action request failed:', err);
       });
     }

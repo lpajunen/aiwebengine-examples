@@ -533,6 +533,104 @@ function getVirtualWorldPage(context) {
     }
     var sessionId = createSessionId();
 
+    // ── Lightweight i18n for UI labels ─────────────────────────────────────
+    var I18N_MESSAGES = {
+      en: {
+        item: {
+          saw: { name: 'Saw' },
+          knife: { name: 'Knife' },
+          flower: { name: 'Rose' },
+          tree_planter: { name: 'Tree planting spade' },
+          unknown: { name: 'Unknown item' },
+        },
+        tree_action: {
+          plant: 'Use tree planting spade (plant)',
+          cut: 'Use saw (cut)',
+        },
+        inventory: {
+          empty: 'empty',
+          left_hand: 'Left Hand',
+          right_hand: 'Right Hand',
+          backpack_empty: 'Backpack empty',
+          items_suffix: 'items',
+        },
+      },
+      fi: {
+        item: {
+          saw: { name: 'Saha' },
+          knife: { name: 'Veitsi' },
+          flower: { name: 'Ruusu' },
+          tree_planter: { name: 'Puunistutuslapio' },
+          unknown: { name: 'Tuntematon esine' },
+        },
+        tree_action: {
+          plant: 'Kayta puunistutuslapiota (istuta)',
+          cut: 'Kayta sahaa (kaada)',
+        },
+        inventory: {
+          empty: 'tyhja',
+          left_hand: 'Vasen kasi',
+          right_hand: 'Oikea kasi',
+          backpack_empty: 'Reppu on tyhja',
+          items_suffix: 'esinetta',
+        },
+      },
+    };
+
+    var activeLocale = null;
+
+    function resolveLocale() {
+      if (activeLocale) return activeLocale;
+      var raw =
+        (navigator.languages && navigator.languages.length > 0
+          ? navigator.languages[0]
+          : navigator.language) ||
+        'en';
+      var normalized = String(raw).toLowerCase();
+      if (I18N_MESSAGES[normalized]) {
+        activeLocale = normalized;
+        return activeLocale;
+      }
+      var base = normalized.split('-')[0];
+      activeLocale = I18N_MESSAGES[base] ? base : 'en';
+      return activeLocale;
+    }
+
+    function getMessageByKey(locale, key) {
+      var dict = I18N_MESSAGES[locale];
+      if (!dict) return null;
+      var parts = String(key || '').split('.');
+      var cur = dict;
+      for (var i = 0; i < parts.length; i++) {
+        if (!cur || typeof cur !== 'object' || !(parts[i] in cur)) return null;
+        cur = cur[parts[i]];
+      }
+      return typeof cur === 'string' ? cur : null;
+    }
+
+    function t(key, fallback) {
+      var locale = resolveLocale();
+      var localized = getMessageByKey(locale, key);
+      if (localized !== null) return localized;
+      var english = getMessageByKey('en', key);
+      if (english !== null) return english;
+      return fallback || key;
+    }
+
+    function humanizeType(type) {
+      return String(type || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+    }
+
+    function itemTypeToLabelKey(type) {
+      if (type === 'saw') return 'item.saw.name';
+      if (type === 'knife') return 'item.knife.name';
+      if (type === 'flower') return 'item.flower.name';
+      if (type === 'tree_planter') return 'item.tree_planter.name';
+      return 'item.unknown.name';
+    }
+
     // ── Dynamic tree state (client-side) ──────────────────────────────────────
     var dynamicTrees = TREE_MODS || {};
     
@@ -590,8 +688,12 @@ function getVirtualWorldPage(context) {
     }
 
     function treeActionLabel(action) {
-      if (action === 'plant') return 'Use tree planter (plant)';
-      if (action === 'cut') return 'Use saw (cut)';
+      if (action === 'plant') {
+        return t('tree_action.plant', 'Use tree planting spade (plant)');
+      }
+      if (action === 'cut') {
+        return t('tree_action.cut', 'Use saw (cut)');
+      }
       return action;
     }
 
@@ -652,8 +754,9 @@ function getVirtualWorldPage(context) {
     }
 
     function inventoryItemLabel(item) {
-      if (!item || !item.type) return 'empty';
-      return String(item.type);
+      if (!item || !item.type) return t('inventory.empty', 'empty');
+      var type = String(item.type);
+      return t(itemTypeToLabelKey(type), humanizeType(type));
     }
 
     function updateHeldHud() {
@@ -1682,11 +1785,22 @@ function getVirtualWorldPage(context) {
         return html;
       }
 
-      leftDiv.innerHTML = handHtml('Left Hand', 'left_hand', playerInventory.left_hand);
-      rightDiv.innerHTML = handHtml('Right Hand', 'right_hand', playerInventory.right_hand);
+      leftDiv.innerHTML = handHtml(
+        t('inventory.left_hand', 'Left Hand'),
+        'left_hand',
+        playerInventory.left_hand,
+      );
+      rightDiv.innerHTML = handHtml(
+        t('inventory.right_hand', 'Right Hand'),
+        'right_hand',
+        playerInventory.right_hand,
+      );
 
       if (!Array.isArray(playerInventory.inventory) || playerInventory.inventory.length === 0) {
-        listDiv.innerHTML = '<div class="inv-row"><span class="label">Backpack empty</span></div>';
+        listDiv.innerHTML =
+          '<div class="inv-row"><span class="label">' +
+          t('inventory.backpack_empty', 'Backpack empty') +
+          '</span></div>';
       } else {
         var rows = '';
         for (var i = 0; i < playerInventory.inventory.length; i++) {
@@ -1704,7 +1818,8 @@ function getVirtualWorldPage(context) {
         listDiv.innerHTML = rows;
       }
 
-      countDiv.textContent = playerInventory.inventory.length + ' items';
+      countDiv.textContent =
+        playerInventory.inventory.length + ' ' + t('inventory.items_suffix', 'items');
       updateHeldHud();
     }
 

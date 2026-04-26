@@ -11,9 +11,14 @@ var NPC_MIN_COUNT = 10;
 var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
-var ITEM_TYPES = ["saw", "knife", "flower"];
+var ITEM_TYPES = ["saw", "knife", "flower", "tree_planter"];
 var WORLD_ITEM_SPAWN_COUNT = 10;
 var npcTickerStarted = false;
+/** @type {Record<string, string>} */
+var TREE_ACTION_BY_ITEM_TYPE = {
+  saw: "cut",
+  tree_planter: "plant",
+};
 
 /**
  * @param {number} seed
@@ -267,16 +272,11 @@ function getVirtualWorldPage(context) {
       border: 1px solid rgba(255,255,255,0.3);
       color: #fff;
     }
-    #btn-plant {
-      background: rgba(45,138,62,0.85);
-      border-color: rgba(61,186,78,0.5);
-    }
-    #btn-plant:hover { background: rgba(61,186,78,1); }
-    #btn-timber {
+    #btn-use {
       background: rgba(139,69,19,0.85);
       border-color: rgba(160,82,45,0.5);
     }
-    #btn-timber:hover { background: rgba(160,82,45,1); }
+    #btn-use:hover { background: rgba(160,82,45,1); }
     #btn-pick {
       background: rgba(25,115,72,0.85);
       border-color: rgba(72,190,130,0.55);
@@ -287,6 +287,42 @@ function getVirtualWorldPage(context) {
       border-color: rgba(130,165,255,0.55);
     }
     #btn-items:hover { background: rgba(67,100,200,1); }
+
+    #hud-use-picker {
+      right: 14px;
+      bottom: 70px;
+      width: min(260px, calc(100vw - 28px));
+      display: none;
+      pointer-events: auto;
+      z-index: 1002;
+      padding: 8px;
+    }
+    #hud-use-picker strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #a8d8ff;
+      font-size: 13px;
+    }
+    #use-picker-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    #use-picker-actions button {
+      font-size: 12px;
+      font-weight: 600;
+      text-align: left;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.24);
+      color: #fff;
+      background: rgba(255,255,255,0.12);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #use-picker-actions button:hover {
+      background: rgba(255,255,255,0.2);
+    }
 
     #hud-inventory-panel {
       right: 14px;
@@ -450,10 +486,14 @@ function getVirtualWorldPage(context) {
   </div>
 
   <div class="hud" id="hud-tree-actions">
-    <button id="btn-plant" onclick="plantTree()">🌱 Plant</button>
-    <button id="btn-timber" onclick="cutTree()">🪓 Timber</button>
+    <button id="btn-use" onclick="useItem()">Use</button>
     <button id="btn-pick" onclick="pickItemsOnTile()">📦 Pick</button>
     <button id="btn-items" onclick="toggleInventoryPanel()">🎒 Items</button>
+  </div>
+
+  <div class="hud" id="hud-use-picker">
+    <strong>Choose Action</strong>
+    <div id="use-picker-actions"></div>
   </div>
 
   <div class="hud" id="hud-inventory-panel">
@@ -541,6 +581,75 @@ function getVirtualWorldPage(context) {
     var playerInventory = normalizeClientInventory(PLAYER_INV);
     var inventoryPanelVisible = false;
     var inventoryAutoHideTimer = null;
+    var usePickerVisible = false;
+
+    function treeActionForItemType(type) {
+      if (type === 'tree_planter') return 'plant';
+      if (type === 'saw') return 'cut';
+      return '';
+    }
+
+    function treeActionLabel(action) {
+      if (action === 'plant') return 'Use tree planter (plant)';
+      if (action === 'cut') return 'Use saw (cut)';
+      return action;
+    }
+
+    function getOwnedTreeActions() {
+      var actionsByType = {};
+      var inv = normalizeClientInventory(playerInventory);
+      var all = [];
+      if (inv.left_hand) all.push(inv.left_hand);
+      if (inv.right_hand) all.push(inv.right_hand);
+      if (Array.isArray(inv.inventory)) {
+        for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
+      }
+      for (var j = 0; j < all.length; j++) {
+        var action = treeActionForItemType(all[j] && all[j].type);
+        if (!action) continue;
+        actionsByType[action] = true;
+      }
+      return Object.keys(actionsByType);
+    }
+
+    function closeUsePicker() {
+      usePickerVisible = false;
+      document.getElementById('hud-use-picker').style.display = 'none';
+      document.getElementById('use-picker-actions').innerHTML = '';
+    }
+
+    function updateUseButtonState() {
+      var btn = document.getElementById('btn-use');
+      if (!btn) return;
+      var actions = getOwnedTreeActions();
+      if (actions.length === 0) {
+        btn.disabled = true;
+        btn.style.opacity = '0.45';
+      } else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+      if (actions.length < 2) closeUsePicker();
+    }
+
+    function openUsePicker(actions) {
+      var container = document.getElementById('use-picker-actions');
+      container.innerHTML = '';
+      for (var i = 0; i < actions.length; i++) {
+        var action = actions[i];
+        var btn = document.createElement('button');
+        btn.textContent = treeActionLabel(action);
+        btn.onclick = (function(a) {
+          return function() {
+            closeUsePicker();
+            postTreeAction(a);
+          };
+        })(action);
+        container.appendChild(btn);
+      }
+      usePickerVisible = true;
+      document.getElementById('hud-use-picker').style.display = 'block';
+    }
 
     function inventoryItemLabel(item) {
       if (!item || !item.type) return 'empty';
@@ -552,6 +661,7 @@ function getVirtualWorldPage(context) {
         playerInventory.left_hand ? inventoryItemLabel(playerInventory.left_hand) : '-';
       document.getElementById('held-right').textContent =
         playerInventory.right_hand ? inventoryItemLabel(playerInventory.right_hand) : '-';
+      updateUseButtonState();
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────
@@ -783,6 +893,7 @@ function getVirtualWorldPage(context) {
       if (type === 'saw') return 0xbfc6d0;
       if (type === 'knife') return 0xd8dee8;
       if (type === 'flower') return 0xec6ea4;
+      if (type === 'tree_planter') return 0x54d08a;
       return 0xf3ca40;
     }
 
@@ -1291,13 +1402,23 @@ function getVirtualWorldPage(context) {
             var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
             
             var treeKey = payload.row + '_' + payload.col;
+            var actorType = payload.actor_type || 'player';
+            var actorId = payload.actor_id || payload.player_id || '';
             
             if (payload.action === 'plant') {
               MAP[payload.row][payload.col] = 2;
-              dynamicTrees[treeKey] = { action: 'plant', player_id: payload.player_id };
+              dynamicTrees[treeKey] = {
+                action: 'plant',
+                actor_type: actorType,
+                actor_id: actorId,
+              };
             } else if (payload.action === 'cut') {
               MAP[payload.row][payload.col] = 0;
-              dynamicTrees[treeKey] = { action: 'cut', player_id: payload.player_id };
+              dynamicTrees[treeKey] = {
+                action: 'cut',
+                actor_type: actorType,
+                actor_id: actorId,
+              };
             }
             
             updateTreeInstances();
@@ -1504,44 +1625,41 @@ function getVirtualWorldPage(context) {
         .catch(function() { window.location.href = '/virtual-world'; });
     }
 
-    function plantTree() {
+    function postTreeAction(action) {
       fetch('/virtual-world/tree-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'plant',
+          action: action,
           row: avatarRow,
           col: avatarCol,
           rotation: avatar.rotation.y
         })
       }).then(function(res) { return res.json(); }).then(function(result) {
         if (!result.ok) {
-          console.log('Plant failed:', result.error);
-          // TODO: Show user feedback
+          console.log('Use failed:', result.error);
         }
       }).catch(function(err) {
-        console.error('Plant request failed:', err);
+        console.error('Use request failed:', err);
       });
     }
 
-    function cutTree() {
-      fetch('/virtual-world/tree-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'cut',
-          row: avatarRow,
-          col: avatarCol,
-          rotation: avatar.rotation.y
-        })
-      }).then(function(res) { return res.json(); }).then(function(result) {
-        if (!result.ok) {
-          console.log('Cut failed:', result.error);
-          // TODO: Show user feedback
-        }
-      }).catch(function(err) {
-        console.error('Cut request failed:', err);
-      });
+    function useItem() {
+      var actions = getOwnedTreeActions().sort();
+      if (actions.length === 0) {
+        console.log('No usable tree item owned');
+        return;
+      }
+      if (actions.length === 1) {
+        closeUsePicker();
+        postTreeAction(actions[0]);
+        return;
+      }
+      if (usePickerVisible) {
+        closeUsePicker();
+        return;
+      }
+      openUsePicker(actions);
     }
 
     function renderInventoryPanel() {
@@ -1638,6 +1756,7 @@ function getVirtualWorldPage(context) {
       }
       rebuildItemMeshes();
       renderInventoryPanel();
+      updateUseButtonState();
     }
 
     function postItemAction(payload, onSuccess) {
@@ -2116,6 +2235,39 @@ function normalizeInventory(inv) {
 }
 
 /**
+ * @param {*} inv
+ * @returns {string[]}
+ */
+function getInventoryTreeActions(inv) {
+  var normalized = normalizeInventory(inv);
+  /** @type {Record<string, boolean>} */
+  var actions = {};
+  /** @type {any[]} */
+  var items = [];
+  if (normalized.left_hand) items.push(normalized.left_hand);
+  if (normalized.right_hand) items.push(normalized.right_hand);
+  if (Array.isArray(normalized.inventory)) {
+    items = items.concat(normalized.inventory);
+  }
+  items.forEach(function (item) {
+    if (!item || typeof item.type !== "string") return;
+    var action = TREE_ACTION_BY_ITEM_TYPE[item.type];
+    if (action) actions[action] = true;
+  });
+  return Object.keys(actions);
+}
+
+/**
+ * @param {*} inv
+ * @param {string} action
+ * @returns {boolean}
+ */
+function canInventoryUseTreeAction(inv, action) {
+  if (action !== "plant" && action !== "cut") return false;
+  return getInventoryTreeActions(inv).indexOf(action) !== -1;
+}
+
+/**
  * @param {string} userId
  * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
  */
@@ -2499,8 +2651,10 @@ function tickWorldNPCs(worldId, now) {
   if (npcIds.length === 0) return;
 
   var map = getEffectiveMap(worldId);
+  var trees = loadWorldTrees(worldId);
   var worldItems = loadWorldItems(worldId);
   var itemChanges = false;
+  var treeChanges = false;
   var players = loadWorldPlayers(worldId);
   /** @type {Record<string, boolean>} */
   var occupiedPlayers = {};
@@ -2638,6 +2792,85 @@ function tickWorldNPCs(worldId, now) {
         ]);
       }
     }
+
+    var npcTreeActions = getInventoryTreeActions(n);
+    if (npcTreeActions.length > 0 && Math.random() < 0.08) {
+      var treeDirs = [
+        { dr: 1, dc: 0 },
+        { dr: -1, dc: 0 },
+        { dr: 0, dc: 1 },
+        { dr: 0, dc: -1 },
+      ];
+      shuffleDirections(treeDirs);
+      var didTreeAction = false;
+      for (var td = 0; td < treeDirs.length && !didTreeAction; td++) {
+        var tr = n.row + treeDirs[td].dr;
+        var tc = n.col + treeDirs[td].dc;
+        if (tr < 0 || tr >= ROWS || tc < 0 || tc >= COLS) continue;
+        var treeKey = tr + "_" + tc;
+
+        if (npcTreeActions.indexOf("cut") !== -1) {
+          var hasPlantedTree =
+            trees[treeKey] && trees[treeKey].action === "plant";
+          var baseHasTree = map[tr][tc] === 2;
+          var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
+          if ((hasPlantedTree || baseHasTree) && !alreadyCut) {
+            trees[treeKey] = {
+              action: "cut",
+              cut_by: npcId,
+              timestamp: now,
+            };
+            map[tr][tc] = 0;
+            n.rotation = directionToRotation(treeDirs[td].dr, treeDirs[td].dc);
+            treeChanges = true;
+            hasChanges = true;
+            didTreeAction = true;
+            graphQLRegistry.sendSubscriptionMessageFiltered(
+              "worldTreeChanged",
+              JSON.stringify({
+                action: "cut",
+                row: tr,
+                col: tc,
+                actor_type: "npc",
+                actor_id: npcId,
+              }),
+              JSON.stringify({ world_id: worldId }),
+            );
+            continue;
+          }
+        }
+
+        if (npcTreeActions.indexOf("plant") !== -1) {
+          var hasExistingTree =
+            trees[treeKey] && trees[treeKey].action === "plant";
+          var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
+          var groundWalkable = map[tr][tc] === 0;
+          if (groundWalkable && !hasExistingTree) {
+            trees[treeKey] = {
+              action: "plant",
+              planted_by: npcId,
+              timestamp: now,
+            };
+            if (wasTreeCut || map[tr][tc] === 0) map[tr][tc] = 2;
+            n.rotation = directionToRotation(treeDirs[td].dr, treeDirs[td].dc);
+            treeChanges = true;
+            hasChanges = true;
+            didTreeAction = true;
+            graphQLRegistry.sendSubscriptionMessageFiltered(
+              "worldTreeChanged",
+              JSON.stringify({
+                action: "plant",
+                row: tr,
+                col: tc,
+                actor_type: "npc",
+                actor_id: npcId,
+              }),
+              JSON.stringify({ world_id: worldId }),
+            );
+          }
+        }
+      }
+    }
   });
 
   if (hasChanges) {
@@ -2649,6 +2882,9 @@ function tickWorldNPCs(worldId, now) {
   }
   if (itemChanges) {
     saveWorldItems(worldId, worldItems);
+  }
+  if (treeChanges) {
+    saveWorldTrees(worldId, trees);
   }
 }
 
@@ -3430,6 +3666,14 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid action" }, 400);
   }
 
+  var inv = loadPlayerInventory(userId);
+  if (!canInventoryUseTreeAction(inv, action)) {
+    return ResponseBuilder.json({
+      ok: false,
+      error: "Missing required item for action",
+    });
+  }
+
   // Derive world from server-side storage
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) {
@@ -3520,6 +3764,8 @@ function treeActionHandler(context) {
     action: action,
     row: targetRow,
     col: targetCol,
+    actor_type: "player",
+    actor_id: userId,
     player_id: userId,
   });
   graphQLRegistry.sendSubscriptionMessageFiltered(

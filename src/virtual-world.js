@@ -566,8 +566,11 @@ function getVirtualWorldPage(context) {
     var authProbeAttempts = 0;
     var authProbeInFlight = false;
     var authSseCheckPending = false;
+    var authRefreshPromise = null;
+    var authRefreshIntervalTimer = null;
     var AUTH_PROBE_MAX_ATTEMPTS = 3;
     var AUTH_LOGIN_REDIRECT_DELAY_MS = 800;
+    var AUTH_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
     function setAuthStatusMessage(text, isError) {
       var el = document.getElementById('hud-auth-status');
@@ -612,6 +615,23 @@ function getVirtualWorldPage(context) {
       flushMove();
     }
 
+    function refreshSessionSilently(reason) {
+      if (isAuthUnavailable()) return Promise.resolve(false);
+      if (authRefreshPromise) return authRefreshPromise;
+      authRefreshPromise = fetch('/auth/refresh', {
+        method: 'POST',
+        cache: 'no-store',
+      }).then(function(res) {
+        if (res.status === 401) return false;
+        return res.ok;
+      }).catch(function() {
+        return false;
+      }).finally(function() {
+        authRefreshPromise = null;
+      });
+      return authRefreshPromise;
+    }
+
     function probeAuthStatus() {
       return fetch('/virtual-world/current-world', {
         method: 'GET',
@@ -636,7 +656,10 @@ function getVirtualWorldPage(context) {
       authProbeRetryTimer = setTimeout(function() {
         if (authState !== AUTH_STATE_EXTENDING) return;
         authProbeInFlight = true;
-        probeAuthStatus().then(function(ok) {
+        refreshSessionSilently('recovery').then(function(refreshed) {
+          if (!refreshed) return false;
+          return probeAuthStatus();
+        }).then(function(ok) {
           authProbeInFlight = false;
           if (ok) {
             handleAuthRecovery();
@@ -666,18 +689,58 @@ function getVirtualWorldPage(context) {
       return authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED;
     }
 
+    function createAuthError(code) {
+      var authErr = new Error(code);
+      authErr.code = code;
+      return authErr;
+    }
+
+    function scheduleSessionRefresh() {
+      if (authRefreshIntervalTimer) {
+        clearInterval(authRefreshIntervalTimer);
+        authRefreshIntervalTimer = null;
+      }
+      authRefreshIntervalTimer = setInterval(function() {
+        if (authState !== AUTH_STATE_OK) return;
+        if (document.visibilityState === 'hidden') return;
+        refreshSessionSilently('interval').then(function(ok) {
+          if (!ok) handleAuth401('refresh_interval');
+        });
+      }, AUTH_REFRESH_INTERVAL_MS);
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') return;
+      if (authState !== AUTH_STATE_OK) return;
+      refreshSessionSilently('visibility').then(function(ok) {
+        if (!ok) handleAuth401('visibility_refresh');
+      });
+    });
+
     function fetchWithAuth(path, options) {
       if (isAuthUnavailable()) {
-        var stoppedErr = new Error('auth_stopped');
-        stoppedErr.code = 'AUTH_STOPPED';
-        return Promise.reject(stoppedErr);
+        return Promise.reject(createAuthError('AUTH_STOPPED'));
       }
-      return fetch(path, options).then(function(res) {
+      var requestOptions = options || {};
+      return fetch(path, requestOptions).then(function(res) {
+        if (res.status !== 401) return res;
+        return refreshSessionSilently('request_retry').then(function(refreshed) {
+          if (!refreshed) {
+            handleAuth401(path);
+            throw createAuthError('AUTH_401');
+          }
+          return fetch(path, requestOptions).then(function(retryRes) {
+            if (retryRes.status === 401) {
+              handleAuth401(path);
+              throw createAuthError('AUTH_401');
+            }
+            return retryRes;
+          });
+        });
+      }).then(function(res) {
         if (res.status === 401) {
           handleAuth401(path);
-          var authErr = new Error('auth_401');
-          authErr.code = 'AUTH_401';
-          throw authErr;
+          throw createAuthError('AUTH_401');
         }
         return res;
       });
@@ -1601,6 +1664,7 @@ function getVirtualWorldPage(context) {
     }
 
     function initMultiplayer() {
+      scheduleSessionRefresh();
       updateHeldHud();
       renderInventoryPanel();
       fetchSnapshot();

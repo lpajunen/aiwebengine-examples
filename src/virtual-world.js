@@ -10,10 +10,16 @@ var LEASE_TTL_MS = 30000;
 var NPC_MIN_COUNT = 10;
 var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
+var NPC_TICK_LEASE_MS = 2000;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
 var ITEM_TYPES = ["saw", "knife", "flower", "tree_planter"];
 var WORLD_ITEM_SPAWN_COUNT = 10;
 var npcTickerStarted = false;
+var npcTickOwnerId =
+  "npc-tick-" +
+  Date.now().toString(36) +
+  "-" +
+  Math.random().toString(36).slice(2);
 /** @type {Record<string, string>} */
 var TREE_ACTION_BY_ITEM_TYPE = {
   saw: "cut",
@@ -3222,7 +3228,7 @@ function runNPCTick() {
       changedWorldSet = true;
       return;
     }
-    tickWorldNPCs(worldId, now);
+    tryTickWorldNPCs(worldId, now);
   });
 
   if (changedWorldSet) saveNPCActiveWorlds(worlds);
@@ -3230,26 +3236,88 @@ function runNPCTick() {
 
 /**
  * @param {string} worldId
+ * @param {number} now
+ * @returns {boolean}
  */
-function maybeTickWorldNPCs(worldId) {
-  var key = "vworld_npc_last_tick:" + worldId;
-  var now = Date.now();
-  var lastTick = Number(sharedStorage.getItem(key) || 0);
-  if (now - lastTick < NPC_TICK_MS) return;
-  tickWorldNPCs(worldId, now);
-  sharedStorage.setItem(key, String(now));
+function tryAcquireNPCTickLease(worldId, now) {
+  var key = "vworld_npc_tick_lease:" + worldId;
+  var raw = sharedStorage.getItem(key);
+  var lease = null;
+  if (raw) {
+    try {
+      lease = JSON.parse(raw);
+    } catch (e) {
+      lease = null;
+    }
+  }
+
+  if (
+    lease &&
+    lease.owner &&
+    lease.owner !== npcTickOwnerId &&
+    Number(lease.expires_at || 0) > now
+  ) {
+    return false;
+  }
+
+  var newLease = {
+    owner: npcTickOwnerId,
+    expires_at: now + NPC_TICK_LEASE_MS,
+  };
+  sharedStorage.setItem(key, JSON.stringify(newLease));
+
+  // Re-read after write so we only proceed if our lease is still current.
+  var verifyRaw = sharedStorage.getItem(key);
+  if (!verifyRaw) return false;
+  try {
+    var verify = JSON.parse(verifyRaw);
+    return (
+      verify &&
+      verify.owner === npcTickOwnerId &&
+      Number(verify.expires_at || 0) >= now
+    );
+  } catch (e) {
+    return false;
+  }
 }
 
-function scheduleNextNPCTick() {
-  var runAt = new Date(Date.now() + NPC_TICK_MS).toISOString();
+/**
+ * @param {string} worldId
+ * @param {number} now
+ * @returns {boolean}
+ */
+function tryTickWorldNPCs(worldId, now) {
+  var key = "vworld_npc_last_tick:" + worldId;
+  var lastTick = Number(sharedStorage.getItem(key) || 0);
+  if (now - lastTick < NPC_TICK_MS) return false;
+  if (!tryAcquireNPCTickLease(worldId, now)) return false;
+
+  // Recheck after lease acquisition to avoid race with another writer.
+  lastTick = Number(sharedStorage.getItem(key) || 0);
+  if (now - lastTick < NPC_TICK_MS) return false;
+
+  tickWorldNPCs(worldId, now);
+  sharedStorage.setItem(key, String(now));
+  return true;
+}
+
+/**
+ * @param {string} worldId
+ */
+function maybeTickWorldNPCs(worldId) {
+  var now = Date.now();
+  tryTickWorldNPCs(worldId, now);
+}
+
+function registerRecurringNPCTick() {
   try {
-    schedulerService.registerOnce({
+    schedulerService.registerRecurring({
       handler: "runNPCTickScheduledJob",
-      runAt: runAt,
+      intervalMilliseconds: NPC_TICK_MS,
       name: "vworld-npc-tick",
     });
   } catch (e) {
-    vwLog("npc scheduler register failed", { error: String(e) });
+    vwLog("npc scheduler registerRecurring failed", { error: String(e) });
   }
 }
 
@@ -3258,13 +3326,12 @@ function scheduleNextNPCTick() {
  */
 function runNPCTickScheduledJob(_context) {
   runNPCTick();
-  scheduleNextNPCTick();
 }
 
 function startNPCTicker() {
   if (npcTickerStarted) return;
   npcTickerStarted = true;
-  scheduleNextNPCTick();
+  registerRecurringNPCTick();
 }
 
 var VW_DEBUG = false;

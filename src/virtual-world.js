@@ -702,7 +702,10 @@ function getVirtualWorldPage(context) {
       }
       authRefreshIntervalTimer = setInterval(function() {
         if (authState !== AUTH_STATE_OK) return;
-        if (document.visibilityState === 'hidden') return;
+        // Refresh even when the tab is hidden: a passive watcher receiving SSE
+        // events may background the tab for hours and should not be forced to
+        // re-login. The 30-minute heartbeat is lightweight enough to keep the
+        // session alive for the full 30-day absolute lifetime.
         refreshSessionSilently('interval').then(function(ok) {
           if (!ok) handleAuth401('refresh_interval');
         });

@@ -485,6 +485,69 @@ function getVirtualWorldPage(context) {
       color: #cfdde7;
     }
 
+    #hud-tile-detail {
+      left: 14px;
+      top: 130px;
+      width: min(260px, calc(50vw - 28px));
+      max-height: min(52vh, 400px);
+      overflow-y: auto;
+      display: none;
+      pointer-events: auto;
+      padding: 10px;
+      z-index: 1001;
+    }
+    #hud-tile-detail .tile-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    #hud-tile-detail .tile-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #a8d8ff;
+    }
+    #btn-close-tile {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      opacity: 0.7;
+      font-family: inherit;
+    }
+    #btn-close-tile:hover { opacity: 1; }
+    #hud-tile-detail .tile-section {
+      margin-bottom: 8px;
+    }
+    #hud-tile-detail .tile-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #88bbdd;
+      margin-bottom: 4px;
+    }
+    #hud-tile-detail .tile-row {
+      font-size: 12px;
+      color: #ddeeff;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      word-break: break-all;
+    }
+    #hud-tile-detail .tile-row:last-child { border-bottom: 0; }
+    #hud-tile-detail .tile-empty {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      font-style: italic;
+    }
+    #hud-tile-detail .tile-you {
+      color: #7dd3fc;
+      font-weight: 700;
+    }
+
     #joystick-container {
       position: absolute;
       bottom: 14px;
@@ -584,6 +647,14 @@ function getVirtualWorldPage(context) {
       <span id="inv-count">0 items</span>
       <button id="btn-close-items" onclick="closeInventoryPanel()">Close</button>
     </div>
+  </div>
+
+  <div class="hud" id="hud-tile-detail" aria-live="polite">
+    <div class="tile-header">
+      <span class="tile-title" id="tile-detail-title">Square (0, 0)</span>
+      <button id="btn-close-tile" onclick="closeTileDetail()" title="Close">×</button>
+    </div>
+    <div id="tile-detail-body"></div>
   </div>
 
   <div id="joystick-container">
@@ -1561,6 +1632,8 @@ function getVirtualWorldPage(context) {
           targetZ: tz,
           targetRot: hasIncomingRot ? incomingRot : 0,
           seq: incomingSeq !== null ? incomingSeq : 0,
+          row: Number(row),
+          col: Number(col),
         };
       } else {
         var knownSeq = Number(remoteAvatars[pid].seq || 0);
@@ -1569,6 +1642,9 @@ function getVirtualWorldPage(context) {
         remoteAvatars[pid].targetZ = tz;
         if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
         if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
+        remoteAvatars[pid].row = Number(row);
+        remoteAvatars[pid].col = Number(col);
+        refreshTileDetailIfOpen();
       }
     }
 
@@ -1576,6 +1652,7 @@ function getVirtualWorldPage(context) {
       if (remoteAvatars[pid]) {
         scene.remove(remoteAvatars[pid].group);
         delete remoteAvatars[pid];
+        refreshTileDetailIfOpen();
       }
     }
 
@@ -1629,6 +1706,8 @@ function getVirtualWorldPage(context) {
           targetZ: tz,
           targetRot: hasIncomingRot ? incomingRot : 0,
           seq: incomingSeq !== null ? incomingSeq : 0,
+          row: Number(row),
+          col: Number(col),
         };
       } else {
         var knownSeq = Number(npcAvatars[npcId].seq || 0);
@@ -1637,6 +1716,9 @@ function getVirtualWorldPage(context) {
         npcAvatars[npcId].targetZ = tz;
         if (hasIncomingRot) npcAvatars[npcId].targetRot = incomingRot;
         if (incomingSeq !== null) npcAvatars[npcId].seq = incomingSeq;
+        npcAvatars[npcId].row = Number(row);
+        npcAvatars[npcId].col = Number(col);
+        refreshTileDetailIfOpen();
       }
     }
 
@@ -1644,6 +1726,7 @@ function getVirtualWorldPage(context) {
       if (npcAvatars[npcId]) {
         scene.remove(npcAvatars[npcId].group);
         delete npcAvatars[npcId];
+        refreshTileDetailIfOpen();
       }
     }
 
@@ -1691,6 +1774,7 @@ function getVirtualWorldPage(context) {
             worldItemsByTile = next;
           }
           rebuildItemMeshes();
+          refreshTileDetailIfOpen();
           updateHeldHud();
           if (inventoryPanelVisible) renderInventoryPanel();
         }).catch(function(err) {
@@ -1993,6 +2077,7 @@ function getVirtualWorldPage(context) {
             }
             
             updateTreeInstances();
+            refreshTileDetailIfOpen();
           } catch(e) {
             console.error('Tree SSE parse error:', e);
           }
@@ -2400,6 +2485,7 @@ function getVirtualWorldPage(context) {
         worldItemsByTile = next;
       }
       rebuildItemMeshes();
+      refreshTileDetailIfOpen();
       renderInventoryPanel();
       updateUseButtonState();
     }
@@ -2448,6 +2534,164 @@ function getVirtualWorldPage(context) {
       postItemAction({ action: 'equip', from: 'inventory', index: index, to: slot });
     }
 
+    // ── Tile inspector (click/tap to see square contents) ─────────────────────
+    var tileRaycaster = new THREE.Raycaster();
+    var tileRayMouse = new THREE.Vector2();
+    var selectedTileRow = -1;
+    var selectedTileCol = -1;
+
+    // Invisible flat plane covering the entire world grid, used only for raycasting
+    var tileColliderGeo = new THREE.PlaneGeometry(COLS * TILE, ROWS * TILE);
+    var tileColliderMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+    var tileCollider = new THREE.Mesh(tileColliderGeo, tileColliderMat);
+    tileCollider.rotation.x = -Math.PI / 2;
+    tileCollider.position.set(mapCX, 0, mapCZ);
+    scene.add(tileCollider);
+
+    function pickTileFromEvent(clientX, clientY) {
+      tileRayMouse.x = (clientX / window.innerWidth) * 2 - 1;
+      tileRayMouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      tileRaycaster.setFromCamera(tileRayMouse, camera);
+      var hits = tileRaycaster.intersectObject(tileCollider);
+      if (!hits.length) return null;
+      var pt = hits[0].point;
+      var r = Math.floor(pt.z / TILE);
+      var c = Math.floor(pt.x / TILE);
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+      return { row: r, col: c };
+    }
+
+    function isClickOnHUD(e) {
+      var el = e.target;
+      while (el && el !== document.body) {
+        if (el.classList && el.classList.contains('hud')) return true;
+        if (el.id === 'joystick-container') return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+
+    function selectTile(row, col) {
+      selectedTileRow = row;
+      selectedTileCol = col;
+      renderTileDetailPanel();
+    }
+
+    function closeTileDetail() {
+      selectedTileRow = -1;
+      selectedTileCol = -1;
+      document.getElementById('hud-tile-detail').style.display = 'none';
+    }
+
+    function refreshTileDetailIfOpen() {
+      if (selectedTileRow < 0) return;
+      renderTileDetailPanel();
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function shortenId(id) {
+      var s = String(id || '');
+      return s.length > 18 ? s.slice(0, 16) + '\u2026' : s;
+    }
+
+    function renderTileDetailPanel() {
+      var row = selectedTileRow;
+      var col = selectedTileCol;
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+      var key = row + '_' + col;
+
+      document.getElementById('tile-detail-title').textContent = 'Square (' + col + ', ' + row + ')';
+
+      var terrainType = MAP[row][col];
+      var treeMod = dynamicTrees[key];
+      var terrainLabel;
+      if (terrainType === 1) {
+        terrainLabel = 'Wall';
+      } else if (terrainType === 2) {
+        terrainLabel = treeMod && treeMod.action === 'plant' ? 'Tree (planted)' : 'Tree';
+      } else {
+        terrainLabel = treeMod && treeMod.action === 'cut' ? 'Ground (tree cut)' : 'Ground';
+      }
+
+      var tileItems = worldItemsByTile[key] || [];
+
+      var playersHere = [];
+      if (avatarRow === row && avatarCol === col) {
+        playersHere.push({ id: playerId, isMe: true });
+      }
+      for (var rpid in remoteAvatars) {
+        var ra = remoteAvatars[rpid];
+        if (ra.row === row && ra.col === col) {
+          playersHere.push({ id: rpid, isMe: false });
+        }
+      }
+
+      var npcsHere = [];
+      for (var nid in npcAvatars) {
+        var na = npcAvatars[nid];
+        if (na.row === row && na.col === col) {
+          npcsHere.push(nid);
+        }
+      }
+
+      var html = '';
+
+      html += '<div class="tile-section">';
+      html += '<div class="tile-section-label">Terrain</div>';
+      html += '<div class="tile-row">' + escHtml(terrainLabel) + '</div>';
+      html += '</div>';
+
+      html += '<div class="tile-section">';
+      html += '<div class="tile-section-label">Items (' + tileItems.length + ')</div>';
+      if (tileItems.length === 0) {
+        html += '<div class="tile-empty">None</div>';
+      } else {
+        for (var i = 0; i < tileItems.length; i++) {
+          var itm = tileItems[i];
+          var label = t(itemTypeToLabelKey(itm.type), humanizeType(itm.type));
+          html += '<div class="tile-row">' + escHtml(label) + '</div>';
+        }
+      }
+      html += '</div>';
+
+      html += '<div class="tile-section">';
+      html += '<div class="tile-section-label">People (' + playersHere.length + ')</div>';
+      if (playersHere.length === 0) {
+        html += '<div class="tile-empty">None</div>';
+      } else {
+        for (var j = 0; j < playersHere.length; j++) {
+          var pp = playersHere[j];
+          if (pp.isMe) {
+            html += '<div class="tile-row tile-you">You (' + escHtml(shortenId(pp.id)) + ')</div>';
+          } else {
+            html += '<div class="tile-row">' + escHtml(shortenId(pp.id)) + '</div>';
+          }
+        }
+      }
+      html += '</div>';
+
+      html += '<div class="tile-section">';
+      html += '<div class="tile-section-label">NPCs (' + npcsHere.length + ')</div>';
+      if (npcsHere.length === 0) {
+        html += '<div class="tile-empty">None</div>';
+      } else {
+        for (var k = 0; k < npcsHere.length; k++) {
+          html += '<div class="tile-row">' + escHtml(shortenId(npcsHere[k])) + '</div>';
+        }
+      }
+      html += '</div>';
+
+      document.getElementById('tile-detail-body').innerHTML = html;
+      document.getElementById('hud-tile-detail').style.display = 'block';
+    }
+
     // ── Input ────────────────────────────────────────────────────────────────
     var keys = {};
     var MOVE_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'];
@@ -2467,8 +2711,10 @@ function getVirtualWorldPage(context) {
     // ── Camera orbit controls (drag + scroll) ────────────────────────────────
     var isDragging = false;
     var lastMouseX = 0, lastMouseY = 0;
+    var mouseClickStartX = 0, mouseClickStartY = 0;
     var lastTouchX = 0, lastTouchY = 0;
     var lastTouchDist = 0;
+    var touchTapStartX = 0, touchTapStartY = 0;
 
     // Mouse controls (desktop)
     document.addEventListener('mousedown', function(e) {
@@ -2476,6 +2722,8 @@ function getVirtualWorldPage(context) {
         isDragging = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
+        mouseClickStartX = e.clientX;
+        mouseClickStartY = e.clientY;
       }
     });
     document.addEventListener('mousemove', function(e) {
@@ -2487,7 +2735,17 @@ function getVirtualWorldPage(context) {
       camTheta -= dx * 0.005;
       camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
     });
-    document.addEventListener('mouseup',    function() { isDragging = false; });
+    document.addEventListener('mouseup', function(e) {
+      if (isDragging && e.button === 0 && !isClickOnHUD(e)) {
+        var ddx = e.clientX - mouseClickStartX;
+        var ddy = e.clientY - mouseClickStartY;
+        if (Math.sqrt(ddx * ddx + ddy * ddy) < 6) {
+          var tile = pickTileFromEvent(e.clientX, e.clientY);
+          if (tile) selectTile(tile.row, tile.col);
+        }
+      }
+      isDragging = false;
+    });
     document.addEventListener('mouseleave', function() { isDragging = false; });
 
     document.addEventListener('wheel', function(e) {
@@ -2541,6 +2799,14 @@ function getVirtualWorldPage(context) {
           return true;
         }
       }
+      var tileDetailDiv = document.getElementById('hud-tile-detail');
+      if (tileDetailDiv && tileDetailDiv.style.display !== 'none') {
+        var tileRect = tileDetailDiv.getBoundingClientRect();
+        if (touch.clientX >= tileRect.left && touch.clientX <= tileRect.right &&
+            touch.clientY >= tileRect.top && touch.clientY <= tileRect.bottom) {
+          return true;
+        }
+      }
       return false;
     }
 
@@ -2551,6 +2817,8 @@ function getVirtualWorldPage(context) {
         isTouchRotating = true;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
+        touchTapStartX = e.touches[0].clientX;
+        touchTapStartY = e.touches[0].clientY;
       } else if (e.touches.length === 2) {
         e.preventDefault();
         // Pinch to zoom
@@ -2585,12 +2853,23 @@ function getVirtualWorldPage(context) {
 
     document.addEventListener('touchend', function(e) {
       if (e.touches.length === 0) {
+        if (isTouchRotating && e.changedTouches.length > 0) {
+          var ct = e.changedTouches[0];
+          var tdx = ct.clientX - touchTapStartX;
+          var tdy = ct.clientY - touchTapStartY;
+          if (Math.sqrt(tdx * tdx + tdy * tdy) < 10) {
+            var tile = pickTileFromEvent(ct.clientX, ct.clientY);
+            if (tile) selectTile(tile.row, tile.col);
+          }
+        }
         isTouchRotating = false;
       } else if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0]) && !isTouchOnButtons(e.touches[0])) {
         // Continuing with one finger after lifting second
         isTouchRotating = true;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
+        touchTapStartX = e.touches[0].clientX;
+        touchTapStartY = e.touches[0].clientY;
       }
     }, { passive: false });
 

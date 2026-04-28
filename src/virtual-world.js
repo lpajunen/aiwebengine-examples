@@ -843,6 +843,7 @@ function getVirtualWorldPage(context) {
           plant: 'Use tree planting spade (plant)',
           cut: 'Use saw (cut)',
           build_portal: 'Use portal builder (build portal)',
+          remove_portal: 'Use portal builder (remove portal)',
           portal_travel: 'Use portal (new world)',
         },
         inventory: {
@@ -867,6 +868,7 @@ function getVirtualWorldPage(context) {
           plant: 'Kayta puunistutuslapiota (istuta)',
           cut: 'Kayta sahaa (kaada)',
           build_portal: 'Kayta portaalityokalua (rakenna portaali)',
+          remove_portal: 'Kayta portaalityokalua (poista portaali)',
           portal_travel: 'Kayta portaalia (uusi maailma)',
         },
         inventory: {
@@ -985,12 +987,12 @@ function getVirtualWorldPage(context) {
     var inventoryAutoHideTimer = null;
     var usePickerVisible = false;
 
-    function treeActionForItemType(type) {
-      if (type === 'tree_planter') return 'plant';
-      if (type === 'saw') return 'cut';
-      if (type === 'portal_builder') return 'build_portal';
-      if (type === 'portal') return 'portal_travel';
-      return '';
+    function treeActionsForItemType(type) {
+      if (type === 'portal_builder') return ['build_portal', 'remove_portal'];
+      if (type === 'tree_planter') return ['plant'];
+      if (type === 'saw') return ['cut'];
+      if (type === 'portal') return ['portal_travel'];
+      return [];
     }
 
     function treeActionLabel(action) {
@@ -1002,6 +1004,9 @@ function getVirtualWorldPage(context) {
       }
       if (action === 'build_portal') {
         return t('tree_action.build_portal', 'Use portal builder (build portal)');
+      }
+      if (action === 'remove_portal') {
+        return t('tree_action.remove_portal', 'Use portal builder (remove portal)');
       }
       if (action === 'portal_travel') {
         return t('tree_action.portal_travel', 'Use portal (new world)');
@@ -1023,9 +1028,12 @@ function getVirtualWorldPage(context) {
         for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);
       }
       for (var j = 0; j < all.length; j++) {
-        var action = treeActionForItemType(all[j] && all[j].type);
-        if (!action) continue;
-        actionsByType[action] = true;
+        var actions = treeActionsForItemType(all[j] && all[j].type);
+        if (!Array.isArray(actions)) continue;
+        for (var m = 0; m < actions.length; m++) {
+          if (!actions[m]) continue;
+          actionsByType[actions[m]] = true;
+        }
       }
       return Object.keys(actionsByType);
     }
@@ -2887,10 +2895,23 @@ function getInventoryTreeActions(inv) {
   if (Array.isArray(normalized.inventory)) {
     items = items.concat(normalized.inventory);
   }
+
+  /**
+   * @param {string} type
+   * @returns {string[]}
+   */
+  function actionsForItemType(type) {
+    if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    var action = TREE_ACTION_BY_ITEM_TYPE[type];
+    return action ? [action] : [];
+  }
+
   items.forEach(function (item) {
     if (!item || typeof item.type !== "string") return;
-    var action = TREE_ACTION_BY_ITEM_TYPE[item.type];
-    if (action) actions[action] = true;
+    var itemActions = actionsForItemType(item.type);
+    for (var i = 0; i < itemActions.length; i++) {
+      actions[itemActions[i]] = true;
+    }
   });
   return Object.keys(actions);
 }
@@ -2905,6 +2926,7 @@ function canInventoryUseTreeAction(inv, action) {
     action !== "plant" &&
     action !== "cut" &&
     action !== "build_portal" &&
+    action !== "remove_portal" &&
     action !== "portal_travel"
   )
     return false;
@@ -2918,10 +2940,22 @@ function canInventoryUseTreeAction(inv, action) {
  */
 function canTileItemsUseTreeAction(items, action) {
   if (!Array.isArray(items)) return false;
+
+  /**
+   * @param {string} type
+   * @returns {string[]}
+   */
+  function actionsForItemType(type) {
+    if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    var mapped = TREE_ACTION_BY_ITEM_TYPE[type];
+    return mapped ? [mapped] : [];
+  }
+
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     if (!item || typeof item.type !== "string") continue;
-    if (TREE_ACTION_BY_ITEM_TYPE[item.type] === action) return true;
+    var itemActions = actionsForItemType(item.type);
+    if (itemActions.indexOf(action) !== -1) return true;
   }
   return false;
 }
@@ -4414,7 +4448,7 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
 
-  var action = body.action; // "plant", "cut", "build_portal" or "portal_travel"
+  var action = body.action; // "plant", "cut", "build_portal", "remove_portal" or "portal_travel"
   var playerRow = Number(body.row);
   var playerCol = Number(body.col);
   var rotation = Number(body.rotation);
@@ -4432,6 +4466,7 @@ function treeActionHandler(context) {
     action !== "plant" &&
     action !== "cut" &&
     action !== "build_portal" &&
+    action !== "remove_portal" &&
     action !== "portal_travel"
   ) {
     return ResponseBuilder.json({ error: "Invalid action" }, 400);
@@ -4547,6 +4582,51 @@ function treeActionHandler(context) {
       action: action,
       row: targetRow,
       col: targetCol,
+      items: flattenWorldItems(worldItems),
+      inventory: inv,
+    });
+  }
+
+  if (action === "remove_portal") {
+    var removeTileKey = targetRow + "_" + targetCol;
+    var removeItems = Array.isArray(worldItems[removeTileKey])
+      ? worldItems[removeTileKey]
+      : [];
+    var keptItems = [];
+    var removedPortals = [];
+    for (var removeIdx = 0; removeIdx < removeItems.length; removeIdx++) {
+      var removeItem = removeItems[removeIdx];
+      if (removeItem && removeItem.type === "portal") {
+        removedPortals.push(removeItem);
+      } else {
+        keptItems.push(removeItem);
+      }
+    }
+
+    if (removedPortals.length === 0) {
+      return ResponseBuilder.json({ ok: false, error: "No portal to remove" });
+    }
+
+    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
+    else delete worldItems[removeTileKey];
+    saveWorldItems(worldId, worldItems);
+
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "portal_remove",
+      targetRow,
+      targetCol,
+      removedPortals,
+    );
+
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      removed_count: removedPortals.length,
       items: flattenWorldItems(worldItems),
       inventory: inv,
     });

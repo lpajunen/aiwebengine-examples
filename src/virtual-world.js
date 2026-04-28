@@ -12,7 +12,7 @@ var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
 var NPC_TICK_LEASE_MS = 2000;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
-var ITEM_TYPES = ["saw", "knife", "flower", "tree_planter"];
+var ITEM_TYPES = ["saw", "knife", "flower", "tree_planter", "portal_builder"];
 var WORLD_ITEM_SPAWN_COUNT = 10;
 var npcTickerStarted = false;
 var npcTickOwnerId =
@@ -24,7 +24,33 @@ var npcTickOwnerId =
 var TREE_ACTION_BY_ITEM_TYPE = {
   saw: "cut",
   tree_planter: "plant",
+  portal_builder: "build_portal",
+  portal: "portal_travel",
 };
+
+/** @type {string[]} */
+var EXTRA_ITEM_TYPES = ["portal"];
+
+/**
+ * @returns {string[]}
+ */
+function getAllKnownItemTypes() {
+  /** @type {Record<string, boolean>} */
+  var seen = {};
+  /** @type {string[]} */
+  var out = [];
+  ITEM_TYPES.forEach(function (type) {
+    if (!type || seen[type]) return;
+    seen[type] = true;
+    out.push(type);
+  });
+  EXTRA_ITEM_TYPES.forEach(function (type) {
+    if (!type || seen[type]) return;
+    seen[type] = true;
+    out.push(type);
+  });
+  return out;
+}
 
 /**
  * @param {number} seed
@@ -208,6 +234,32 @@ function getVirtualWorldPage(context) {
       line-height: 1.7;
     }
     #hud-pos strong { font-size: 15px; display: block; margin-bottom: 4px; color: #a8d8ff; }
+    #hud-auth-name {
+      display: inline-block;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: auto;
+    }
+
+    #hud-cheat-toast {
+      left: 50%;
+      bottom: 84px;
+      transform: translateX(-50%);
+      min-width: 240px;
+      max-width: min(460px, calc(100vw - 28px));
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.4;
+      display: none;
+      z-index: 1020;
+      pointer-events: none;
+      border-color: rgba(120, 220, 160, 0.6);
+      background: rgba(18, 95, 55, 0.9);
+    }
+    #hud-cheat-toast.error {
+      border-color: rgba(255, 150, 120, 0.6);
+      background: rgba(120, 35, 25, 0.92);
+    }
 
     #hud-legend {
       top: 14px; right: 14px;
@@ -481,7 +533,7 @@ function getVirtualWorldPage(context) {
 <body>
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
-    ${authName ? `${authName}<br>` : ""}
+    ${authName ? `<span id="hud-auth-name">${authName}</span><br>` : ""}
     World: ${worldId}<br>
     Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
     L: <span id="held-left">-</span> | R: <span id="held-right">-</span>
@@ -502,9 +554,10 @@ function getVirtualWorldPage(context) {
 
   <div class="hud" id="hud-auth-status" aria-live="polite"></div>
 
+  <div class="hud" id="hud-cheat-toast" aria-live="polite"></div>
+
   <div class="hud" id="hud-portal">
     <div class="portal-buttons">
-      <button onclick="goToNewWorld()">&#9654; New World</button>
       <button class="start-world" onclick="startWorld()">Start World</button>
     </div>
   </div>
@@ -782,11 +835,15 @@ function getVirtualWorldPage(context) {
           knife: { name: 'Knife' },
           flower: { name: 'Rose' },
           tree_planter: { name: 'Tree planting spade' },
+          portal_builder: { name: 'Portal builder' },
+          portal: { name: 'Portal' },
           unknown: { name: 'Unknown item' },
         },
         tree_action: {
           plant: 'Use tree planting spade (plant)',
           cut: 'Use saw (cut)',
+          build_portal: 'Use portal builder (build portal)',
+          portal_travel: 'Use portal (new world)',
         },
         inventory: {
           empty: 'empty',
@@ -802,11 +859,15 @@ function getVirtualWorldPage(context) {
           knife: { name: 'Veitsi' },
           flower: { name: 'Ruusu' },
           tree_planter: { name: 'Puunistutuslapio' },
+          portal_builder: { name: 'Portaalityokalu' },
+          portal: { name: 'Portaali' },
           unknown: { name: 'Tuntematon esine' },
         },
         tree_action: {
           plant: 'Kayta puunistutuslapiota (istuta)',
           cut: 'Kayta sahaa (kaada)',
+          build_portal: 'Kayta portaalityokalua (rakenna portaali)',
+          portal_travel: 'Kayta portaalia (uusi maailma)',
         },
         inventory: {
           empty: 'tyhja',
@@ -869,6 +930,8 @@ function getVirtualWorldPage(context) {
       if (type === 'knife') return 'item.knife.name';
       if (type === 'flower') return 'item.flower.name';
       if (type === 'tree_planter') return 'item.tree_planter.name';
+      if (type === 'portal_builder') return 'item.portal_builder.name';
+      if (type === 'portal') return 'item.portal.name';
       return 'item.unknown.name';
     }
 
@@ -925,6 +988,8 @@ function getVirtualWorldPage(context) {
     function treeActionForItemType(type) {
       if (type === 'tree_planter') return 'plant';
       if (type === 'saw') return 'cut';
+      if (type === 'portal_builder') return 'build_portal';
+      if (type === 'portal') return 'portal_travel';
       return '';
     }
 
@@ -934,6 +999,12 @@ function getVirtualWorldPage(context) {
       }
       if (action === 'cut') {
         return t('tree_action.cut', 'Use saw (cut)');
+      }
+      if (action === 'build_portal') {
+        return t('tree_action.build_portal', 'Use portal builder (build portal)');
+      }
+      if (action === 'portal_travel') {
+        return t('tree_action.portal_travel', 'Use portal (new world)');
       }
       return action;
     }
@@ -946,6 +1017,10 @@ function getVirtualWorldPage(context) {
       if (inv.right_hand) all.push(inv.right_hand);
       if (Array.isArray(inv.inventory)) {
         for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
+      }
+      var tileItems = worldItemsByTile[avatarRow + '_' + avatarCol];
+      if (Array.isArray(tileItems)) {
+        for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);
       }
       for (var j = 0; j < all.length; j++) {
         var action = treeActionForItemType(all[j] && all[j].type);
@@ -1006,6 +1081,111 @@ function getVirtualWorldPage(context) {
       document.getElementById('held-right').textContent =
         playerInventory.right_hand ? inventoryItemLabel(playerInventory.right_hand) : '-';
       updateUseButtonState();
+    }
+
+    var cheatClickCount = 0;
+    var cheatClickResetTimer = null;
+    var lastCheatTapAt = 0;
+    var cheatToastTimer = null;
+
+    function showCheatToast(message, isError) {
+      var toast = document.getElementById('hud-cheat-toast');
+      if (!toast) return;
+      toast.textContent = message;
+      if (isError) toast.classList.add('error');
+      else toast.classList.remove('error');
+      toast.style.display = 'block';
+      if (cheatToastTimer) clearTimeout(cheatToastTimer);
+      cheatToastTimer = setTimeout(function() {
+        toast.style.display = 'none';
+        toast.classList.remove('error');
+        cheatToastTimer = null;
+      }, isError ? 2600 : 1800);
+    }
+
+    function applyCheatResult(result) {
+      if (!result || !result.ok) {
+        console.log('Cheat failed:', result && result.error);
+        showCheatToast('Item cheat failed', true);
+        return false;
+      }
+      applyItemStateFromResult(result);
+      showInventoryPanel(2500);
+      console.log('Cheat granted items:', result.granted_count || 0);
+      showCheatToast('Item cheat activated: +' + String(result.granted_count || 0) + ' items', false);
+      return true;
+    }
+
+    function postCheatViaTreeAction() {
+      return fetchWithAuth('/virtual-world/tree-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cheat_grant_all' })
+      }).then(function(res) {
+        return res.json();
+      }).then(function(result) {
+        applyCheatResult(result);
+      });
+    }
+
+    function postCheatGrantAllItems() {
+      fetchWithAuth('/virtual-world/cheat-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      }).then(function(res) {
+        return res.json();
+      }).then(function(result) {
+        if (!applyCheatResult(result)) {
+          return postCheatViaTreeAction();
+        }
+      }).catch(function(err) {
+        if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+        postCheatViaTreeAction().catch(function(innerErr) {
+          if (innerErr && (innerErr.code === 'AUTH_401' || innerErr.code === 'AUTH_STOPPED')) return;
+          console.error('Cheat request failed:', innerErr);
+          showCheatToast('Item cheat request failed', true);
+        });
+      });
+    }
+
+    function initCheatTrigger() {
+      var nameEl = document.getElementById('hud-auth-name');
+      if (!nameEl) return;
+      nameEl.style.cursor = 'pointer';
+      nameEl.title = 'Triple click for test items';
+      function onNameCheatTap() {
+        var now = Date.now();
+        if (now - lastCheatTapAt < 180) return;
+        lastCheatTapAt = now;
+        cheatClickCount += 1;
+        nameEl.style.opacity = '0.8';
+        nameEl.title = 'Triple click for test items (' + cheatClickCount + '/3)';
+        if (cheatClickResetTimer) clearTimeout(cheatClickResetTimer);
+        cheatClickResetTimer = setTimeout(function() {
+          cheatClickCount = 0;
+          nameEl.style.opacity = '1';
+          nameEl.title = 'Triple click for test items';
+          cheatClickResetTimer = null;
+        }, 2000);
+        if (cheatClickCount >= 3) {
+          cheatClickCount = 0;
+          if (cheatClickResetTimer) {
+            clearTimeout(cheatClickResetTimer);
+            cheatClickResetTimer = null;
+          }
+          nameEl.style.opacity = '1';
+          nameEl.title = 'Triple click for test items';
+          showCheatToast('Activating item cheat...', false);
+          postCheatGrantAllItems();
+        }
+      }
+      nameEl.addEventListener('click', onNameCheatTap);
+      nameEl.addEventListener('pointerup', onNameCheatTap);
+      nameEl.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        onNameCheatTap();
+      }, { passive: false });
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────
@@ -1238,6 +1418,8 @@ function getVirtualWorldPage(context) {
       if (type === 'knife') return 0xd8dee8;
       if (type === 'flower') return 0xec6ea4;
       if (type === 'tree_planter') return 0x54d08a;
+      if (type === 'portal_builder') return 0xff9f1c;
+      if (type === 'portal') return 0x5ad7ff;
       return 0xf3ca40;
     }
 
@@ -1670,6 +1852,7 @@ function getVirtualWorldPage(context) {
       scheduleSessionRefresh();
       updateHeldHud();
       renderInventoryPanel();
+      initCheatTrigger();
       fetchSnapshot();
       syncNPCSnapshot(NPCS);
       fetchNPCSnapshot();
@@ -1681,6 +1864,7 @@ function getVirtualWorldPage(context) {
       var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
       var reconnectTimer = null;
       var sseRetryCount = 0;
+      var sseWaitingForOnline = false;
 
       function openSSE() {
         var es = new EventSource(sseUrl);
@@ -1723,6 +1907,7 @@ function getVirtualWorldPage(context) {
                   }
                   document.getElementById('pos-col').textContent = avatarCol;
                   document.getElementById('pos-row').textContent = avatarRow;
+                  updateUseButtonState();
                 }
               }
             } else {
@@ -1740,6 +1925,18 @@ function getVirtualWorldPage(context) {
           es.close();
           scheduleSSEAuthCheck('worldPlayerMoved');
           if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!sseWaitingForOnline) {
+              sseWaitingForOnline = true;
+              function handleOnline() {
+                window.removeEventListener('online', handleOnline);
+                sseWaitingForOnline = false;
+                openSSE();
+              }
+              window.addEventListener('online', handleOnline);
+            }
+            return;
+          }
           // Immediate healing snapshot, then short reconnect retry.
           if (reconnectTimer) clearTimeout(reconnectTimer);
           fetchSnapshot();
@@ -1756,6 +1953,7 @@ function getVirtualWorldPage(context) {
       var treeSseUrl = '/graphql/sse?query=' + encodeURIComponent(treeQuery);
       var treeReconnectTimer = null;
       var treeRetryCount = 0;
+      var treeWaitingForOnline = false;
 
       function openTreeSSE() {
         var treeEs = new EventSource(treeSseUrl);
@@ -1795,6 +1993,18 @@ function getVirtualWorldPage(context) {
           treeEs.close();
           scheduleSSEAuthCheck('worldTreeChanged');
           if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!treeWaitingForOnline) {
+              treeWaitingForOnline = true;
+              function handleTreeOnline() {
+                window.removeEventListener('online', handleTreeOnline);
+                treeWaitingForOnline = false;
+                openTreeSSE();
+              }
+              window.addEventListener('online', handleTreeOnline);
+            }
+            return;
+          }
           if (treeReconnectTimer) clearTimeout(treeReconnectTimer);
           treeRetryCount += 1;
           treeReconnectTimer = setTimeout(openTreeSSE, getSSEReconnectDelayMs(treeRetryCount));
@@ -1809,6 +2019,7 @@ function getVirtualWorldPage(context) {
       var npcSseUrl = '/graphql/sse?query=' + encodeURIComponent(npcQuery);
       var npcReconnectTimer = null;
       var npcRetryCount = 0;
+      var npcWaitingForOnline = false;
 
       function openNPCSSE() {
         var npcEs = new EventSource(npcSseUrl);
@@ -1836,6 +2047,18 @@ function getVirtualWorldPage(context) {
           npcEs.close();
           scheduleSSEAuthCheck('worldNPCMoved');
           if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!npcWaitingForOnline) {
+              npcWaitingForOnline = true;
+              function handleNPCOnline() {
+                window.removeEventListener('online', handleNPCOnline);
+                npcWaitingForOnline = false;
+                openNPCSSE();
+              }
+              window.addEventListener('online', handleNPCOnline);
+            }
+            return;
+          }
           if (npcReconnectTimer) clearTimeout(npcReconnectTimer);
           fetchNPCSnapshot();
           npcRetryCount += 1;
@@ -1851,6 +2074,7 @@ function getVirtualWorldPage(context) {
       var itemSseUrl = '/graphql/sse?query=' + encodeURIComponent(itemQuery);
       var itemReconnectTimer = null;
       var itemRetryCount = 0;
+      var itemWaitingForOnline = false;
 
       function openItemSSE() {
         var itemEs = new EventSource(itemSseUrl);
@@ -1863,6 +2087,18 @@ function getVirtualWorldPage(context) {
           itemEs.close();
           scheduleSSEAuthCheck('worldItemChanged');
           if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!itemWaitingForOnline) {
+              itemWaitingForOnline = true;
+              function handleItemOnline() {
+                window.removeEventListener('online', handleItemOnline);
+                itemWaitingForOnline = false;
+                openItemSSE();
+              }
+              window.addEventListener('online', handleItemOnline);
+            }
+            return;
+          }
           if (itemReconnectTimer) clearTimeout(itemReconnectTimer);
           fetchItemSnapshot();
           itemRetryCount += 1;
@@ -1918,6 +2154,7 @@ function getVirtualWorldPage(context) {
         avatar.rotation.y = angle;
         document.getElementById('pos-col').textContent = nc;
         document.getElementById('pos-row').textContent = nr;
+        updateUseButtonState();
         return true;
       }
       return false;
@@ -2019,6 +2256,12 @@ function getVirtualWorldPage(context) {
       }).then(function(res) { return res.json(); }).then(function(result) {
         if (!result.ok) {
           console.log('Use failed:', result.error);
+          updateUseButtonState();
+          return;
+        }
+        applyItemStateFromResult(result);
+        if (result.switched_world) {
+          window.location.href = '/virtual-world';
         }
       }).catch(function(err) {
         if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
@@ -2029,7 +2272,7 @@ function getVirtualWorldPage(context) {
     function useItem() {
       var actions = getOwnedTreeActions().sort();
       if (actions.length === 0) {
-        console.log('No usable tree item owned');
+        console.log('No usable item available in inventory or on this tile');
         return;
       }
       if (actions.length === 1) {
@@ -2658,8 +2901,29 @@ function getInventoryTreeActions(inv) {
  * @returns {boolean}
  */
 function canInventoryUseTreeAction(inv, action) {
-  if (action !== "plant" && action !== "cut") return false;
+  if (
+    action !== "plant" &&
+    action !== "cut" &&
+    action !== "build_portal" &&
+    action !== "portal_travel"
+  )
+    return false;
   return getInventoryTreeActions(inv).indexOf(action) !== -1;
+}
+
+/**
+ * @param {any[]} items
+ * @param {string} action
+ * @returns {boolean}
+ */
+function canTileItemsUseTreeAction(items, action) {
+  if (!Array.isArray(items)) return false;
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (!item || typeof item.type !== "string") continue;
+    if (TREE_ACTION_BY_ITEM_TYPE[item.type] === action) return true;
+  }
+  return false;
 }
 
 /**
@@ -3654,6 +3918,72 @@ function itemActionHandler(context) {
 }
 
 /**
+ * @param {string} userId
+ * @param {string} worldId
+ * @param {number} index
+ * @returns {string}
+ */
+function makeCheatItemId(userId, worldId, index) {
+  return (
+    "u" +
+    String(userId) +
+    "_w" +
+    String(worldId || "none") +
+    "_cheat_" +
+    Date.now().toString(36) +
+    "_" +
+    String(index)
+  );
+}
+
+/**
+ * @param {string} userId
+ * @returns {{ok: boolean, action: string, granted_count: number, inventory: {left_hand: any, right_hand: any, inventory: any[]}, items: Array<{id: string, type: string, row: number, col: number}>}}
+ */
+function grantAllItemsForUser(userId) {
+  var worldId = sharedStorage.getItem("vworld_current:" + userId) || "";
+  var inv = loadPlayerInventory(userId);
+  var itemTypes = getAllKnownItemTypes();
+  var now = Date.now();
+
+  for (var i = 0; i < itemTypes.length; i++) {
+    inv.inventory.push({
+      id: makeCheatItemId(userId, worldId, i),
+      type: itemTypes[i],
+      created_at: now,
+    });
+  }
+
+  savePlayerInventory(userId, inv);
+
+  /** @type {Array<{id: string, type: string, row: number, col: number}>} */
+  var itemsSnapshot = [];
+  if (worldId) {
+    ensureWorldItems(worldId);
+    itemsSnapshot = flattenWorldItems(loadWorldItems(worldId));
+  }
+
+  return {
+    ok: true,
+    action: "cheat_grant_all",
+    granted_count: itemTypes.length,
+    inventory: inv,
+    items: itemsSnapshot,
+  };
+}
+
+/**
+ * @param {*} context
+ */
+function cheatItemsHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  return ResponseBuilder.json(grantAllItemsForUser(userId));
+}
+
+/**
  * @param {*} context
  */
 function moveHandler(context) {
@@ -3932,19 +4262,10 @@ function heartbeatHandler(context) {
 }
 
 /**
- * @param {*} context
+ * @param {string} userId
+ * @param {string} targetWorldId
  */
-function newWorldHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
-
-  // Broadcast leave from the current world before switching.
-  // This must happen here because leaveHandler derives worldId from storage:
-  // by the time beforeunload fires after navigation, vworld_current already
-  // points to the new world, so the beacon would be a no-op there.
+function switchUserWorld(userId, targetWorldId) {
   var oldWorldId = sharedStorage.getItem("vworld_current:" + userId);
   if (oldWorldId) {
     var oldPlayers = loadWorldPlayers(oldWorldId);
@@ -3959,17 +4280,28 @@ function newWorldHandler(context) {
           player_id: userId,
           leaving: true,
           switched_world: true,
-          target_world_id: newWorldId,
+          target_world_id: String(targetWorldId),
         }),
         JSON.stringify({ world_id: oldWorldId }),
       );
     }
   }
 
-  sharedStorage.setItem("vworld_current:" + userId, newWorldId);
+  sharedStorage.setItem("vworld_current:" + userId, String(targetWorldId));
   sharedStorage.removeItem("vworld_lease:" + userId);
-  // Clear persisted position so the player spawns at (1,1) in the new world.
   sharedStorage.removeItem("vworld_pos:" + userId);
+}
+
+/**
+ * @param {*} context
+ */
+function newWorldHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
+  switchUserWorld(userId, newWorldId);
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -3981,33 +4313,7 @@ function startWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-
-  // Broadcast leave from the current world before switching.
-  var oldWorldId = sharedStorage.getItem("vworld_current:" + userId);
-  if (oldWorldId) {
-    var oldPlayers = loadWorldPlayers(oldWorldId);
-    if (oldPlayers[userId]) {
-      delete oldPlayers[userId];
-      saveWorldPlayers(oldWorldId, oldPlayers);
-      sharedStorage.removeItem("vworld_hb:" + userId);
-      sharedStorage.removeItem("vworld_lease:" + userId);
-      graphQLRegistry.sendSubscriptionMessageFiltered(
-        "worldPlayerMoved",
-        JSON.stringify({
-          player_id: userId,
-          leaving: true,
-          switched_world: true,
-          target_world_id: "10000",
-        }),
-        JSON.stringify({ world_id: oldWorldId }),
-      );
-    }
-  }
-
-  sharedStorage.setItem("vworld_current:" + userId, "10000");
-  sharedStorage.removeItem("vworld_lease:" + userId);
-  // Clear persisted position so the player spawns at (1,1) in start world.
-  sharedStorage.removeItem("vworld_pos:" + userId);
+  switchUserWorld(userId, "10000");
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -4108,7 +4414,7 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
 
-  var action = body.action; // "plant" or "cut"
+  var action = body.action; // "plant", "cut", "build_portal" or "portal_travel"
   var playerRow = Number(body.row);
   var playerCol = Number(body.col);
   var rotation = Number(body.rotation);
@@ -4118,22 +4424,53 @@ function treeActionHandler(context) {
     return ResponseBuilder.json(handled.payload, handled.status);
   }
 
-  if (action !== "plant" && action !== "cut") {
-    return ResponseBuilder.json({ error: "Invalid action" }, 400);
+  if (action === "cheat_grant_all") {
+    return ResponseBuilder.json(grantAllItemsForUser(userId));
   }
 
-  var inv = loadPlayerInventory(userId);
-  if (!canInventoryUseTreeAction(inv, action)) {
-    return ResponseBuilder.json({
-      ok: false,
-      error: "Missing required item for action",
-    });
+  if (
+    action !== "plant" &&
+    action !== "cut" &&
+    action !== "build_portal" &&
+    action !== "portal_travel"
+  ) {
+    return ResponseBuilder.json({ error: "Invalid action" }, 400);
   }
 
   // Derive world from server-side storage
   var worldId = sharedStorage.getItem("vworld_current:" + userId);
   if (!worldId) {
     return ResponseBuilder.json({ ok: false, error: "No world found" });
+  }
+  ensureWorldItems(worldId);
+
+  var inv = loadPlayerInventory(userId);
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var currentTileKey = canonical.row + "_" + canonical.col;
+  var worldItems = loadWorldItems(worldId);
+  var currentTileItems = Array.isArray(worldItems[currentTileKey])
+    ? worldItems[currentTileKey]
+    : [];
+  var canUseAction =
+    canInventoryUseTreeAction(inv, action) ||
+    canTileItemsUseTreeAction(currentTileItems, action);
+
+  if (!canUseAction) {
+    return ResponseBuilder.json({
+      ok: false,
+      error: "Missing required item for action",
+    });
+  }
+
+  if (action === "portal_travel") {
+    var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
+    switchUserWorld(userId, newWorldId);
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      switched_world: true,
+      world_id: newWorldId,
+    });
   }
 
   // Calculate target tile based on player rotation.
@@ -4168,9 +4505,52 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ ok: false, error: "Target out of bounds" });
   }
 
-  var map = generateMap(worldId);
+  var map = getEffectiveMap(worldId);
   var trees = loadWorldTrees(worldId);
   var treeKey = targetRow + "_" + targetCol;
+
+  if (action === "build_portal") {
+    if (map[targetRow][targetCol] !== 0) {
+      return ResponseBuilder.json({ ok: false, error: "Cannot build portal here" });
+    }
+    var targetTileKey = targetRow + "_" + targetCol;
+    var targetItems = Array.isArray(worldItems[targetTileKey])
+      ? worldItems[targetTileKey]
+      : [];
+    var hasPortal = targetItems.some(function (item) {
+      return item && item.type === "portal";
+    });
+    if (hasPortal) {
+      return ResponseBuilder.json({ ok: false, error: "Portal already exists" });
+    }
+    var portalItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "portal",
+      created_at: Date.now(),
+    };
+    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
+    worldItems[targetTileKey].push(portalItem);
+    saveWorldItems(worldId, worldItems);
+
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "portal_create",
+      targetRow,
+      targetCol,
+      [portalItem],
+    );
+
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      items: flattenWorldItems(worldItems),
+      inventory: inv,
+    });
+  }
 
   if (action === "plant") {
     // Check if target is walkable ground (no wall, no tree)
@@ -4355,6 +4735,7 @@ function init() {
   safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
   safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
   safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
+  safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");
 
   safeRegisterSubscription(
     "worldItemChanged",

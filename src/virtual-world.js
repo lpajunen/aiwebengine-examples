@@ -3190,7 +3190,8 @@ function canInventoryUseTreeAction(inv, action) {
     action !== "cut" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
-    action !== "portal_travel"
+    action !== "portal_travel" &&
+    action !== "return_home"
   )
     return false;
   return getInventoryTreeActions(inv).indexOf(action) !== -1;
@@ -4804,7 +4805,8 @@ function treeActionHandler(context) {
     action !== "cut" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
-    action !== "portal_travel"
+    action !== "portal_travel" &&
+    action !== "return_home"
   ) {
     return ResponseBuilder.json({ error: "Invalid action" }, 400);
   }

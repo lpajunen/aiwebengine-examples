@@ -423,20 +423,29 @@ function getVirtualWorldPage(context) {
       border: 1px solid rgba(255,255,255,0.16);
       border-radius: 6px;
       max-height: min(32vh, 250px);
-      overflow-y: auto;
-      padding: 6px;
-    }
-    .inv-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 5px 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+      overflow-y: scroll;
+      padding: 4px 6px;
+      display: grid;
+      grid-template-columns: minmax(33%, 1fr) auto;
+      align-items: start;
+      column-gap: 8px;
       font-size: 12px;
     }
-    .inv-row:last-child { border-bottom: 0; }
-    .inv-row .label { color: #e6f3ff; word-break: break-word; }
+    .inv-row { display: contents; }
+    .inv-row .label {
+      color: #e6f3ff;
+      word-break: break-word;
+      padding: 5px 2px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .inv-row-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      padding: 5px 2px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
     #inv-footer {
       margin-top: 8px;
       display: flex;
@@ -893,25 +902,25 @@ function getVirtualWorldPage(context) {
           knife: { name: 'Veitsi' },
           flower: { name: 'Ruusu' },
           tree_planter: { name: 'Puunistutuslapio' },
-          portal_builder: { name: 'Portaalityokalu' },
+          portal_builder: { name: 'Portaalityökalu' },
           portal: { name: 'Portaali' },
           starter_kit: { name: 'Aloituspakkaus' },
           unknown: { name: 'Tuntematon esine' },
         },
         tree_action: {
-          plant: 'Kayta puunistutuslapiota (istuta)',
-          cut: 'Kayta sahaa (kaada)',
-          build_portal: 'Kayta portaalityokalua (rakenna portaali)',
-          remove_portal: 'Kayta portaalityokalua (poista portaali)',
-          portal_travel: 'Kayta portaalia',
+          plant: 'Istuta puu',
+          cut: 'Kaada puu',
+          build_portal: 'Rakenna portaali',
+          remove_portal: 'Tuhoa portaali',
+          portal_travel: 'Matkusta portaaliin',
           return_home: 'Matkusta kotiin',
         },
         inventory: {
-          empty: 'tyhja',
-          left_hand: 'Vasen kasi',
-          right_hand: 'Oikea kasi',
-          backpack_empty: 'Reppu on tyhja',
-          items_suffix: 'esinetta',
+          empty: 'tyhjä',
+          left_hand: 'Vasen käsi',
+          right_hand: 'Oikea käsi',
+          backpack_empty: 'Reppu on tyhjä',
+          items_suffix: 'esinettä',
         },
       },
     };
@@ -2378,7 +2387,7 @@ function getVirtualWorldPage(context) {
 
       if (!Array.isArray(playerInventory.inventory) || playerInventory.inventory.length === 0) {
         listDiv.innerHTML =
-          '<div class="inv-row"><span class="label">' +
+          '<div class="inv-row"><span class="label" style="grid-column:1/-1">' +
           t('inventory.backpack_empty', 'Backpack empty') +
           '</span></div>';
       } else {
@@ -2393,7 +2402,7 @@ function getVirtualWorldPage(context) {
           rows +=
             '<div class="inv-row">' +
             '<span class="label">' + inventoryItemLabel(item) + '</span>' +
-            '<span>' +
+            '<span class="inv-row-actions">' +
             '<button onclick="equipFromInventory(' + i + ',\\'left_hand\\')">L</button> ' +
             '<button onclick="equipFromInventory(' + i + ',\\'right_hand\\')">R</button> ' +
             (item.non_droppable ? '' : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
@@ -2718,6 +2727,10 @@ function getVirtualWorldPage(context) {
       isDragging = false;
     });
     document.addEventListener('mouseleave', function() { isDragging = false; });
+
+    document.getElementById('hud-inventory-panel').addEventListener('wheel', function(e) {
+      e.stopPropagation();
+    }, { passive: true });
 
     document.addEventListener('wheel', function(e) {
       e.preventDefault();

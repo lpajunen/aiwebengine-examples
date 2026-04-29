@@ -369,13 +369,7 @@ function getVirtualWorldPage(context) {
       display: none;
       pointer-events: auto;
       z-index: 1002;
-      padding: 8px;
-    }
-    #hud-use-picker strong {
-      display: block;
-      margin-bottom: 8px;
-      color: #a8d8ff;
-      font-size: 13px;
+      padding: 10px;
     }
     #use-picker-actions {
       display: flex;
@@ -409,12 +403,6 @@ function getVirtualWorldPage(context) {
       padding: 10px;
       z-index: 1001;
     }
-    #hud-inventory-panel strong {
-      display: block;
-      margin-bottom: 8px;
-      color: #a8d8ff;
-      font-size: 13px;
-    }
     .inv-hands {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -440,8 +428,7 @@ function getVirtualWorldPage(context) {
       flex-wrap: wrap;
     }
     .inv-actions button,
-    .inv-row button,
-    #btn-close-items {
+    .inv-row button {
       font-size: 11px;
       line-height: 1.2;
       padding: 4px 8px;
@@ -453,8 +440,7 @@ function getVirtualWorldPage(context) {
       font-family: inherit;
     }
     .inv-actions button:hover,
-    .inv-row button:hover,
-    #btn-close-items:hover {
+    .inv-row button:hover {
       background: rgba(255,255,255,0.2);
     }
     #inv-list {
@@ -487,7 +473,7 @@ function getVirtualWorldPage(context) {
 
     #hud-tile-detail {
       left: 14px;
-      top: 130px;
+      top: 200px;
       width: min(260px, calc(50vw - 28px));
       max-height: min(52vh, 400px);
       overflow-y: auto;
@@ -496,18 +482,18 @@ function getVirtualWorldPage(context) {
       padding: 10px;
       z-index: 1001;
     }
-    #hud-tile-detail .tile-header {
+    .panel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
     }
-    #hud-tile-detail .tile-title {
+    .panel-title {
       font-size: 13px;
       font-weight: 700;
       color: #a8d8ff;
     }
-    #btn-close-tile {
+    .panel-close {
       background: none;
       border: none;
       color: #fff;
@@ -518,7 +504,7 @@ function getVirtualWorldPage(context) {
       opacity: 0.7;
       font-family: inherit;
     }
-    #btn-close-tile:hover { opacity: 1; }
+    .panel-close:hover { opacity: 1; }
     #hud-tile-detail .tile-section {
       margin-bottom: 8px;
     }
@@ -632,12 +618,18 @@ function getVirtualWorldPage(context) {
   </div>
 
   <div class="hud" id="hud-use-picker">
-    <strong>Choose Action</strong>
+    <div class="panel-header">
+      <span class="panel-title">Choose Action</span>
+      <button class="panel-close" onclick="closeUsePicker()" title="Close">×</button>
+    </div>
     <div id="use-picker-actions"></div>
   </div>
 
   <div class="hud" id="hud-inventory-panel">
-    <strong>Inventory</strong>
+    <div class="panel-header">
+      <span class="panel-title">Inventory</span>
+      <button class="panel-close" onclick="closeInventoryPanel()" title="Close">×</button>
+    </div>
     <div class="inv-hands">
       <div class="inv-hand" id="inv-left-hand"></div>
       <div class="inv-hand" id="inv-right-hand"></div>
@@ -645,14 +637,13 @@ function getVirtualWorldPage(context) {
     <div id="inv-list"></div>
     <div id="inv-footer">
       <span id="inv-count">0 items</span>
-      <button id="btn-close-items" onclick="closeInventoryPanel()">Close</button>
     </div>
   </div>
 
   <div class="hud" id="hud-tile-detail" aria-live="polite">
-    <div class="tile-header">
-      <span class="tile-title" id="tile-detail-title">Square (0, 0)</span>
-      <button id="btn-close-tile" onclick="closeTileDetail()" title="Close">×</button>
+    <div class="panel-header">
+      <span class="panel-title" id="tile-detail-title">Square (0, 0)</span>
+      <button class="panel-close" onclick="closeTileDetail()" title="Close">×</button>
     </div>
     <div id="tile-detail-body"></div>
   </div>
@@ -915,7 +906,7 @@ function getVirtualWorldPage(context) {
           cut: 'Use saw (cut)',
           build_portal: 'Use portal builder (build portal)',
           remove_portal: 'Use portal builder (remove portal)',
-          portal_travel: 'Use portal (new world)',
+          portal_travel: 'Use portal',
         },
         inventory: {
           empty: 'empty',
@@ -940,7 +931,7 @@ function getVirtualWorldPage(context) {
           cut: 'Kayta sahaa (kaada)',
           build_portal: 'Kayta portaalityokalua (rakenna portaali)',
           remove_portal: 'Kayta portaalityokalua (poista portaali)',
-          portal_travel: 'Kayta portaalia (uusi maailma)',
+          portal_travel: 'Kayta portaalia',
         },
         inventory: {
           empty: 'tyhja',
@@ -2807,6 +2798,14 @@ function getVirtualWorldPage(context) {
           return true;
         }
       }
+      var usePickerDiv = document.getElementById('hud-use-picker');
+      if (usePickerDiv && usePickerDiv.style.display !== 'none') {
+        var usePickerRect = usePickerDiv.getBoundingClientRect();
+        if (touch.clientX >= usePickerRect.left && touch.clientX <= usePickerRect.right &&
+            touch.clientY >= usePickerRect.top && touch.clientY <= usePickerRect.bottom) {
+          return true;
+        }
+      }
       return false;
     }
 
@@ -3711,16 +3710,26 @@ function tickWorldNPCs(worldId, now) {
       }
     }
 
-    // NPC item behavior: pick all from current tile, and occasionally drop one.
+    // NPC item behavior: pick all pickable items from current tile, and occasionally drop one.
     var tileKey = n.row + "_" + n.col;
-    var tileItems = Array.isArray(worldItems[tileKey])
+    var allNpcTileItems = Array.isArray(worldItems[tileKey])
       ? worldItems[tileKey]
       : [];
-    if (tileItems.length > 0 && Math.random() < 0.65) {
-      for (var pickIdx = 0; pickIdx < tileItems.length; pickIdx++) {
-        n.inventory.push(tileItems[pickIdx]);
+    var pickableItems = allNpcTileItems.filter(function (item) {
+      return item && item.type !== "portal";
+    });
+    var nonPickableItems = allNpcTileItems.filter(function (item) {
+      return item && item.type === "portal";
+    });
+    if (pickableItems.length > 0 && Math.random() < 0.65) {
+      for (var pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
+        n.inventory.push(pickableItems[pickIdx]);
       }
-      delete worldItems[tileKey];
+      if (nonPickableItems.length > 0) {
+        worldItems[tileKey] = nonPickableItems;
+      } else {
+        delete worldItems[tileKey];
+      }
       itemChanges = true;
       hasChanges = true;
       broadcastItemChange(
@@ -3730,7 +3739,7 @@ function tickWorldNPCs(worldId, now) {
         "pick",
         n.row,
         n.col,
-        tileItems,
+        pickableItems,
       );
     }
 
@@ -4073,12 +4082,24 @@ function handleItemActionForUser(userId, body) {
   var worldItems = loadWorldItems(worldId);
 
   if (action === "pick") {
-    var picked = Array.isArray(worldItems[tileKey]) ? worldItems[tileKey] : [];
+    var allTileItems = Array.isArray(worldItems[tileKey])
+      ? worldItems[tileKey]
+      : [];
+    var picked = allTileItems.filter(function (item) {
+      return item && item.type !== "portal";
+    });
+    var remainingOnTile = allTileItems.filter(function (item) {
+      return item && item.type === "portal";
+    });
     if (picked.length > 0) {
       for (var i = 0; i < picked.length; i++) {
         inv.inventory.push(picked[i]);
       }
-      delete worldItems[tileKey];
+      if (remainingOnTile.length > 0) {
+        worldItems[tileKey] = remainingOnTile;
+      } else {
+        delete worldItems[tileKey];
+      }
       saveWorldItems(worldId, worldItems);
       savePlayerInventory(userId, inv);
       broadcastItemChange(
@@ -4256,7 +4277,7 @@ function makeCheatItemId(userId, worldId, index) {
 function grantAllItemsForUser(userId) {
   var worldId = sharedStorage.getItem("vworld_current:" + userId) || "";
   var inv = loadPlayerInventory(userId);
-  var itemTypes = getAllKnownItemTypes();
+  var itemTypes = ITEM_TYPES;
   var now = Date.now();
 
   for (var i = 0; i < itemTypes.length; i++) {
@@ -4777,7 +4798,13 @@ function treeActionHandler(context) {
   }
 
   if (action === "portal_travel") {
-    var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
+    var portalEntry = currentTileItems.find(function (item) {
+      return item && item.type === "portal";
+    });
+    var newWorldId =
+      portalEntry && portalEntry.destination_world_id
+        ? String(portalEntry.destination_world_id)
+        : "10000";
     switchUserWorld(userId, newWorldId);
     return ResponseBuilder.json({
       ok: true,
@@ -4825,7 +4852,10 @@ function treeActionHandler(context) {
 
   if (action === "build_portal") {
     if (map[targetRow][targetCol] !== 0) {
-      return ResponseBuilder.json({ ok: false, error: "Cannot build portal here" });
+      return ResponseBuilder.json({
+        ok: false,
+        error: "Cannot build portal here",
+      });
     }
     var targetTileKey = targetRow + "_" + targetCol;
     var targetItems = Array.isArray(worldItems[targetTileKey])
@@ -4835,12 +4865,16 @@ function treeActionHandler(context) {
       return item && item.type === "portal";
     });
     if (hasPortal) {
-      return ResponseBuilder.json({ ok: false, error: "Portal already exists" });
+      return ResponseBuilder.json({
+        ok: false,
+        error: "Portal already exists",
+      });
     }
     var portalItem = {
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),
       type: "portal",
       created_at: Date.now(),
+      destination_world_id: String(Math.floor(Math.random() * 999999) + 1),
     };
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);

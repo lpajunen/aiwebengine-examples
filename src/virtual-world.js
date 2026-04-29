@@ -26,10 +26,11 @@ var TREE_ACTION_BY_ITEM_TYPE = {
   tree_planter: "plant",
   portal_builder: "build_portal",
   portal: "portal_travel",
+  starter_kit: "return_home",
 };
 
 /** @type {string[]} */
-var EXTRA_ITEM_TYPES = ["portal"];
+var EXTRA_ITEM_TYPES = ["portal", "starter_kit"];
 
 /**
  * @returns {string[]}
@@ -177,6 +178,7 @@ function getVirtualWorldPage(context) {
   // ── Server-side state ─────────────────────────────────────────────────────
   const worldId = getOrCreatePlayerWorld(userId);
   markNPCWorldActive(worldId);
+  ensureStarterKit(userId);
   const map = generateMap(worldId);
   const treeMods = loadWorldTrees(worldId);
   ensureWorldItems(worldId);
@@ -302,33 +304,6 @@ function getVirtualWorldPage(context) {
       border-color: rgba(255, 196, 112, 0.6);
       background: rgba(120, 70, 10, 0.86);
     }
-
-    #hud-portal {
-      top: 180px; right: 14px;
-      pointer-events: auto;
-    }
-    #hud-portal .portal-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    #hud-portal button {
-      background: rgba(255,130,0,0.82);
-      border: 1px solid rgba(255,200,80,0.45);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 9px 18px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    #hud-portal button:hover { background: rgba(255,160,0,1); }
-    #hud-portal button.start-world {
-      background: rgba(40,120,220,0.85);
-      border-color: rgba(130,190,255,0.55);
-    }
-    #hud-portal button.start-world:hover { background: rgba(60,150,255,1); }
 
     #hud-tree-actions {
       bottom: 14px; right: 14px;
@@ -604,12 +579,6 @@ function getVirtualWorldPage(context) {
   <div class="hud" id="hud-auth-status" aria-live="polite"></div>
 
   <div class="hud" id="hud-cheat-toast" aria-live="polite"></div>
-
-  <div class="hud" id="hud-portal">
-    <div class="portal-buttons">
-      <button class="start-world" onclick="startWorld()">Start World</button>
-    </div>
-  </div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()">Use</button>
@@ -899,6 +868,7 @@ function getVirtualWorldPage(context) {
           tree_planter: { name: 'Tree planting spade' },
           portal_builder: { name: 'Portal builder' },
           portal: { name: 'Portal' },
+          starter_kit: { name: 'Starter Kit' },
           unknown: { name: 'Unknown item' },
         },
         tree_action: {
@@ -907,6 +877,7 @@ function getVirtualWorldPage(context) {
           build_portal: 'Use portal builder (build portal)',
           remove_portal: 'Use portal builder (remove portal)',
           portal_travel: 'Use portal',
+          return_home: 'Travel home',
         },
         inventory: {
           empty: 'empty',
@@ -924,6 +895,7 @@ function getVirtualWorldPage(context) {
           tree_planter: { name: 'Puunistutuslapio' },
           portal_builder: { name: 'Portaalityokalu' },
           portal: { name: 'Portaali' },
+          starter_kit: { name: 'Aloituspakkaus' },
           unknown: { name: 'Tuntematon esine' },
         },
         tree_action: {
@@ -932,6 +904,7 @@ function getVirtualWorldPage(context) {
           build_portal: 'Kayta portaalityokalua (rakenna portaali)',
           remove_portal: 'Kayta portaalityokalua (poista portaali)',
           portal_travel: 'Kayta portaalia',
+          return_home: 'Matkusta kotiin',
         },
         inventory: {
           empty: 'tyhja',
@@ -996,6 +969,7 @@ function getVirtualWorldPage(context) {
       if (type === 'tree_planter') return 'item.tree_planter.name';
       if (type === 'portal_builder') return 'item.portal_builder.name';
       if (type === 'portal') return 'item.portal.name';
+      if (type === 'starter_kit') return 'item.starter_kit.name';
       return 'item.unknown.name';
     }
 
@@ -1054,6 +1028,7 @@ function getVirtualWorldPage(context) {
       if (type === 'tree_planter') return ['plant'];
       if (type === 'saw') return ['cut'];
       if (type === 'portal') return ['portal_travel'];
+      if (type === 'starter_kit') return ['return_home'];
       return [];
     }
 
@@ -1072,6 +1047,9 @@ function getVirtualWorldPage(context) {
       }
       if (action === 'portal_travel') {
         return t('tree_action.portal_travel', 'Use portal (new world)');
+      }
+      if (action === 'return_home') {
+        return t('tree_action.return_home', 'Travel home');
       }
       return action;
     }
@@ -2321,12 +2299,6 @@ function getVirtualWorldPage(context) {
         .catch(function() { window.location.href = '/virtual-world'; });
     }
 
-    function startWorld() {
-      fetchWithAuth('/virtual-world/start-world', { method: 'POST' })
-        .then(function() { window.location.href = '/virtual-world'; })
-        .catch(function() { window.location.href = '/virtual-world'; });
-    }
-
     function postTreeAction(action) {
       fetchWithAuth('/virtual-world/tree-action', {
         method: 'POST',
@@ -2384,7 +2356,9 @@ function getVirtualWorldPage(context) {
           '<div>' + label + '</div>' +
           '<div class="inv-actions">';
         if (item) {
-          html += '<button onclick="dropFromSlot(\\'' + slot + '\\')">Drop</button>';
+          if (!item.non_droppable) {
+            html += '<button onclick="dropFromSlot(\\'' + slot + '\\')">Drop</button>';
+          }
           html += '<button onclick="equipToInventory(\\'' + slot + '\\')">Store</button>';
         }
         html += '</div>';
@@ -2411,13 +2385,19 @@ function getVirtualWorldPage(context) {
         var rows = '';
         for (var i = 0; i < playerInventory.inventory.length; i++) {
           var item = playerInventory.inventory[i];
+          var itemActions = treeActionsForItemType(item.type);
+          var actionBtns = '';
+          for (var ai = 0; ai < itemActions.length; ai++) {
+            actionBtns += '<button onclick="postTreeAction(\\'' + itemActions[ai] + '\\')">' + treeActionLabel(itemActions[ai]) + '</button> ';
+          }
           rows +=
             '<div class="inv-row">' +
             '<span class="label">' + inventoryItemLabel(item) + '</span>' +
             '<span>' +
             '<button onclick="equipFromInventory(' + i + ',\\'left_hand\\')">L</button> ' +
             '<button onclick="equipFromInventory(' + i + ',\\'right_hand\\')">R</button> ' +
-            '<button onclick="dropFromInventory(' + i + ')">Drop</button>' +
+            (item.non_droppable ? '' : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
+            actionBtns +
             '</span>' +
             '</div>';
         }
@@ -2769,14 +2749,6 @@ function getVirtualWorldPage(context) {
       var treeActionsDiv = document.getElementById('hud-tree-actions');
       if (treeActionsDiv) {
         var rect = treeActionsDiv.getBoundingClientRect();
-        if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
-            touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
-          return true;
-        }
-      }
-      var portalDiv = document.getElementById('hud-portal');
-      if (portalDiv) {
-        var rect = portalDiv.getBoundingClientRect();
         if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
             touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
           return true;
@@ -3236,6 +3208,33 @@ function canTileItemsUseTreeAction(items, action) {
     if (itemActions.indexOf(action) !== -1) return true;
   }
   return false;
+}
+
+/**
+ * Ensures the player has a starter_kit item in their inventory.
+ * Idempotent — safe to call on every page load.
+ * @param {string} userId
+ */
+function ensureStarterKit(userId) {
+  var inv = loadPlayerInventory(userId);
+  var allItems = [];
+  if (inv.left_hand) allItems.push(inv.left_hand);
+  if (inv.right_hand) allItems.push(inv.right_hand);
+  if (Array.isArray(inv.inventory)) {
+    allItems = allItems.concat(inv.inventory);
+  }
+  var hasKit = allItems.some(function (item) {
+    return item && item.type === "starter_kit";
+  });
+  if (!hasKit) {
+    inv.inventory.push({
+      id: "starter_kit_" + userId,
+      type: "starter_kit",
+      created_at: Date.now(),
+      non_droppable: true,
+    });
+    savePlayerInventory(userId, inv);
+  }
 }
 
 /**
@@ -4148,6 +4147,13 @@ function handleItemActionForUser(userId, body) {
       };
     }
 
+    if (dropItem.non_droppable) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Item cannot be dropped" },
+      };
+    }
+
     if (!worldItems[tileKey]) worldItems[tileKey] = [];
     worldItems[tileKey].push(dropItem);
 
@@ -4280,12 +4286,30 @@ function grantAllItemsForUser(userId) {
   var itemTypes = ITEM_TYPES;
   var now = Date.now();
 
+  // Collect types already owned across all inventory slots
+  /** @type {Record<string, boolean>} */
+  var ownedTypes = {};
+  if (inv.left_hand && inv.left_hand.type)
+    ownedTypes[inv.left_hand.type] = true;
+  if (inv.right_hand && inv.right_hand.type)
+    ownedTypes[inv.right_hand.type] = true;
+  if (Array.isArray(inv.inventory)) {
+    for (var j = 0; j < inv.inventory.length; j++) {
+      if (inv.inventory[j] && inv.inventory[j].type) {
+        ownedTypes[inv.inventory[j].type] = true;
+      }
+    }
+  }
+
+  var grantedCount = 0;
   for (var i = 0; i < itemTypes.length; i++) {
+    if (ownedTypes[itemTypes[i]]) continue;
     inv.inventory.push({
       id: makeCheatItemId(userId, worldId, i),
       type: itemTypes[i],
       created_at: now,
     });
+    grantedCount++;
   }
 
   savePlayerInventory(userId, inv);
@@ -4300,7 +4324,7 @@ function grantAllItemsForUser(userId) {
   return {
     ok: true,
     action: "cheat_grant_all",
-    granted_count: itemTypes.length,
+    granted_count: grantedCount,
     inventory: inv,
     items: itemsSnapshot,
   };
@@ -4794,6 +4818,16 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({
       ok: false,
       error: "Missing required item for action",
+    });
+  }
+
+  if (action === "return_home") {
+    switchUserWorld(userId, "10000");
+    return ResponseBuilder.json({
+      ok: true,
+      action: "return_home",
+      switched_world: true,
+      world_id: "10000",
     });
   }
 

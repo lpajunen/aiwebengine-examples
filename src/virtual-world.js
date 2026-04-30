@@ -201,6 +201,10 @@ function getVirtualWorldPage(context) {
     savePlayerNick(userId, authName);
     playerNick = authName;
   }
+  // Register presence NOW so the loading player appears in the snapshot they receive
+  // and in other players' next poll.  Session ID is not yet known (it's client-generated),
+  // so pass ""; the first heartbeat will claim the session and preserve login_at.
+  updateOnlinePresence(userId, worldId, "");
   const onlinePlayers = buildOnlinePlayersSnapshot();
   const initialChat = loadWorldChat(worldId).slice(-50);
   const initialDmIndex = loadDMIndex(userId);
@@ -2602,6 +2606,20 @@ function getVirtualWorldPage(context) {
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
+      // Fire a heartbeat immediately when a backgrounded tab regains focus.
+      // Browsers throttle setInterval to ≥60 s in background tabs, which can
+      // cause presence to expire (TTL = 90 s). Sending one ping on visibility
+      // restore keeps the entry fresh without needing a shorter poll interval.
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible' && authState === AUTH_STATE_OK) {
+          fetchWithAuth('/virtual-world/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+          }).catch(function() {});
+        }
+      });
+
       // Heartbeat — keep presence alive and resync snapshot every 15 s
       setInterval(function() {
         if (authState !== AUTH_STATE_OK) return;
@@ -2908,6 +2926,12 @@ function getVirtualWorldPage(context) {
       playersPanelVisible = true;
       document.getElementById('hud-players-panel').style.display = 'block';
       renderPlayersPanel();
+      // Fetch fresh data immediately when opening, then poll every 15 s
+      fetchWithAuth('/virtual-world/online-players').then(function(res) {
+        return res.json();
+      }).then(function(data) {
+        if (Array.isArray(data)) { onlinePlayersList = data; renderPlayersPanel(); }
+      }).catch(function() {});
       if (playersPollTimer) clearInterval(playersPollTimer);
       playersPollTimer = setInterval(function() {
         if (!playersPanelVisible) { clearInterval(playersPollTimer); playersPollTimer = null; return; }
@@ -2919,7 +2943,7 @@ function getVirtualWorldPage(context) {
             renderPlayersPanel();
           }
         }).catch(function() {});
-      }, 30000);
+      }, 15000);
     }
 
     function closePlayersPanel() {
@@ -4142,7 +4166,8 @@ function buildOnlinePlayersSnapshot() {
     ids = [];
   }
   var now = Date.now();
-  var TTL = 30000;
+  // 90 s TTL — gives headroom for background-tab heartbeat throttling.
+  var TTL = 90000;
   /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
   var result = [];
   /** @type {Record<string, boolean>} */

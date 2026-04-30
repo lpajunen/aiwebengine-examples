@@ -196,7 +196,11 @@ function getVirtualWorldPage(context) {
     savedPos && Number.isFinite(Number(savedPos.rotation))
       ? Number(savedPos.rotation)
       : 0;
-  const playerNick = loadPlayerNick(userId);
+  let playerNick = loadPlayerNick(userId);
+  if (!playerNick && authName) {
+    savePlayerNick(userId, authName);
+    playerNick = authName;
+  }
   const onlinePlayers = buildOnlinePlayersSnapshot();
   const initialChat = loadWorldChat(worldId).slice(-50);
   const initialDmIndex = loadDMIndex(userId);
@@ -240,12 +244,12 @@ function getVirtualWorldPage(context) {
       line-height: 1.7;
     }
     #hud-pos strong { font-size: 15px; display: block; margin-bottom: 4px; color: #a8d8ff; }
-    #hud-auth-name {
-      display: inline-block;
-      user-select: none;
-      -webkit-user-select: none;
-      pointer-events: auto;
-    }
+    #hud-nick-row { pointer-events: auto; user-select: none; -webkit-user-select: none; }
+    #nick-display { display: inline; }
+    #nick-edit-btn { background: none; border: none; cursor: pointer; color: #a8d8ff; font-size: 11px; padding: 0 0 0 4px; vertical-align: middle; pointer-events: auto; }
+    #nick-edit-row { display: inline; }
+    #nick-edit-row input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: #fff; font-size: 12px; padding: 1px 4px; border-radius: 3px; width: 110px; pointer-events: auto; }
+    #nick-edit-row button { background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff; cursor: pointer; font-size: 11px; padding: 1px 4px; border-radius: 3px; pointer-events: auto; margin-left: 2px; }
 
     #hud-cheat-toast {
       left: 50%;
@@ -813,7 +817,7 @@ function getVirtualWorldPage(context) {
 <body>
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
-    ${authName ? `<span id="hud-auth-name">${authName}</span><br>` : ""}
+    <span id="hud-nick-row"><span id="nick-display">${(playerNick || authName).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</span><button id="nick-edit-btn" onclick="startNickEdit()" title="Rename">✏️</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" title="Save">✓</button><button onclick="cancelNickEdit()" title="Cancel">✗</button></span></span><br>
     World: ${worldId}<br>
     Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
     L: <span id="held-left">-</span> | R: <span id="held-right">-</span>
@@ -878,10 +882,7 @@ function getVirtualWorldPage(context) {
   <div class="hud" id="hud-players-panel">
     <div class="panel-header">
       <span class="panel-title">Players Online</span>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <button class="btn-dm" onclick="promptSetNickname()" title="Set your nickname">✏️ Rename</button>
-        <button class="panel-close" onclick="closePlayersPanel()" title="Close">×</button>
-      </div>
+      <button class="panel-close" onclick="closePlayersPanel()" title="Close">×</button>
     </div>
     <div id="players-list-wrap">
       <table class="players-table">
@@ -2932,20 +2933,41 @@ function getVirtualWorldPage(context) {
       else showPlayersPanel();
     }
 
-    function promptSetNickname() {
-      var current = playerNick || '';
-      var input = window.prompt('Enter your nickname (max 24 characters):', current);
-      if (input === null) return; // cancelled
-      input = input.trim().slice(0, 24);
-      if (!input) return;
+    function startNickEdit() {
+      var inp = document.getElementById('nick-input');
+      if (inp) {
+        inp.value = playerNick || '';
+        inp.onkeydown = function(e) {
+          if (e.key === 'Enter') { e.preventDefault(); commitNickEdit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); cancelNickEdit(); }
+        };
+      }
+      document.getElementById('nick-display').style.display = 'none';
+      document.getElementById('nick-edit-btn').style.display = 'none';
+      document.getElementById('nick-edit-row').style.display = 'inline';
+      if (inp) { inp.focus(); inp.select(); }
+    }
+
+    function cancelNickEdit() {
+      document.getElementById('nick-display').style.display = '';
+      document.getElementById('nick-edit-btn').style.display = '';
+      document.getElementById('nick-edit-row').style.display = 'none';
+    }
+
+    function commitNickEdit() {
+      var inp = document.getElementById('nick-input');
+      if (!inp) return;
+      var val = inp.value.trim().slice(0, 24);
+      if (!val) { cancelNickEdit(); return; }
       fetchWithAuth('/virtual-world/set-nickname', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nick: input }),
+        body: JSON.stringify({ nick: val }),
       }).then(function(res) { return res.json(); }).then(function(data) {
         if (data && data.ok) {
           playerNick = data.nick;
-          // Update own entry in the online players list so the panel shows the new nick
+          var display = document.getElementById('nick-display');
+          if (display) display.textContent = data.nick;
           for (var i = 0; i < onlinePlayersList.length; i++) {
             if (onlinePlayersList[i].player_id === playerId) {
               onlinePlayersList[i].nick = data.nick;
@@ -2953,11 +2975,11 @@ function getVirtualWorldPage(context) {
             }
           }
           if (playersPanelVisible) renderPlayersPanel();
-          // Re-render visible chat panels so own messages show the updated nick
           if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
           if (chatPanelVisible && chatActiveTab === 'dm' && activeDmUserId) renderDMThread(activeDmUserId);
         }
-      }).catch(function() {});
+        cancelNickEdit();
+      }).catch(function() { cancelNickEdit(); });
     }
 
     // ── Chat helpers ─────────────────────────────────────────────────────────

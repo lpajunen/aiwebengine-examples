@@ -2907,12 +2907,14 @@ function getVirtualWorldPage(context) {
       }
       var rows = onlinePlayersList.map(function(p) {
         var isMe = p.player_id === playerId;
+        var sameWorld = String(p.world_id) === String(worldId);
         var nick = escapeHtml(p.nick || p.player_id.slice(0, 16));
         var worldLabel = p.world_id ? escapeHtml(String(p.world_id)) : '-';
         var youBadge = isMe ? '<span class="you-badge">(you)</span>' : '';
+        var mapBadge = sameWorld && !isMe ? '<span title="In your world" style="margin-left:4px;font-size:10px;opacity:0.7;">🗺️</span>' : '';
         var dmBtn = isMe ? '' : '<button class="btn-dm" data-uid="' + escapeHtml(p.player_id) + '" onclick="openChatPanelDM(this.dataset.uid)">💬 DM</button>';
-        return '<tr>'
-          + '<td>' + nick + youBadge + '</td>'
+        return '<tr' + (sameWorld && !isMe ? ' style="background:rgba(255,255,255,0.05);"' : '') + '>'
+          + '<td>' + nick + youBadge + mapBadge + '</td>'
           + '<td><span class="world-badge">' + worldLabel + '</span></td>'
           + '<td class="time-cell">' + formatRelTime(p.login_at) + '</td>'
           + '<td class="time-cell">' + formatRelTime(p.last_active) + '</td>'
@@ -5904,7 +5906,7 @@ function playersHandler(context) {
       // is within the TTL window.  Heartbeat ts is stored separately to avoid
       // racing with the move handler's write to the players object.
       var hbTs = Number(sharedStorage.getItem("vworld_hb:" + pid) || 0);
-      return now - Math.max(players[pid].ts, hbTs) < 30000;
+      return now - Math.max(players[pid].ts, hbTs) < 90000;
     })
     .map(function (pid) {
       return {

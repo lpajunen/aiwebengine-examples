@@ -3356,6 +3356,14 @@ function getVirtualWorldPage(context) {
       return s.length > 18 ? s.slice(0, 16) + '\u2026' : s;
     }
 
+    function getNickForPlayer(id) {
+      if (id === playerId) return playerNick || shortenId(id);
+      for (var i = 0; i < onlinePlayersList.length; i++) {
+        if (onlinePlayersList[i].player_id === id) return onlinePlayersList[i].nick || shortenId(id);
+      }
+      return shortenId(id);
+    }
+
     function renderTileDetailPanel() {
       var row = selectedTileRow;
       var col = selectedTileCol;
@@ -3424,9 +3432,9 @@ function getVirtualWorldPage(context) {
         for (var j = 0; j < playersHere.length; j++) {
           var pp = playersHere[j];
           if (pp.isMe) {
-            html += '<div class="tile-row tile-you">You (' + escHtml(shortenId(pp.id)) + ')</div>';
+            html += '<div class="tile-row tile-you">You (' + escHtml(getNickForPlayer(pp.id)) + ')</div>';
           } else {
-            html += '<div class="tile-row">' + escHtml(shortenId(pp.id)) + '</div>';
+            html += '<div class="tile-row">' + escHtml(getNickForPlayer(pp.id)) + '</div>';
           }
         }
       }

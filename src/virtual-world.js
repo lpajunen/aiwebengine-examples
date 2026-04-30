@@ -278,6 +278,7 @@ function getVirtualWorldPage(context) {
       width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0;
       border: 1px solid rgba(255,255,255,0.25);
     }
+    #legend-ground { pointer-events: auto; user-select: none; -webkit-user-select: none; }
 
     #hud-keys {
       bottom: 14px; left: 50%; transform: translateX(-50%);
@@ -820,7 +821,7 @@ function getVirtualWorldPage(context) {
 
   <div class="hud" id="hud-legend">
     <strong>Legend</strong>
-    <div class="leg"><div class="leg-box" style="background:#7ab648;"></div> Ground</div>
+    <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Ground</div>
     <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Wall</div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Tree</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
@@ -1520,7 +1521,7 @@ function getVirtualWorldPage(context) {
     }
 
     function initCheatTrigger() {
-      var nameEl = document.getElementById('hud-auth-name');
+      var nameEl = document.getElementById('legend-ground');
       if (!nameEl) return;
       nameEl.style.cursor = 'pointer';
       nameEl.title = 'Triple click for test items';

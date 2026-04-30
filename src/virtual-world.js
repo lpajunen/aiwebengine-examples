@@ -196,6 +196,10 @@ function getVirtualWorldPage(context) {
     savedPos && Number.isFinite(Number(savedPos.rotation))
       ? Number(savedPos.rotation)
       : 0;
+  const playerNick = loadPlayerNick(userId);
+  const onlinePlayers = buildOnlinePlayersSnapshot();
+  const initialChat = loadWorldChat(worldId).slice(-50);
+  const initialDmIndex = loadDMIndex(userId);
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -561,6 +565,248 @@ function getVirtualWorldPage(context) {
     @media (hover: none) and (pointer: coarse) {
       #hud-keys { display: none; }
     }
+
+    /* ── Players panel ──────────────────────────────────────────────────── */
+    #hud-players-panel {
+      right: 14px;
+      bottom: 70px;
+      width: min(380px, calc(100vw - 28px));
+      max-height: min(55vh, 480px);
+      overflow: hidden;
+      display: none;
+      pointer-events: auto;
+      padding: 10px;
+      z-index: 1001;
+    }
+    #players-list-wrap {
+      max-height: min(44vh, 380px);
+      overflow-y: auto;
+      margin-top: 6px;
+    }
+    .players-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .players-table th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #88bbdd;
+      text-align: left;
+      padding: 4px 6px 6px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .players-table td {
+      padding: 5px 6px;
+      color: #ddeeff;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      vertical-align: middle;
+    }
+    .players-table tr:last-child td { border-bottom: 0; }
+    .players-table .you-badge {
+      font-size: 10px;
+      color: #7dd3fc;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .players-table .world-badge {
+      font-size: 10px;
+      color: #aaa;
+    }
+    .players-table .time-cell {
+      font-size: 11px;
+      color: #99aacc;
+      white-space: nowrap;
+    }
+    .btn-dm {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.24);
+      color: #fff;
+      background: rgba(49,76,168,0.75);
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-dm:hover { background: rgba(67,100,200,1); }
+    #btn-players {
+      background: rgba(80,50,140,0.88);
+      border-color: rgba(180,140,255,0.55);
+    }
+    #btn-players:hover { background: rgba(100,65,180,1); }
+    #btn-players.has-activity {
+      background: rgba(100,65,180,1);
+    }
+
+    /* ── Chat panel ─────────────────────────────────────────────────────── */
+    #hud-chat-panel {
+      right: 14px;
+      bottom: 70px;
+      width: min(400px, calc(100vw - 28px));
+      height: min(60vh, 520px);
+      display: none;
+      flex-direction: column;
+      pointer-events: auto;
+      padding: 10px;
+      z-index: 1001;
+    }
+    #hud-chat-panel.visible { display: flex; }
+    .chat-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .chat-tab {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+      font-family: inherit;
+      position: relative;
+    }
+    .chat-tab.active {
+      background: rgba(49,76,168,0.85);
+      border-color: rgba(130,165,255,0.55);
+      color: #fff;
+    }
+    .chat-tab .unread-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 1px 4px;
+      line-height: 1.4;
+      display: none;
+    }
+    .chat-tab .unread-badge.visible { display: block; }
+    .chat-content {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-content.hidden { display: none; }
+    .chat-msgs {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 4px 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .chat-msg {
+      font-size: 12px;
+      line-height: 1.4;
+      color: #ddeeff;
+    }
+    .chat-msg .msg-nick {
+      font-weight: 700;
+      color: #a8d8ff;
+      margin-right: 4px;
+    }
+    .chat-msg .msg-nick.is-me { color: #7dd3fc; }
+    .chat-msg .msg-ts {
+      font-size: 10px;
+      color: rgba(255,255,255,0.35);
+      margin-left: 4px;
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .chat-input-row input {
+      flex: 1;
+      min-width: 0;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 8px;
+      font-family: inherit;
+      outline: none;
+    }
+    .chat-input-row input::placeholder { color: rgba(255,255,255,0.35); }
+    .chat-input-row input:focus { border-color: rgba(130,165,255,0.7); }
+    .chat-input-row button {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(130,165,255,0.55);
+      color: #fff;
+      background: rgba(49,76,168,0.85);
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .chat-input-row button:hover { background: rgba(67,100,200,1); }
+    .dm-convos {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dm-convo-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      cursor: pointer;
+      font-size: 12px;
+      color: #ddeeff;
+    }
+    .dm-convo-item:hover { background: rgba(255,255,255,0.12); }
+    .dm-convo-item .convo-nick { font-weight: 600; }
+    .dm-back {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #ddeeff;
+      background: rgba(255,255,255,0.08);
+      cursor: pointer;
+      font-family: inherit;
+      margin-bottom: 6px;
+      display: inline-block;
+    }
+    .dm-back:hover { background: rgba(255,255,255,0.16); }
+    #btn-chat {
+      background: rgba(14,100,80,0.88);
+      border-color: rgba(60,200,160,0.55);
+      position: relative;
+    }
+    #btn-chat:hover { background: rgba(20,130,100,1); }
+    #btn-chat .unread-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 1px 5px;
+      line-height: 1.4;
+      display: none;
+    }
+    #btn-chat .unread-badge.visible { display: block; }
   </style>
 </head>
 <body>
@@ -593,6 +839,8 @@ function getVirtualWorldPage(context) {
     <button id="btn-use" onclick="useItem()">Use</button>
     <button id="btn-pick" onclick="pickItemsOnTile()">📦 Pick</button>
     <button id="btn-items" onclick="toggleInventoryPanel()">🎒 Items</button>
+    <button id="btn-players" onclick="togglePlayersPanel()">👥 Players</button>
+    <button id="btn-chat" onclick="toggleChatPanel()">💬 Chat<span class="unread-badge" id="chat-unread-badge"></span></button>
   </div>
 
   <div class="hud" id="hud-use-picker">
@@ -626,6 +874,53 @@ function getVirtualWorldPage(context) {
     <div id="tile-detail-body"></div>
   </div>
 
+  <div class="hud" id="hud-players-panel">
+    <div class="panel-header">
+      <span class="panel-title">Players Online</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn-dm" onclick="promptSetNickname()" title="Set your nickname">✏️ Rename</button>
+        <button class="panel-close" onclick="closePlayersPanel()" title="Close">×</button>
+      </div>
+    </div>
+    <div id="players-list-wrap">
+      <table class="players-table">
+        <thead><tr>
+          <th>Name</th><th>World</th><th>Online since</th><th>Last active</th><th></th>
+        </tr></thead>
+        <tbody id="players-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="hud" id="hud-chat-panel">
+    <div class="panel-header">
+      <span class="panel-title" id="chat-panel-title">Chat</span>
+      <button class="panel-close" onclick="closeChatPanel()" title="Close">×</button>
+    </div>
+    <div class="chat-tabs">
+      <button class="chat-tab active" id="chat-tab-world" onclick="switchChatTab('world')">World</button>
+      <button class="chat-tab" id="chat-tab-dm" onclick="switchChatTab('dm')">Direct Messages<span class="unread-badge" id="dm-tab-badge"></span></button>
+    </div>
+    <div class="chat-content" id="chat-content-world">
+      <div class="chat-msgs" id="world-chat-msgs"></div>
+      <div class="chat-input-row">
+        <input type="text" id="world-chat-input" placeholder="Say something…" maxlength="500" onkeydown="if(event.key==='Enter')sendWorldChatMessage()">
+        <button onclick="sendWorldChatMessage()">Send</button>
+      </div>
+    </div>
+    <div class="chat-content hidden" id="chat-content-dm">
+      <div id="dm-thread-view" style="display:none;flex:1;min-height:0;flex-direction:column;">
+        <button class="dm-back" onclick="showDMConvoList()">← Back</button>
+        <div class="chat-msgs" id="dm-thread-msgs"></div>
+        <div class="chat-input-row">
+          <input type="text" id="dm-chat-input" placeholder="Send a direct message…" maxlength="500" onkeydown="if(event.key==='Enter')sendDirectMessage()">
+          <button onclick="sendDirectMessage()">Send</button>
+        </div>
+      </div>
+      <div id="dm-convo-list" class="dm-convos" style="overflow-y:auto;flex:1;min-height:0;"></div>
+    </div>
+  </div>
+
   <div id="joystick-container">
     <div id="joystick-base"></div>
     <div id="joystick-stick"></div>
@@ -641,6 +936,10 @@ function getVirtualWorldPage(context) {
     var NPCS = ${JSON.stringify(npcs)};
     var worldId  = ${JSON.stringify(worldId)};
     var playerId = ${JSON.stringify(userId)};
+    var PLAYER_NICK = ${JSON.stringify(playerNick)};
+    var ONLINE_PLAYERS = ${JSON.stringify(onlinePlayers)};
+    var INITIAL_CHAT = ${JSON.stringify(initialChat)};
+    var INITIAL_DM_INDEX = ${JSON.stringify(initialDmIndex)};
 
     function createSessionId() {
       if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -1031,6 +1330,20 @@ function getVirtualWorldPage(context) {
     var inventoryPanelVisible = false;
     var inventoryAutoHideTimer = null;
     var usePickerVisible = false;
+
+    // ── Communication state ──────────────────────────────────────────────────
+    var playerNick = PLAYER_NICK || '';
+    var onlinePlayersList = ONLINE_PLAYERS || [];
+    var playersPanelVisible = false;
+    var playersPollTimer = null;
+
+    var chatPanelVisible = false;
+    var chatActiveTab = 'world';  // 'world' | 'dm'
+    var worldChatMessages = INITIAL_CHAT || [];
+    var dmIndex = INITIAL_DM_INDEX || [];
+    var dmThreads = {};       // { [otherUserId]: Message[] }
+    var activeDmUserId = null;
+    var unreadDmCount = 0;
 
     function treeActionsForItemType(type) {
       if (type === 'portal_builder') return ['build_portal', 'remove_portal'];
@@ -2180,6 +2493,110 @@ function getVirtualWorldPage(context) {
 
       openItemSSE();
 
+      // Subscribe to world chat via GraphQL SSE
+      var chatQuery = 'subscription{worldChatMessage}';
+      var chatSseUrl = '/graphql/sse?query=' + encodeURIComponent(chatQuery);
+      var chatReconnectTimer = null;
+      var chatRetryCount = 0;
+      var chatWaitingForOnline = false;
+
+      function openChatSSE() {
+        var chatEs = new EventSource(chatSseUrl);
+        chatEs.onmessage = function(evt) {
+          chatRetryCount = 0;
+          try {
+            var obj = JSON.parse(evt.data);
+            var raw = obj.data.worldChatMessage;
+            var msg = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            if (!msg || !msg.id) return;
+            var exists = worldChatMessages.some(function(m) { return m.id === msg.id; });
+            if (!exists) {
+              worldChatMessages.push(msg);
+              if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
+            }
+          } catch (e) {}
+        };
+        chatEs.onerror = function() {
+          chatEs.close();
+          scheduleSSEAuthCheck('worldChatMessage');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!chatWaitingForOnline) {
+              chatWaitingForOnline = true;
+              function handleChatOnline() {
+                window.removeEventListener('online', handleChatOnline);
+                chatWaitingForOnline = false;
+                openChatSSE();
+              }
+              window.addEventListener('online', handleChatOnline);
+            }
+            return;
+          }
+          if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
+          chatRetryCount += 1;
+          chatReconnectTimer = setTimeout(openChatSSE, getSSEReconnectDelayMs(chatRetryCount));
+        };
+        return chatEs;
+      }
+
+      openChatSSE();
+
+      // Subscribe to direct messages via GraphQL SSE
+      var dmQuery = 'subscription{worldDirectMessage}';
+      var dmSseUrl = '/graphql/sse?query=' + encodeURIComponent(dmQuery);
+      var dmReconnectTimer = null;
+      var dmRetryCount = 0;
+      var dmWaitingForOnline = false;
+
+      function openDMSSE() {
+        var dmEs = new EventSource(dmSseUrl);
+        dmEs.onmessage = function(evt) {
+          dmRetryCount = 0;
+          try {
+            var obj = JSON.parse(evt.data);
+            var raw = obj.data.worldDirectMessage;
+            var msg = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+            if (!msg || !msg.id || !msg.sender_id) return;
+            var senderId = msg.sender_id;
+            if (!dmThreads[senderId]) dmThreads[senderId] = [];
+            var exists = dmThreads[senderId].some(function(m) { return m.id === msg.id; });
+            if (!exists) {
+              dmThreads[senderId].push(msg);
+              if (dmIndex.indexOf(senderId) === -1) dmIndex.push(senderId);
+            }
+            if (chatPanelVisible && chatActiveTab === 'dm' && activeDmUserId === senderId) {
+              renderDMThread(senderId);
+            } else {
+              unreadDmCount += 1;
+              updateChatUnreadBadge();
+            }
+          } catch (e) {}
+        };
+        dmEs.onerror = function() {
+          dmEs.close();
+          scheduleSSEAuthCheck('worldDirectMessage');
+          if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (!dmWaitingForOnline) {
+              dmWaitingForOnline = true;
+              function handleDMOnline() {
+                window.removeEventListener('online', handleDMOnline);
+                dmWaitingForOnline = false;
+                openDMSSE();
+              }
+              window.addEventListener('online', handleDMOnline);
+            }
+            return;
+          }
+          if (dmReconnectTimer) clearTimeout(dmReconnectTimer);
+          dmRetryCount += 1;
+          dmReconnectTimer = setTimeout(openDMSSE, getSSEReconnectDelayMs(dmRetryCount));
+        };
+        return dmEs;
+      }
+
+      openDMSSE();
+
       // Announce departure
       window.addEventListener('beforeunload', postLeave);
 
@@ -2447,6 +2864,317 @@ function getVirtualWorldPage(context) {
       else showInventoryPanel(0);
     }
 
+    // ── Players panel ────────────────────────────────────────────────────────
+
+    function formatRelTime(ts) {
+      if (!ts) return '-';
+      var diff = Math.max(0, Date.now() - ts);
+      var secs = Math.floor(diff / 1000);
+      if (secs < 60) return secs + 's ago';
+      var mins = Math.floor(secs / 60);
+      if (mins < 60) return mins + 'm ago';
+      var hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      return Math.floor(hrs / 24) + 'd ago';
+    }
+
+    function renderPlayersPanel() {
+      var tbody = document.getElementById('players-table-body');
+      if (!tbody) return;
+      if (!onlinePlayersList.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:rgba(255,255,255,0.4);font-style:italic;text-align:center;padding:10px;">No players online</td></tr>';
+        return;
+      }
+      var rows = onlinePlayersList.map(function(p) {
+        var isMe = p.player_id === playerId;
+        var nick = escapeHtml(p.nick || p.player_id.slice(0, 16));
+        var worldLabel = p.world_id ? escapeHtml(String(p.world_id)) : '-';
+        var youBadge = isMe ? '<span class="you-badge">(you)</span>' : '';
+        var dmBtn = isMe ? '' : '<button class="btn-dm" data-uid="' + escapeHtml(p.player_id) + '" onclick="openChatPanelDM(this.dataset.uid)">💬 DM</button>';
+        return '<tr>'
+          + '<td>' + nick + youBadge + '</td>'
+          + '<td><span class="world-badge">' + worldLabel + '</span></td>'
+          + '<td class="time-cell">' + formatRelTime(p.login_at) + '</td>'
+          + '<td class="time-cell">' + formatRelTime(p.last_active) + '</td>'
+          + '<td>' + dmBtn + '</td>'
+          + '</tr>';
+      });
+      tbody.innerHTML = rows.join('');
+    }
+
+    function showPlayersPanel() {
+      playersPanelVisible = true;
+      document.getElementById('hud-players-panel').style.display = 'block';
+      renderPlayersPanel();
+      if (playersPollTimer) clearInterval(playersPollTimer);
+      playersPollTimer = setInterval(function() {
+        if (!playersPanelVisible) { clearInterval(playersPollTimer); playersPollTimer = null; return; }
+        fetchWithAuth('/virtual-world/online-players').then(function(res) {
+          return res.json();
+        }).then(function(data) {
+          if (Array.isArray(data)) {
+            onlinePlayersList = data;
+            renderPlayersPanel();
+          }
+        }).catch(function() {});
+      }, 30000);
+    }
+
+    function closePlayersPanel() {
+      playersPanelVisible = false;
+      document.getElementById('hud-players-panel').style.display = 'none';
+      if (playersPollTimer) { clearInterval(playersPollTimer); playersPollTimer = null; }
+    }
+
+    function togglePlayersPanel() {
+      if (playersPanelVisible) closePlayersPanel();
+      else showPlayersPanel();
+    }
+
+    function promptSetNickname() {
+      var current = playerNick || '';
+      var input = window.prompt('Enter your nickname (max 24 characters):', current);
+      if (input === null) return; // cancelled
+      input = input.trim().slice(0, 24);
+      if (!input) return;
+      fetchWithAuth('/virtual-world/set-nickname', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: input }),
+      }).then(function(res) { return res.json(); }).then(function(data) {
+        if (data && data.ok) {
+          playerNick = data.nick;
+          // Update own entry in the online players list so the panel shows the new nick
+          for (var i = 0; i < onlinePlayersList.length; i++) {
+            if (onlinePlayersList[i].player_id === playerId) {
+              onlinePlayersList[i].nick = data.nick;
+              break;
+            }
+          }
+          if (playersPanelVisible) renderPlayersPanel();
+          // Re-render visible chat panels so own messages show the updated nick
+          if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
+          if (chatPanelVisible && chatActiveTab === 'dm' && activeDmUserId) renderDMThread(activeDmUserId);
+        }
+      }).catch(function() {});
+    }
+
+    // ── Chat helpers ─────────────────────────────────────────────────────────
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatChatTime(ts) {
+      var d = new Date(ts);
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    }
+
+    function buildMsgHtml(msg) {
+      var isMe = msg.sender_id === playerId;
+      // For own messages always reflect the current nick so renames apply retroactively.
+      var nick = escapeHtml(isMe
+        ? (playerNick || msg.sender_nick || playerId.slice(0, 16))
+        : (msg.sender_nick || msg.sender_id.slice(0, 16)));
+      var text = escapeHtml(msg.text);
+      return '<div class="chat-msg">'
+        + '<span class="msg-nick' + (isMe ? ' is-me' : '') + '">' + nick + ':</span>'
+        + text
+        + '<span class="msg-ts">' + formatChatTime(msg.ts) + '</span>'
+        + '</div>';
+    }
+
+    function scrollChatToBottom(containerId) {
+      var el = document.getElementById(containerId);
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    // ── World chat ────────────────────────────────────────────────────────────
+
+    function renderWorldChat() {
+      var container = document.getElementById('world-chat-msgs');
+      if (!container) return;
+      container.innerHTML = worldChatMessages.map(buildMsgHtml).join('');
+      scrollChatToBottom('world-chat-msgs');
+    }
+
+    function sendWorldChatMessage() {
+      var input = document.getElementById('world-chat-input');
+      if (!input) return;
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      fetchWithAuth('/virtual-world/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      }).then(function(res) { return res.json(); }).then(function(data) {
+        if (data && data.ok && data.message) {
+          // Server echo will arrive via SSE; optimistically add to avoid duplication check
+          var exists = worldChatMessages.some(function(m) { return m.id === data.message.id; });
+          if (!exists) {
+            worldChatMessages.push(data.message);
+            if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
+          }
+        }
+      }).catch(function() {});
+    }
+
+    // ── Chat panel ────────────────────────────────────────────────────────────
+
+    function showChatPanel() {
+      chatPanelVisible = true;
+      var el = document.getElementById('hud-chat-panel');
+      if (el) el.classList.add('visible');
+      unreadDmCount = 0;
+      updateChatUnreadBadge();
+      if (chatActiveTab === 'world') renderWorldChat();
+      else renderDMContent();
+    }
+
+    function closeChatPanel() {
+      chatPanelVisible = false;
+      var el = document.getElementById('hud-chat-panel');
+      if (el) el.classList.remove('visible');
+    }
+
+    function toggleChatPanel() {
+      if (chatPanelVisible) closeChatPanel();
+      else showChatPanel();
+    }
+
+    function switchChatTab(tab) {
+      chatActiveTab = tab;
+      document.getElementById('chat-tab-world').classList.toggle('active', tab === 'world');
+      document.getElementById('chat-tab-dm').classList.toggle('active', tab === 'dm');
+      document.getElementById('chat-content-world').classList.toggle('hidden', tab !== 'world');
+      document.getElementById('chat-content-dm').classList.toggle('hidden', tab !== 'dm');
+      if (tab === 'world') renderWorldChat();
+      else renderDMContent();
+      if (tab === 'dm') {
+        unreadDmCount = 0;
+        updateChatUnreadBadge();
+      }
+    }
+
+    function updateChatUnreadBadge() {
+      var badge = document.getElementById('chat-unread-badge');
+      var tabBadge = document.getElementById('dm-tab-badge');
+      if (!badge || !tabBadge) return;
+      if (unreadDmCount > 0) {
+        badge.textContent = unreadDmCount > 9 ? '9+' : String(unreadDmCount);
+        badge.classList.add('visible');
+        tabBadge.textContent = badge.textContent;
+        tabBadge.classList.add('visible');
+      } else {
+        badge.classList.remove('visible');
+        tabBadge.classList.remove('visible');
+      }
+    }
+
+    // Opens chat panel on DM tab and directly starts thread with a specific user.
+    function openChatPanelDM(otherUserId) {
+      if (!chatPanelVisible) showChatPanel();
+      if (chatActiveTab !== 'dm') switchChatTab('dm');
+      openDMThread(otherUserId);
+    }
+
+    // ── Direct messages ───────────────────────────────────────────────────────
+
+    function renderDMContent() {
+      if (activeDmUserId) {
+        renderDMThread(activeDmUserId);
+      } else {
+        showDMConvoList();
+      }
+    }
+
+    function showDMConvoList() {
+      activeDmUserId = null;
+      var threadView = document.getElementById('dm-thread-view');
+      var convoList = document.getElementById('dm-convo-list');
+      if (threadView) threadView.style.display = 'none';
+      if (!convoList) return;
+      convoList.style.display = '';
+      if (!dmIndex.length) {
+        convoList.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No conversations yet. Click 💬 DM next to a player to start one.</div>';
+        return;
+      }
+      convoList.innerHTML = dmIndex.map(function(uid) {
+        // Try to get the nick from the online players list first
+        var entry = onlinePlayersList.find(function(p) { return p.player_id === uid; });
+        var nick = entry ? escapeHtml(entry.nick) : escapeHtml(uid.slice(0, 16));
+        return '<div class="dm-convo-item" data-uid="' + escapeHtml(uid) + '" onclick="openDMThread(this.dataset.uid)">'
+          + '<span class="convo-nick">' + nick + '</span>'
+          + '<span style="font-size:11px;color:#aaa;">→</span>'
+          + '</div>';
+      }).join('');
+    }
+
+    function openDMThread(otherUserId) {
+      activeDmUserId = otherUserId;
+      var threadView = document.getElementById('dm-thread-view');
+      var convoList = document.getElementById('dm-convo-list');
+      if (convoList) convoList.style.display = 'none';
+      if (threadView) threadView.style.display = 'flex';
+      if (dmThreads[otherUserId]) {
+        renderDMThread(otherUserId);
+      } else {
+        // Load from server
+        fetchWithAuth('/virtual-world/dm-history?with=' + encodeURIComponent(otherUserId))
+          .then(function(res) { return res.json(); })
+          .then(function(msgs) {
+            dmThreads[otherUserId] = Array.isArray(msgs) ? msgs : [];
+            if (!dmIndex.includes(otherUserId) && dmThreads[otherUserId].length > 0) {
+              dmIndex.push(otherUserId);
+            }
+            renderDMThread(otherUserId);
+          }).catch(function() {
+            dmThreads[otherUserId] = [];
+            renderDMThread(otherUserId);
+          });
+      }
+    }
+
+    function renderDMThread(otherUserId) {
+      var msgs = dmThreads[otherUserId] || [];
+      var container = document.getElementById('dm-thread-msgs');
+      if (!container) return;
+      container.innerHTML = msgs.length
+        ? msgs.map(buildMsgHtml).join('')
+        : '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No messages yet.</div>';
+      scrollChatToBottom('dm-thread-msgs');
+    }
+
+    function sendDirectMessage() {
+      if (!activeDmUserId) return;
+      var input = document.getElementById('dm-chat-input');
+      if (!input) return;
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      var to = activeDmUserId;
+      fetchWithAuth('/virtual-world/dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to, text: text }),
+      }).then(function(res) { return res.json(); }).then(function(data) {
+        if (data && data.ok && data.message) {
+          if (!dmThreads[to]) dmThreads[to] = [];
+          var exists = dmThreads[to].some(function(m) { return m.id === data.message.id; });
+          if (!exists) {
+            dmThreads[to].push(data.message);
+            if (!dmIndex.includes(to)) dmIndex.push(to);
+            if (activeDmUserId === to) renderDMThread(to);
+          }
+        }
+      }).catch(function() {});
+    }
+
     function applyItemStateFromResult(result) {
       if (!result || typeof result !== 'object') return;
       if (result.inventory) {
@@ -2676,7 +3404,21 @@ function getVirtualWorldPage(context) {
     var keys = {};
     var MOVE_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'];
 
+    function isTypingTarget(el) {
+      if (!el) return false;
+      var tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+    }
+
+    // Clear held movement keys when an input gains focus to prevent stuck movement
+    document.addEventListener('focusin', function(e) {
+      if (isTypingTarget(e.target)) {
+        MOVE_KEYS.forEach(function(k) { keys[k] = false; });
+      }
+    });
+
     document.addEventListener('keydown', function(e) {
+      if (isTypingTarget(document.activeElement)) return;
       keys[e.key] = true;
       if (MOVE_KEYS.indexOf(e.key) !== -1) e.preventDefault();
       if (e.key === 'i' || e.key === 'I') {
@@ -2685,6 +3427,7 @@ function getVirtualWorldPage(context) {
       }
     });
     document.addEventListener('keyup', function(e) {
+      if (isTypingTarget(document.activeElement)) return;
       keys[e.key] = false;
     });
 
@@ -3274,6 +4017,233 @@ function savePlayerInventory(userId, inventory) {
     "vworld_inv:" + userId,
     JSON.stringify(normalizeInventory(inventory)),
   );
+}
+
+// ── Player nicknames ──────────────────────────────────────────────────────────
+
+/**
+ * @param {string} userId
+ * @returns {string}
+ */
+function loadPlayerNick(userId) {
+  return sharedStorage.getItem("vworld_nick:" + userId) || "";
+}
+
+/**
+ * @param {string} userId
+ * @param {string} nick
+ */
+function savePlayerNick(userId, nick) {
+  sharedStorage.setItem("vworld_nick:" + userId, nick);
+}
+
+/**
+ * Returns the custom nick if set, otherwise falls back to a truncated userId.
+ * @param {string} userId
+ * @returns {string}
+ */
+function getEffectiveNick(userId) {
+  var nick = loadPlayerNick(userId);
+  return nick || userId.slice(0, 16);
+}
+
+// ── Global online presence ────────────────────────────────────────────────────
+
+/**
+ * Adds userId to the global online index (list of all ever-online user IDs).
+ * Benign duplicates are deduplicated on read.
+ * @param {string} userId
+ */
+function addToOnlineIndex(userId) {
+  var raw = sharedStorage.getItem("vworld_online_ids");
+  /** @type {string[]} */
+  var ids = [];
+  try {
+    ids = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(ids)) ids = [];
+  } catch (e) {
+    ids = [];
+  }
+  if (ids.indexOf(userId) === -1) {
+    ids.push(userId);
+    sharedStorage.setItem("vworld_online_ids", JSON.stringify(ids));
+  }
+}
+
+/**
+ * Write the per-user online-presence entry.  Safe to call from heartbeat
+ * because each user only writes their own key — no read-modify-write of a
+ * shared object, so there is no concurrency hazard.
+ * @param {string} userId
+ * @param {string} worldId
+ * @param {string} sessionId
+ */
+function updateOnlinePresence(userId, worldId, sessionId) {
+  var now = Date.now();
+  var existing = null;
+  var raw = sharedStorage.getItem("vworld_online:" + userId);
+  if (raw) {
+    try {
+      existing = JSON.parse(raw);
+    } catch (e) {}
+  }
+  var loginAt =
+    existing && existing.session_id === sessionId && existing.login_at
+      ? existing.login_at
+      : now;
+  sharedStorage.setItem(
+    "vworld_online:" + userId,
+    JSON.stringify({
+      world_id: String(worldId),
+      nick: getEffectiveNick(userId),
+      login_at: loginAt,
+      ts: now,
+      session_id: sessionId,
+    }),
+  );
+  addToOnlineIndex(userId);
+}
+
+/**
+ * Build a snapshot of all online players (TTL = 30 s).
+ * @returns {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>}
+ */
+function buildOnlinePlayersSnapshot() {
+  var raw = sharedStorage.getItem("vworld_online_ids");
+  /** @type {string[]} */
+  var ids = [];
+  try {
+    ids = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(ids)) ids = [];
+  } catch (e) {
+    ids = [];
+  }
+  var now = Date.now();
+  var TTL = 30000;
+  /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
+  var result = [];
+  /** @type {Record<string, boolean>} */
+  var seen = {};
+  for (var i = 0; i < ids.length; i++) {
+    var uid = ids[i];
+    if (!uid || seen[uid]) continue;
+    seen[uid] = true;
+    var entryRaw = sharedStorage.getItem("vworld_online:" + uid);
+    if (!entryRaw) continue;
+    var entry = null;
+    try {
+      entry = JSON.parse(entryRaw);
+    } catch (e) {}
+    if (!entry || typeof entry.ts !== "number") continue;
+    if (now - entry.ts > TTL) continue;
+    result.push({
+      player_id: uid,
+      nick: entry.nick || uid.slice(0, 16),
+      world_id: String(entry.world_id || ""),
+      login_at: Number(entry.login_at || 0),
+      last_active: Number(entry.ts),
+    });
+  }
+  return result;
+}
+
+// ── World chat ────────────────────────────────────────────────────────────────
+
+var WORLD_CHAT_MAX = 100;
+
+/**
+ * @param {string} worldId
+ * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
+ */
+function loadWorldChat(worldId) {
+  var raw = sharedStorage.getItem("vworld_chat:" + worldId);
+  if (!raw) return [];
+  try {
+    var msgs = JSON.parse(raw);
+    return Array.isArray(msgs) ? msgs : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @param {Array<any>} msgs
+ */
+function saveWorldChat(worldId, msgs) {
+  var capped = msgs.slice(-WORLD_CHAT_MAX);
+  sharedStorage.setItem("vworld_chat:" + worldId, JSON.stringify(capped));
+}
+
+// ── Direct messages ───────────────────────────────────────────────────────────
+
+var DM_MAX = 200;
+
+/**
+ * Returns the storage key for a DM conversation (stable regardless of who
+ * is sender / recipient).
+ * @param {string} a
+ * @param {string} b
+ * @returns {string}
+ */
+function dmConversationKey(a, b) {
+  return [a, b].sort().join(":");
+}
+
+/**
+ * @param {string} a
+ * @param {string} b
+ * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
+ */
+function loadDMHistory(a, b) {
+  var raw = sharedStorage.getItem("vworld_dm:" + dmConversationKey(a, b));
+  if (!raw) return [];
+  try {
+    var msgs = JSON.parse(raw);
+    return Array.isArray(msgs) ? msgs : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * @param {string} a
+ * @param {string} b
+ * @param {Array<any>} msgs
+ */
+function saveDMHistory(a, b, msgs) {
+  var capped = msgs.slice(-DM_MAX);
+  sharedStorage.setItem(
+    "vworld_dm:" + dmConversationKey(a, b),
+    JSON.stringify(capped),
+  );
+}
+
+/**
+ * @param {string} userId
+ * @returns {string[]}
+ */
+function loadDMIndex(userId) {
+  var raw = sharedStorage.getItem("vworld_dm_index:" + userId);
+  if (!raw) return [];
+  try {
+    var idx = JSON.parse(raw);
+    return Array.isArray(idx) ? idx : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * @param {string} userId
+ * @param {string} otherUserId
+ */
+function addToDMIndex(userId, otherUserId) {
+  var idx = loadDMIndex(userId);
+  if (idx.indexOf(otherUserId) === -1) {
+    idx.push(otherUserId);
+    sharedStorage.setItem("vworld_dm_index:" + userId, JSON.stringify(idx));
+  }
 }
 
 /**
@@ -4344,6 +5314,155 @@ function grantAllItemsForUser(userId) {
   };
 }
 
+// ── Nickname handler ─────────────────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function setNicknameHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  var nick = String(body.nick || "").trim();
+  // Strip HTML-special characters to prevent XSS via injected display names
+  nick = nick.replace(/[<>&"']/g, "");
+  if (nick.length > 24) nick = nick.slice(0, 24);
+  if (!nick)
+    return ResponseBuilder.json({ error: "Nickname cannot be empty" }, 400);
+  savePlayerNick(userId, nick);
+  return ResponseBuilder.json({ ok: true, nick: nick });
+}
+
+// ── Online players handler ────────────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function onlinePlayersHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  return ResponseBuilder.json(buildOnlinePlayersSnapshot());
+}
+
+// ── World chat handler ────────────────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function chatHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return ResponseBuilder.json({ error: "Not in a world" }, 400);
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  var text = String(body.text || "").trim();
+  text = text.replace(/[<>&"']/g, "");
+  if (!text)
+    return ResponseBuilder.json({ error: "Message cannot be empty" }, 400);
+  if (text.length > 500) text = text.slice(0, 500);
+  var msg = {
+    id:
+      "wc-" +
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2),
+    sender_id: userId,
+    sender_nick: getEffectiveNick(userId),
+    text: text,
+    ts: Date.now(),
+  };
+  var history = loadWorldChat(worldId);
+  history.push(msg);
+  saveWorldChat(worldId, history);
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    "worldChatMessage",
+    JSON.stringify(msg),
+    JSON.stringify({ world_id: worldId }),
+  );
+  return ResponseBuilder.json({ ok: true, message: msg });
+}
+
+// ── Direct message handlers ───────────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function dmHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  var to = String(body.to || "").trim();
+  if (!to) return ResponseBuilder.json({ error: "Recipient required" }, 400);
+  if (to === userId)
+    return ResponseBuilder.json({ error: "Cannot DM yourself" }, 400);
+  var text = String(body.text || "").trim();
+  text = text.replace(/[<>&"']/g, "");
+  if (!text)
+    return ResponseBuilder.json({ error: "Message cannot be empty" }, 400);
+  if (text.length > 500) text = text.slice(0, 500);
+  var msg = {
+    id:
+      "dm-" +
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2),
+    sender_id: userId,
+    sender_nick: getEffectiveNick(userId),
+    recipient_id: to,
+    text: text,
+    ts: Date.now(),
+  };
+  var conv = loadDMHistory(userId, to);
+  conv.push(msg);
+  saveDMHistory(userId, to, conv);
+  addToDMIndex(userId, to);
+  addToDMIndex(to, userId);
+  graphQLRegistry.sendSubscriptionMessageFiltered(
+    "worldDirectMessage",
+    JSON.stringify(msg),
+    JSON.stringify({ recipient_id: to }),
+  );
+  return ResponseBuilder.json({ ok: true, message: msg });
+}
+
+/**
+ * @param {*} context
+ */
+function dmHistoryHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var withUser = String(
+    (context.request.query && context.request.query["with"]) || "",
+  ).trim();
+  if (!withUser)
+    return ResponseBuilder.json({ error: "with param required" }, 400);
+  return ResponseBuilder.json(loadDMHistory(userId, withUser));
+}
+
 /**
  * @param {*} context
  */
@@ -4560,6 +5679,7 @@ function leaveHandler(context) {
   saveWorldPlayers(worldId, players);
   sharedStorage.removeItem("vworld_hb:" + userId);
   sharedStorage.removeItem("vworld_lease:" + userId);
+  sharedStorage.removeItem("vworld_online:" + userId);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -4630,6 +5750,7 @@ function heartbeatHandler(context) {
   // be clobbered by this handler writing back a stale row/col, causing the
   // server's canonical position to regress and the next move to be rejected.
   sharedStorage.setItem("vworld_hb:" + userId, String(Date.now()));
+  updateOnlinePresence(userId, worldId, sessionId || "");
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -4662,6 +5783,9 @@ function switchUserWorld(userId, targetWorldId) {
   sharedStorage.setItem("vworld_current:" + userId, String(targetWorldId));
   sharedStorage.removeItem("vworld_lease:" + userId);
   sharedStorage.removeItem("vworld_pos:" + userId);
+  // Clear presence entry so login_at resets when the player establishes
+  // presence in the new world on their next heartbeat.
+  sharedStorage.removeItem("vworld_online:" + userId);
 }
 
 /**
@@ -5112,6 +6236,30 @@ function worldItemChangedResolver(context) {
   return { world_id: worldId };
 }
 
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
+function worldChatMessageResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = sharedStorage.getItem("vworld_current:" + userId);
+  if (!worldId) return {};
+  return { world_id: worldId };
+}
+
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
+function worldDirectMessageResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  return { recipient_id: userId };
+}
+
 function init() {
   startNPCTicker();
   /**
@@ -5178,6 +6326,19 @@ function init() {
   safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
   safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
   safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");
+  safeRegisterRoute(
+    "/virtual-world/set-nickname",
+    "setNicknameHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    "/virtual-world/online-players",
+    "onlinePlayersHandler",
+    "GET",
+  );
+  safeRegisterRoute("/virtual-world/chat", "chatHandler", "POST");
+  safeRegisterRoute("/virtual-world/dm", "dmHandler", "POST");
+  safeRegisterRoute("/virtual-world/dm-history", "dmHistoryHandler", "GET");
 
   safeRegisterSubscription(
     "worldItemChanged",
@@ -5201,6 +6362,18 @@ function init() {
     "worldNPCMoved",
     "type Subscription { worldNPCMoved: String }",
     "worldNPCMovedResolver",
+    "external",
+  );
+  safeRegisterSubscription(
+    "worldChatMessage",
+    "type Subscription { worldChatMessage: String }",
+    "worldChatMessageResolver",
+    "external",
+  );
+  safeRegisterSubscription(
+    "worldDirectMessage",
+    "type Subscription { worldDirectMessage: String }",
+    "worldDirectMessageResolver",
     "external",
   );
 }

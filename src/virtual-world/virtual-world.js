@@ -169,7 +169,7 @@ function getVirtualWorldPage(context) {
   const req = context.request;
   if (!req.auth || !req.auth.isAuthenticated) {
     return ResponseBuilder.redirect(
-      "/auth/login?redirect=" + encodeURIComponent("/virtual-world"),
+      "/auth/login?redirect=" + encodeURIComponent("/virtual-world/play"),
     );
   }
   const userId = req.auth.userId;
@@ -990,7 +990,7 @@ function getVirtualWorldPage(context) {
     }
 
     function loginRedirectUrl() {
-      return '/auth/login?redirect=' + encodeURIComponent('/virtual-world');
+      return '/auth/login?redirect=' + encodeURIComponent('/virtual-world/play');
     }
 
     function redirectToLogin() {
@@ -2230,7 +2230,7 @@ function getVirtualWorldPage(context) {
       fetchJsonWithAuth('/virtual-world/current-world')
         .then(function(state) {
           if (state && state.world_id && String(state.world_id) !== String(worldId)) {
-            window.location.href = '/virtual-world';
+            window.location.href = '/virtual-world/play';
           }
         }).catch(function(err) {
           if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
@@ -2265,7 +2265,7 @@ function getVirtualWorldPage(context) {
             var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
             if (payload.leaving) {
               if (payload.player_id === playerId && payload.switched_world) {
-                window.location.href = '/virtual-world';
+                window.location.href = '/virtual-world/play';
                 return;
               }
               removeRemoteAvatar(payload.player_id);
@@ -2741,8 +2741,8 @@ function getVirtualWorldPage(context) {
 
     function goToNewWorld() {
       fetchWithAuth('/virtual-world/new-world', { method: 'POST' })
-        .then(function() { window.location.href = '/virtual-world'; })
-        .catch(function() { window.location.href = '/virtual-world'; });
+        .then(function() { window.location.href = '/virtual-world/play'; })
+        .catch(function() { window.location.href = '/virtual-world/play'; });
     }
 
     function postTreeAction(action) {
@@ -2763,7 +2763,7 @@ function getVirtualWorldPage(context) {
         }
         applyItemStateFromResult(result);
         if (result.switched_world) {
-          window.location.href = '/virtual-world';
+          window.location.href = '/virtual-world/play';
         }
       }).catch(function(err) {
         if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
@@ -6364,10 +6364,15 @@ function init() {
   safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
   safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
 
-  safeRegisterRoute("/virtual-world", "getVirtualWorldPage", "GET", {
-    summary: "2.5D Virtual World",
+  try {
+    routeRegistry.registerAssetRoute("/virtual-world", "welcome.html");
+  } catch (e) {
+    vwLog("asset route registration skipped", { path: "/virtual-world", error: String(e) });
+  }
+  safeRegisterRoute("/virtual-world/play", "getVirtualWorldPage", "GET", {
+    summary: "Virtual World (Play)",
     description:
-      "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys.",
+      "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys. Requires authentication.",
     tags: ["Demo"],
   });
   safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");

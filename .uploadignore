@@ -1,0 +1,4 @@
+# Upload ignore patterns (glob patterns supported)
+# Files and directories matching these patterns will not be uploaded as assets
+
+.DS_Store

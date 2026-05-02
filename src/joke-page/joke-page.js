@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Joke page
 // Handles HTTP requests and returns a random joke as an HTML page

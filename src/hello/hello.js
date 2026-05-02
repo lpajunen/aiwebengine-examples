@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 /**
  * @param {HandlerContext} context

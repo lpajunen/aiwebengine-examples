@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Daily Aphorism Page
 // Displays a unique aphorism for each day

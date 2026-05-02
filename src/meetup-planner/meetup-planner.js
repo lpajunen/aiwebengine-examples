@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Meetup Planner Example Script
 // Demonstrates creating and managing meetups with public sharing and member responses

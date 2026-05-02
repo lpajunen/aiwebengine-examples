@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // MCP (Model Context Protocol) Prompts Demo
 // This script demonstrates how to register MCP prompts for common development tasks

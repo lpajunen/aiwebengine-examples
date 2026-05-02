@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Example script demonstrating the fetch() API
 // This script shows how to make HTTP requests to external APIs

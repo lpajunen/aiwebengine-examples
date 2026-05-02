@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Example blog script demonstrating aiwebengine capabilities
 // This script registers a /blog endpoint that serves a sample blog post

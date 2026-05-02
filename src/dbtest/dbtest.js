@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // dbtest.js
 // New script created at 2025-12-14T08:17:31.242Z

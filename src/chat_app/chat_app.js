@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Real-Time Chat Application
 // Demonstrates GraphQL subscriptions with filtered messaging, persistent storage, and authentication

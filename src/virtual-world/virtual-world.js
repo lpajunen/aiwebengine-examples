@@ -1,4 +1,4 @@
-/// <reference path="../types/aiwebengine.d.ts" />
+/// <reference path="../../types/aiwebengine.d.ts" />
 
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.

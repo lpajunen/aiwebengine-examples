@@ -1,15 +1,17 @@
 function createSessionId() {
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID();
   }
-  return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+  return (
+    "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
+  );
 }
 var sessionId = createSessionId();
 
-var AUTH_STATE_OK = 'ok';
-var AUTH_STATE_EXTENDING = 'extending';
-var AUTH_STATE_EXPIRED = 'expired';
-var AUTH_STATE_REDIRECTING = 'redirecting';
+var AUTH_STATE_OK = "ok";
+var AUTH_STATE_EXTENDING = "extending";
+var AUTH_STATE_EXPIRED = "expired";
+var AUTH_STATE_REDIRECTING = "redirecting";
 var authState = AUTH_STATE_OK;
 var authProbeRetryTimer = null;
 var authProbeAttempts = 0;
@@ -22,33 +24,33 @@ var AUTH_LOGIN_REDIRECT_DELAY_MS = 800;
 var AUTH_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 function setAuthStatusMessage(text, isError) {
-  var el = document.getElementById('hud-auth-status');
+  var el = document.getElementById("hud-auth-status");
   if (!el) return;
   if (!text) {
-    el.style.display = 'none';
-    el.textContent = '';
+    el.style.display = "none";
+    el.textContent = "";
     return;
   }
   el.textContent = text;
-  el.style.display = 'block';
+  el.style.display = "block";
   if (isError) {
-    el.style.background = 'rgba(130, 36, 26, 0.9)';
-    el.style.borderColor = 'rgba(255, 120, 100, 0.7)';
+    el.style.background = "rgba(130, 36, 26, 0.9)";
+    el.style.borderColor = "rgba(255, 120, 100, 0.7)";
   } else {
-    el.style.background = 'rgba(120, 70, 10, 0.86)';
-    el.style.borderColor = 'rgba(255, 196, 112, 0.6)';
+    el.style.background = "rgba(120, 70, 10, 0.86)";
+    el.style.borderColor = "rgba(255, 196, 112, 0.6)";
   }
 }
 
 function loginRedirectUrl() {
-  return '/auth/login?redirect=' + encodeURIComponent('/virtual-world/play');
+  return "/auth/login?redirect=" + encodeURIComponent("/virtual-world/play");
 }
 
 function redirectToLogin() {
   if (authState === AUTH_STATE_REDIRECTING) return;
   authState = AUTH_STATE_REDIRECTING;
-  setAuthStatusMessage('Session expired. Redirecting to login...', true);
-  setTimeout(function() {
+  setAuthStatusMessage("Session expired. Redirecting to login...", true);
+  setTimeout(function () {
     window.location.href = loginRedirectUrl();
   }, AUTH_LOGIN_REDIRECT_DELAY_MS);
 }
@@ -60,37 +62,42 @@ function handleAuthRecovery() {
     clearTimeout(authProbeRetryTimer);
     authProbeRetryTimer = null;
   }
-  setAuthStatusMessage('', false);
+  setAuthStatusMessage("", false);
   flushMove();
 }
 
 function refreshSessionSilently(reason) {
   if (isAuthUnavailable()) return Promise.resolve(false);
   if (authRefreshPromise) return authRefreshPromise;
-  authRefreshPromise = fetch('/auth/refresh', {
-    method: 'POST',
-    cache: 'no-store',
-  }).then(function(res) {
-    if (res.status === 401) return false;
-    return res.ok;
-  }).catch(function() {
-    return false;
-  }).finally(function() {
-    authRefreshPromise = null;
-  });
+  authRefreshPromise = fetch("/auth/refresh", {
+    method: "POST",
+    cache: "no-store",
+  })
+    .then(function (res) {
+      if (res.status === 401) return false;
+      return res.ok;
+    })
+    .catch(function () {
+      return false;
+    })
+    .finally(function () {
+      authRefreshPromise = null;
+    });
   return authRefreshPromise;
 }
 
 function probeAuthStatus() {
-  return fetch('/virtual-world/current-world', {
-    method: 'GET',
-    cache: 'no-store',
-  }).then(function(res) {
-    if (res.status === 401) return false;
-    return res.ok;
-  }).catch(function() {
-    return false;
-  });
+  return fetch("/virtual-world/current-world", {
+    method: "GET",
+    cache: "no-store",
+  })
+    .then(function (res) {
+      if (res.status === 401) return false;
+      return res.ok;
+    })
+    .catch(function () {
+      return false;
+    });
 }
 
 function runAuthProbeAttempt() {
@@ -101,41 +108,50 @@ function runAuthProbeAttempt() {
     redirectToLogin();
     return;
   }
-  var delay = authProbeAttempts === 0 ? 0 : Math.min(4000, Math.pow(2, authProbeAttempts - 1) * 1000);
-  authProbeRetryTimer = setTimeout(function() {
+  var delay =
+    authProbeAttempts === 0
+      ? 0
+      : Math.min(4000, Math.pow(2, authProbeAttempts - 1) * 1000);
+  authProbeRetryTimer = setTimeout(function () {
     if (authState !== AUTH_STATE_EXTENDING) return;
     authProbeInFlight = true;
-    refreshSessionSilently('recovery').then(function(refreshed) {
-      if (!refreshed) return false;
-      return probeAuthStatus();
-    }).then(function(ok) {
-      authProbeInFlight = false;
-      if (ok) {
-        handleAuthRecovery();
-        return;
-      }
-      authProbeAttempts += 1;
-      runAuthProbeAttempt();
-    }).catch(function() {
-      authProbeInFlight = false;
-      authProbeAttempts += 1;
-      runAuthProbeAttempt();
-    });
+    refreshSessionSilently("recovery")
+      .then(function (refreshed) {
+        if (!refreshed) return false;
+        return probeAuthStatus();
+      })
+      .then(function (ok) {
+        authProbeInFlight = false;
+        if (ok) {
+          handleAuthRecovery();
+          return;
+        }
+        authProbeAttempts += 1;
+        runAuthProbeAttempt();
+      })
+      .catch(function () {
+        authProbeInFlight = false;
+        authProbeAttempts += 1;
+        runAuthProbeAttempt();
+      });
   }, delay);
 }
 
 function handleAuth401(source) {
-  if (authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED) return;
+  if (authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED)
+    return;
   if (authState === AUTH_STATE_EXTENDING) return;
   authState = AUTH_STATE_EXTENDING;
   authProbeAttempts = 0;
-  setAuthStatusMessage('Session expired, trying to reconnect...', false);
-  console.warn('Auth expired during request:', source);
+  setAuthStatusMessage("Session expired, trying to reconnect...", false);
+  console.warn("Auth expired during request:", source);
   runAuthProbeAttempt();
 }
 
 function isAuthUnavailable() {
-  return authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED;
+  return (
+    authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED
+  );
 }
 
 function createAuthError(code) {
@@ -149,57 +165,59 @@ function scheduleSessionRefresh() {
     clearInterval(authRefreshIntervalTimer);
     authRefreshIntervalTimer = null;
   }
-  authRefreshIntervalTimer = setInterval(function() {
+  authRefreshIntervalTimer = setInterval(function () {
     if (authState !== AUTH_STATE_OK) return;
     // Refresh even when the tab is hidden: a passive watcher receiving SSE
     // events may background the tab for hours and should not be forced to
     // re-login. The 30-minute heartbeat is lightweight enough to keep the
     // session alive for the full 30-day absolute lifetime.
-    refreshSessionSilently('interval').then(function(ok) {
-      if (!ok) handleAuth401('refresh_interval');
+    refreshSessionSilently("interval").then(function (ok) {
+      if (!ok) handleAuth401("refresh_interval");
     });
   }, AUTH_REFRESH_INTERVAL_MS);
 }
 
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState !== 'visible') return;
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState !== "visible") return;
   if (authState !== AUTH_STATE_OK) return;
-  refreshSessionSilently('visibility').then(function(ok) {
-    if (!ok) handleAuth401('visibility_refresh');
+  refreshSessionSilently("visibility").then(function (ok) {
+    if (!ok) handleAuth401("visibility_refresh");
   });
 });
 
 function fetchWithAuth(path, options) {
   if (isAuthUnavailable()) {
-    return Promise.reject(createAuthError('AUTH_STOPPED'));
+    return Promise.reject(createAuthError("AUTH_STOPPED"));
   }
   var requestOptions = options || {};
-  return fetch(path, requestOptions).then(function(res) {
-    if (res.status !== 401) return res;
-    return refreshSessionSilently('request_retry').then(function(refreshed) {
-      if (!refreshed) {
-        handleAuth401(path);
-        throw createAuthError('AUTH_401');
-      }
-      return fetch(path, requestOptions).then(function(retryRes) {
-        if (retryRes.status === 401) {
+  return fetch(path, requestOptions)
+    .then(function (res) {
+      if (res.status !== 401) return res;
+      return refreshSessionSilently("request_retry").then(function (refreshed) {
+        if (!refreshed) {
           handleAuth401(path);
-          throw createAuthError('AUTH_401');
+          throw createAuthError("AUTH_401");
         }
-        return retryRes;
+        return fetch(path, requestOptions).then(function (retryRes) {
+          if (retryRes.status === 401) {
+            handleAuth401(path);
+            throw createAuthError("AUTH_401");
+          }
+          return retryRes;
+        });
       });
+    })
+    .then(function (res) {
+      if (res.status === 401) {
+        handleAuth401(path);
+        throw createAuthError("AUTH_401");
+      }
+      return res;
     });
-  }).then(function(res) {
-    if (res.status === 401) {
-      handleAuth401(path);
-      throw createAuthError('AUTH_401');
-    }
-    return res;
-  });
 }
 
 function fetchJsonWithAuth(path, options) {
-  return fetchWithAuth(path, options).then(function(res) {
+  return fetchWithAuth(path, options).then(function (res) {
     return res.json();
   });
 }
@@ -207,9 +225,9 @@ function fetchJsonWithAuth(path, options) {
 function scheduleSSEAuthCheck(source) {
   if (authState !== AUTH_STATE_OK || authSseCheckPending) return;
   authSseCheckPending = true;
-  setTimeout(function() {
+  setTimeout(function () {
     authSseCheckPending = false;
-    probeAuthStatus().then(function(ok) {
+    probeAuthStatus().then(function (ok) {
       if (!ok) handleAuth401(source);
     });
   }, 250);
@@ -227,56 +245,56 @@ function getSSEReconnectDelayMs(retryCount) {
 var I18N_MESSAGES = {
   en: {
     item: {
-      saw: { name: 'Saw' },
-      knife: { name: 'Knife' },
-      flower: { name: 'Rose' },
-      tree_planter: { name: 'Tree planting spade' },
-      portal_builder: { name: 'Portal builder' },
-      portal: { name: 'Portal' },
-      starter_kit: { name: 'Starter Kit' },
-      unknown: { name: 'Unknown item' },
+      saw: { name: "Saw" },
+      knife: { name: "Knife" },
+      flower: { name: "Rose" },
+      tree_planter: { name: "Tree planting spade" },
+      portal_builder: { name: "Portal builder" },
+      portal: { name: "Portal" },
+      starter_kit: { name: "Starter Kit" },
+      unknown: { name: "Unknown item" },
     },
     tree_action: {
-      plant: 'Use tree planting spade (plant)',
-      cut: 'Use saw (cut)',
-      build_portal: 'Use portal builder (build portal)',
-      remove_portal: 'Use portal builder (remove portal)',
-      portal_travel: 'Use portal',
-      return_home: 'Travel home',
+      plant: "Use tree planting spade (plant)",
+      cut: "Use saw (cut)",
+      build_portal: "Use portal builder (build portal)",
+      remove_portal: "Use portal builder (remove portal)",
+      portal_travel: "Use portal",
+      return_home: "Travel home",
     },
     inventory: {
-      empty: 'empty',
-      left_hand: 'Left Hand',
-      right_hand: 'Right Hand',
-      backpack_empty: 'Backpack empty',
-      items_suffix: 'items',
+      empty: "empty",
+      left_hand: "Left Hand",
+      right_hand: "Right Hand",
+      backpack_empty: "Backpack empty",
+      items_suffix: "items",
     },
   },
   fi: {
     item: {
-      saw: { name: 'Saha' },
-      knife: { name: 'Veitsi' },
-      flower: { name: 'Ruusu' },
-      tree_planter: { name: 'Puunistutuslapio' },
-      portal_builder: { name: 'Portaalityökalu' },
-      portal: { name: 'Portaali' },
-      starter_kit: { name: 'Aloituspakkaus' },
-      unknown: { name: 'Tuntematon esine' },
+      saw: { name: "Saha" },
+      knife: { name: "Veitsi" },
+      flower: { name: "Ruusu" },
+      tree_planter: { name: "Puunistutuslapio" },
+      portal_builder: { name: "Portaalityökalu" },
+      portal: { name: "Portaali" },
+      starter_kit: { name: "Aloituspakkaus" },
+      unknown: { name: "Tuntematon esine" },
     },
     tree_action: {
-      plant: 'Istuta puu',
-      cut: 'Kaada puu',
-      build_portal: 'Rakenna portaali',
-      remove_portal: 'Tuhoa portaali',
-      portal_travel: 'Matkusta portaaliin',
-      return_home: 'Matkusta kotiin',
+      plant: "Istuta puu",
+      cut: "Kaada puu",
+      build_portal: "Rakenna portaali",
+      remove_portal: "Tuhoa portaali",
+      portal_travel: "Matkusta portaaliin",
+      return_home: "Matkusta kotiin",
     },
     inventory: {
-      empty: 'tyhjä',
-      left_hand: 'Vasen käsi',
-      right_hand: 'Oikea käsi',
-      backpack_empty: 'Reppu on tyhjä',
-      items_suffix: 'esinettä',
+      empty: "tyhjä",
+      left_hand: "Vasen käsi",
+      right_hand: "Oikea käsi",
+      backpack_empty: "Reppu on tyhjä",
+      items_suffix: "esinettä",
     },
   },
 };
@@ -288,54 +306,55 @@ function resolveLocale() {
   var raw =
     (navigator.languages && navigator.languages.length > 0
       ? navigator.languages[0]
-      : navigator.language) ||
-    'en';
+      : navigator.language) || "en";
   var normalized = String(raw).toLowerCase();
   if (I18N_MESSAGES[normalized]) {
     activeLocale = normalized;
     return activeLocale;
   }
-  var base = normalized.split('-')[0];
-  activeLocale = I18N_MESSAGES[base] ? base : 'en';
+  var base = normalized.split("-")[0];
+  activeLocale = I18N_MESSAGES[base] ? base : "en";
   return activeLocale;
 }
 
 function getMessageByKey(locale, key) {
   var dict = I18N_MESSAGES[locale];
   if (!dict) return null;
-  var parts = String(key || '').split('.');
+  var parts = String(key || "").split(".");
   var cur = dict;
   for (var i = 0; i < parts.length; i++) {
-    if (!cur || typeof cur !== 'object' || !(parts[i] in cur)) return null;
+    if (!cur || typeof cur !== "object" || !(parts[i] in cur)) return null;
     cur = cur[parts[i]];
   }
-  return typeof cur === 'string' ? cur : null;
+  return typeof cur === "string" ? cur : null;
 }
 
 function t(key, fallback) {
   var locale = resolveLocale();
   var localized = getMessageByKey(locale, key);
   if (localized !== null) return localized;
-  var english = getMessageByKey('en', key);
+  var english = getMessageByKey("en", key);
   if (english !== null) return english;
   return fallback || key;
 }
 
 function humanizeType(type) {
-  return String(type || '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+  return String(type || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, function (ch) {
+      return ch.toUpperCase();
+    });
 }
 
 function itemTypeToLabelKey(type) {
-  if (type === 'saw') return 'item.saw.name';
-  if (type === 'knife') return 'item.knife.name';
-  if (type === 'flower') return 'item.flower.name';
-  if (type === 'tree_planter') return 'item.tree_planter.name';
-  if (type === 'portal_builder') return 'item.portal_builder.name';
-  if (type === 'portal') return 'item.portal.name';
-  if (type === 'starter_kit') return 'item.starter_kit.name';
-  return 'item.unknown.name';
+  if (type === "saw") return "item.saw.name";
+  if (type === "knife") return "item.knife.name";
+  if (type === "flower") return "item.flower.name";
+  if (type === "tree_planter") return "item.tree_planter.name";
+  if (type === "portal_builder") return "item.portal_builder.name";
+  if (type === "portal") return "item.portal.name";
+  if (type === "starter_kit") return "item.starter_kit.name";
+  return "item.unknown.name";
 }
 
 // ── Dynamic tree state (client-side) ──────────────────────────────────────
@@ -343,27 +362,29 @@ var dynamicTrees = TREE_MODS || {};
 
 // Apply tree modifications to MAP
 for (var treeKey in dynamicTrees) {
-  var parts = treeKey.split('_');
+  var parts = treeKey.split("_");
   var tr = parseInt(parts[0], 10);
   var tc = parseInt(parts[1], 10);
   if (tr >= 0 && tr < 100 && tc >= 0 && tc < 100) {
-    if (dynamicTrees[treeKey].action === 'plant') {
+    if (dynamicTrees[treeKey].action === "plant") {
       MAP[tr][tc] = 2; // Add tree
-    } else if (dynamicTrees[treeKey].action === 'cut') {
+    } else if (dynamicTrees[treeKey].action === "cut") {
       MAP[tr][tc] = 0; // Remove tree
     }
   }
 }
 
 function normalizeClientInventory(inv) {
-  if (!inv || typeof inv !== 'object') {
+  if (!inv || typeof inv !== "object") {
     return { left_hand: null, right_hand: null, inventory: [] };
   }
   var out = {
     left_hand: inv.left_hand && inv.left_hand.id ? inv.left_hand : null,
     right_hand: inv.right_hand && inv.right_hand.id ? inv.right_hand : null,
     inventory: Array.isArray(inv.inventory)
-      ? inv.inventory.filter(function(it) { return it && it.id && it.type; })
+      ? inv.inventory.filter(function (it) {
+          return it && it.id && it.type;
+        })
       : [],
   };
   return out;
@@ -371,10 +392,10 @@ function normalizeClientInventory(inv) {
 
 function normalizeClientWorldItems(items) {
   var out = {};
-  if (!items || typeof items !== 'object') return out;
+  if (!items || typeof items !== "object") return out;
   for (var tileKey in items) {
     if (!Array.isArray(items[tileKey])) continue;
-    var filtered = items[tileKey].filter(function(it) {
+    var filtered = items[tileKey].filter(function (it) {
       return it && it.id && it.type;
     });
     if (filtered.length > 0) out[tileKey] = filtered;
@@ -389,46 +410,46 @@ var inventoryAutoHideTimer = null;
 var usePickerVisible = false;
 
 // ── Communication state ──────────────────────────────────────────────────
-var playerNick = PLAYER_NICK || '';
+var playerNick = PLAYER_NICK || "";
 var onlinePlayersList = ONLINE_PLAYERS || [];
 var playersPanelVisible = false;
 var playersPollTimer = null;
 
 var chatPanelVisible = false;
-var chatActiveTab = 'world';  // 'world' | 'dm'
+var chatActiveTab = "world"; // 'world' | 'dm'
 var worldChatMessages = INITIAL_CHAT || [];
 var dmIndex = INITIAL_DM_INDEX || [];
-var dmThreads = {};       // { [otherUserId]: Message[] }
+var dmThreads = {}; // { [otherUserId]: Message[] }
 var activeDmUserId = null;
 var unreadDmCount = 0;
 
 function treeActionsForItemType(type) {
-  if (type === 'portal_builder') return ['build_portal', 'remove_portal'];
-  if (type === 'tree_planter') return ['plant'];
-  if (type === 'saw') return ['cut'];
-  if (type === 'portal') return ['portal_travel'];
-  if (type === 'starter_kit') return ['return_home'];
+  if (type === "portal_builder") return ["build_portal", "remove_portal"];
+  if (type === "tree_planter") return ["plant"];
+  if (type === "saw") return ["cut"];
+  if (type === "portal") return ["portal_travel"];
+  if (type === "starter_kit") return ["return_home"];
   return [];
 }
 
 function treeActionLabel(action) {
-  if (action === 'plant') {
-    return t('tree_action.plant', 'Use tree planting spade (plant)');
+  if (action === "plant") {
+    return t("tree_action.plant", "Use tree planting spade (plant)");
   }
-  if (action === 'cut') {
-    return t('tree_action.cut', 'Use saw (cut)');
+  if (action === "cut") {
+    return t("tree_action.cut", "Use saw (cut)");
   }
-  if (action === 'build_portal') {
-    return t('tree_action.build_portal', 'Use portal builder (build portal)');
+  if (action === "build_portal") {
+    return t("tree_action.build_portal", "Use portal builder (build portal)");
   }
-  if (action === 'remove_portal') {
-    return t('tree_action.remove_portal', 'Use portal builder (remove portal)');
+  if (action === "remove_portal") {
+    return t("tree_action.remove_portal", "Use portal builder (remove portal)");
   }
-  if (action === 'portal_travel') {
-    return t('tree_action.portal_travel', 'Use portal (new world)');
+  if (action === "portal_travel") {
+    return t("tree_action.portal_travel", "Use portal (new world)");
   }
-  if (action === 'return_home') {
-    return t('tree_action.return_home', 'Travel home');
+  if (action === "return_home") {
+    return t("tree_action.return_home", "Travel home");
   }
   return action;
 }
@@ -442,7 +463,7 @@ function getOwnedTreeActions() {
   if (Array.isArray(inv.inventory)) {
     for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
   }
-  var tileItems = worldItemsByTile[avatarRow + '_' + avatarCol];
+  var tileItems = worldItemsByTile[avatarRow + "_" + avatarCol];
   if (Array.isArray(tileItems)) {
     for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);
   }
@@ -459,33 +480,33 @@ function getOwnedTreeActions() {
 
 function closeUsePicker() {
   usePickerVisible = false;
-  document.getElementById('hud-use-picker').style.display = 'none';
-  document.getElementById('use-picker-actions').innerHTML = '';
+  document.getElementById("hud-use-picker").style.display = "none";
+  document.getElementById("use-picker-actions").innerHTML = "";
 }
 
 function updateUseButtonState() {
-  var btn = document.getElementById('btn-use');
+  var btn = document.getElementById("btn-use");
   if (!btn) return;
   var actions = getOwnedTreeActions();
   if (actions.length === 0) {
     btn.disabled = true;
-    btn.style.opacity = '0.45';
+    btn.style.opacity = "0.45";
   } else {
     btn.disabled = false;
-    btn.style.opacity = '1';
+    btn.style.opacity = "1";
   }
   if (actions.length < 2) closeUsePicker();
 }
 
 function openUsePicker(actions) {
-  var container = document.getElementById('use-picker-actions');
-  container.innerHTML = '';
+  var container = document.getElementById("use-picker-actions");
+  container.innerHTML = "";
   for (var i = 0; i < actions.length; i++) {
     var action = actions[i];
-    var btn = document.createElement('button');
+    var btn = document.createElement("button");
     btn.textContent = treeActionLabel(action);
-    btn.onclick = (function(a) {
-      return function() {
+    btn.onclick = (function (a) {
+      return function () {
         closeUsePicker();
         postTreeAction(a);
       };
@@ -493,20 +514,22 @@ function openUsePicker(actions) {
     container.appendChild(btn);
   }
   usePickerVisible = true;
-  document.getElementById('hud-use-picker').style.display = 'block';
+  document.getElementById("hud-use-picker").style.display = "block";
 }
 
 function inventoryItemLabel(item) {
-  if (!item || !item.type) return t('inventory.empty', 'empty');
+  if (!item || !item.type) return t("inventory.empty", "empty");
   var type = String(item.type);
   return t(itemTypeToLabelKey(type), humanizeType(type));
 }
 
 function updateHeldHud() {
-  document.getElementById('held-left').textContent =
-    playerInventory.left_hand ? inventoryItemLabel(playerInventory.left_hand) : '-';
-  document.getElementById('held-right').textContent =
-    playerInventory.right_hand ? inventoryItemLabel(playerInventory.right_hand) : '-';
+  document.getElementById("held-left").textContent = playerInventory.left_hand
+    ? inventoryItemLabel(playerInventory.left_hand)
+    : "-";
+  document.getElementById("held-right").textContent = playerInventory.right_hand
+    ? inventoryItemLabel(playerInventory.right_hand)
+    : "-";
   updateUseButtonState();
 }
 
@@ -516,83 +539,99 @@ var lastCheatTapAt = 0;
 var cheatToastTimer = null;
 
 function showCheatToast(message, isError) {
-  var toast = document.getElementById('hud-cheat-toast');
+  var toast = document.getElementById("hud-cheat-toast");
   if (!toast) return;
   toast.textContent = message;
-  if (isError) toast.classList.add('error');
-  else toast.classList.remove('error');
-  toast.style.display = 'block';
+  if (isError) toast.classList.add("error");
+  else toast.classList.remove("error");
+  toast.style.display = "block";
   if (cheatToastTimer) clearTimeout(cheatToastTimer);
-  cheatToastTimer = setTimeout(function() {
-    toast.style.display = 'none';
-    toast.classList.remove('error');
-    cheatToastTimer = null;
-  }, isError ? 2600 : 1800);
+  cheatToastTimer = setTimeout(
+    function () {
+      toast.style.display = "none";
+      toast.classList.remove("error");
+      cheatToastTimer = null;
+    },
+    isError ? 2600 : 1800,
+  );
 }
 
 function applyCheatResult(result) {
   if (!result || !result.ok) {
-    console.log('Cheat failed:', result && result.error);
-    showCheatToast('Item cheat failed', true);
+    console.log("Cheat failed:", result && result.error);
+    showCheatToast("Item cheat failed", true);
     return false;
   }
   applyItemStateFromResult(result);
   showInventoryPanel(2500);
-  console.log('Cheat granted items:', result.granted_count || 0);
-  showCheatToast('Item cheat activated: +' + String(result.granted_count || 0) + ' items', false);
+  console.log("Cheat granted items:", result.granted_count || 0);
+  showCheatToast(
+    "Item cheat activated: +" + String(result.granted_count || 0) + " items",
+    false,
+  );
   return true;
 }
 
 function postCheatViaTreeAction() {
-  return fetchWithAuth('/virtual-world/tree-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'cheat_grant_all' })
-  }).then(function(res) {
-    return res.json();
-  }).then(function(result) {
-    applyCheatResult(result);
-  });
+  return fetchWithAuth("/virtual-world/tree-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "cheat_grant_all" }),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      applyCheatResult(result);
+    });
 }
 
 function postCheatGrantAllItems() {
-  fetchWithAuth('/virtual-world/cheat-items', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  }).then(function(res) {
-    return res.json();
-  }).then(function(result) {
-    if (!applyCheatResult(result)) {
-      return postCheatViaTreeAction();
-    }
-  }).catch(function(err) {
-    if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
-    postCheatViaTreeAction().catch(function(innerErr) {
-      if (innerErr && (innerErr.code === 'AUTH_401' || innerErr.code === 'AUTH_STOPPED')) return;
-      console.error('Cheat request failed:', innerErr);
-      showCheatToast('Item cheat request failed', true);
+  fetchWithAuth("/virtual-world/cheat-items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      if (!applyCheatResult(result)) {
+        return postCheatViaTreeAction();
+      }
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
+      postCheatViaTreeAction().catch(function (innerErr) {
+        if (
+          innerErr &&
+          (innerErr.code === "AUTH_401" || innerErr.code === "AUTH_STOPPED")
+        )
+          return;
+        console.error("Cheat request failed:", innerErr);
+        showCheatToast("Item cheat request failed", true);
+      });
     });
-  });
 }
 
 function initCheatTrigger() {
-  var nameEl = document.getElementById('legend-ground');
+  var nameEl = document.getElementById("legend-ground");
   if (!nameEl) return;
-  nameEl.style.cursor = 'pointer';
-  nameEl.title = 'Triple click for test items';
+  nameEl.style.cursor = "pointer";
+  nameEl.title = "Triple click for test items";
   function onNameCheatTap() {
     var now = Date.now();
     if (now - lastCheatTapAt < 180) return;
     lastCheatTapAt = now;
     cheatClickCount += 1;
-    nameEl.style.opacity = '0.8';
-    nameEl.title = 'Triple click for test items (' + cheatClickCount + '/3)';
+    nameEl.style.opacity = "0.8";
+    nameEl.title = "Triple click for test items (" + cheatClickCount + "/3)";
     if (cheatClickResetTimer) clearTimeout(cheatClickResetTimer);
-    cheatClickResetTimer = setTimeout(function() {
+    cheatClickResetTimer = setTimeout(function () {
       cheatClickCount = 0;
-      nameEl.style.opacity = '1';
-      nameEl.title = 'Triple click for test items';
+      nameEl.style.opacity = "1";
+      nameEl.title = "Triple click for test items";
       cheatClickResetTimer = null;
     }, 2000);
     if (cheatClickCount >= 3) {
@@ -601,24 +640,28 @@ function initCheatTrigger() {
         clearTimeout(cheatClickResetTimer);
         cheatClickResetTimer = null;
       }
-      nameEl.style.opacity = '1';
-      nameEl.title = 'Triple click for test items';
-      showCheatToast('Activating item cheat...', false);
+      nameEl.style.opacity = "1";
+      nameEl.title = "Triple click for test items";
+      showCheatToast("Activating item cheat...", false);
       postCheatGrantAllItems();
     }
   }
-  nameEl.addEventListener('click', onNameCheatTap);
-  nameEl.addEventListener('pointerup', onNameCheatTap);
-  nameEl.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    onNameCheatTap();
-  }, { passive: false });
+  nameEl.addEventListener("click", onNameCheatTap);
+  nameEl.addEventListener("pointerup", onNameCheatTap);
+  nameEl.addEventListener(
+    "touchend",
+    function (e) {
+      e.preventDefault();
+      onNameCheatTap();
+    },
+    { passive: false },
+  );
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
 var ROWS = 100;
 var COLS = 100;
-var TILE = 2;            // world units per tile
+var TILE = 2; // world units per tile
 var MOVE_INTERVAL = 160; // ms between steps
 var MAX_PENDING_MOVES = 40;
 
@@ -626,8 +669,8 @@ var avatarRow = INIT_ROW;
 var avatarCol = INIT_COL;
 var targetX = avatarCol * TILE + TILE / 2;
 var targetZ = avatarRow * TILE + TILE / 2;
-var moveSeq = INIT_SEQ;  // last confirmed server sequence number
-var lastAssignedSeq = INIT_SEQ;  // last seq assigned to any move (queued or in-flight)
+var moveSeq = INIT_SEQ; // last confirmed server sequence number
+var lastAssignedSeq = INIT_SEQ; // last seq assigned to any move (queued or in-flight)
 
 // ── Renderer ─────────────────────────────────────────────────────────────
 var renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -645,12 +688,17 @@ scene.fog = new THREE.FogExp2(0x87ceeb, 0.018);
 // ── Camera ───────────────────────────────────────────────────────────────
 var mapCX = (COLS * TILE) / 2;
 var mapCZ = (ROWS * TILE) / 2;
-var camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 300);
+var camera = new THREE.PerspectiveCamera(
+  40,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  300,
+);
 
 // Camera orbit state (spherical coordinates around map centre)
-var camR     = 50;           // distance
-var camTheta = Math.PI / 4;  // azimuth (horizontal rotation)
-var camPhi   = 0.67;         // elevation above horizontal (radians)
+var camR = 50; // distance
+var camTheta = Math.PI / 4; // azimuth (horizontal rotation)
+var camPhi = 0.67; // elevation above horizontal (radians)
 
 function updateCamera() {
   var ax = avatar.position.x;
@@ -658,7 +706,7 @@ function updateCamera() {
   camera.position.set(
     ax + camR * Math.cos(camPhi) * Math.sin(camTheta),
     camR * Math.sin(camPhi),
-    az + camR * Math.cos(camPhi) * Math.cos(camTheta)
+    az + camR * Math.cos(camPhi) * Math.cos(camTheta),
   );
   camera.lookAt(ax, 0, az);
 }
@@ -666,7 +714,7 @@ function updateCamera() {
 camera.position.set(
   targetX + camR * Math.cos(camPhi) * Math.sin(camTheta),
   camR * Math.sin(camPhi),
-  targetZ + camR * Math.cos(camPhi) * Math.cos(camTheta)
+  targetZ + camR * Math.cos(camPhi) * Math.cos(camTheta),
 );
 camera.lookAt(targetX, 0, targetZ);
 
@@ -711,9 +759,16 @@ var matGroundB = new THREE.MeshLambertMaterial({ color: 0x6da040 });
 
 var geoWall = new THREE.BoxGeometry(TILE, 1.7, TILE);
 var matWallSides = new THREE.MeshLambertMaterial({ color: 0x9e9e9e });
-var matWallTop  = new THREE.MeshLambertMaterial({ color: 0xc8c8c8 });
+var matWallTop = new THREE.MeshLambertMaterial({ color: 0xc8c8c8 });
 // BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
-var matWall = [matWallSides, matWallSides, matWallTop, matWallSides, matWallSides, matWallSides];
+var matWall = [
+  matWallSides,
+  matWallSides,
+  matWallTop,
+  matWallSides,
+  matWallSides,
+  matWallSides,
+];
 
 var geoTrunk = new THREE.BoxGeometry(0.28, 0.9, 0.28);
 var matTrunk = new THREE.MeshLambertMaterial({ color: 0x7d4f2a });
@@ -724,62 +779,83 @@ var matFoliage1 = new THREE.MeshLambertMaterial({ color: 0x2d8a3e });
 var matFoliage2 = new THREE.MeshLambertMaterial({ color: 0x3dba4e });
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
-function tileX(col) { return col * TILE + TILE / 2; }
-function tileZ(row) { return row * TILE + TILE / 2; }
+function tileX(col) {
+  return col * TILE + TILE / 2;
+}
+function tileZ(row) {
+  return row * TILE + TILE / 2;
+}
 
 var dummy = new THREE.Object3D();
 dummy.rotation.set(0, 0, 0);
 dummy.scale.set(1, 1, 1);
 
 // Count instances
-var cntA = 0, cntB = 0, cntWall = 0, cntTree = 0;
+var cntA = 0,
+  cntB = 0,
+  cntWall = 0,
+  cntTree = 0;
 for (var r = 0; r < ROWS; r++) {
   for (var c = 0; c < COLS; c++) {
-    if ((r + c) % 2 === 0) cntA++; else cntB++;
+    if ((r + c) % 2 === 0) cntA++;
+    else cntB++;
     if (MAP[r][c] === 1) cntWall++;
     if (MAP[r][c] === 2) cntTree++;
   }
 }
 
-var iGroundA  = new THREE.InstancedMesh(geoGround,   matGroundA,  cntA);
-var iGroundB  = new THREE.InstancedMesh(geoGround,   matGroundB,  cntB);
-var iWall     = new THREE.InstancedMesh(geoWall,     matWall,     cntWall);
-var iTrunk    = new THREE.InstancedMesh(geoTrunk,    matTrunk,    cntTree);
+var iGroundA = new THREE.InstancedMesh(geoGround, matGroundA, cntA);
+var iGroundB = new THREE.InstancedMesh(geoGround, matGroundB, cntB);
+var iWall = new THREE.InstancedMesh(geoWall, matWall, cntWall);
+var iTrunk = new THREE.InstancedMesh(geoTrunk, matTrunk, cntTree);
 var iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, cntTree);
 var iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, cntTree);
 
 iGroundA.receiveShadow = true;
 iGroundB.receiveShadow = true;
-iWall.castShadow = true;     iWall.receiveShadow = true;
-iTrunk.castShadow = true;    iFoliage1.castShadow = true;    iFoliage2.castShadow = true;
+iWall.castShadow = true;
+iWall.receiveShadow = true;
+iTrunk.castShadow = true;
+iFoliage1.castShadow = true;
+iFoliage2.castShadow = true;
 
-var idxA = 0, idxB = 0, idxW = 0, idxT = 0;
+var idxA = 0,
+  idxB = 0,
+  idxW = 0,
+  idxT = 0;
 for (var r = 0; r < ROWS; r++) {
   for (var c = 0; c < COLS; c++) {
-    var tx = tileX(c), tz = tileZ(r);
+    var tx = tileX(c),
+      tz = tileZ(r);
 
     dummy.position.set(tx, -0.125, tz);
     dummy.updateMatrix();
     if ((r + c) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
-    else                    iGroundB.setMatrixAt(idxB++, dummy.matrix);
+    else iGroundB.setMatrixAt(idxB++, dummy.matrix);
 
     if (MAP[r][c] === 1) {
       dummy.position.set(tx, 0.85, tz);
       dummy.updateMatrix();
       iWall.setMatrixAt(idxW++, dummy.matrix);
     } else if (MAP[r][c] === 2) {
-      dummy.position.set(tx, 0.45,  tz); dummy.updateMatrix(); iTrunk.setMatrixAt(idxT, dummy.matrix);
-      dummy.position.set(tx, 1.1,   tz); dummy.updateMatrix(); iFoliage1.setMatrixAt(idxT, dummy.matrix);
-      dummy.position.set(tx, 1.78,  tz); dummy.updateMatrix(); iFoliage2.setMatrixAt(idxT, dummy.matrix);
+      dummy.position.set(tx, 0.45, tz);
+      dummy.updateMatrix();
+      iTrunk.setMatrixAt(idxT, dummy.matrix);
+      dummy.position.set(tx, 1.1, tz);
+      dummy.updateMatrix();
+      iFoliage1.setMatrixAt(idxT, dummy.matrix);
+      dummy.position.set(tx, 1.78, tz);
+      dummy.updateMatrix();
+      iFoliage2.setMatrixAt(idxT, dummy.matrix);
       idxT++;
     }
   }
 }
 
-iGroundA.instanceMatrix.needsUpdate  = true;
-iGroundB.instanceMatrix.needsUpdate  = true;
-iWall.instanceMatrix.needsUpdate     = true;
-iTrunk.instanceMatrix.needsUpdate    = true;
+iGroundA.instanceMatrix.needsUpdate = true;
+iGroundB.instanceMatrix.needsUpdate = true;
+iWall.instanceMatrix.needsUpdate = true;
+iTrunk.instanceMatrix.needsUpdate = true;
 iFoliage1.instanceMatrix.needsUpdate = true;
 iFoliage2.instanceMatrix.needsUpdate = true;
 
@@ -789,12 +865,12 @@ scene.add(iGroundA, iGroundB, iWall, iTrunk, iFoliage1, iFoliage2);
 function updateTreeInstances() {
   // Remove old tree meshes from scene
   scene.remove(iTrunk, iFoliage1, iFoliage2);
-  
+
   // Dispose of old meshes to free memory
   iTrunk.dispose();
   iFoliage1.dispose();
   iFoliage2.dispose();
-  
+
   // Count trees in current MAP state
   var newTreeCount = 0;
   for (var r = 0; r < ROWS; r++) {
@@ -802,34 +878,41 @@ function updateTreeInstances() {
       if (MAP[r][c] === 2) newTreeCount++;
     }
   }
-  
+
   // Create new tree instances
-  iTrunk    = new THREE.InstancedMesh(geoTrunk,    matTrunk,    newTreeCount);
+  iTrunk = new THREE.InstancedMesh(geoTrunk, matTrunk, newTreeCount);
   iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, newTreeCount);
   iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, newTreeCount);
-  
+
   iTrunk.castShadow = true;
   iFoliage1.castShadow = true;
   iFoliage2.castShadow = true;
-  
+
   // Populate tree instances
   var treeIdx = 0;
   for (var r = 0; r < ROWS; r++) {
     for (var c = 0; c < COLS; c++) {
       if (MAP[r][c] === 2) {
-        var tx = tileX(c), tz = tileZ(r);
-        dummy.position.set(tx, 0.45,  tz); dummy.updateMatrix(); iTrunk.setMatrixAt(treeIdx, dummy.matrix);
-        dummy.position.set(tx, 1.1,   tz); dummy.updateMatrix(); iFoliage1.setMatrixAt(treeIdx, dummy.matrix);
-        dummy.position.set(tx, 1.78,  tz); dummy.updateMatrix(); iFoliage2.setMatrixAt(treeIdx, dummy.matrix);
+        var tx = tileX(c),
+          tz = tileZ(r);
+        dummy.position.set(tx, 0.45, tz);
+        dummy.updateMatrix();
+        iTrunk.setMatrixAt(treeIdx, dummy.matrix);
+        dummy.position.set(tx, 1.1, tz);
+        dummy.updateMatrix();
+        iFoliage1.setMatrixAt(treeIdx, dummy.matrix);
+        dummy.position.set(tx, 1.78, tz);
+        dummy.updateMatrix();
+        iFoliage2.setMatrixAt(treeIdx, dummy.matrix);
         treeIdx++;
       }
     }
   }
-  
-  iTrunk.instanceMatrix.needsUpdate    = true;
+
+  iTrunk.instanceMatrix.needsUpdate = true;
   iFoliage1.instanceMatrix.needsUpdate = true;
   iFoliage2.instanceMatrix.needsUpdate = true;
-  
+
   // Add new tree meshes to scene
   scene.add(iTrunk, iFoliage1, iFoliage2);
 }
@@ -841,18 +924,20 @@ var itemMeshGroup = new THREE.Group();
 scene.add(itemMeshGroup);
 
 function itemTypeColor(type) {
-  if (type === 'saw') return 0xbfc6d0;
-  if (type === 'knife') return 0xd8dee8;
-  if (type === 'flower') return 0xec6ea4;
-  if (type === 'tree_planter') return 0x54d08a;
-  if (type === 'portal_builder') return 0xff9f1c;
-  if (type === 'portal') return 0x5ad7ff;
+  if (type === "saw") return 0xbfc6d0;
+  if (type === "knife") return 0xd8dee8;
+  if (type === "flower") return 0xec6ea4;
+  if (type === "tree_planter") return 0x54d08a;
+  if (type === "portal_builder") return 0xff9f1c;
+  if (type === "portal") return 0x5ad7ff;
   return 0xf3ca40;
 }
 
 function getItemMaterial(type) {
   if (!itemMatCache[type]) {
-    itemMatCache[type] = new THREE.MeshLambertMaterial({ color: itemTypeColor(type) });
+    itemMatCache[type] = new THREE.MeshLambertMaterial({
+      color: itemTypeColor(type),
+    });
   }
   return itemMatCache[type];
 }
@@ -867,7 +952,7 @@ function clearItemMeshes() {
 function rebuildItemMeshes() {
   clearItemMeshes();
   for (var tileKey in worldItemsByTile) {
-    var parts = tileKey.split('_');
+    var parts = tileKey.split("_");
     var row = Number(parts[0]);
     var col = Number(parts[1]);
     if (!isFinite(row) || !isFinite(col)) continue;
@@ -876,9 +961,9 @@ function rebuildItemMeshes() {
     for (var i = 0; i < arr.length; i++) {
       var item = arr[i];
       var mesh = new THREE.Mesh(itemGeo, getItemMaterial(item.type));
-      var ox = ((i % 3) - 1) * 0.20;
-      var oz = (Math.floor(i / 3) % 3 - 1) * 0.20;
-      var oy = 0.20 + Math.floor(i / 9) * 0.16;
+      var ox = ((i % 3) - 1) * 0.2;
+      var oz = ((Math.floor(i / 3) % 3) - 1) * 0.2;
+      var oy = 0.2 + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
       mesh.castShadow = true;
       mesh.receiveShadow = false;
@@ -902,15 +987,15 @@ function makePart(w, h, d, color, px, py, pz) {
 }
 
 // Legs
-avatar.add(makePart(0.20, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
-avatar.add(makePart(0.20, 0.35, 0.22, 0x1a252f,  0.14, 0.175, 0));
+avatar.add(makePart(0.2, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
+avatar.add(makePart(0.2, 0.35, 0.22, 0x1a252f, 0.14, 0.175, 0));
 // Body
-avatar.add(makePart(0.55, 0.65, 0.40, 0x2980b9, 0, 0.525, 0));
+avatar.add(makePart(0.55, 0.65, 0.4, 0x2980b9, 0, 0.525, 0));
 // Head
 avatar.add(makePart(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
 // Eyes (on +Z face of head)
 avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-avatar.add(makePart(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
+avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
 
 avatar.position.set(targetX, 0, targetZ);
 avatar.rotation.y = INIT_ROTATION;
@@ -922,7 +1007,7 @@ var targetIndicatorMat = new THREE.MeshBasicMaterial({
   color: 0x00ff00,
   transparent: true,
   opacity: 0.3,
-  side: THREE.DoubleSide
+  side: THREE.DoubleSide,
 });
 var targetIndicator = new THREE.Mesh(targetIndicatorGeo, targetIndicatorMat);
 targetIndicator.position.set(targetX, 0.15, targetZ);
@@ -934,11 +1019,12 @@ var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
 
 function avatarBodyColor(pid) {
   var h = 0;
-  for (var i = 0; i < pid.length; i++) h = (Math.imul(31, h) + pid.charCodeAt(i)) | 0;
+  for (var i = 0; i < pid.length; i++)
+    h = (Math.imul(31, h) + pid.charCodeAt(i)) | 0;
   var hue = (h >>> 0) % 360;
   // Shift away from ~200-240 (local avatar blue)
   if (hue >= 200 && hue <= 240) hue = (hue + 80) % 360;
-  return new THREE.Color('hsl(' + hue + ',70%,55%)');
+  return new THREE.Color("hsl(" + hue + ",70%,55%)");
 }
 
 function makeRemoteAvatar(pid) {
@@ -946,28 +1032,29 @@ function makeRemoteAvatar(pid) {
   function rp(w, h, d, color, px, py, pz) {
     var mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color })
+      new THREE.MeshLambertMaterial({ color: color }),
     );
     mesh.position.set(px, py, pz);
     mesh.castShadow = true;
     return mesh;
   }
   var bc = avatarBodyColor(pid);
-  g.add(rp(0.20, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
-  g.add(rp(0.20, 0.35, 0.22, 0x1a252f,  0.14, 0.175, 0));
-  g.add(rp(0.55, 0.65, 0.40, bc,         0,   0.525, 0));
-  g.add(rp(0.45, 0.45, 0.45, 0xf4c78c,   0,   0.975, 0));
+  g.add(rp(0.2, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
+  g.add(rp(0.2, 0.35, 0.22, 0x1a252f, 0.14, 0.175, 0));
+  g.add(rp(0.55, 0.65, 0.4, bc, 0, 0.525, 0));
+  g.add(rp(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
   g.add(rp(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-  g.add(rp(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
+  g.add(rp(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
   return g;
 }
 
 function upsertRemoteAvatar(pid, row, col, seq, rotation) {
   if (pid === playerId) return;
-  var tx = tileX(col), tz = tileZ(row);
+  var tx = tileX(col),
+    tz = tileZ(row);
   var incomingRot = Number(rotation);
   var hasIncomingRot = isFinite(incomingRot);
-  var incomingSeq = (seq !== undefined && seq !== null) ? Number(seq) : null;
+  var incomingSeq = seq !== undefined && seq !== null ? Number(seq) : null;
   if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
   if (!remoteAvatars[pid]) {
     var g = makeRemoteAvatar(pid);
@@ -1010,7 +1097,7 @@ function npcBodyColor(npcId) {
     h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
   }
   var hue = 25 + ((h >>> 0) % 80);
-  return new THREE.Color('hsl(' + hue + ',65%,52%)');
+  return new THREE.Color("hsl(" + hue + ",65%,52%)");
 }
 
 function makeNPCAvatar(npcId) {
@@ -1018,19 +1105,19 @@ function makeNPCAvatar(npcId) {
   function np(w, h, d, color, px, py, pz) {
     var mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color })
+      new THREE.MeshLambertMaterial({ color: color }),
     );
     mesh.position.set(px, py, pz);
     mesh.castShadow = true;
     return mesh;
   }
   var bc = npcBodyColor(npcId);
-  g.add(np(0.20, 0.35, 0.22, 0x5c4033, -0.14, 0.175, 0));
-  g.add(np(0.20, 0.35, 0.22, 0x5c4033,  0.14, 0.175, 0));
-  g.add(np(0.55, 0.65, 0.40, bc,         0,   0.525, 0));
-  g.add(np(0.45, 0.45, 0.45, 0xd9b38c,   0,   0.975, 0));
+  g.add(np(0.2, 0.35, 0.22, 0x5c4033, -0.14, 0.175, 0));
+  g.add(np(0.2, 0.35, 0.22, 0x5c4033, 0.14, 0.175, 0));
+  g.add(np(0.55, 0.65, 0.4, bc, 0, 0.525, 0));
+  g.add(np(0.45, 0.45, 0.45, 0xd9b38c, 0, 0.975, 0));
   g.add(np(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-  g.add(np(0.09, 0.09, 0.06, 0x222222,  0.11, 0.995, 0.225));
+  g.add(np(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
   return g;
 }
 
@@ -1040,7 +1127,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation) {
   var tz = tileZ(Number(row));
   var incomingRot = Number(rotation);
   var hasIncomingRot = isFinite(incomingRot);
-  var incomingSeq = (seq !== undefined && seq !== null) ? Number(seq) : null;
+  var incomingSeq = seq !== undefined && seq !== null ? Number(seq) : null;
   if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
 
   if (!npcAvatars[npcId]) {
@@ -1083,7 +1170,7 @@ function syncNPCSnapshot(npcs) {
   var seen = {};
   for (var i = 0; i < npcs.length; i++) {
     var n = npcs[i];
-    if (!n || typeof n.npc_id !== 'string') continue;
+    if (!n || typeof n.npc_id !== "string") continue;
     seen[n.npc_id] = true;
     upsertNPCAvatar(n.npc_id, n.row, n.col, n.seq, n.rotation);
   }
@@ -1094,19 +1181,21 @@ function syncNPCSnapshot(npcs) {
 
 function fetchNPCSnapshot() {
   if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth('/virtual-world/npcs')
-    .then(function(npcs) {
+  fetchJsonWithAuth("/virtual-world/npcs")
+    .then(function (npcs) {
       syncNPCSnapshot(npcs);
-    }).catch(function(err) {
-      if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
     });
 }
 
 function fetchItemSnapshot() {
   if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth('/virtual-world/current-world')
-    .then(function(payload) {
-      if (!payload || typeof payload !== 'object') return;
+  fetchJsonWithAuth("/virtual-world/current-world")
+    .then(function (payload) {
+      if (!payload || typeof payload !== "object") return;
       if (payload.inventory) {
         playerInventory = normalizeClientInventory(payload.inventory);
       }
@@ -1115,7 +1204,7 @@ function fetchItemSnapshot() {
         for (var i = 0; i < payload.items.length; i++) {
           var it = payload.items[i];
           if (!it || !it.id || !it.type) continue;
-          var key = it.row + '_' + it.col;
+          var key = it.row + "_" + it.col;
           if (!next[key]) next[key] = [];
           next[key].push({ id: it.id, type: it.type });
         }
@@ -1125,12 +1214,14 @@ function fetchItemSnapshot() {
       refreshTileDetailIfOpen();
       updateHeldHud();
       if (inventoryPanelVisible) renderInventoryPanel();
-    }).catch(function(err) {
-      if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
     });
 }
 
-var pendingMoves = [];   // FIFO queue of {row,col,seq} — one entry per step
+var pendingMoves = []; // FIFO queue of {row,col,seq} — one entry per step
 var moveInFlight = false;
 
 function flushMove() {
@@ -1138,9 +1229,9 @@ function flushMove() {
   if (moveInFlight || pendingMoves.length === 0) return;
   var payload = pendingMoves.shift();
   moveInFlight = true;
-  fetchWithAuth('/virtual-world/move', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  fetchWithAuth("/virtual-world/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     // world_id and player_id are determined server-side from auth session
     body: JSON.stringify({
       fromRow: payload.fromRow,
@@ -1150,72 +1241,83 @@ function flushMove() {
       rotation: payload.rotation,
       seq: payload.seq,
       session_id: sessionId,
+    }),
+  })
+    .then(function (res) {
+      return res.json();
     })
-  }).then(function(res) { return res.json(); }).then(function(result) {
-    moveInFlight = false;
-    if (!result.ok) {
-      if (result.stale) {
-        // Another tab took over — our queued moves are based on an old seq.
-        // Reconcile to server canonical state, then discard queue.
-        if (typeof result.row === 'number' && typeof result.col === 'number') {
-          avatarRow = result.row;
-          avatarCol = result.col;
+    .then(function (result) {
+      moveInFlight = false;
+      if (!result.ok) {
+        if (result.stale) {
+          // Another tab took over — our queued moves are based on an old seq.
+          // Reconcile to server canonical state, then discard queue.
+          if (
+            typeof result.row === "number" &&
+            typeof result.col === "number"
+          ) {
+            avatarRow = result.row;
+            avatarCol = result.col;
+            targetX = tileX(avatarCol);
+            targetZ = tileZ(avatarRow);
+            document.getElementById("pos-col").textContent = avatarCol;
+            document.getElementById("pos-row").textContent = avatarRow;
+          }
+          if (typeof result.seq === "number" && isFinite(result.seq)) {
+            moveSeq = result.seq;
+            lastAssignedSeq = result.seq;
+          }
+          pendingMoves = [];
+        } else {
+          // Server rejected the move (wall/bounds) — rebuild the queue by extracting
+          // the movement delta from each queued move and reapplying from the corrected position.
+          // This preserves the user's intended movement direction.
+          var lastPos = { row: result.row, col: result.col };
+          for (var i = 0; i < pendingMoves.length; i++) {
+            // Extract the intended movement direction (delta) from the original move
+            var deltaRow = pendingMoves[i].toRow - pendingMoves[i].fromRow;
+            var deltaCol = pendingMoves[i].toCol - pendingMoves[i].fromCol;
+
+            // Reapply the delta from the corrected position
+            pendingMoves[i].fromRow = lastPos.row;
+            pendingMoves[i].fromCol = lastPos.col;
+            pendingMoves[i].toRow = lastPos.row + deltaRow;
+            pendingMoves[i].toCol = lastPos.col + deltaCol;
+
+            lastPos = {
+              row: pendingMoves[i].toRow,
+              col: pendingMoves[i].toCol,
+            };
+          }
+
+          // Update client state to match the end of the rebuilt queue for smooth continuation
+          avatarRow = lastPos.row;
+          avatarCol = lastPos.col;
           targetX = tileX(avatarCol);
           targetZ = tileZ(avatarRow);
-          document.getElementById('pos-col').textContent = avatarCol;
-          document.getElementById('pos-row').textContent = avatarRow;
+          document.getElementById("pos-col").textContent = avatarCol;
+          document.getElementById("pos-row").textContent = avatarRow;
         }
-        if (typeof result.seq === 'number' && isFinite(result.seq)) {
-          moveSeq = result.seq;
-          lastAssignedSeq = result.seq;
-        }
-        pendingMoves = [];
       } else {
-        // Server rejected the move (wall/bounds) — rebuild the queue by extracting
-        // the movement delta from each queued move and reapplying from the corrected position.
-        // This preserves the user's intended movement direction.
-        var lastPos = { row: result.row, col: result.col };
-        for (var i = 0; i < pendingMoves.length; i++) {
-          // Extract the intended movement direction (delta) from the original move
-          var deltaRow = pendingMoves[i].toRow - pendingMoves[i].fromRow;
-          var deltaCol = pendingMoves[i].toCol - pendingMoves[i].fromCol;
-          
-          // Reapply the delta from the corrected position
-          pendingMoves[i].fromRow = lastPos.row;
-          pendingMoves[i].fromCol = lastPos.col;
-          pendingMoves[i].toRow = lastPos.row + deltaRow;
-          pendingMoves[i].toCol = lastPos.col + deltaCol;
-          
-          lastPos = { row: pendingMoves[i].toRow, col: pendingMoves[i].toCol };
+        // Confirmed — update the last confirmed server sequence number.
+        // Only update if this response is newer than what we've already confirmed.
+        // This prevents late responses from moving moveSeq backwards.
+        if (result.seq > moveSeq) {
+          moveSeq = result.seq;
         }
-        
-        // Update client state to match the end of the rebuilt queue for smooth continuation
-        avatarRow = lastPos.row;
-        avatarCol = lastPos.col;
-        targetX = tileX(avatarCol);
-        targetZ = tileZ(avatarRow);
-        document.getElementById('pos-col').textContent = avatarCol;
-        document.getElementById('pos-row').textContent = avatarRow;
       }
-    } else {
-      // Confirmed — update the last confirmed server sequence number.
-      // Only update if this response is newer than what we've already confirmed.
-      // This prevents late responses from moving moveSeq backwards.
-      if (result.seq > moveSeq) {
-        moveSeq = result.seq;
+      flushMove(); // drain next step if any
+    })
+    .catch(function (err) {
+      moveInFlight = false;
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED")) {
+        pendingMoves.unshift(payload);
+        return;
       }
-    }
-    flushMove(); // drain next step if any
-  }).catch(function(err) {
-    moveInFlight = false;
-    if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) {
+      // Put the failed step back at the front and retry after 500 ms
       pendingMoves.unshift(payload);
-      return;
-    }
-    // Put the failed step back at the front and retry after 500 ms
-    pendingMoves.unshift(payload);
-    setTimeout(flushMove, 500);
-  });
+      setTimeout(flushMove, 500);
+    });
 }
 
 function postMove(fromRow, fromCol, toRow, toCol, rotation) {
@@ -1241,20 +1343,26 @@ function postMove(fromRow, fromCol, toRow, toCol, rotation) {
 
 function postLeave() {
   // world_id and player_id are determined server-side from auth session
-  navigator.sendBeacon('/virtual-world/leave',
-    new Blob(['{}'], { type: 'application/json' }));
+  navigator.sendBeacon(
+    "/virtual-world/leave",
+    new Blob(["{}"], { type: "application/json" }),
+  );
 }
 
 function fetchSnapshot() {
   if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth('/virtual-world/players')
-    .then(function(players) {
-      players.forEach(function(p) {
+  fetchJsonWithAuth("/virtual-world/players")
+    .then(function (players) {
+      players.forEach(function (p) {
         if (p.player_id === playerId) {
           var snapSeq = Number(p.seq || 0);
           // Snapshot healing for same-user tabs when SSE is delayed/flaky.
           // Only accept snapshot if we're idle AND it's not stale (older than our current state).
-          if (!moveInFlight && pendingMoves.length === 0 && snapSeq >= moveSeq) {
+          if (
+            !moveInFlight &&
+            pendingMoves.length === 0 &&
+            snapSeq >= moveSeq
+          ) {
             avatarRow = p.row;
             avatarCol = p.col;
             targetX = tileX(avatarCol);
@@ -1264,27 +1372,35 @@ function fetchSnapshot() {
             }
             moveSeq = snapSeq;
             lastAssignedSeq = snapSeq;
-            document.getElementById('pos-col').textContent = avatarCol;
-            document.getElementById('pos-row').textContent = avatarRow;
+            document.getElementById("pos-col").textContent = avatarCol;
+            document.getElementById("pos-row").textContent = avatarRow;
           }
         } else {
           upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
         }
       });
-    }).catch(function(err) {
-      if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
     });
 }
 
 function ensureCurrentWorld() {
   if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth('/virtual-world/current-world')
-    .then(function(state) {
-      if (state && state.world_id && String(state.world_id) !== String(worldId)) {
-        window.location.href = '/virtual-world/play';
+  fetchJsonWithAuth("/virtual-world/current-world")
+    .then(function (state) {
+      if (
+        state &&
+        state.world_id &&
+        String(state.world_id) !== String(worldId)
+      ) {
+        window.location.href = "/virtual-world/play";
       }
-    }).catch(function(err) {
-      if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
     });
 }
 
@@ -1300,23 +1416,23 @@ function initMultiplayer() {
 
   // Subscribe to real-time moves via GraphQL SSE
   // world_id is resolved server-side from the authenticated user's current world
-  var query = 'subscription{worldPlayerMoved}';
-  var sseUrl = '/graphql/sse?query=' + encodeURIComponent(query);
+  var query = "subscription{worldPlayerMoved}";
+  var sseUrl = "/graphql/sse?query=" + encodeURIComponent(query);
   var reconnectTimer = null;
   var sseRetryCount = 0;
   var sseWaitingForOnline = false;
 
   function openSSE() {
     var es = new EventSource(sseUrl);
-    es.onmessage = function(evt) {
+    es.onmessage = function (evt) {
       sseRetryCount = 0;
       try {
         var obj = JSON.parse(evt.data);
         var raw = obj.data.worldPlayerMoved;
-        var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
         if (payload.leaving) {
           if (payload.player_id === playerId && payload.switched_world) {
-            window.location.href = '/virtual-world/play';
+            window.location.href = "/virtual-world/play";
             return;
           }
           removeRemoteAvatar(payload.player_id);
@@ -1345,8 +1461,8 @@ function initMultiplayer() {
                 moveSeq = incomingSeq;
                 lastAssignedSeq = incomingSeq;
               }
-              document.getElementById('pos-col').textContent = avatarCol;
-              document.getElementById('pos-row').textContent = avatarRow;
+              document.getElementById("pos-col").textContent = avatarCol;
+              document.getElementById("pos-row").textContent = avatarRow;
               updateUseButtonState();
             }
           }
@@ -1359,21 +1475,25 @@ function initMultiplayer() {
             payload.rotation,
           );
         }
-      } catch(e) {}
+      } catch (e) {}
     };
-    es.onerror = function() {
+    es.onerror = function () {
       es.close();
-      scheduleSSEAuthCheck('worldPlayerMoved');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldPlayerMoved");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!sseWaitingForOnline) {
           sseWaitingForOnline = true;
           function handleOnline() {
-            window.removeEventListener('online', handleOnline);
+            window.removeEventListener("online", handleOnline);
             sseWaitingForOnline = false;
             openSSE();
           }
-          window.addEventListener('online', handleOnline);
+          window.addEventListener("online", handleOnline);
         }
         return;
       }
@@ -1381,7 +1501,10 @@ function initMultiplayer() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       fetchSnapshot();
       sseRetryCount += 1;
-      reconnectTimer = setTimeout(openSSE, getSSEReconnectDelayMs(sseRetryCount));
+      reconnectTimer = setTimeout(
+        openSSE,
+        getSSEReconnectDelayMs(sseRetryCount),
+      );
     };
     return es;
   }
@@ -1389,66 +1512,73 @@ function initMultiplayer() {
   openSSE();
 
   // Subscribe to tree changes via GraphQL SSE
-  var treeQuery = 'subscription{worldTreeChanged}';
-  var treeSseUrl = '/graphql/sse?query=' + encodeURIComponent(treeQuery);
+  var treeQuery = "subscription{worldTreeChanged}";
+  var treeSseUrl = "/graphql/sse?query=" + encodeURIComponent(treeQuery);
   var treeReconnectTimer = null;
   var treeRetryCount = 0;
   var treeWaitingForOnline = false;
 
   function openTreeSSE() {
     var treeEs = new EventSource(treeSseUrl);
-    treeEs.onmessage = function(evt) {
+    treeEs.onmessage = function (evt) {
       treeRetryCount = 0;
       try {
         var obj = JSON.parse(evt.data);
         var raw = obj.data.worldTreeChanged;
-        var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-        
-        var treeKey = payload.row + '_' + payload.col;
-        var actorType = payload.actor_type || 'player';
-        var actorId = payload.actor_id || payload.player_id || '';
-        
-        if (payload.action === 'plant') {
+        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+        var treeKey = payload.row + "_" + payload.col;
+        var actorType = payload.actor_type || "player";
+        var actorId = payload.actor_id || payload.player_id || "";
+
+        if (payload.action === "plant") {
           MAP[payload.row][payload.col] = 2;
           dynamicTrees[treeKey] = {
-            action: 'plant',
+            action: "plant",
             actor_type: actorType,
             actor_id: actorId,
           };
-        } else if (payload.action === 'cut') {
+        } else if (payload.action === "cut") {
           MAP[payload.row][payload.col] = 0;
           dynamicTrees[treeKey] = {
-            action: 'cut',
+            action: "cut",
             actor_type: actorType,
             actor_id: actorId,
           };
         }
-        
+
         updateTreeInstances();
         refreshTileDetailIfOpen();
-      } catch(e) {
-        console.error('Tree SSE parse error:', e);
+      } catch (e) {
+        console.error("Tree SSE parse error:", e);
       }
     };
-    treeEs.onerror = function() {
+    treeEs.onerror = function () {
       treeEs.close();
-      scheduleSSEAuthCheck('worldTreeChanged');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldTreeChanged");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!treeWaitingForOnline) {
           treeWaitingForOnline = true;
           function handleTreeOnline() {
-            window.removeEventListener('online', handleTreeOnline);
+            window.removeEventListener("online", handleTreeOnline);
             treeWaitingForOnline = false;
             openTreeSSE();
           }
-          window.addEventListener('online', handleTreeOnline);
+          window.addEventListener("online", handleTreeOnline);
         }
         return;
       }
       if (treeReconnectTimer) clearTimeout(treeReconnectTimer);
       treeRetryCount += 1;
-      treeReconnectTimer = setTimeout(openTreeSSE, getSSEReconnectDelayMs(treeRetryCount));
+      treeReconnectTimer = setTimeout(
+        openTreeSSE,
+        getSSEReconnectDelayMs(treeRetryCount),
+      );
     };
     return treeEs;
   }
@@ -1456,21 +1586,21 @@ function initMultiplayer() {
   openTreeSSE();
 
   // Subscribe to NPC movement via GraphQL SSE
-  var npcQuery = 'subscription{worldNPCMoved}';
-  var npcSseUrl = '/graphql/sse?query=' + encodeURIComponent(npcQuery);
+  var npcQuery = "subscription{worldNPCMoved}";
+  var npcSseUrl = "/graphql/sse?query=" + encodeURIComponent(npcQuery);
   var npcReconnectTimer = null;
   var npcRetryCount = 0;
   var npcWaitingForOnline = false;
 
   function openNPCSSE() {
     var npcEs = new EventSource(npcSseUrl);
-    npcEs.onmessage = function(evt) {
+    npcEs.onmessage = function (evt) {
       npcRetryCount = 0;
       try {
         var obj = JSON.parse(evt.data);
         var raw = obj.data.worldNPCMoved;
-        var payload = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-        if (!payload || typeof payload.npc_id !== 'string') return;
+        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!payload || typeof payload.npc_id !== "string") return;
         if (payload.despawn) {
           removeNPCAvatar(payload.npc_id);
         } else {
@@ -1484,26 +1614,33 @@ function initMultiplayer() {
         }
       } catch (e) {}
     };
-    npcEs.onerror = function() {
+    npcEs.onerror = function () {
       npcEs.close();
-      scheduleSSEAuthCheck('worldNPCMoved');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldNPCMoved");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!npcWaitingForOnline) {
           npcWaitingForOnline = true;
           function handleNPCOnline() {
-            window.removeEventListener('online', handleNPCOnline);
+            window.removeEventListener("online", handleNPCOnline);
             npcWaitingForOnline = false;
             openNPCSSE();
           }
-          window.addEventListener('online', handleNPCOnline);
+          window.addEventListener("online", handleNPCOnline);
         }
         return;
       }
       if (npcReconnectTimer) clearTimeout(npcReconnectTimer);
       fetchNPCSnapshot();
       npcRetryCount += 1;
-      npcReconnectTimer = setTimeout(openNPCSSE, getSSEReconnectDelayMs(npcRetryCount));
+      npcReconnectTimer = setTimeout(
+        openNPCSSE,
+        getSSEReconnectDelayMs(npcRetryCount),
+      );
     };
     return npcEs;
   }
@@ -1511,39 +1648,46 @@ function initMultiplayer() {
   openNPCSSE();
 
   // Subscribe to item changes via GraphQL SSE
-  var itemQuery = 'subscription{worldItemChanged}';
-  var itemSseUrl = '/graphql/sse?query=' + encodeURIComponent(itemQuery);
+  var itemQuery = "subscription{worldItemChanged}";
+  var itemSseUrl = "/graphql/sse?query=" + encodeURIComponent(itemQuery);
   var itemReconnectTimer = null;
   var itemRetryCount = 0;
   var itemWaitingForOnline = false;
 
   function openItemSSE() {
     var itemEs = new EventSource(itemSseUrl);
-    itemEs.onmessage = function(_evt) {
+    itemEs.onmessage = function (_evt) {
       itemRetryCount = 0;
       // Keep item sync authoritative by reloading snapshot on each event.
       fetchItemSnapshot();
     };
-    itemEs.onerror = function() {
+    itemEs.onerror = function () {
       itemEs.close();
-      scheduleSSEAuthCheck('worldItemChanged');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldItemChanged");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!itemWaitingForOnline) {
           itemWaitingForOnline = true;
           function handleItemOnline() {
-            window.removeEventListener('online', handleItemOnline);
+            window.removeEventListener("online", handleItemOnline);
             itemWaitingForOnline = false;
             openItemSSE();
           }
-          window.addEventListener('online', handleItemOnline);
+          window.addEventListener("online", handleItemOnline);
         }
         return;
       }
       if (itemReconnectTimer) clearTimeout(itemReconnectTimer);
       fetchItemSnapshot();
       itemRetryCount += 1;
-      itemReconnectTimer = setTimeout(openItemSSE, getSSEReconnectDelayMs(itemRetryCount));
+      itemReconnectTimer = setTimeout(
+        openItemSSE,
+        getSSEReconnectDelayMs(itemRetryCount),
+      );
     };
     return itemEs;
   }
@@ -1551,47 +1695,56 @@ function initMultiplayer() {
   openItemSSE();
 
   // Subscribe to world chat via GraphQL SSE
-  var chatQuery = 'subscription{worldChatMessage}';
-  var chatSseUrl = '/graphql/sse?query=' + encodeURIComponent(chatQuery);
+  var chatQuery = "subscription{worldChatMessage}";
+  var chatSseUrl = "/graphql/sse?query=" + encodeURIComponent(chatQuery);
   var chatReconnectTimer = null;
   var chatRetryCount = 0;
   var chatWaitingForOnline = false;
 
   function openChatSSE() {
     var chatEs = new EventSource(chatSseUrl);
-    chatEs.onmessage = function(evt) {
+    chatEs.onmessage = function (evt) {
       chatRetryCount = 0;
       try {
         var obj = JSON.parse(evt.data);
         var raw = obj.data.worldChatMessage;
-        var msg = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+        var msg = typeof raw === "string" ? JSON.parse(raw) : raw;
         if (!msg || !msg.id) return;
-        var exists = worldChatMessages.some(function(m) { return m.id === msg.id; });
+        var exists = worldChatMessages.some(function (m) {
+          return m.id === msg.id;
+        });
         if (!exists) {
           worldChatMessages.push(msg);
-          if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
+          if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
         }
       } catch (e) {}
     };
-    chatEs.onerror = function() {
+    chatEs.onerror = function () {
       chatEs.close();
-      scheduleSSEAuthCheck('worldChatMessage');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldChatMessage");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!chatWaitingForOnline) {
           chatWaitingForOnline = true;
           function handleChatOnline() {
-            window.removeEventListener('online', handleChatOnline);
+            window.removeEventListener("online", handleChatOnline);
             chatWaitingForOnline = false;
             openChatSSE();
           }
-          window.addEventListener('online', handleChatOnline);
+          window.addEventListener("online", handleChatOnline);
         }
         return;
       }
       if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
       chatRetryCount += 1;
-      chatReconnectTimer = setTimeout(openChatSSE, getSSEReconnectDelayMs(chatRetryCount));
+      chatReconnectTimer = setTimeout(
+        openChatSSE,
+        getSSEReconnectDelayMs(chatRetryCount),
+      );
     };
     return chatEs;
   }
@@ -1599,29 +1752,35 @@ function initMultiplayer() {
   openChatSSE();
 
   // Subscribe to direct messages via GraphQL SSE
-  var dmQuery = 'subscription{worldDirectMessage}';
-  var dmSseUrl = '/graphql/sse?query=' + encodeURIComponent(dmQuery);
+  var dmQuery = "subscription{worldDirectMessage}";
+  var dmSseUrl = "/graphql/sse?query=" + encodeURIComponent(dmQuery);
   var dmReconnectTimer = null;
   var dmRetryCount = 0;
   var dmWaitingForOnline = false;
 
   function openDMSSE() {
     var dmEs = new EventSource(dmSseUrl);
-    dmEs.onmessage = function(evt) {
+    dmEs.onmessage = function (evt) {
       dmRetryCount = 0;
       try {
         var obj = JSON.parse(evt.data);
         var raw = obj.data.worldDirectMessage;
-        var msg = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+        var msg = typeof raw === "string" ? JSON.parse(raw) : raw;
         if (!msg || !msg.id || !msg.sender_id) return;
         var senderId = msg.sender_id;
         if (!dmThreads[senderId]) dmThreads[senderId] = [];
-        var exists = dmThreads[senderId].some(function(m) { return m.id === msg.id; });
+        var exists = dmThreads[senderId].some(function (m) {
+          return m.id === msg.id;
+        });
         if (!exists) {
           dmThreads[senderId].push(msg);
           if (dmIndex.indexOf(senderId) === -1) dmIndex.push(senderId);
         }
-        if (chatPanelVisible && chatActiveTab === 'dm' && activeDmUserId === senderId) {
+        if (
+          chatPanelVisible &&
+          chatActiveTab === "dm" &&
+          activeDmUserId === senderId
+        ) {
           renderDMThread(senderId);
         } else {
           unreadDmCount += 1;
@@ -1629,25 +1788,32 @@ function initMultiplayer() {
         }
       } catch (e) {}
     };
-    dmEs.onerror = function() {
+    dmEs.onerror = function () {
       dmEs.close();
-      scheduleSSEAuthCheck('worldDirectMessage');
-      if (authState === AUTH_STATE_EXPIRED || authState === AUTH_STATE_REDIRECTING) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      scheduleSSEAuthCheck("worldDirectMessage");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         if (!dmWaitingForOnline) {
           dmWaitingForOnline = true;
           function handleDMOnline() {
-            window.removeEventListener('online', handleDMOnline);
+            window.removeEventListener("online", handleDMOnline);
             dmWaitingForOnline = false;
             openDMSSE();
           }
-          window.addEventListener('online', handleDMOnline);
+          window.addEventListener("online", handleDMOnline);
         }
         return;
       }
       if (dmReconnectTimer) clearTimeout(dmReconnectTimer);
       dmRetryCount += 1;
-      dmReconnectTimer = setTimeout(openDMSSE, getSSEReconnectDelayMs(dmRetryCount));
+      dmReconnectTimer = setTimeout(
+        openDMSSE,
+        getSSEReconnectDelayMs(dmRetryCount),
+      );
     };
     return dmEs;
   }
@@ -1655,33 +1821,34 @@ function initMultiplayer() {
   openDMSSE();
 
   // Announce departure
-  window.addEventListener('beforeunload', postLeave);
+  window.addEventListener("beforeunload", postLeave);
 
   // Fire a heartbeat immediately when a backgrounded tab regains focus.
   // Browsers throttle setInterval to ≥60 s in background tabs, which can
   // cause presence to expire (TTL = 90 s). Sending one ping on visibility
   // restore keeps the entry fresh without needing a shorter poll interval.
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && authState === AUTH_STATE_OK) {
-      fetchWithAuth('/virtual-world/heartbeat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && authState === AUTH_STATE_OK) {
+      fetchWithAuth("/virtual-world/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId }),
-      }).catch(function() {});
+      }).catch(function () {});
     }
   });
 
   // Heartbeat — keep presence alive and resync snapshot every 15 s
-  setInterval(function() {
+  setInterval(function () {
     if (authState !== AUTH_STATE_OK) return;
     // Use dedicated heartbeat endpoint: only refreshes the presence TTL
     // without sending a position, so idle tabs can't overwrite a moving tab.
-    fetchWithAuth('/virtual-world/heartbeat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetchWithAuth("/virtual-world/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
-    }).catch(function(err) {
-      if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
+    }).catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
     });
     ensureCurrentWorld();
     fetchSnapshot();
@@ -1711,8 +1878,8 @@ function tryMove(dr, dc, angle) {
     targetX = tileX(nc);
     targetZ = tileZ(nr);
     avatar.rotation.y = angle;
-    document.getElementById('pos-col').textContent = nc;
-    document.getElementById('pos-row').textContent = nr;
+    document.getElementById("pos-col").textContent = nc;
+    document.getElementById("pos-row").textContent = nr;
     updateUseButtonState();
     return true;
   }
@@ -1753,7 +1920,7 @@ function tryMoveCameraRelative(inputX, inputY) {
 
   var intentKey =
     (inputX > 0 ? 1 : inputX < 0 ? -1 : 0) +
-    ',' +
+    "," +
     (inputY > 0 ? 1 : inputY < 0 ? -1 : 0);
 
   var forward = getCameraForwardCardinal();
@@ -1764,14 +1931,14 @@ function tryMoveCameraRelative(inputX, inputY) {
   var absY = Math.abs(inputY);
   var axis = null;
   var axisBias = 0.12;
-  if (absX > absY + axisBias) axis = 'horizontal';
-  else if (absY > absX + axisBias) axis = 'vertical';
+  if (absX > absY + axisBias) axis = "horizontal";
+  else if (absY > absX + axisBias) axis = "vertical";
   else if (lastMoveIntentKey === intentKey && lastMoveAxis) axis = lastMoveAxis;
-  else axis = absY >= absX ? 'vertical' : 'horizontal';
+  else axis = absY >= absX ? "vertical" : "horizontal";
 
   var dr = 0;
   var dc = 0;
-  if (axis === 'horizontal') {
+  if (axis === "horizontal") {
     var sx = inputX > 0 ? 1 : -1;
     dr = right.dr * sx;
     dc = right.dc * sx;
@@ -1791,41 +1958,51 @@ function tryMoveCameraRelative(inputX, inputY) {
 }
 
 function goToNewWorld() {
-  fetchWithAuth('/virtual-world/new-world', { method: 'POST' })
-    .then(function() { window.location.href = '/virtual-world/play'; })
-    .catch(function() { window.location.href = '/virtual-world/play'; });
+  fetchWithAuth("/virtual-world/new-world", { method: "POST" })
+    .then(function () {
+      window.location.href = "/virtual-world/play";
+    })
+    .catch(function () {
+      window.location.href = "/virtual-world/play";
+    });
 }
 
 function postTreeAction(action) {
-  fetchWithAuth('/virtual-world/tree-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  fetchWithAuth("/virtual-world/tree-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: action,
       row: avatarRow,
       col: avatarCol,
-      rotation: avatar.rotation.y
+      rotation: avatar.rotation.y,
+    }),
+  })
+    .then(function (res) {
+      return res.json();
     })
-  }).then(function(res) { return res.json(); }).then(function(result) {
-    if (!result.ok) {
-      console.log('Use failed:', result.error);
-      updateUseButtonState();
-      return;
-    }
-    applyItemStateFromResult(result);
-    if (result.switched_world) {
-      window.location.href = '/virtual-world/play';
-    }
-  }).catch(function(err) {
-    if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
-    console.error('Use request failed:', err);
-  });
+    .then(function (result) {
+      if (!result.ok) {
+        console.log("Use failed:", result.error);
+        updateUseButtonState();
+        return;
+      }
+      applyItemStateFromResult(result);
+      if (result.switched_world) {
+        window.location.href = "/virtual-world/play";
+      }
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
+      console.error("Use request failed:", err);
+    });
 }
 
 function useItem() {
   var actions = getOwnedTreeActions().sort();
   if (actions.length === 0) {
-    console.log('No usable item available in inventory or on this tile');
+    console.log("No usable item available in inventory or on this tile");
     return;
   }
   if (actions.length === 1) {
@@ -1841,81 +2018,105 @@ function useItem() {
 }
 
 function renderInventoryPanel() {
-  var leftDiv = document.getElementById('inv-left-hand');
-  var rightDiv = document.getElementById('inv-right-hand');
-  var listDiv = document.getElementById('inv-list');
-  var countDiv = document.getElementById('inv-count');
+  var leftDiv = document.getElementById("inv-left-hand");
+  var rightDiv = document.getElementById("inv-right-hand");
+  var listDiv = document.getElementById("inv-list");
+  var countDiv = document.getElementById("inv-count");
 
   function handHtml(title, slot, item) {
-    var label = item ? inventoryItemLabel(item) : 'empty';
+    var label = item ? inventoryItemLabel(item) : "empty";
     var html =
-      '<div class="name">' + title + '</div>' +
-      '<div>' + label + '</div>' +
+      '<div class="name">' +
+      title +
+      "</div>" +
+      "<div>" +
+      label +
+      "</div>" +
       '<div class="inv-actions">';
     if (item) {
       if (!item.non_droppable) {
-        html += '<button onclick="dropFromSlot(\'' + slot + '\')">Drop</button>';
+        html +=
+          "<button onclick=\"dropFromSlot('" + slot + "')\">Drop</button>";
       }
-      html += '<button onclick="equipToInventory(\'' + slot + '\')">Store</button>';
+      html +=
+        "<button onclick=\"equipToInventory('" + slot + "')\">Store</button>";
     }
-    html += '</div>';
+    html += "</div>";
     return html;
   }
 
   leftDiv.innerHTML = handHtml(
-    t('inventory.left_hand', 'Left Hand'),
-    'left_hand',
+    t("inventory.left_hand", "Left Hand"),
+    "left_hand",
     playerInventory.left_hand,
   );
   rightDiv.innerHTML = handHtml(
-    t('inventory.right_hand', 'Right Hand'),
-    'right_hand',
+    t("inventory.right_hand", "Right Hand"),
+    "right_hand",
     playerInventory.right_hand,
   );
 
-  if (!Array.isArray(playerInventory.inventory) || playerInventory.inventory.length === 0) {
+  if (
+    !Array.isArray(playerInventory.inventory) ||
+    playerInventory.inventory.length === 0
+  ) {
     listDiv.innerHTML =
       '<div class="inv-row"><span class="label" style="grid-column:1/-1">' +
-      t('inventory.backpack_empty', 'Backpack empty') +
-      '</span></div>';
+      t("inventory.backpack_empty", "Backpack empty") +
+      "</span></div>";
   } else {
-    var rows = '';
+    var rows = "";
     for (var i = 0; i < playerInventory.inventory.length; i++) {
       var item = playerInventory.inventory[i];
       var itemActions = treeActionsForItemType(item.type);
-      var actionBtns = '';
+      var actionBtns = "";
       for (var ai = 0; ai < itemActions.length; ai++) {
-        actionBtns += '<button onclick="postTreeAction(\'' + itemActions[ai] + '\')">' + treeActionLabel(itemActions[ai]) + '</button> ';
+        actionBtns +=
+          "<button onclick=\"postTreeAction('" +
+          itemActions[ai] +
+          "')\">" +
+          treeActionLabel(itemActions[ai]) +
+          "</button> ";
       }
       rows +=
         '<div class="inv-row">' +
-        '<span class="label">' + inventoryItemLabel(item) + '</span>' +
+        '<span class="label">' +
+        inventoryItemLabel(item) +
+        "</span>" +
         '<span class="inv-row-actions">' +
-        '<button onclick="equipFromInventory(' + i + ',\'left_hand\')">L</button> ' +
-        '<button onclick="equipFromInventory(' + i + ',\'right_hand\')">R</button> ' +
-        (item.non_droppable ? '' : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
+        '<button onclick="equipFromInventory(' +
+        i +
+        ",'left_hand')\">L</button> " +
+        '<button onclick="equipFromInventory(' +
+        i +
+        ",'right_hand')\">R</button> " +
+        (item.non_droppable
+          ? ""
+          : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
         actionBtns +
-        '</span>' +
-        '</div>';
+        "</span>" +
+        "</div>";
     }
     listDiv.innerHTML = rows;
   }
 
   countDiv.textContent =
-    playerInventory.inventory.length + ' ' + t('inventory.items_suffix', 'items');
+    playerInventory.inventory.length +
+    " " +
+    t("inventory.items_suffix", "items");
   updateHeldHud();
 }
 
 function showInventoryPanel(autoHideMs) {
   inventoryPanelVisible = true;
-  document.getElementById('hud-inventory-panel').style.display = 'block';
+  document.getElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
   if (inventoryAutoHideTimer) {
     clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
   }
   if (autoHideMs && autoHideMs > 0) {
-    inventoryAutoHideTimer = setTimeout(function() {
+    inventoryAutoHideTimer = setTimeout(function () {
       closeInventoryPanel();
     }, autoHideMs);
   }
@@ -1923,7 +2124,7 @@ function showInventoryPanel(autoHideMs) {
 
 function closeInventoryPanel() {
   inventoryPanelVisible = false;
-  document.getElementById('hud-inventory-panel').style.display = 'none';
+  document.getElementById("hud-inventory-panel").style.display = "none";
   if (inventoryAutoHideTimer) {
     clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
@@ -1938,71 +2139,113 @@ function toggleInventoryPanel() {
 // ── Players panel ────────────────────────────────────────────────────────
 
 function formatRelTime(ts) {
-  if (!ts) return '-';
+  if (!ts) return "-";
   var diff = Math.max(0, Date.now() - ts);
   var secs = Math.floor(diff / 1000);
-  if (secs < 60) return secs + 's ago';
+  if (secs < 60) return secs + "s ago";
   var mins = Math.floor(secs / 60);
-  if (mins < 60) return mins + 'm ago';
+  if (mins < 60) return mins + "m ago";
   var hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + 'h ago';
-  return Math.floor(hrs / 24) + 'd ago';
+  if (hrs < 24) return hrs + "h ago";
+  return Math.floor(hrs / 24) + "d ago";
 }
 
 function renderPlayersPanel() {
-  var tbody = document.getElementById('players-table-body');
+  var tbody = document.getElementById("players-table-body");
   if (!tbody) return;
   if (!onlinePlayersList.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:rgba(255,255,255,0.4);font-style:italic;text-align:center;padding:10px;">No players online</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="5" style="color:rgba(255,255,255,0.4);font-style:italic;text-align:center;padding:10px;">No players online</td></tr>';
     return;
   }
-  var rows = onlinePlayersList.map(function(p) {
+  var rows = onlinePlayersList.map(function (p) {
     var isMe = p.player_id === playerId;
     var sameWorld = String(p.world_id) === String(worldId);
     var nick = escapeHtml(p.nick || p.player_id.slice(0, 16));
-    var worldLabel = p.world_id ? escapeHtml(String(p.world_id)) : '-';
-    var youBadge = isMe ? '<span class="you-badge">(you)</span>' : '';
-    var mapBadge = sameWorld && !isMe ? '<span title="In your world" style="margin-left:4px;font-size:10px;opacity:0.7;">🗺️</span>' : '';
-    var dmBtn = isMe ? '' : '<button class="btn-dm" data-uid="' + escapeHtml(p.player_id) + '" onclick="openChatPanelDM(this.dataset.uid)">💬 DM</button>';
-    return '<tr' + (sameWorld && !isMe ? ' style="background:rgba(255,255,255,0.05);"' : '') + '>'
-      + '<td>' + nick + youBadge + mapBadge + '</td>'
-      + '<td><span class="world-badge">' + worldLabel + '</span></td>'
-      + '<td class="time-cell">' + formatRelTime(p.login_at) + '</td>'
-      + '<td class="time-cell">' + formatRelTime(p.last_active) + '</td>'
-      + '<td>' + dmBtn + '</td>'
-      + '</tr>';
+    var worldLabel = p.world_id ? escapeHtml(String(p.world_id)) : "-";
+    var youBadge = isMe ? '<span class="you-badge">(you)</span>' : "";
+    var mapBadge =
+      sameWorld && !isMe
+        ? '<span title="In your world" style="margin-left:4px;font-size:10px;opacity:0.7;">🗺️</span>'
+        : "";
+    var dmBtn = isMe
+      ? ""
+      : '<button class="btn-dm" data-uid="' +
+        escapeHtml(p.player_id) +
+        '" onclick="openChatPanelDM(this.dataset.uid)">💬 DM</button>';
+    return (
+      "<tr" +
+      (sameWorld && !isMe
+        ? ' style="background:rgba(255,255,255,0.05);"'
+        : "") +
+      ">" +
+      "<td>" +
+      nick +
+      youBadge +
+      mapBadge +
+      "</td>" +
+      '<td><span class="world-badge">' +
+      worldLabel +
+      "</span></td>" +
+      '<td class="time-cell">' +
+      formatRelTime(p.login_at) +
+      "</td>" +
+      '<td class="time-cell">' +
+      formatRelTime(p.last_active) +
+      "</td>" +
+      "<td>" +
+      dmBtn +
+      "</td>" +
+      "</tr>"
+    );
   });
-  tbody.innerHTML = rows.join('');
+  tbody.innerHTML = rows.join("");
 }
 
 function showPlayersPanel() {
   playersPanelVisible = true;
-  document.getElementById('hud-players-panel').style.display = 'block';
+  document.getElementById("hud-players-panel").style.display = "block";
   renderPlayersPanel();
   // Fetch fresh data immediately when opening, then poll every 15 s
-  fetchWithAuth('/virtual-world/online-players').then(function(res) {
-    return res.json();
-  }).then(function(data) {
-    if (Array.isArray(data)) { onlinePlayersList = data; renderPlayersPanel(); }
-  }).catch(function() {});
-  if (playersPollTimer) clearInterval(playersPollTimer);
-  playersPollTimer = setInterval(function() {
-    if (!playersPanelVisible) { clearInterval(playersPollTimer); playersPollTimer = null; return; }
-    fetchWithAuth('/virtual-world/online-players').then(function(res) {
+  fetchWithAuth("/virtual-world/online-players")
+    .then(function (res) {
       return res.json();
-    }).then(function(data) {
+    })
+    .then(function (data) {
       if (Array.isArray(data)) {
         onlinePlayersList = data;
         renderPlayersPanel();
       }
-    }).catch(function() {});
+    })
+    .catch(function () {});
+  if (playersPollTimer) clearInterval(playersPollTimer);
+  playersPollTimer = setInterval(function () {
+    if (!playersPanelVisible) {
+      clearInterval(playersPollTimer);
+      playersPollTimer = null;
+      return;
+    }
+    fetchWithAuth("/virtual-world/online-players")
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (Array.isArray(data)) {
+          onlinePlayersList = data;
+          renderPlayersPanel();
+        }
+      })
+      .catch(function () {});
   }, 15000);
 }
 
 function closePlayersPanel() {
   playersPanelVisible = false;
-  document.getElementById('hud-players-panel').style.display = 'none';
-  if (playersPollTimer) { clearInterval(playersPollTimer); playersPollTimer = null; }
+  document.getElementById("hud-players-panel").style.display = "none";
+  if (playersPollTimer) {
+    clearInterval(playersPollTimer);
+    playersPollTimer = null;
+  }
 }
 
 function togglePlayersPanel() {
@@ -2011,81 +2254,114 @@ function togglePlayersPanel() {
 }
 
 function startNickEdit() {
-  var inp = document.getElementById('nick-input');
+  var inp = document.getElementById("nick-input");
   if (inp) {
-    inp.value = playerNick || '';
-    inp.onkeydown = function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); commitNickEdit(); }
-      else if (e.key === 'Escape') { e.preventDefault(); cancelNickEdit(); }
+    inp.value = playerNick || "";
+    inp.onkeydown = function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitNickEdit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelNickEdit();
+      }
     };
   }
-  document.getElementById('nick-display').style.display = 'none';
-  document.getElementById('nick-edit-btn').style.display = 'none';
-  document.getElementById('nick-edit-row').style.display = 'inline';
-  if (inp) { inp.focus(); inp.select(); }
+  document.getElementById("nick-display").style.display = "none";
+  document.getElementById("nick-edit-btn").style.display = "none";
+  document.getElementById("nick-edit-row").style.display = "inline";
+  if (inp) {
+    inp.focus();
+    inp.select();
+  }
 }
 
 function cancelNickEdit() {
-  document.getElementById('nick-display').style.display = '';
-  document.getElementById('nick-edit-btn').style.display = '';
-  document.getElementById('nick-edit-row').style.display = 'none';
+  document.getElementById("nick-display").style.display = "";
+  document.getElementById("nick-edit-btn").style.display = "";
+  document.getElementById("nick-edit-row").style.display = "none";
 }
 
 function commitNickEdit() {
-  var inp = document.getElementById('nick-input');
+  var inp = document.getElementById("nick-input");
   if (!inp) return;
   var val = inp.value.trim().slice(0, 24);
-  if (!val) { cancelNickEdit(); return; }
-  fetchWithAuth('/virtual-world/set-nickname', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nick: val }),
-  }).then(function(res) { return res.json(); }).then(function(data) {
-    if (data && data.ok) {
-      playerNick = data.nick;
-      var display = document.getElementById('nick-display');
-      if (display) display.textContent = data.nick;
-      for (var i = 0; i < onlinePlayersList.length; i++) {
-        if (onlinePlayersList[i].player_id === playerId) {
-          onlinePlayersList[i].nick = data.nick;
-          break;
-        }
-      }
-      if (playersPanelVisible) renderPlayersPanel();
-      if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
-      if (chatPanelVisible && chatActiveTab === 'dm' && activeDmUserId) renderDMThread(activeDmUserId);
-    }
+  if (!val) {
     cancelNickEdit();
-  }).catch(function() { cancelNickEdit(); });
+    return;
+  }
+  fetchWithAuth("/virtual-world/set-nickname", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nick: val }),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.ok) {
+        playerNick = data.nick;
+        var display = document.getElementById("nick-display");
+        if (display) display.textContent = data.nick;
+        for (var i = 0; i < onlinePlayersList.length; i++) {
+          if (onlinePlayersList[i].player_id === playerId) {
+            onlinePlayersList[i].nick = data.nick;
+            break;
+          }
+        }
+        if (playersPanelVisible) renderPlayersPanel();
+        if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+        if (chatPanelVisible && chatActiveTab === "dm" && activeDmUserId)
+          renderDMThread(activeDmUserId);
+      }
+      cancelNickEdit();
+    })
+    .catch(function () {
+      cancelNickEdit();
+    });
 }
 
 // ── Chat helpers ─────────────────────────────────────────────────────────
 
 function escapeHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function formatChatTime(ts) {
   var d = new Date(ts);
-  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  return (
+    d.getHours().toString().padStart(2, "0") +
+    ":" +
+    d.getMinutes().toString().padStart(2, "0")
+  );
 }
 
 function buildMsgHtml(msg) {
   var isMe = msg.sender_id === playerId;
   // For own messages always reflect the current nick so renames apply retroactively.
-  var nick = escapeHtml(isMe
-    ? (playerNick || msg.sender_nick || playerId.slice(0, 16))
-    : (msg.sender_nick || msg.sender_id.slice(0, 16)));
+  var nick = escapeHtml(
+    isMe
+      ? playerNick || msg.sender_nick || playerId.slice(0, 16)
+      : msg.sender_nick || msg.sender_id.slice(0, 16),
+  );
   var text = escapeHtml(msg.text);
-  return '<div class="chat-msg">'
-    + '<span class="msg-nick' + (isMe ? ' is-me' : '') + '">' + nick + ':</span>'
-    + text
-    + '<span class="msg-ts">' + formatChatTime(msg.ts) + '</span>'
-    + '</div>';
+  return (
+    '<div class="chat-msg">' +
+    '<span class="msg-nick' +
+    (isMe ? " is-me" : "") +
+    '">' +
+    nick +
+    ":</span>" +
+    text +
+    '<span class="msg-ts">' +
+    formatChatTime(msg.ts) +
+    "</span>" +
+    "</div>"
+  );
 }
 
 function scrollChatToBottom(containerId) {
@@ -2096,50 +2372,57 @@ function scrollChatToBottom(containerId) {
 // ── World chat ────────────────────────────────────────────────────────────
 
 function renderWorldChat() {
-  var container = document.getElementById('world-chat-msgs');
+  var container = document.getElementById("world-chat-msgs");
   if (!container) return;
-  container.innerHTML = worldChatMessages.map(buildMsgHtml).join('');
-  scrollChatToBottom('world-chat-msgs');
+  container.innerHTML = worldChatMessages.map(buildMsgHtml).join("");
+  scrollChatToBottom("world-chat-msgs");
 }
 
 function sendWorldChatMessage() {
-  var input = document.getElementById('world-chat-input');
+  var input = document.getElementById("world-chat-input");
   if (!input) return;
   var text = input.value.trim();
   if (!text) return;
-  input.value = '';
-  fetchWithAuth('/virtual-world/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  input.value = "";
+  fetchWithAuth("/virtual-world/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: text }),
-  }).then(function(res) { return res.json(); }).then(function(data) {
-    if (data && data.ok && data.message) {
-      // Server echo will arrive via SSE; optimistically add to avoid duplication check
-      var exists = worldChatMessages.some(function(m) { return m.id === data.message.id; });
-      if (!exists) {
-        worldChatMessages.push(data.message);
-        if (chatPanelVisible && chatActiveTab === 'world') renderWorldChat();
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.ok && data.message) {
+        // Server echo will arrive via SSE; optimistically add to avoid duplication check
+        var exists = worldChatMessages.some(function (m) {
+          return m.id === data.message.id;
+        });
+        if (!exists) {
+          worldChatMessages.push(data.message);
+          if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+        }
       }
-    }
-  }).catch(function() {});
+    })
+    .catch(function () {});
 }
 
 // ── Chat panel ────────────────────────────────────────────────────────────
 
 function showChatPanel() {
   chatPanelVisible = true;
-  var el = document.getElementById('hud-chat-panel');
-  if (el) el.classList.add('visible');
+  var el = document.getElementById("hud-chat-panel");
+  if (el) el.classList.add("visible");
   unreadDmCount = 0;
   updateChatUnreadBadge();
-  if (chatActiveTab === 'world') renderWorldChat();
+  if (chatActiveTab === "world") renderWorldChat();
   else renderDMContent();
 }
 
 function closeChatPanel() {
   chatPanelVisible = false;
-  var el = document.getElementById('hud-chat-panel');
-  if (el) el.classList.remove('visible');
+  var el = document.getElementById("hud-chat-panel");
+  if (el) el.classList.remove("visible");
 }
 
 function toggleChatPanel() {
@@ -2149,37 +2432,45 @@ function toggleChatPanel() {
 
 function switchChatTab(tab) {
   chatActiveTab = tab;
-  document.getElementById('chat-tab-world').classList.toggle('active', tab === 'world');
-  document.getElementById('chat-tab-dm').classList.toggle('active', tab === 'dm');
-  document.getElementById('chat-content-world').classList.toggle('hidden', tab !== 'world');
-  document.getElementById('chat-content-dm').classList.toggle('hidden', tab !== 'dm');
-  if (tab === 'world') renderWorldChat();
+  document
+    .getElementById("chat-tab-world")
+    .classList.toggle("active", tab === "world");
+  document
+    .getElementById("chat-tab-dm")
+    .classList.toggle("active", tab === "dm");
+  document
+    .getElementById("chat-content-world")
+    .classList.toggle("hidden", tab !== "world");
+  document
+    .getElementById("chat-content-dm")
+    .classList.toggle("hidden", tab !== "dm");
+  if (tab === "world") renderWorldChat();
   else renderDMContent();
-  if (tab === 'dm') {
+  if (tab === "dm") {
     unreadDmCount = 0;
     updateChatUnreadBadge();
   }
 }
 
 function updateChatUnreadBadge() {
-  var badge = document.getElementById('chat-unread-badge');
-  var tabBadge = document.getElementById('dm-tab-badge');
+  var badge = document.getElementById("chat-unread-badge");
+  var tabBadge = document.getElementById("dm-tab-badge");
   if (!badge || !tabBadge) return;
   if (unreadDmCount > 0) {
-    badge.textContent = unreadDmCount > 9 ? '9+' : String(unreadDmCount);
-    badge.classList.add('visible');
+    badge.textContent = unreadDmCount > 9 ? "9+" : String(unreadDmCount);
+    badge.classList.add("visible");
     tabBadge.textContent = badge.textContent;
-    tabBadge.classList.add('visible');
+    tabBadge.classList.add("visible");
   } else {
-    badge.classList.remove('visible');
-    tabBadge.classList.remove('visible');
+    badge.classList.remove("visible");
+    tabBadge.classList.remove("visible");
   }
 }
 
 // Opens chat panel on DM tab and directly starts thread with a specific user.
 function openChatPanelDM(otherUserId) {
   if (!chatPanelVisible) showChatPanel();
-  if (chatActiveTab !== 'dm') switchChatTab('dm');
+  if (chatActiveTab !== "dm") switchChatTab("dm");
   openDMThread(otherUserId);
 }
 
@@ -2195,45 +2486,64 @@ function renderDMContent() {
 
 function showDMConvoList() {
   activeDmUserId = null;
-  var threadView = document.getElementById('dm-thread-view');
-  var convoList = document.getElementById('dm-convo-list');
-  if (threadView) threadView.style.display = 'none';
+  var threadView = document.getElementById("dm-thread-view");
+  var convoList = document.getElementById("dm-convo-list");
+  if (threadView) threadView.style.display = "none";
   if (!convoList) return;
-  convoList.style.display = '';
+  convoList.style.display = "";
   if (!dmIndex.length) {
-    convoList.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No conversations yet. Click 💬 DM next to a player to start one.</div>';
+    convoList.innerHTML =
+      '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No conversations yet. Click 💬 DM next to a player to start one.</div>';
     return;
   }
-  convoList.innerHTML = dmIndex.map(function(uid) {
-    // Try to get the nick from the online players list first
-    var entry = onlinePlayersList.find(function(p) { return p.player_id === uid; });
-    var nick = entry ? escapeHtml(entry.nick) : escapeHtml(uid.slice(0, 16));
-    return '<div class="dm-convo-item" data-uid="' + escapeHtml(uid) + '" onclick="openDMThread(this.dataset.uid)">'
-      + '<span class="convo-nick">' + nick + '</span>'
-      + '<span style="font-size:11px;color:#aaa;">→</span>'
-      + '</div>';
-  }).join('');
+  convoList.innerHTML = dmIndex
+    .map(function (uid) {
+      // Try to get the nick from the online players list first
+      var entry = onlinePlayersList.find(function (p) {
+        return p.player_id === uid;
+      });
+      var nick = entry ? escapeHtml(entry.nick) : escapeHtml(uid.slice(0, 16));
+      return (
+        '<div class="dm-convo-item" data-uid="' +
+        escapeHtml(uid) +
+        '" onclick="openDMThread(this.dataset.uid)">' +
+        '<span class="convo-nick">' +
+        nick +
+        "</span>" +
+        '<span style="font-size:11px;color:#aaa;">→</span>' +
+        "</div>"
+      );
+    })
+    .join("");
 }
 
 function openDMThread(otherUserId) {
   activeDmUserId = otherUserId;
-  var threadView = document.getElementById('dm-thread-view');
-  var convoList = document.getElementById('dm-convo-list');
-  if (convoList) convoList.style.display = 'none';
-  if (threadView) threadView.style.display = 'flex';
+  var threadView = document.getElementById("dm-thread-view");
+  var convoList = document.getElementById("dm-convo-list");
+  if (convoList) convoList.style.display = "none";
+  if (threadView) threadView.style.display = "flex";
   if (dmThreads[otherUserId]) {
     renderDMThread(otherUserId);
   } else {
     // Load from server
-    fetchWithAuth('/virtual-world/dm-history?with=' + encodeURIComponent(otherUserId))
-      .then(function(res) { return res.json(); })
-      .then(function(msgs) {
+    fetchWithAuth(
+      "/virtual-world/dm-history?with=" + encodeURIComponent(otherUserId),
+    )
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (msgs) {
         dmThreads[otherUserId] = Array.isArray(msgs) ? msgs : [];
-        if (!dmIndex.includes(otherUserId) && dmThreads[otherUserId].length > 0) {
+        if (
+          !dmIndex.includes(otherUserId) &&
+          dmThreads[otherUserId].length > 0
+        ) {
           dmIndex.push(otherUserId);
         }
         renderDMThread(otherUserId);
-      }).catch(function() {
+      })
+      .catch(function () {
         dmThreads[otherUserId] = [];
         renderDMThread(otherUserId);
       });
@@ -2242,41 +2552,48 @@ function openDMThread(otherUserId) {
 
 function renderDMThread(otherUserId) {
   var msgs = dmThreads[otherUserId] || [];
-  var container = document.getElementById('dm-thread-msgs');
+  var container = document.getElementById("dm-thread-msgs");
   if (!container) return;
   container.innerHTML = msgs.length
-    ? msgs.map(buildMsgHtml).join('')
+    ? msgs.map(buildMsgHtml).join("")
     : '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No messages yet.</div>';
-  scrollChatToBottom('dm-thread-msgs');
+  scrollChatToBottom("dm-thread-msgs");
 }
 
 function sendDirectMessage() {
   if (!activeDmUserId) return;
-  var input = document.getElementById('dm-chat-input');
+  var input = document.getElementById("dm-chat-input");
   if (!input) return;
   var text = input.value.trim();
   if (!text) return;
-  input.value = '';
+  input.value = "";
   var to = activeDmUserId;
-  fetchWithAuth('/virtual-world/dm', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  fetchWithAuth("/virtual-world/dm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ to: to, text: text }),
-  }).then(function(res) { return res.json(); }).then(function(data) {
-    if (data && data.ok && data.message) {
-      if (!dmThreads[to]) dmThreads[to] = [];
-      var exists = dmThreads[to].some(function(m) { return m.id === data.message.id; });
-      if (!exists) {
-        dmThreads[to].push(data.message);
-        if (!dmIndex.includes(to)) dmIndex.push(to);
-        if (activeDmUserId === to) renderDMThread(to);
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (data && data.ok && data.message) {
+        if (!dmThreads[to]) dmThreads[to] = [];
+        var exists = dmThreads[to].some(function (m) {
+          return m.id === data.message.id;
+        });
+        if (!exists) {
+          dmThreads[to].push(data.message);
+          if (!dmIndex.includes(to)) dmIndex.push(to);
+          if (activeDmUserId === to) renderDMThread(to);
+        }
       }
-    }
-  }).catch(function() {});
+    })
+    .catch(function () {});
 }
 
 function applyItemStateFromResult(result) {
-  if (!result || typeof result !== 'object') return;
+  if (!result || typeof result !== "object") return;
   if (result.inventory) {
     playerInventory = normalizeClientInventory(result.inventory);
   }
@@ -2286,7 +2603,7 @@ function applyItemStateFromResult(result) {
     for (var i = 0; i < result.items.length; i++) {
       var it = result.items[i];
       if (!it || !it.id || !it.type) continue;
-      var key = it.row + '_' + it.col;
+      var key = it.row + "_" + it.col;
       if (!next[key]) next[key] = [];
       next[key].push({ id: it.id, type: it.type });
     }
@@ -2299,27 +2616,31 @@ function applyItemStateFromResult(result) {
 }
 
 function postItemAction(payload, onSuccess) {
-  fetchWithAuth('/virtual-world/tree-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  fetchWithAuth("/virtual-world/tree-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  }).then(function(res) {
-    return res.json();
-  }).then(function(result) {
-    if (!result || !result.ok) {
-      console.log('Item action failed:', result && result.error);
-      return;
-    }
-    applyItemStateFromResult(result);
-    if (typeof onSuccess === 'function') onSuccess(result);
-  }).catch(function(err) {
-    if (err && (err.code === 'AUTH_401' || err.code === 'AUTH_STOPPED')) return;
-    console.error('Item action request failed:', err);
-  });
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      if (!result || !result.ok) {
+        console.log("Item action failed:", result && result.error);
+        return;
+      }
+      applyItemStateFromResult(result);
+      if (typeof onSuccess === "function") onSuccess(result);
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
+      console.error("Item action request failed:", err);
+    });
 }
 
 function pickItemsOnTile() {
-  postItemAction({ action: 'pick' }, function(result) {
+  postItemAction({ action: "pick" }, function (result) {
     if (result && Number(result.picked_count || 0) > 0) {
       showInventoryPanel(2500);
     }
@@ -2327,19 +2648,24 @@ function pickItemsOnTile() {
 }
 
 function dropFromSlot(slot) {
-  postItemAction({ action: 'drop', from: slot });
+  postItemAction({ action: "drop", from: slot });
 }
 
 function dropFromInventory(index) {
-  postItemAction({ action: 'drop', from: 'inventory', index: index });
+  postItemAction({ action: "drop", from: "inventory", index: index });
 }
 
 function equipToInventory(slot) {
-  postItemAction({ action: 'equip', from: slot, to: 'inventory' });
+  postItemAction({ action: "equip", from: slot, to: "inventory" });
 }
 
 function equipFromInventory(index, slot) {
-  postItemAction({ action: 'equip', from: 'inventory', index: index, to: slot });
+  postItemAction({
+    action: "equip",
+    from: "inventory",
+    index: index,
+    to: slot,
+  });
 }
 
 // ── Tile inspector (click/tap to see square contents) ─────────────────────
@@ -2350,7 +2676,10 @@ var selectedTileCol = -1;
 
 // Invisible flat plane covering the entire world grid, used only for raycasting
 var tileColliderGeo = new THREE.PlaneGeometry(COLS * TILE, ROWS * TILE);
-var tileColliderMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+var tileColliderMat = new THREE.MeshBasicMaterial({
+  visible: false,
+  side: THREE.DoubleSide,
+});
 var tileCollider = new THREE.Mesh(tileColliderGeo, tileColliderMat);
 tileCollider.rotation.x = -Math.PI / 2;
 tileCollider.position.set(mapCX, 0, mapCZ);
@@ -2372,8 +2701,8 @@ function pickTileFromEvent(clientX, clientY) {
 function isClickOnHUD(e) {
   var el = e.target;
   while (el && el !== document.body) {
-    if (el.classList && el.classList.contains('hud')) return true;
-    if (el.id === 'joystick-container') return true;
+    if (el.classList && el.classList.contains("hud")) return true;
+    if (el.id === "joystick-container") return true;
     el = el.parentElement;
   }
   return false;
@@ -2388,7 +2717,7 @@ function selectTile(row, col) {
 function closeTileDetail() {
   selectedTileRow = -1;
   selectedTileCol = -1;
-  document.getElementById('hud-tile-detail').style.display = 'none';
+  document.getElementById("hud-tile-detail").style.display = "none";
 }
 
 function refreshTileDetailIfOpen() {
@@ -2398,21 +2727,22 @@ function refreshTileDetailIfOpen() {
 
 function escHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function shortenId(id) {
-  var s = String(id || '');
-  return s.length > 18 ? s.slice(0, 16) + '\u2026' : s;
+  var s = String(id || "");
+  return s.length > 18 ? s.slice(0, 16) + "\u2026" : s;
 }
 
 function getNickForPlayer(id) {
   if (id === playerId) return playerNick || shortenId(id);
   for (var i = 0; i < onlinePlayersList.length; i++) {
-    if (onlinePlayersList[i].player_id === id) return onlinePlayersList[i].nick || shortenId(id);
+    if (onlinePlayersList[i].player_id === id)
+      return onlinePlayersList[i].nick || shortenId(id);
   }
   return shortenId(id);
 }
@@ -2421,19 +2751,22 @@ function renderTileDetailPanel() {
   var row = selectedTileRow;
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
-  var key = row + '_' + col;
+  var key = row + "_" + col;
 
-  document.getElementById('tile-detail-title').textContent = 'Square (' + col + ', ' + row + ')';
+  document.getElementById("tile-detail-title").textContent =
+    "Square (" + col + ", " + row + ")";
 
   var terrainType = MAP[row][col];
   var treeMod = dynamicTrees[key];
   var terrainLabel;
   if (terrainType === 1) {
-    terrainLabel = 'Wall';
+    terrainLabel = "Wall";
   } else if (terrainType === 2) {
-    terrainLabel = treeMod && treeMod.action === 'plant' ? 'Tree (planted)' : 'Tree';
+    terrainLabel =
+      treeMod && treeMod.action === "plant" ? "Tree (planted)" : "Tree";
   } else {
-    terrainLabel = treeMod && treeMod.action === 'cut' ? 'Ground (tree cut)' : 'Ground';
+    terrainLabel =
+      treeMod && treeMod.action === "cut" ? "Ground (tree cut)" : "Ground";
   }
 
   var tileItems = worldItemsByTile[key] || [];
@@ -2457,98 +2790,127 @@ function renderTileDetailPanel() {
     }
   }
 
-  var html = '';
+  var html = "";
 
   html += '<div class="tile-section">';
   html += '<div class="tile-section-label">Terrain</div>';
-  html += '<div class="tile-row">' + escHtml(terrainLabel) + '</div>';
-  html += '</div>';
+  html += '<div class="tile-row">' + escHtml(terrainLabel) + "</div>";
+  html += "</div>";
 
   html += '<div class="tile-section">';
-  html += '<div class="tile-section-label">Items (' + tileItems.length + ')</div>';
+  html +=
+    '<div class="tile-section-label">Items (' + tileItems.length + ")</div>";
   if (tileItems.length === 0) {
     html += '<div class="tile-empty">None</div>';
   } else {
     for (var i = 0; i < tileItems.length; i++) {
       var itm = tileItems[i];
       var label = t(itemTypeToLabelKey(itm.type), humanizeType(itm.type));
-      html += '<div class="tile-row">' + escHtml(label) + '</div>';
+      html += '<div class="tile-row">' + escHtml(label) + "</div>";
     }
   }
-  html += '</div>';
+  html += "</div>";
 
   html += '<div class="tile-section">';
-  html += '<div class="tile-section-label">People (' + playersHere.length + ')</div>';
+  html +=
+    '<div class="tile-section-label">People (' + playersHere.length + ")</div>";
   if (playersHere.length === 0) {
     html += '<div class="tile-empty">None</div>';
   } else {
     for (var j = 0; j < playersHere.length; j++) {
       var pp = playersHere[j];
       if (pp.isMe) {
-        html += '<div class="tile-row tile-you">You (' + escHtml(getNickForPlayer(pp.id)) + ')</div>';
+        html +=
+          '<div class="tile-row tile-you">You (' +
+          escHtml(getNickForPlayer(pp.id)) +
+          ")</div>";
       } else {
-        html += '<div class="tile-row">' + escHtml(getNickForPlayer(pp.id)) + '</div>';
+        html +=
+          '<div class="tile-row">' +
+          escHtml(getNickForPlayer(pp.id)) +
+          "</div>";
       }
     }
   }
-  html += '</div>';
+  html += "</div>";
 
   html += '<div class="tile-section">';
-  html += '<div class="tile-section-label">NPCs (' + npcsHere.length + ')</div>';
+  html +=
+    '<div class="tile-section-label">NPCs (' + npcsHere.length + ")</div>";
   if (npcsHere.length === 0) {
     html += '<div class="tile-empty">None</div>';
   } else {
     for (var k = 0; k < npcsHere.length; k++) {
-      html += '<div class="tile-row">' + escHtml(shortenId(npcsHere[k])) + '</div>';
+      html +=
+        '<div class="tile-row">' + escHtml(shortenId(npcsHere[k])) + "</div>";
     }
   }
-  html += '</div>';
+  html += "</div>";
 
-  document.getElementById('tile-detail-body').innerHTML = html;
-  document.getElementById('hud-tile-detail').style.display = 'block';
+  document.getElementById("tile-detail-body").innerHTML = html;
+  document.getElementById("hud-tile-detail").style.display = "block";
 }
 
 // ── Input ────────────────────────────────────────────────────────────────
 var keys = {};
-var MOVE_KEYS = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'];
+var MOVE_KEYS = [
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "w",
+  "a",
+  "s",
+  "d",
+  "W",
+  "A",
+  "S",
+  "D",
+];
 
 function isTypingTarget(el) {
   if (!el) return false;
   var tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
 // Clear held movement keys when an input gains focus to prevent stuck movement
-document.addEventListener('focusin', function(e) {
+document.addEventListener("focusin", function (e) {
   if (isTypingTarget(e.target)) {
-    MOVE_KEYS.forEach(function(k) { keys[k] = false; });
+    MOVE_KEYS.forEach(function (k) {
+      keys[k] = false;
+    });
   }
 });
 
-document.addEventListener('keydown', function(e) {
+document.addEventListener("keydown", function (e) {
   if (isTypingTarget(document.activeElement)) return;
   keys[e.key] = true;
   if (MOVE_KEYS.indexOf(e.key) !== -1) e.preventDefault();
-  if (e.key === 'i' || e.key === 'I') {
+  if (e.key === "i" || e.key === "I") {
     e.preventDefault();
     toggleInventoryPanel();
   }
 });
-document.addEventListener('keyup', function(e) {
+document.addEventListener("keyup", function (e) {
   if (isTypingTarget(document.activeElement)) return;
   keys[e.key] = false;
 });
 
 // ── Camera orbit controls (drag + scroll) ────────────────────────────────
 var isDragging = false;
-var lastMouseX = 0, lastMouseY = 0;
-var mouseClickStartX = 0, mouseClickStartY = 0;
-var lastTouchX = 0, lastTouchY = 0;
+var lastMouseX = 0,
+  lastMouseY = 0;
+var mouseClickStartX = 0,
+  mouseClickStartY = 0;
+var lastTouchX = 0,
+  lastTouchY = 0;
 var lastTouchDist = 0;
-var touchTapStartX = 0, touchTapStartY = 0;
+var touchTapStartX = 0,
+  touchTapStartY = 0;
 
 // Mouse controls (desktop)
-document.addEventListener('mousedown', function(e) {
+document.addEventListener("mousedown", function (e) {
   if (e.button === 0) {
     isDragging = true;
     lastMouseX = e.clientX;
@@ -2557,7 +2919,7 @@ document.addEventListener('mousedown', function(e) {
     mouseClickStartY = e.clientY;
   }
 });
-document.addEventListener('mousemove', function(e) {
+document.addEventListener("mousemove", function (e) {
   if (!isDragging) return;
   var dx = e.clientX - lastMouseX;
   var dy = e.clientY - lastMouseY;
@@ -2566,7 +2928,7 @@ document.addEventListener('mousemove', function(e) {
   camTheta -= dx * 0.005;
   camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
 });
-document.addEventListener('mouseup', function(e) {
+document.addEventListener("mouseup", function (e) {
   if (isDragging && e.button === 0 && !isClickOnHUD(e)) {
     var ddx = e.clientX - mouseClickStartX;
     var ddy = e.clientY - mouseClickStartY;
@@ -2577,20 +2939,30 @@ document.addEventListener('mouseup', function(e) {
   }
   isDragging = false;
 });
-document.addEventListener('mouseleave', function() { isDragging = false; });
+document.addEventListener("mouseleave", function () {
+  isDragging = false;
+});
 
-document.getElementById('hud-inventory-panel').addEventListener('wheel', function(e) {
-  e.stopPropagation();
-}, { passive: true });
+document.getElementById("hud-inventory-panel").addEventListener(
+  "wheel",
+  function (e) {
+    e.stopPropagation();
+  },
+  { passive: true },
+);
 
-document.addEventListener('wheel', function(e) {
-  e.preventDefault();
-  camR = Math.max(10, Math.min(150, camR + e.deltaY * 0.05));
-}, { passive: false });
+document.addEventListener(
+  "wheel",
+  function (e) {
+    e.preventDefault();
+    camR = Math.max(10, Math.min(150, camR + e.deltaY * 0.05));
+  },
+  { passive: false },
+);
 
 // ── Joystick element references (must be defined before touch handlers) ──
-var joystickBase = document.getElementById('joystick-base');
-var joystickStick = document.getElementById('joystick-stick');
+var joystickBase = document.getElementById("joystick-base");
+var joystickStick = document.getElementById("joystick-stick");
 var joystickActive = false;
 var joystickMouseActive = false; // separate flag for mouse vs touch
 var joystickDirection = { x: 0, y: 0 }; // normalized direction
@@ -2610,103 +2982,139 @@ function isTouchOnJoystick(touch) {
 }
 
 function isTouchOnButtons(touch) {
-  var treeActionsDiv = document.getElementById('hud-tree-actions');
+  var treeActionsDiv = document.getElementById("hud-tree-actions");
   if (treeActionsDiv) {
     var rect = treeActionsDiv.getBoundingClientRect();
-    if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
-        touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+    if (
+      touch.clientX >= rect.left &&
+      touch.clientX <= rect.right &&
+      touch.clientY >= rect.top &&
+      touch.clientY <= rect.bottom
+    ) {
       return true;
     }
   }
-  var inventoryDiv = document.getElementById('hud-inventory-panel');
-  if (inventoryDiv && inventoryDiv.style.display !== 'none') {
+  var inventoryDiv = document.getElementById("hud-inventory-panel");
+  if (inventoryDiv && inventoryDiv.style.display !== "none") {
     var invRect = inventoryDiv.getBoundingClientRect();
-    if (touch.clientX >= invRect.left && touch.clientX <= invRect.right &&
-        touch.clientY >= invRect.top && touch.clientY <= invRect.bottom) {
+    if (
+      touch.clientX >= invRect.left &&
+      touch.clientX <= invRect.right &&
+      touch.clientY >= invRect.top &&
+      touch.clientY <= invRect.bottom
+    ) {
       return true;
     }
   }
-  var tileDetailDiv = document.getElementById('hud-tile-detail');
-  if (tileDetailDiv && tileDetailDiv.style.display !== 'none') {
+  var tileDetailDiv = document.getElementById("hud-tile-detail");
+  if (tileDetailDiv && tileDetailDiv.style.display !== "none") {
     var tileRect = tileDetailDiv.getBoundingClientRect();
-    if (touch.clientX >= tileRect.left && touch.clientX <= tileRect.right &&
-        touch.clientY >= tileRect.top && touch.clientY <= tileRect.bottom) {
+    if (
+      touch.clientX >= tileRect.left &&
+      touch.clientX <= tileRect.right &&
+      touch.clientY >= tileRect.top &&
+      touch.clientY <= tileRect.bottom
+    ) {
       return true;
     }
   }
-  var usePickerDiv = document.getElementById('hud-use-picker');
-  if (usePickerDiv && usePickerDiv.style.display !== 'none') {
+  var usePickerDiv = document.getElementById("hud-use-picker");
+  if (usePickerDiv && usePickerDiv.style.display !== "none") {
     var usePickerRect = usePickerDiv.getBoundingClientRect();
-    if (touch.clientX >= usePickerRect.left && touch.clientX <= usePickerRect.right &&
-        touch.clientY >= usePickerRect.top && touch.clientY <= usePickerRect.bottom) {
+    if (
+      touch.clientX >= usePickerRect.left &&
+      touch.clientX <= usePickerRect.right &&
+      touch.clientY >= usePickerRect.top &&
+      touch.clientY <= usePickerRect.bottom
+    ) {
       return true;
     }
   }
   return false;
 }
 
-document.addEventListener('touchstart', function(e) {
-  // Ignore if touching the joystick or buttons
-  if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0]) && !isTouchOnButtons(e.touches[0])) {
-    e.preventDefault();
-    isTouchRotating = true;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    touchTapStartX = e.touches[0].clientX;
-    touchTapStartY = e.touches[0].clientY;
-  } else if (e.touches.length === 2) {
-    e.preventDefault();
-    // Pinch to zoom
-    isTouchRotating = false;
-    var dx = e.touches[1].clientX - e.touches[0].clientX;
-    var dy = e.touches[1].clientY - e.touches[0].clientY;
-    lastTouchDist = Math.sqrt(dx * dx + dy * dy);
-  }
-}, { passive: false });
-
-document.addEventListener('touchmove', function(e) {
-  if (e.touches.length === 1 && isTouchRotating) {
-    e.preventDefault();
-    // Single finger drag for camera rotation
-    var dx = e.touches[0].clientX - lastTouchX;
-    var dy = e.touches[0].clientY - lastTouchY;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    camTheta -= dx * 0.005;
-    camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
-  } else if (e.touches.length === 2) {
-    e.preventDefault();
-    // Pinch to zoom
-    var dx = e.touches[1].clientX - e.touches[0].clientX;
-    var dy = e.touches[1].clientY - e.touches[0].clientY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    var delta = lastTouchDist - dist;
-    lastTouchDist = dist;
-    camR = Math.max(10, Math.min(150, camR + delta * 0.2));
-  }
-}, { passive: false });
-
-document.addEventListener('touchend', function(e) {
-  if (e.touches.length === 0) {
-    if (isTouchRotating && e.changedTouches.length > 0) {
-      var ct = e.changedTouches[0];
-      var tdx = ct.clientX - touchTapStartX;
-      var tdy = ct.clientY - touchTapStartY;
-      if (Math.sqrt(tdx * tdx + tdy * tdy) < 10) {
-        var tile = pickTileFromEvent(ct.clientX, ct.clientY);
-        if (tile) selectTile(tile.row, tile.col);
-      }
+document.addEventListener(
+  "touchstart",
+  function (e) {
+    // Ignore if touching the joystick or buttons
+    if (
+      e.touches.length === 1 &&
+      !isTouchOnJoystick(e.touches[0]) &&
+      !isTouchOnButtons(e.touches[0])
+    ) {
+      e.preventDefault();
+      isTouchRotating = true;
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+      touchTapStartX = e.touches[0].clientX;
+      touchTapStartY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      e.preventDefault();
+      // Pinch to zoom
+      isTouchRotating = false;
+      var dx = e.touches[1].clientX - e.touches[0].clientX;
+      var dy = e.touches[1].clientY - e.touches[0].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
     }
-    isTouchRotating = false;
-  } else if (e.touches.length === 1 && !isTouchOnJoystick(e.touches[0]) && !isTouchOnButtons(e.touches[0])) {
-    // Continuing with one finger after lifting second
-    isTouchRotating = true;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    touchTapStartX = e.touches[0].clientX;
-    touchTapStartY = e.touches[0].clientY;
-  }
-}, { passive: false });
+  },
+  { passive: false },
+);
+
+document.addEventListener(
+  "touchmove",
+  function (e) {
+    if (e.touches.length === 1 && isTouchRotating) {
+      e.preventDefault();
+      // Single finger drag for camera rotation
+      var dx = e.touches[0].clientX - lastTouchX;
+      var dy = e.touches[0].clientY - lastTouchY;
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+      camTheta -= dx * 0.005;
+      camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
+    } else if (e.touches.length === 2) {
+      e.preventDefault();
+      // Pinch to zoom
+      var dx = e.touches[1].clientX - e.touches[0].clientX;
+      var dy = e.touches[1].clientY - e.touches[0].clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var delta = lastTouchDist - dist;
+      lastTouchDist = dist;
+      camR = Math.max(10, Math.min(150, camR + delta * 0.2));
+    }
+  },
+  { passive: false },
+);
+
+document.addEventListener(
+  "touchend",
+  function (e) {
+    if (e.touches.length === 0) {
+      if (isTouchRotating && e.changedTouches.length > 0) {
+        var ct = e.changedTouches[0];
+        var tdx = ct.clientX - touchTapStartX;
+        var tdy = ct.clientY - touchTapStartY;
+        if (Math.sqrt(tdx * tdx + tdy * tdy) < 10) {
+          var tile = pickTileFromEvent(ct.clientX, ct.clientY);
+          if (tile) selectTile(tile.row, tile.col);
+        }
+      }
+      isTouchRotating = false;
+    } else if (
+      e.touches.length === 1 &&
+      !isTouchOnJoystick(e.touches[0]) &&
+      !isTouchOnButtons(e.touches[0])
+    ) {
+      // Continuing with one finger after lifting second
+      isTouchRotating = true;
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+      touchTapStartX = e.touches[0].clientX;
+      touchTapStartY = e.touches[0].clientY;
+    }
+  },
+  { passive: false },
+);
 
 // ── Joystick control functions ───────────────────────────────────────────
 function updateJoystick(touchX, touchY) {
@@ -2723,10 +3131,12 @@ function updateJoystick(touchX, touchY) {
     dy = (dy / distance) * maxDistance;
   }
 
-  joystickStick.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
-  
+  joystickStick.style.transform =
+    "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px))";
+
   // Normalize direction
-  if (distance > 10) { // dead zone
+  if (distance > 10) {
+    // dead zone
     joystickDirection.x = dx / maxDistance;
     joystickDirection.y = dy / maxDistance;
   } else {
@@ -2736,59 +3146,75 @@ function updateJoystick(touchX, touchY) {
 }
 
 function resetJoystick() {
-  joystickStick.style.transform = 'translate(-50%, -50%)';
+  joystickStick.style.transform = "translate(-50%, -50%)";
   joystickDirection.x = 0;
   joystickDirection.y = 0;
   joystickActive = false;
-  joystickStick.classList.remove('active');
+  joystickStick.classList.remove("active");
 }
 
-joystickBase.addEventListener('touchstart', function(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  joystickActive = true;
-  joystickStick.classList.add('active');
-  updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
-}, { passive: false });
-
-joystickBase.addEventListener('touchmove', function(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  if (joystickActive) {
+joystickBase.addEventListener(
+  "touchstart",
+  function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    joystickActive = true;
+    joystickStick.classList.add("active");
     updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
-  }
-}, { passive: false });
+  },
+  { passive: false },
+);
 
-joystickBase.addEventListener('touchend', function(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  resetJoystick();
-}, { passive: false });
+joystickBase.addEventListener(
+  "touchmove",
+  function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (joystickActive) {
+      updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  },
+  { passive: false },
+);
 
-joystickBase.addEventListener('touchcancel', function(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  resetJoystick();
-}, { passive: false });
+joystickBase.addEventListener(
+  "touchend",
+  function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    resetJoystick();
+  },
+  { passive: false },
+);
+
+joystickBase.addEventListener(
+  "touchcancel",
+  function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    resetJoystick();
+  },
+  { passive: false },
+);
 
 // Mouse event handlers for desktop
-joystickBase.addEventListener('mousedown', function(e) {
+joystickBase.addEventListener("mousedown", function (e) {
   e.preventDefault();
   e.stopPropagation();
   joystickActive = true;
   joystickMouseActive = true;
-  joystickStick.classList.add('active');
+  joystickStick.classList.add("active");
   updateJoystick(e.clientX, e.clientY);
 });
 
-document.addEventListener('mousemove', function(e) {
+document.addEventListener("mousemove", function (e) {
   if (joystickMouseActive) {
     e.preventDefault();
     updateJoystick(e.clientX, e.clientY);
   }
 });
 
-document.addEventListener('mouseup', function(e) {
+document.addEventListener("mouseup", function (e) {
   if (joystickMouseActive) {
     e.preventDefault();
     joystickMouseActive = false;
@@ -2809,20 +3235,25 @@ function animate() {
   moveTimer -= dt;
   if (moveTimer <= 0) {
     var moved = false;
-    
+
     // Check joystick input first (for touch devices)
-    if (joystickActive && (Math.abs(joystickDirection.x) > 0.15 || Math.abs(joystickDirection.y) > 0.15)) {
+    if (
+      joystickActive &&
+      (Math.abs(joystickDirection.x) > 0.15 ||
+        Math.abs(joystickDirection.y) > 0.15)
+    ) {
       moved = tryMoveCameraRelative(joystickDirection.x, -joystickDirection.y);
     }
     // Fallback to keyboard input (camera-relative)
     else {
       var inputX = 0;
       var inputY = 0;
-      if (keys['ArrowUp'] || keys['w'] || keys['W']) inputY += 1;
-      if (keys['ArrowDown'] || keys['s'] || keys['S']) inputY -= 1;
-      if (keys['ArrowLeft'] || keys['a'] || keys['A']) inputX -= 1;
-      if (keys['ArrowRight'] || keys['d'] || keys['D']) inputX += 1;
-      if (inputX !== 0 || inputY !== 0) moved = tryMoveCameraRelative(inputX, inputY);
+      if (keys["ArrowUp"] || keys["w"] || keys["W"]) inputY += 1;
+      if (keys["ArrowDown"] || keys["s"] || keys["S"]) inputY -= 1;
+      if (keys["ArrowLeft"] || keys["a"] || keys["A"]) inputX -= 1;
+      if (keys["ArrowRight"] || keys["d"] || keys["D"]) inputX += 1;
+      if (inputX !== 0 || inputY !== 0)
+        moved = tryMoveCameraRelative(inputX, inputY);
       else {
         lastMoveIntentKey = null;
         lastMoveAxis = null;
@@ -2833,12 +3264,14 @@ function animate() {
   }
 
   // Smooth lerp toward target position
-  var lerp = 1 - Math.exp(-15 * dt / 1000);
+  var lerp = 1 - Math.exp((-15 * dt) / 1000);
   avatar.position.x += (targetX - avatar.position.x) * lerp;
   avatar.position.z += (targetZ - avatar.position.z) * lerp;
 
   // Walking bob
-  var dist = Math.abs(avatar.position.x - targetX) + Math.abs(avatar.position.z - targetZ);
+  var dist =
+    Math.abs(avatar.position.x - targetX) +
+    Math.abs(avatar.position.z - targetZ);
   if (dist > 0.05) {
     walkTime += dt;
     avatar.position.y = Math.abs(Math.sin(walkTime * 0.012)) * 0.1;
@@ -2885,19 +3318,19 @@ function animate() {
   var angle = avatar.rotation.y;
   while (angle > Math.PI) angle -= 2 * Math.PI;
   while (angle < -Math.PI) angle += 2 * Math.PI;
-  
+
   var targetRow = avatarRow;
   var targetCol = avatarCol;
   if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
     targetRow = avatarRow + 1; // South
-  } else if (angle >= Math.PI / 4 && angle < 3 * Math.PI / 4) {
+  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
     targetCol = avatarCol + 1; // East
-  } else if (angle >= 3 * Math.PI / 4 || angle < -3 * Math.PI / 4) {
+  } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
     targetRow = avatarRow - 1; // North
   } else {
     targetCol = avatarCol - 1; // West
   }
-  
+
   targetIndicator.position.x = tileX(targetCol);
   targetIndicator.position.z = tileZ(targetRow);
 
@@ -2909,7 +3342,7 @@ animate();
 initMultiplayer();
 
 // ── Resize ───────────────────────────────────────────────────────────────
-window.addEventListener('resize', function() {
+window.addEventListener("resize", function () {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);

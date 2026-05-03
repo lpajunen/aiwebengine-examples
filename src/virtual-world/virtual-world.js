@@ -2853,17 +2853,26 @@ function init() {
   try {
     routeRegistry.registerAssetRoute("/virtual-world", "welcome.html");
   } catch (e) {
-    vwLog("asset route registration skipped", { path: "/virtual-world", error: String(e) });
+    vwLog("asset route registration skipped", {
+      path: "/virtual-world",
+      error: String(e),
+    });
   }
   try {
     routeRegistry.registerAssetRoute("/virtual-world/styles.css", "styles.css");
   } catch (e) {
-    vwLog("asset route registration skipped", { path: "/virtual-world/styles.css", error: String(e) });
+    vwLog("asset route registration skipped", {
+      path: "/virtual-world/styles.css",
+      error: String(e),
+    });
   }
   try {
     routeRegistry.registerAssetRoute("/virtual-world/client.js", "client.js");
   } catch (e) {
-    vwLog("asset route registration skipped", { path: "/virtual-world/client.js", error: String(e) });
+    vwLog("asset route registration skipped", {
+      path: "/virtual-world/client.js",
+      error: String(e),
+    });
   }
   safeRegisterRoute("/virtual-world/play", "getVirtualWorldPage", "GET", {
     summary: "Virtual World (Play)",

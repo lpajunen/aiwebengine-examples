@@ -839,7 +839,12 @@ function savePlayerInventory(userId, inventory) {
  * @returns {string}
  */
 function loadPlayerNick(userId) {
-  return sharedStorage.getItem("vworld_nick:" + userId) || "";
+  var row = querySingleWorldRow(
+    VWORLD_PLAYER_NICK_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
+  if (!row || typeof row.nick !== "string") return "";
+  return row.nick;
 }
 
 /**
@@ -847,7 +852,11 @@ function loadPlayerNick(userId) {
  * @param {string} nick
  */
 function savePlayerNick(userId, nick) {
-  sharedStorage.setItem("vworld_nick:" + userId, nick);
+  upsertWorldRow(VWORLD_PLAYER_NICK_TABLE, ["user_id"], {
+    user_id: String(userId),
+    nick: String(nick || ""),
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  });
 }
 
 /**
@@ -967,6 +976,7 @@ var WORLD_CHAT_MAX = 100;
 var VWORLD_CHAT_TABLE = "vworld_chat_messages";
 var VWORLD_DM_TABLE = "vworld_direct_messages";
 var VWORLD_DM_INDEX_TABLE = "vworld_dm_index";
+var VWORLD_PLAYER_NICK_TABLE = "vworld_player_nicks";
 var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
 var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
 var VWORLD_PLAYER_INVENTORY_TABLE = "vworld_player_inventory";
@@ -1234,6 +1244,46 @@ function querySingleWorldRow(tableName, filters) {
 }
 
 function ensureWorldDatabaseSchema() {
+  reportWorldSchemaResult(
+    "createTable",
+    VWORLD_PLAYER_NICK_TABLE,
+    parseWorldDbResult(database.createTable(VWORLD_PLAYER_NICK_TABLE)),
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_PLAYER_NICK_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_PLAYER_NICK_TABLE, "user_id", false),
+    ),
+    "user_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_PLAYER_NICK_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_PLAYER_NICK_TABLE, "nick", false),
+    ),
+    "nick",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_PLAYER_NICK_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(VWORLD_PLAYER_NICK_TABLE, "updated_ts", false),
+    ),
+    "updated_ts",
+  );
+  reportWorldSchemaResult(
+    "addUniqueIndex",
+    VWORLD_PLAYER_NICK_TABLE,
+    parseWorldDbResult(
+      database.addUniqueIndex(
+        VWORLD_PLAYER_NICK_TABLE,
+        JSON.stringify(["user_id"]),
+      ),
+    ),
+  );
+
   reportWorldSchemaResult(
     "createTable",
     VWORLD_PLAYER_WORLD_TABLE,

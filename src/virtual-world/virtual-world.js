@@ -694,29 +694,425 @@ function buildOnlinePlayersSnapshot() {
 // ── World chat ────────────────────────────────────────────────────────────────
 
 var WORLD_CHAT_MAX = 100;
+var VWORLD_CHAT_TABLE = "vworld_chat_messages";
+var VWORLD_DM_TABLE = "vworld_direct_messages";
+var VWORLD_DM_INDEX_TABLE = "vworld_dm_index";
+
+/**
+ * @param {string} raw
+ * @returns {*}
+ */
+function parseChatDbResult(raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    vwLog("chat db parse failed", { error: String(e) });
+    return null;
+  }
+}
+
+/**
+ * @param {number} tsMs
+ * @returns {number}
+ */
+function toStoredChatTimestamp(tsMs) {
+  var numeric = Number(tsMs || 0);
+  if (!isFinite(numeric) || numeric <= 0) return Math.floor(Date.now() / 1000);
+  if (numeric >= 1000000000000) return Math.floor(numeric / 1000);
+  return Math.floor(numeric);
+}
+
+/**
+ * @param {*} storedTs
+ * @returns {number}
+ */
+function fromStoredChatTimestamp(storedTs) {
+  var numeric = Number(storedTs || 0);
+  if (!isFinite(numeric) || numeric <= 0) return 0;
+  if (numeric < 1000000000000) return numeric * 1000;
+  return numeric;
+}
+
+/**
+ * @param {*} result
+ * @returns {boolean}
+ */
+function isBenignChatSchemaResult(result) {
+  if (!result || !result.error) return true;
+  var msg = String(result.error || "").toLowerCase();
+  return (
+    msg.indexOf("already exists") !== -1 || msg.indexOf("duplicate") !== -1
+  );
+}
+
+/**
+ * @param {string} op
+ * @param {string} tableName
+ * @param {*} result
+ * @param {string} [columnName]
+ */
+function reportChatSchemaResult(op, tableName, result, columnName) {
+  if (isBenignChatSchemaResult(result)) return;
+  vwLog("chat schema setup failed", {
+    op: op,
+    table: tableName,
+    column: columnName || "",
+    error: String(result && result.error ? result.error : "unknown"),
+  });
+}
+
+function ensureChatDatabaseSchema() {
+  reportChatSchemaResult(
+    "createTable",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(database.createTable(VWORLD_CHAT_TABLE)),
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_CHAT_TABLE, "message_id", false),
+    ),
+    "message_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_CHAT_TABLE, "world_id", false),
+    ),
+    "world_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_CHAT_TABLE, "sender_id", false),
+    ),
+    "sender_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_CHAT_TABLE, "sender_nick", false),
+    ),
+    "sender_nick",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(database.addTextColumn(VWORLD_CHAT_TABLE, "text", false)),
+    "text",
+  );
+  reportChatSchemaResult(
+    "addIntegerColumn",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addIntegerColumn(VWORLD_CHAT_TABLE, "ts", false),
+    ),
+    "ts",
+  );
+  reportChatSchemaResult(
+    "addUniqueIndex",
+    VWORLD_CHAT_TABLE,
+    parseChatDbResult(
+      database.addUniqueIndex(
+        VWORLD_CHAT_TABLE,
+        JSON.stringify(["message_id"]),
+      ),
+    ),
+  );
+
+  reportChatSchemaResult(
+    "createTable",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(database.createTable(VWORLD_DM_TABLE)),
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_TABLE, "message_id", false),
+    ),
+    "message_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_TABLE, "conversation_key", false),
+    ),
+    "conversation_key",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_TABLE, "sender_id", false),
+    ),
+    "sender_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_TABLE, "sender_nick", false),
+    ),
+    "sender_nick",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_TABLE, "recipient_id", false),
+    ),
+    "recipient_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(database.addTextColumn(VWORLD_DM_TABLE, "text", false)),
+    "text",
+  );
+  reportChatSchemaResult(
+    "addIntegerColumn",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(database.addIntegerColumn(VWORLD_DM_TABLE, "ts", false)),
+    "ts",
+  );
+  reportChatSchemaResult(
+    "addUniqueIndex",
+    VWORLD_DM_TABLE,
+    parseChatDbResult(
+      database.addUniqueIndex(VWORLD_DM_TABLE, JSON.stringify(["message_id"])),
+    ),
+  );
+
+  reportChatSchemaResult(
+    "createTable",
+    VWORLD_DM_INDEX_TABLE,
+    parseChatDbResult(database.createTable(VWORLD_DM_INDEX_TABLE)),
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_INDEX_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_INDEX_TABLE, "user_id", false),
+    ),
+    "user_id",
+  );
+  reportChatSchemaResult(
+    "addTextColumn",
+    VWORLD_DM_INDEX_TABLE,
+    parseChatDbResult(
+      database.addTextColumn(VWORLD_DM_INDEX_TABLE, "other_user_id", false),
+    ),
+    "other_user_id",
+  );
+  reportChatSchemaResult(
+    "addIntegerColumn",
+    VWORLD_DM_INDEX_TABLE,
+    parseChatDbResult(
+      database.addIntegerColumn(VWORLD_DM_INDEX_TABLE, "last_ts", false),
+    ),
+    "last_ts",
+  );
+  reportChatSchemaResult(
+    "addUniqueIndex",
+    VWORLD_DM_INDEX_TABLE,
+    parseChatDbResult(
+      database.addUniqueIndex(
+        VWORLD_DM_INDEX_TABLE,
+        JSON.stringify(["user_id", "other_user_id"]),
+      ),
+    ),
+  );
+}
+
+/**
+ * @param {string} tableName
+ * @param {string} filters
+ * @param {number} limit
+ * @param {string} orderBy
+ * @param {"asc" | "desc"} orderDir
+ * @returns {any[]}
+ */
+function queryChatRows(tableName, filters, limit, orderBy, orderDir) {
+  var result = parseChatDbResult(
+    database.query(tableName, filters, limit, orderBy, orderDir),
+  );
+  if (!Array.isArray(result)) {
+    if (result && result.error) {
+      vwLog("chat db query failed", {
+        table: tableName,
+        filters: filters || "",
+        error: String(result.error),
+      });
+    }
+    return [];
+  }
+  return result;
+}
+
+/**
+ * @param {string} tableName
+ * @param {*} data
+ * @returns {*}
+ */
+function insertChatRow(tableName, data) {
+  var result = parseChatDbResult(
+    database.insert(tableName, JSON.stringify(data)),
+  );
+  if (result && result.error) {
+    vwLog("chat db insert failed", {
+      table: tableName,
+      error: String(result.error),
+    });
+    return null;
+  }
+  return result;
+}
+
+/**
+ * @param {string} userId
+ * @param {string} otherUserId
+ * @param {number} ts
+ */
+function upsertDMIndexEntry(userId, otherUserId, ts) {
+  var result = parseChatDbResult(
+    database.upsert(
+      VWORLD_DM_INDEX_TABLE,
+      JSON.stringify(["user_id", "other_user_id"]),
+      JSON.stringify({
+        user_id: userId,
+        other_user_id: otherUserId,
+        last_ts: toStoredChatTimestamp(ts),
+      }),
+    ),
+  );
+  if (result && result.error) {
+    vwLog("chat db upsert failed", {
+      table: VWORLD_DM_INDEX_TABLE,
+      error: String(result.error),
+    });
+  }
+}
+
+/**
+ * @param {string} tableName
+ * @param {string} filters
+ */
+function deleteChatRowsWhere(tableName, filters) {
+  var result = parseChatDbResult(database.deleteWhere(tableName, filters));
+  if (result && result.error) {
+    vwLog("chat db deleteWhere failed", {
+      table: tableName,
+      error: String(result.error),
+    });
+  }
+}
+
+/**
+ * @param {string} tableName
+ * @param {string} orderField
+ * @param {number} maxCount
+ * @param {string} filters
+ */
+function pruneChatRows(tableName, orderField, maxCount, filters) {
+  var rows = queryChatRows(tableName, filters, 1000, orderField, "desc");
+  if (rows.length <= maxCount) return;
+  for (var i = maxCount; i < rows.length; i++) {
+    if (!isFinite(Number(rows[i] && rows[i].id))) continue;
+    var result = parseChatDbResult(
+      database.delete(tableName, Number(rows[i].id)),
+    );
+    if (result && result.error) {
+      vwLog("chat db prune delete failed", {
+        table: tableName,
+        id: Number(rows[i].id),
+        error: String(result.error),
+      });
+    }
+  }
+}
+
+/**
+ * @param {any[]} rows
+ * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
+ */
+function normalizeWorldChatRows(rows) {
+  return rows
+    .filter(function (/** @type {any} */ row) {
+      return row && typeof row.message_id === "string";
+    })
+    .map(function (/** @type {any} */ row) {
+      return {
+        id: String(row.message_id),
+        sender_id: String(row.sender_id || ""),
+        sender_nick: String(row.sender_nick || ""),
+        text: String(row.text || ""),
+        ts: fromStoredChatTimestamp(row.ts),
+      };
+    });
+}
+
+/**
+ * @param {any[]} rows
+ * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
+ */
+function normalizeDMRows(rows) {
+  return rows
+    .filter(function (/** @type {any} */ row) {
+      return row && typeof row.message_id === "string";
+    })
+    .map(function (/** @type {any} */ row) {
+      return {
+        id: String(row.message_id),
+        sender_id: String(row.sender_id || ""),
+        sender_nick: String(row.sender_nick || ""),
+        recipient_id: String(row.recipient_id || ""),
+        text: String(row.text || ""),
+        ts: fromStoredChatTimestamp(row.ts),
+      };
+    });
+}
 
 /**
  * @param {string} worldId
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
  */
 function loadWorldChat(worldId) {
-  var raw = sharedStorage.getItem("vworld_chat:" + worldId);
-  if (!raw) return [];
-  try {
-    var msgs = JSON.parse(raw);
-    return Array.isArray(msgs) ? msgs : [];
-  } catch (e) {
-    return [];
-  }
+  var rows = queryChatRows(
+    VWORLD_CHAT_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    WORLD_CHAT_MAX,
+    "ts",
+    "desc",
+  );
+  return normalizeWorldChatRows(rows).reverse();
 }
 
 /**
  * @param {string} worldId
- * @param {Array<any>} msgs
+ * @param {{id:string,sender_id:string,sender_nick:string,text:string,ts:number}} msg
  */
-function saveWorldChat(worldId, msgs) {
-  var capped = msgs.slice(-WORLD_CHAT_MAX);
-  sharedStorage.setItem("vworld_chat:" + worldId, JSON.stringify(capped));
+function appendWorldChatMessage(worldId, msg) {
+  insertChatRow(VWORLD_CHAT_TABLE, {
+    message_id: String(msg.id),
+    world_id: String(worldId),
+    sender_id: String(msg.sender_id || ""),
+    sender_nick: String(msg.sender_nick || ""),
+    text: String(msg.text || ""),
+    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
+  });
+  pruneChatRows(
+    VWORLD_CHAT_TABLE,
+    "ts",
+    WORLD_CHAT_MAX,
+    JSON.stringify({ world_id: String(worldId) }),
+  );
 }
 
 // ── Direct messages ───────────────────────────────────────────────────────────
@@ -740,26 +1136,37 @@ function dmConversationKey(a, b) {
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
  */
 function loadDMHistory(a, b) {
-  var raw = sharedStorage.getItem("vworld_dm:" + dmConversationKey(a, b));
-  if (!raw) return [];
-  try {
-    var msgs = JSON.parse(raw);
-    return Array.isArray(msgs) ? msgs : [];
-  } catch (e) {
-    return [];
-  }
+  var rows = queryChatRows(
+    VWORLD_DM_TABLE,
+    JSON.stringify({ conversation_key: dmConversationKey(a, b) }),
+    DM_MAX,
+    "ts",
+    "desc",
+  );
+  return normalizeDMRows(rows).reverse();
 }
 
 /**
  * @param {string} a
  * @param {string} b
- * @param {Array<any>} msgs
+ * @param {{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}} msg
  */
-function saveDMHistory(a, b, msgs) {
-  var capped = msgs.slice(-DM_MAX);
-  sharedStorage.setItem(
-    "vworld_dm:" + dmConversationKey(a, b),
-    JSON.stringify(capped),
+function appendDMMessage(a, b, msg) {
+  var conversationKey = dmConversationKey(a, b);
+  insertChatRow(VWORLD_DM_TABLE, {
+    message_id: String(msg.id),
+    conversation_key: conversationKey,
+    sender_id: String(msg.sender_id || ""),
+    sender_nick: String(msg.sender_nick || ""),
+    recipient_id: String(msg.recipient_id || ""),
+    text: String(msg.text || ""),
+    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
+  });
+  pruneChatRows(
+    VWORLD_DM_TABLE,
+    "ts",
+    DM_MAX,
+    JSON.stringify({ conversation_key: conversationKey }),
   );
 }
 
@@ -768,26 +1175,33 @@ function saveDMHistory(a, b, msgs) {
  * @returns {string[]}
  */
 function loadDMIndex(userId) {
-  var raw = sharedStorage.getItem("vworld_dm_index:" + userId);
-  if (!raw) return [];
-  try {
-    var idx = JSON.parse(raw);
-    return Array.isArray(idx) ? idx : [];
-  } catch (e) {
-    return [];
+  var rows = queryChatRows(
+    VWORLD_DM_INDEX_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+    1000,
+    "last_ts",
+    "desc",
+  );
+  /** @type {Record<string, boolean>} */
+  var seen = {};
+  /** @type {string[]} */
+  var idx = [];
+  for (var i = 0; i < rows.length; i++) {
+    var otherUserId = rows[i] && rows[i].other_user_id;
+    if (!otherUserId || seen[otherUserId]) continue;
+    seen[otherUserId] = true;
+    idx.push(String(otherUserId));
   }
+  return idx;
 }
 
 /**
  * @param {string} userId
  * @param {string} otherUserId
+ * @param {number} [ts]
  */
-function addToDMIndex(userId, otherUserId) {
-  var idx = loadDMIndex(userId);
-  if (idx.indexOf(otherUserId) === -1) {
-    idx.push(otherUserId);
-    sharedStorage.setItem("vworld_dm_index:" + userId, JSON.stringify(idx));
-  }
+function addToDMIndex(userId, otherUserId, ts) {
+  upsertDMIndexEntry(userId, otherUserId, Number(ts || Date.now()));
 }
 
 /**
@@ -1930,9 +2344,7 @@ function chatHandler(context) {
     text: text,
     ts: Date.now(),
   };
-  var history = loadWorldChat(worldId);
-  history.push(msg);
-  saveWorldChat(worldId, history);
+  appendWorldChatMessage(worldId, msg);
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldChatMessage",
     JSON.stringify(msg),
@@ -1978,11 +2390,9 @@ function dmHandler(context) {
     text: text,
     ts: Date.now(),
   };
-  var conv = loadDMHistory(userId, to);
-  conv.push(msg);
-  saveDMHistory(userId, to, conv);
-  addToDMIndex(userId, to);
-  addToDMIndex(to, userId);
+  appendDMMessage(userId, to, msg);
+  addToDMIndex(userId, to, msg.ts);
+  addToDMIndex(to, userId, msg.ts);
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldDirectMessage",
     JSON.stringify(msg),
@@ -2806,6 +3216,7 @@ function worldDirectMessageResolver(context) {
 
 function init() {
   startNPCTicker();
+  ensureChatDatabaseSchema();
   /**
    * @param {string} path
    * @param {string} handler

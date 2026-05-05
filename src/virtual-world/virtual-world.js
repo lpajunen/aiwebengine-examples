@@ -207,6 +207,30 @@ function loadPlayerPosition(userId) {
 }
 
 /**
+ * @returns {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>}
+ */
+function loadAllPlayerPositions() {
+  var rows = queryWorldRows(
+    VWORLD_PLAYER_POSITION_TABLE,
+    "",
+    1000,
+    "updated_ts",
+    "desc",
+  );
+  /** @type {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>} */
+  var out = {};
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var userId = row && row.user_id ? String(row.user_id) : "";
+    if (!userId || out[userId]) continue;
+    var normalized = normalizePlayerPositionRow(row);
+    if (!normalized) continue;
+    out[userId] = normalized;
+  }
+  return out;
+}
+
+/**
  * @param {string} userId
  * @param {string} worldId
  * @param {{row:number,col:number,seq:number,rotation:number,session_id?:string,ts?:number}} position
@@ -1018,21 +1042,63 @@ function buildOnlinePlayersSnapshot() {
   var now = Date.now();
   // 90 s TTL — gives headroom for background-tab heartbeat throttling.
   var TTL = 90000;
-  /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
-  var result = [];
+  var heartbeatByUserId = loadPlayerHeartbeatMap();
+  var positionsByUserId = loadAllPlayerPositions();
+  /** @type {Record<string, {player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
+  var byUserId = {};
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
     if (!row || !row.user_id) continue;
-    var lastActive = fromStoredWorldTimestamp(row.last_active_ts);
-    if (now - lastActive > TTL) continue;
-    result.push({
-      player_id: String(row.user_id),
-      nick: row.nick || String(row.user_id).slice(0, 16),
-      world_id: String(row.world_id || ""),
-      login_at: fromStoredWorldTimestamp(row.login_at),
-      last_active: lastActive,
-    });
+    var userId = String(row.user_id);
+    var pos = positionsByUserId[userId] || null;
+    var presenceLastActive = fromStoredWorldTimestamp(row.last_active_ts);
+    var canonicalLastActive = Math.max(
+      presenceLastActive,
+      Number(heartbeatByUserId[userId] || 0),
+      pos ? Number(pos.ts || 0) : 0,
+    );
+    if (now - canonicalLastActive > TTL) continue;
+    byUserId[userId] = {
+      player_id: userId,
+      nick: row.nick || getEffectiveNick(userId),
+      world_id: String(row.world_id || (pos ? pos.world_id : "") || ""),
+      login_at: fromStoredWorldTimestamp(row.login_at) || canonicalLastActive,
+      last_active: canonicalLastActive,
+    };
   }
+  Object.keys(positionsByUserId).forEach(function (userId) {
+    var pos = positionsByUserId[userId];
+    if (!pos) return;
+    var canonicalLastActive = Math.max(
+      Number(pos.ts || 0),
+      Number(heartbeatByUserId[userId] || 0),
+    );
+    if (now - canonicalLastActive > TTL) return;
+    if (!byUserId[userId]) {
+      byUserId[userId] = {
+        player_id: userId,
+        nick: getEffectiveNick(userId),
+        world_id: String(pos.world_id || getPlayerWorld(userId) || ""),
+        login_at: canonicalLastActive,
+        last_active: canonicalLastActive,
+      };
+      return;
+    }
+    if (!byUserId[userId].world_id && pos.world_id) {
+      byUserId[userId].world_id = String(pos.world_id);
+    }
+    if (canonicalLastActive > byUserId[userId].last_active) {
+      byUserId[userId].last_active = canonicalLastActive;
+    }
+  });
+  /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
+  var result = Object.keys(byUserId)
+    .map(function (userId) {
+      return byUserId[userId];
+    })
+    .sort(function (a, b) {
+      return b.last_active - a.last_active;
+    });
   return result;
 }
 
@@ -4047,7 +4113,24 @@ function onlinePlayersHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
-  return ResponseBuilder.json(buildOnlinePlayersSnapshot());
+  var userId = context.request.auth.userId;
+  var snapshot = buildOnlinePlayersSnapshot();
+  if (snapshot.length > 0) {
+    return ResponseBuilder.json(snapshot);
+  }
+  var worldId = getPlayerWorld(userId);
+  if (!worldId) return ResponseBuilder.json([]);
+  return ResponseBuilder.json(
+    buildActiveWorldPlayers(worldId).map(function (player) {
+      return {
+        player_id: player.player_id,
+        nick: getEffectiveNick(player.player_id),
+        world_id: String(worldId),
+        login_at: player.last_active,
+        last_active: player.last_active,
+      };
+    }),
+  );
 }
 
 // ── World chat handler ────────────────────────────────────────────────────────
@@ -4415,6 +4498,39 @@ function heartbeatHandler(context) {
 }
 
 /**
+ * @param {string} worldId
+ * @returns {Array<{player_id: string, row: number, col: number, seq: number, rotation: number, last_active: number}>}
+ */
+function buildActiveWorldPlayers(worldId) {
+  if (!worldId) return [];
+  var players = loadWorldPlayers(worldId);
+  if (!players || typeof players !== "object") return [];
+  var now = Date.now();
+  var heartbeatByUserId = loadPlayerHeartbeatMap();
+  return Object.keys(players)
+    .filter(function (pid) {
+      if (!players[pid] || typeof players[pid] !== "object") {
+        return false;
+      }
+      var hbTs = Number(heartbeatByUserId[pid] || 0);
+      return now - Math.max(Number(players[pid].ts || 0), hbTs) < 90000;
+    })
+    .map(function (pid) {
+      var hbTs = Number(heartbeatByUserId[pid] || 0);
+      return {
+        player_id: pid,
+        row: players[pid].row,
+        col: players[pid].col,
+        seq: players[pid].seq || 0,
+        rotation: isFinite(Number(players[pid].rotation))
+          ? Number(players[pid].rotation)
+          : 0,
+        last_active: Math.max(Number(players[pid].ts || 0), hbTs),
+      };
+    });
+}
+
+/**
  * @param {string} userId
  * @param {string} targetWorldId
  */
@@ -4482,44 +4598,15 @@ function playersHandler(context) {
   var worldId = getPlayerWorld(userId);
   if (!worldId) return ResponseBuilder.json([]);
   markNPCWorldActive(worldId);
-  var players = loadWorldPlayers(worldId);
-  if (!players || typeof players !== "object") {
-    vwLog("playersHandler recovered malformed players payload", {
-      user_id: userId,
-      world_id: worldId,
-      type: typeof players,
-    });
-    players = {};
-  }
-  var now = Date.now();
-  var heartbeatByUserId = loadPlayerHeartbeatMap();
-  var active = Object.keys(players)
-    .filter(function (pid) {
-      if (!players[pid] || typeof players[pid] !== "object") {
-        vwLog("playersHandler skipped malformed player entry", {
-          user_id: userId,
-          world_id: worldId,
-          player_id: pid,
-        });
-        return false;
-      }
-      // A player is active if either their last move OR their last heartbeat
-      // is within the TTL window.  Heartbeat ts is stored separately to avoid
-      // racing with the move handler's write to the players object.
-      var hbTs = Number(heartbeatByUserId[pid] || 0);
-      return now - Math.max(players[pid].ts, hbTs) < 90000;
-    })
-    .map(function (pid) {
-      return {
-        player_id: pid,
-        row: players[pid].row,
-        col: players[pid].col,
-        seq: players[pid].seq || 0,
-        rotation: isFinite(Number(players[pid].rotation))
-          ? Number(players[pid].rotation)
-          : 0,
-      };
-    });
+  var active = buildActiveWorldPlayers(worldId).map(function (pid) {
+    return {
+      player_id: pid.player_id,
+      row: pid.row,
+      col: pid.col,
+      seq: pid.seq || 0,
+      rotation: isFinite(Number(pid.rotation)) ? Number(pid.rotation) : 0,
+    };
+  });
   return ResponseBuilder.json(active);
 }
 

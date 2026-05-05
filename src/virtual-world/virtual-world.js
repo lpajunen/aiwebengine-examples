@@ -241,6 +241,100 @@ function deletePlayerPosition(userId) {
 
 /**
  * @param {string} userId
+ * @returns {{session_id: string, expires_at: number} | null}
+ */
+function loadPlayerMoveLease(userId) {
+  var row = querySingleWorldRow(
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
+  if (!row) return null;
+  return {
+    session_id: typeof row.session_id === "string" ? row.session_id : "",
+    expires_at: fromStoredWorldTimestamp(row.expires_ts),
+  };
+}
+
+/**
+ * @param {string} userId
+ * @param {string} sessionId
+ * @param {number} expiresAt
+ */
+function savePlayerMoveLease(userId, sessionId, expiresAt) {
+  upsertWorldRow(VWORLD_PLAYER_MOVE_LEASE_TABLE, ["user_id"], {
+    user_id: String(userId),
+    session_id: String(sessionId || ""),
+    expires_ts: toStoredWorldTimestamp(expiresAt),
+  });
+}
+
+/**
+ * @param {string} userId
+ */
+function deletePlayerMoveLease(userId) {
+  deleteWorldRowsWhere(
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
+}
+
+/**
+ * @param {string} userId
+ * @returns {number}
+ */
+function loadPlayerHeartbeatTs(userId) {
+  var row = querySingleWorldRow(
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
+  if (!row) return 0;
+  return fromStoredWorldTimestamp(row.heartbeat_ts);
+}
+
+/**
+ * @returns {Record<string, number>}
+ */
+function loadPlayerHeartbeatMap() {
+  var rows = queryWorldRows(
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    "",
+    1000,
+    "heartbeat_ts",
+    "desc",
+  );
+  /** @type {Record<string, number>} */
+  var out = {};
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row || !row.user_id) continue;
+    out[String(row.user_id)] = fromStoredWorldTimestamp(row.heartbeat_ts);
+  }
+  return out;
+}
+
+/**
+ * @param {string} userId
+ * @param {number} heartbeatTs
+ */
+function savePlayerHeartbeatTs(userId, heartbeatTs) {
+  upsertWorldRow(VWORLD_PLAYER_HEARTBEAT_TABLE, ["user_id"], {
+    user_id: String(userId),
+    heartbeat_ts: toStoredWorldTimestamp(heartbeatTs),
+  });
+}
+
+/**
+ * @param {string} userId
+ */
+function deletePlayerHeartbeat(userId) {
+  deleteWorldRowsWhere(
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
+}
+
+/**
+ * @param {string} userId
  */
 function markPlayerPositionInactive(userId) {
   var row = querySingleWorldRow(
@@ -872,27 +966,6 @@ function getEffectiveNick(userId) {
 // ── Global online presence ────────────────────────────────────────────────────
 
 /**
- * Adds userId to the global online index (list of all ever-online user IDs).
- * Benign duplicates are deduplicated on read.
- * @param {string} userId
- */
-function addToOnlineIndex(userId) {
-  var raw = sharedStorage.getItem("vworld_online_ids");
-  /** @type {string[]} */
-  var ids = [];
-  try {
-    ids = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(ids)) ids = [];
-  } catch (e) {
-    ids = [];
-  }
-  if (ids.indexOf(userId) === -1) {
-    ids.push(userId);
-    sharedStorage.setItem("vworld_online_ids", JSON.stringify(ids));
-  }
-}
-
-/**
  * Write the per-user online-presence entry.  Safe to call from heartbeat
  * because each user only writes their own key — no read-modify-write of a
  * shared object, so there is no concurrency hazard.
@@ -902,28 +975,32 @@ function addToOnlineIndex(userId) {
  */
 function updateOnlinePresence(userId, worldId, sessionId) {
   var now = Date.now();
-  var existing = null;
-  var raw = sharedStorage.getItem("vworld_online:" + userId);
-  if (raw) {
-    try {
-      existing = JSON.parse(raw);
-    } catch (e) {}
-  }
+  var existing = querySingleWorldRow(
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
+  );
   var loginAt =
     existing && existing.session_id === sessionId && existing.login_at
-      ? existing.login_at
+      ? fromStoredWorldTimestamp(existing.login_at)
       : now;
-  sharedStorage.setItem(
-    "vworld_online:" + userId,
-    JSON.stringify({
-      world_id: String(worldId),
-      nick: getEffectiveNick(userId),
-      login_at: loginAt,
-      ts: now,
-      session_id: sessionId,
-    }),
+  upsertWorldRow(VWORLD_ONLINE_PRESENCE_TABLE, ["user_id"], {
+    user_id: String(userId),
+    world_id: String(worldId),
+    nick: getEffectiveNick(userId),
+    login_at: toStoredWorldTimestamp(loginAt),
+    last_active_ts: toStoredWorldTimestamp(now),
+    session_id: String(sessionId || ""),
+  });
+}
+
+/**
+ * @param {string} userId
+ */
+function deleteOnlinePresence(userId) {
+  deleteWorldRowsWhere(
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    JSON.stringify({ user_id: String(userId) }),
   );
-  addToOnlineIndex(userId);
 }
 
 /**
@@ -931,40 +1008,29 @@ function updateOnlinePresence(userId, worldId, sessionId) {
  * @returns {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>}
  */
 function buildOnlinePlayersSnapshot() {
-  var raw = sharedStorage.getItem("vworld_online_ids");
-  /** @type {string[]} */
-  var ids = [];
-  try {
-    ids = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(ids)) ids = [];
-  } catch (e) {
-    ids = [];
-  }
+  var rows = queryWorldRows(
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    "",
+    1000,
+    "last_active_ts",
+    "desc",
+  );
   var now = Date.now();
   // 90 s TTL — gives headroom for background-tab heartbeat throttling.
   var TTL = 90000;
   /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
   var result = [];
-  /** @type {Record<string, boolean>} */
-  var seen = {};
-  for (var i = 0; i < ids.length; i++) {
-    var uid = ids[i];
-    if (!uid || seen[uid]) continue;
-    seen[uid] = true;
-    var entryRaw = sharedStorage.getItem("vworld_online:" + uid);
-    if (!entryRaw) continue;
-    var entry = null;
-    try {
-      entry = JSON.parse(entryRaw);
-    } catch (e) {}
-    if (!entry || typeof entry.ts !== "number") continue;
-    if (now - entry.ts > TTL) continue;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row || !row.user_id) continue;
+    var lastActive = fromStoredWorldTimestamp(row.last_active_ts);
+    if (now - lastActive > TTL) continue;
     result.push({
-      player_id: uid,
-      nick: entry.nick || uid.slice(0, 16),
-      world_id: String(entry.world_id || ""),
-      login_at: Number(entry.login_at || 0),
-      last_active: Number(entry.ts),
+      player_id: String(row.user_id),
+      nick: row.nick || String(row.user_id).slice(0, 16),
+      world_id: String(row.world_id || ""),
+      login_at: fromStoredWorldTimestamp(row.login_at),
+      last_active: lastActive,
     });
   }
   return result;
@@ -976,6 +1042,9 @@ var WORLD_CHAT_MAX = 100;
 var VWORLD_CHAT_TABLE = "vworld_chat_messages";
 var VWORLD_DM_TABLE = "vworld_direct_messages";
 var VWORLD_DM_INDEX_TABLE = "vworld_dm_index";
+var VWORLD_ONLINE_PRESENCE_TABLE = "vworld_online_presence";
+var VWORLD_PLAYER_HEARTBEAT_TABLE = "vworld_player_heartbeats";
+var VWORLD_PLAYER_MOVE_LEASE_TABLE = "vworld_player_move_leases";
 var VWORLD_PLAYER_NICK_TABLE = "vworld_player_nicks";
 var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
 var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
@@ -985,6 +1054,8 @@ var VWORLD_WORLD_ITEM_TABLE = "vworld_world_items";
 var VWORLD_WORLD_ITEM_META_TABLE = "vworld_world_item_meta";
 var VWORLD_NPC_TABLE = "vworld_npcs";
 var VWORLD_NPC_ACTIVE_WORLD_TABLE = "vworld_npc_active_worlds";
+var VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
+var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 
 /**
  * @param {string} raw
@@ -1094,6 +1165,291 @@ function reportWorldSchemaResult(op, tableName, result, columnName) {
     column: columnName || "",
     error: String(result && result.error ? result.error : "unknown"),
   });
+}
+
+/**
+ * @param {"world" | "chat"} scope
+ * @param {string} op
+ * @param {string} tableName
+ * @param {() => string} run
+ * @param {string | undefined} columnName
+ * @param {Array<any> | undefined} collector
+ * @returns {*}
+ */
+function executeSchemaStep(scope, op, tableName, run, columnName, collector) {
+  var parser = scope === "world" ? parseWorldDbResult : parseChatDbResult;
+  var reporter =
+    scope === "world" ? reportWorldSchemaResult : reportChatSchemaResult;
+  var result = null;
+  try {
+    result = parser(run());
+  } catch (e) {
+    result = { error: "threw: " + String(e) };
+  }
+  reporter(op, tableName, result, columnName);
+  if (collector) {
+    collector.push({
+      scope: scope,
+      op: op,
+      table: tableName,
+      column: columnName || "",
+      ok: !result || !result.error,
+      error: result && result.error ? String(result.error) : "",
+    });
+  }
+  return result;
+}
+
+/**
+ * @param {string} op
+ * @param {string} tableName
+ * @param {() => string} run
+ * @param {string} [columnName]
+ * @param {Array<any>} [collector]
+ * @returns {*}
+ */
+function runWorldSchemaStep(op, tableName, run, columnName, collector) {
+  return executeSchemaStep("world", op, tableName, run, columnName, collector);
+}
+
+/**
+ * @param {string} op
+ * @param {string} tableName
+ * @param {() => string} run
+ * @param {string} [columnName]
+ * @param {Array<any>} [collector]
+ * @returns {*}
+ */
+function runChatSchemaStep(op, tableName, run, columnName, collector) {
+  return executeSchemaStep("chat", op, tableName, run, columnName, collector);
+}
+
+/**
+ * @param {Array<any>} [collector]
+ */
+function ensureLateWorldDatabaseSchema(collector) {
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.createTable(VWORLD_NPC_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "npc_id", false);
+    },
+    "npc_id",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "world_id", false);
+    },
+    "world_id",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addIntegerColumn(VWORLD_NPC_TABLE, "row", false);
+    },
+    "row",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addIntegerColumn(VWORLD_NPC_TABLE, "col", false);
+    },
+    "col",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addIntegerColumn(VWORLD_NPC_TABLE, "seq", false);
+    },
+    "seq",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addIntegerColumn(VWORLD_NPC_TABLE, "rotation", false);
+    },
+    "rotation",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "state", true);
+    },
+    "state",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addIntegerColumn(VWORLD_NPC_TABLE, "ts", false);
+    },
+    "ts",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "left_hand_json", true);
+    },
+    "left_hand_json",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "right_hand_json", true);
+    },
+    "right_hand_json",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TABLE, "inventory_json", false);
+    },
+    "inventory_json",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    VWORLD_NPC_TABLE,
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_NPC_TABLE,
+        JSON.stringify(["npc_id"]),
+      );
+    },
+    undefined,
+    collector,
+  );
+
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
+    function () {
+      return database.createTable(VWORLD_NPC_ACTIVE_WORLD_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
+    function () {
+      return database.addTextColumn(
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
+        "world_id",
+        false,
+      );
+    },
+    "world_id",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
+    function () {
+      return database.addIntegerColumn(
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
+        "last_active_ts",
+        false,
+      );
+    },
+    "last_active_ts",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
+        JSON.stringify(["world_id"]),
+      );
+    },
+    undefined,
+    collector,
+  );
+
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_NPC_TICK_TABLE,
+    function () {
+      return database.createTable(VWORLD_NPC_TICK_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_NPC_TICK_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_NPC_TICK_TABLE, "world_id", false);
+    },
+    "world_id",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_NPC_TICK_TABLE,
+    function () {
+      return database.addIntegerColumn(
+        VWORLD_NPC_TICK_TABLE,
+        "last_tick_ts",
+        false,
+      );
+    },
+    "last_tick_ts",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    VWORLD_NPC_TICK_TABLE,
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_NPC_TICK_TABLE,
+        JSON.stringify(["world_id"]),
+      );
+    },
+    undefined,
+    collector,
+  );
+
+  runWorldSchemaStep(
+    "createLeaseTable",
+    VWORLD_NPC_TICK_LEASE_TABLE,
+    function () {
+      return database.createLeaseTable(VWORLD_NPC_TICK_LEASE_TABLE);
+    },
+    undefined,
+    collector,
+  );
 }
 
 /**
@@ -1244,6 +1600,162 @@ function querySingleWorldRow(tableName, filters) {
 }
 
 function ensureWorldDatabaseSchema() {
+  reportWorldSchemaResult(
+    "createTable",
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    parseWorldDbResult(database.createTable(VWORLD_PLAYER_HEARTBEAT_TABLE)),
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_PLAYER_HEARTBEAT_TABLE, "user_id", false),
+    ),
+    "user_id",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(
+        VWORLD_PLAYER_HEARTBEAT_TABLE,
+        "heartbeat_ts",
+        false,
+      ),
+    ),
+    "heartbeat_ts",
+  );
+  reportWorldSchemaResult(
+    "addUniqueIndex",
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    parseWorldDbResult(
+      database.addUniqueIndex(
+        VWORLD_PLAYER_HEARTBEAT_TABLE,
+        JSON.stringify(["user_id"]),
+      ),
+    ),
+  );
+
+  reportWorldSchemaResult(
+    "createTable",
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    parseWorldDbResult(database.createTable(VWORLD_PLAYER_MOVE_LEASE_TABLE)),
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_PLAYER_MOVE_LEASE_TABLE, "user_id", false),
+    ),
+    "user_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
+        "session_id",
+        false,
+      ),
+    ),
+    "session_id",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
+        "expires_ts",
+        false,
+      ),
+    ),
+    "expires_ts",
+  );
+  reportWorldSchemaResult(
+    "addUniqueIndex",
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    parseWorldDbResult(
+      database.addUniqueIndex(
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
+        JSON.stringify(["user_id"]),
+      ),
+    ),
+  );
+
+  reportWorldSchemaResult(
+    "createTable",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(database.createTable(VWORLD_ONLINE_PRESENCE_TABLE)),
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_ONLINE_PRESENCE_TABLE, "user_id", false),
+    ),
+    "user_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_ONLINE_PRESENCE_TABLE, "world_id", false),
+    ),
+    "world_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_ONLINE_PRESENCE_TABLE, "nick", false),
+    ),
+    "nick",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(
+        VWORLD_ONLINE_PRESENCE_TABLE,
+        "login_at",
+        false,
+      ),
+    ),
+    "login_at",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(
+        VWORLD_ONLINE_PRESENCE_TABLE,
+        "last_active_ts",
+        false,
+      ),
+    ),
+    "last_active_ts",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_ONLINE_PRESENCE_TABLE, "session_id", false),
+    ),
+    "session_id",
+  );
+  reportWorldSchemaResult(
+    "addUniqueIndex",
+    VWORLD_ONLINE_PRESENCE_TABLE,
+    parseWorldDbResult(
+      database.addUniqueIndex(
+        VWORLD_ONLINE_PRESENCE_TABLE,
+        JSON.stringify(["user_id"]),
+      ),
+    ),
+  );
+
   reportWorldSchemaResult(
     "createTable",
     VWORLD_PLAYER_NICK_TABLE,
@@ -1702,308 +2214,225 @@ function ensureWorldDatabaseSchema() {
     ),
   );
 
-  reportWorldSchemaResult(
-    "createTable",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(database.createTable(VWORLD_NPC_TABLE)),
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_TABLE, "npc_id", false),
-    ),
-    "npc_id",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_TABLE, "world_id", false),
-    ),
-    "world_id",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_NPC_TABLE, "row", false),
-    ),
-    "row",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_NPC_TABLE, "col", false),
-    ),
-    "col",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_NPC_TABLE, "seq", false),
-    ),
-    "seq",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_NPC_TABLE, "rotation", false),
-    ),
-    "rotation",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(database.addTextColumn(VWORLD_NPC_TABLE, "state", true)),
-    "state",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_NPC_TABLE, "ts", false),
-    ),
-    "ts",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_TABLE, "left_hand_json", true),
-    ),
-    "left_hand_json",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_TABLE, "right_hand_json", true),
-    ),
-    "right_hand_json",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_TABLE, "inventory_json", false),
-    ),
-    "inventory_json",
-  );
-  reportWorldSchemaResult(
-    "addUniqueIndex",
-    VWORLD_NPC_TABLE,
-    parseWorldDbResult(
-      database.addUniqueIndex(VWORLD_NPC_TABLE, JSON.stringify(["npc_id"])),
-    ),
-  );
-
-  reportWorldSchemaResult(
-    "createTable",
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    parseWorldDbResult(database.createTable(VWORLD_NPC_ACTIVE_WORLD_TABLE)),
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_NPC_ACTIVE_WORLD_TABLE, "world_id", false),
-    ),
-    "world_id",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(
-        VWORLD_NPC_ACTIVE_WORLD_TABLE,
-        "last_active_ts",
-        false,
-      ),
-    ),
-    "last_active_ts",
-  );
-  reportWorldSchemaResult(
-    "addUniqueIndex",
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    parseWorldDbResult(
-      database.addUniqueIndex(
-        VWORLD_NPC_ACTIVE_WORLD_TABLE,
-        JSON.stringify(["world_id"]),
-      ),
-    ),
-  );
+  ensureLateWorldDatabaseSchema();
 }
 
-function ensureChatDatabaseSchema() {
-  reportChatSchemaResult(
+/**
+ * @param {Array<any>} [collector]
+ */
+function ensureChatDatabaseSchema(collector) {
+  runChatSchemaStep(
     "createTable",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(database.createTable(VWORLD_CHAT_TABLE)),
+    function () {
+      return database.createTable(VWORLD_CHAT_TABLE);
+    },
+    undefined,
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_CHAT_TABLE, "message_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_CHAT_TABLE, "message_id", false);
+    },
     "message_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_CHAT_TABLE, "world_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_CHAT_TABLE, "world_id", false);
+    },
     "world_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_CHAT_TABLE, "sender_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_CHAT_TABLE, "sender_id", false);
+    },
     "sender_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_CHAT_TABLE, "sender_nick", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_CHAT_TABLE, "sender_nick", false);
+    },
     "sender_nick",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(database.addTextColumn(VWORLD_CHAT_TABLE, "text", false)),
+    function () {
+      return database.addTextColumn(VWORLD_CHAT_TABLE, "text", false);
+    },
     "text",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addIntegerColumn",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addIntegerColumn(VWORLD_CHAT_TABLE, "ts", false),
-    ),
+    function () {
+      return database.addIntegerColumn(VWORLD_CHAT_TABLE, "ts", false);
+    },
     "ts",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addUniqueIndex",
     VWORLD_CHAT_TABLE,
-    parseChatDbResult(
-      database.addUniqueIndex(
+    function () {
+      return database.addUniqueIndex(
         VWORLD_CHAT_TABLE,
         JSON.stringify(["message_id"]),
-      ),
-    ),
+      );
+    },
+    undefined,
+    collector,
   );
 
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "createTable",
     VWORLD_DM_TABLE,
-    parseChatDbResult(database.createTable(VWORLD_DM_TABLE)),
+    function () {
+      return database.createTable(VWORLD_DM_TABLE);
+    },
+    undefined,
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_TABLE, "message_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "message_id", false);
+    },
     "message_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_TABLE, "conversation_key", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "conversation_key", false);
+    },
     "conversation_key",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_TABLE, "sender_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "sender_id", false);
+    },
     "sender_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_TABLE, "sender_nick", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "sender_nick", false);
+    },
     "sender_nick",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_TABLE, "recipient_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "recipient_id", false);
+    },
     "recipient_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(database.addTextColumn(VWORLD_DM_TABLE, "text", false)),
+    function () {
+      return database.addTextColumn(VWORLD_DM_TABLE, "text", false);
+    },
     "text",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addIntegerColumn",
     VWORLD_DM_TABLE,
-    parseChatDbResult(database.addIntegerColumn(VWORLD_DM_TABLE, "ts", false)),
+    function () {
+      return database.addIntegerColumn(VWORLD_DM_TABLE, "ts", false);
+    },
     "ts",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addUniqueIndex",
     VWORLD_DM_TABLE,
-    parseChatDbResult(
-      database.addUniqueIndex(VWORLD_DM_TABLE, JSON.stringify(["message_id"])),
-    ),
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_DM_TABLE,
+        JSON.stringify(["message_id"]),
+      );
+    },
+    undefined,
+    collector,
   );
 
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "createTable",
     VWORLD_DM_INDEX_TABLE,
-    parseChatDbResult(database.createTable(VWORLD_DM_INDEX_TABLE)),
+    function () {
+      return database.createTable(VWORLD_DM_INDEX_TABLE);
+    },
+    undefined,
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_INDEX_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_INDEX_TABLE, "user_id", false),
-    ),
+    function () {
+      return database.addTextColumn(VWORLD_DM_INDEX_TABLE, "user_id", false);
+    },
     "user_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addTextColumn",
     VWORLD_DM_INDEX_TABLE,
-    parseChatDbResult(
-      database.addTextColumn(VWORLD_DM_INDEX_TABLE, "other_user_id", false),
-    ),
+    function () {
+      return database.addTextColumn(
+        VWORLD_DM_INDEX_TABLE,
+        "other_user_id",
+        false,
+      );
+    },
     "other_user_id",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addIntegerColumn",
     VWORLD_DM_INDEX_TABLE,
-    parseChatDbResult(
-      database.addIntegerColumn(VWORLD_DM_INDEX_TABLE, "last_ts", false),
-    ),
+    function () {
+      return database.addIntegerColumn(VWORLD_DM_INDEX_TABLE, "last_ts", false);
+    },
     "last_ts",
+    collector,
   );
-  reportChatSchemaResult(
+  runChatSchemaStep(
     "addUniqueIndex",
     VWORLD_DM_INDEX_TABLE,
-    parseChatDbResult(
-      database.addUniqueIndex(
+    function () {
+      return database.addUniqueIndex(
         VWORLD_DM_INDEX_TABLE,
         JSON.stringify(["user_id", "other_user_id"]),
-      ),
-    ),
+      );
+    },
+    undefined,
+    collector,
   );
 }
 
@@ -2369,21 +2798,6 @@ function saveWorldItems(worldId, items) {
     });
   }
 
-  var existingRows = queryWorldRows(
-    VWORLD_WORLD_ITEM_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "desc",
-  );
-  /** @type {Record<string, any>} */
-  var existingByItemId = {};
-  for (var i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].item_id) {
-      existingByItemId[String(existingRows[i].item_id)] = existingRows[i];
-    }
-  }
-
   Object.keys(normalized).forEach(function (tileKey) {
     var parts = tileKey.split("_");
     var row = Number(parts[0]);
@@ -2407,15 +2821,56 @@ function saveWorldItems(worldId, items) {
             ? item.destination_world_id
             : null,
       });
-      delete existingByItemId[String(item.id)];
     });
   });
+}
 
-  Object.keys(existingByItemId).forEach(function (itemId) {
-    var row = existingByItemId[itemId];
-    if (!row || !isFinite(Number(row.id))) return;
-    deleteWorldRow(VWORLD_WORLD_ITEM_TABLE, Number(row.id));
+/**
+ * @param {string} worldId
+ * @param {number} row
+ * @param {number} col
+ * @param {*} item
+ */
+function upsertWorldItem(worldId, row, col, item) {
+  if (!isValidItem(item) || !isFinite(Number(row)) || !isFinite(Number(col))) {
+    return;
+  }
+  upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
+    item_id: String(item.id),
+    world_id: String(worldId),
+    row: Number(row),
+    col: Number(col),
+    type: String(item.type),
+    created_at: toStoredWorldTimestamp(
+      isFinite(Number(item.created_at)) ? Number(item.created_at) : Date.now(),
+    ),
+    destination_world_id:
+      typeof item.destination_world_id === "string"
+        ? item.destination_world_id
+        : null,
   });
+}
+
+/**
+ * @param {string} itemId
+ */
+function deleteWorldItemById(itemId) {
+  if (!itemId) return;
+  deleteWorldRowsWhere(
+    VWORLD_WORLD_ITEM_TABLE,
+    JSON.stringify({ item_id: String(itemId) }),
+  );
+}
+
+/**
+ * @param {any[]} items
+ */
+function deleteWorldItems(items) {
+  if (!Array.isArray(items)) return;
+  for (var i = 0; i < items.length; i++) {
+    if (!items[i] || typeof items[i].id !== "string") continue;
+    deleteWorldItemById(String(items[i].id));
+  }
 }
 
 /**
@@ -2581,21 +3036,6 @@ function loadWorldNPCs(worldId) {
  * @param {Record<string, any>} npcs
  */
 function saveWorldNPCs(worldId, npcs) {
-  var existingRows = queryWorldRows(
-    VWORLD_NPC_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    1000,
-    "id",
-    "desc",
-  );
-  /** @type {Record<string, any>} */
-  var existingByNpcId = {};
-  for (var i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].npc_id) {
-      existingByNpcId[String(existingRows[i].npc_id)] = existingRows[i];
-    }
-  }
-
   Object.keys(npcs && typeof npcs === "object" ? npcs : {}).forEach(
     function (npcId) {
       var npc = npcs[npcId];
@@ -2616,15 +3056,8 @@ function saveWorldNPCs(worldId, npcs) {
         right_hand_json: inv.right_hand ? JSON.stringify(inv.right_hand) : null,
         inventory_json: JSON.stringify(inv.inventory || []),
       });
-      delete existingByNpcId[npcId];
     },
   );
-
-  Object.keys(existingByNpcId).forEach(function (npcId) {
-    var row = existingByNpcId[npcId];
-    if (!row || !isFinite(Number(row.id))) return;
-    deleteWorldRow(VWORLD_NPC_TABLE, Number(row.id));
-  });
 }
 
 /**
@@ -2697,6 +3130,30 @@ function markNPCWorldActive(worldId) {
   upsertWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, ["world_id"], {
     world_id: String(worldId),
     last_active_ts: toStoredWorldTimestamp(Date.now()),
+  });
+}
+
+/**
+ * @param {string} worldId
+ * @returns {number}
+ */
+function loadNPCLastTick(worldId) {
+  var row = querySingleWorldRow(
+    VWORLD_NPC_TICK_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+  );
+  if (!row) return 0;
+  return fromStoredWorldTimestamp(row.last_tick_ts);
+}
+
+/**
+ * @param {string} worldId
+ * @param {number} lastTickTs
+ */
+function saveNPCLastTick(worldId, lastTickTs) {
+  upsertWorldRow(VWORLD_NPC_TICK_TABLE, ["world_id"], {
+    world_id: String(worldId),
+    last_tick_ts: toStoredWorldTimestamp(lastTickTs),
   });
 }
 
@@ -2974,6 +3431,7 @@ function tickWorldNPCs(worldId, now) {
       for (var pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
         n.inventory.push(pickableItems[pickIdx]);
       }
+      deleteWorldItems(pickableItems);
       if (nonPickableItems.length > 0) {
         worldItems[tileKey] = nonPickableItems;
       } else {
@@ -3015,6 +3473,7 @@ function tickWorldNPCs(worldId, now) {
       if (dropItem) {
         if (!worldItems[tileKey]) worldItems[tileKey] = [];
         worldItems[tileKey].push(dropItem);
+        upsertWorldItem(worldId, n.row, n.col, dropItem);
         itemChanges = true;
         hasChanges = true;
         broadcastItemChange(worldId, "npc", npcId, "drop", n.row, n.col, [
@@ -3110,9 +3569,6 @@ function tickWorldNPCs(worldId, now) {
       npc_count: npcIds.length,
     });
   }
-  if (itemChanges) {
-    saveWorldItems(worldId, worldItems);
-  }
   if (treeChanges) {
     saveWorldTrees(worldId, trees);
   }
@@ -3130,6 +3586,10 @@ function runNPCTick() {
         VWORLD_NPC_TABLE,
         JSON.stringify({ world_id: String(worldId) }),
       );
+      deleteWorldRowsWhere(
+        VWORLD_NPC_TICK_TABLE,
+        JSON.stringify({ world_id: String(worldId) }),
+      );
       changedWorldSet = true;
       return;
     }
@@ -3145,45 +3605,22 @@ function runNPCTick() {
  * @returns {boolean}
  */
 function tryAcquireNPCTickLease(worldId, now) {
-  var key = "vworld_npc_tick_lease:" + worldId;
-  var raw = sharedStorage.getItem(key);
-  var lease = null;
-  if (raw) {
-    try {
-      lease = JSON.parse(raw);
-    } catch (e) {
-      lease = null;
-    }
-  }
-
-  if (
-    lease &&
-    lease.owner &&
-    lease.owner !== npcTickOwnerId &&
-    Number(lease.expires_at || 0) > now
-  ) {
+  var result = parseWorldDbResult(
+    database.acquireLease(
+      VWORLD_NPC_TICK_LEASE_TABLE,
+      "npc_tick:" + String(worldId),
+      npcTickOwnerId,
+      NPC_TICK_LEASE_MS,
+    ),
+  );
+  if (!result || result.error) {
+    vwLog("npc tick lease acquisition failed", {
+      world_id: worldId,
+      error: String(result && result.error ? result.error : "unknown"),
+    });
     return false;
   }
-
-  var newLease = {
-    owner: npcTickOwnerId,
-    expires_at: now + NPC_TICK_LEASE_MS,
-  };
-  sharedStorage.setItem(key, JSON.stringify(newLease));
-
-  // Re-read after write so we only proceed if our lease is still current.
-  var verifyRaw = sharedStorage.getItem(key);
-  if (!verifyRaw) return false;
-  try {
-    var verify = JSON.parse(verifyRaw);
-    return (
-      verify &&
-      verify.owner === npcTickOwnerId &&
-      Number(verify.expires_at || 0) >= now
-    );
-  } catch (e) {
-    return false;
-  }
+  return !!(result.acquired && result.owner === npcTickOwnerId);
 }
 
 /**
@@ -3192,17 +3629,16 @@ function tryAcquireNPCTickLease(worldId, now) {
  * @returns {boolean}
  */
 function tryTickWorldNPCs(worldId, now) {
-  var key = "vworld_npc_last_tick:" + worldId;
-  var lastTick = Number(sharedStorage.getItem(key) || 0);
+  var lastTick = loadNPCLastTick(worldId);
   if (now - lastTick < NPC_TICK_MS) return false;
   if (!tryAcquireNPCTickLease(worldId, now)) return false;
 
   // Recheck after lease acquisition to avoid race with another writer.
-  lastTick = Number(sharedStorage.getItem(key) || 0);
+  lastTick = loadNPCLastTick(worldId);
   if (now - lastTick < NPC_TICK_MS) return false;
 
   tickWorldNPCs(worldId, now);
-  sharedStorage.setItem(key, String(now));
+  saveNPCLastTick(worldId, now);
   return true;
 }
 
@@ -3340,12 +3776,12 @@ function handleItemActionForUser(userId, body) {
       for (var i = 0; i < picked.length; i++) {
         inv.inventory.push(picked[i]);
       }
+      deleteWorldItems(picked);
       if (remainingOnTile.length > 0) {
         worldItems[tileKey] = remainingOnTile;
       } else {
         delete worldItems[tileKey];
       }
-      saveWorldItems(worldId, worldItems);
       savePlayerInventory(userId, inv);
       broadcastItemChange(
         worldId,
@@ -3404,7 +3840,7 @@ function handleItemActionForUser(userId, body) {
     worldItems[tileKey].push(dropItem);
 
     savePlayerInventory(userId, inv);
-    saveWorldItems(worldId, worldItems);
+    upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
     broadcastItemChange(
       worldId,
       "player",
@@ -3762,34 +4198,21 @@ function moveHandler(context) {
   }
   markNPCWorldActive(worldId);
 
-  var leaseKey = "vworld_lease:" + userId;
-  var leaseRaw = sharedStorage.getItem(leaseKey);
-  var lease = null;
-  if (leaseRaw) {
-    try {
-      lease = JSON.parse(leaseRaw);
-    } catch (e) {
-      lease = null;
-    }
-  }
+  var lease = loadPlayerMoveLease(userId);
   var now = Date.now();
-  var leaseValid =
-    lease &&
-    typeof lease.session_id === "string" &&
-    Number(lease.expires_at || 0) > now;
-  if (leaseValid && lease.session_id !== sessionId) {
+  var leaseSessionId =
+    lease && typeof lease.session_id === "string" ? lease.session_id : "";
+  var leaseValid = !!lease && Number(lease.expires_at || 0) > now;
+  if (leaseValid && leaseSessionId !== sessionId) {
     vwLog("move taking over lease", {
       user_id: userId,
       world_id: worldId,
-      previous_session: lease.session_id,
+      previous_session: leaseSessionId,
       session_id: sessionId,
     });
   }
   // Acquire or renew writer lease for this session before processing move.
-  sharedStorage.setItem(
-    leaseKey,
-    JSON.stringify({ session_id: sessionId, expires_at: now + LEASE_TTL_MS }),
-  );
+  savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
 
   var players = loadWorldPlayers(worldId);
   // When players[userId] is absent (player reconnected after a refresh — leaveHandler
@@ -3930,9 +4353,9 @@ function leaveHandler(context) {
     return ResponseBuilder.json({ ok: true });
   }
   markPlayerPositionInactive(userId);
-  sharedStorage.removeItem("vworld_hb:" + userId);
-  sharedStorage.removeItem("vworld_lease:" + userId);
-  sharedStorage.removeItem("vworld_online:" + userId);
+  deletePlayerHeartbeat(userId);
+  deletePlayerMoveLease(userId);
+  deleteOnlinePresence(userId);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
   graphQLRegistry.sendSubscriptionMessageFiltered(
     "worldPlayerMoved",
@@ -3962,37 +4385,21 @@ function heartbeatHandler(context) {
   } catch (e) {}
 
   if (sessionId) {
-    var leaseKey = "vworld_lease:" + userId;
-    var leaseRaw = sharedStorage.getItem(leaseKey);
-    var lease = null;
-    if (leaseRaw) {
-      try {
-        lease = JSON.parse(leaseRaw);
-      } catch (e) {
-        lease = null;
-      }
-    }
+    var lease = loadPlayerMoveLease(userId);
     var now = Date.now();
-    var leaseValid =
-      lease &&
-      typeof lease.session_id === "string" &&
-      Number(lease.expires_at || 0) > now;
+    var leaseSessionId =
+      lease && typeof lease.session_id === "string" ? lease.session_id : "";
+    var leaseValid = !!lease && Number(lease.expires_at || 0) > now;
     // Heartbeat must not steal another tab's active writer lease.
     // It can only renew if this session already owns the lease,
     // or claim it when no valid lease exists.
-    if (!leaseValid || lease.session_id === sessionId) {
-      sharedStorage.setItem(
-        leaseKey,
-        JSON.stringify({
-          session_id: sessionId,
-          expires_at: now + LEASE_TTL_MS,
-        }),
-      );
+    if (!leaseValid || leaseSessionId === sessionId) {
+      savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
     } else {
       vwLog("heartbeat ignored: lease owned by other session", {
         user_id: userId,
         world_id: worldId,
-        lease_session: lease.session_id,
+        lease_session: leaseSessionId,
         session_id: sessionId,
       });
     }
@@ -4002,7 +4409,7 @@ function heartbeatHandler(context) {
   // the shared players object.  A concurrent moveHandler write would otherwise
   // be clobbered by this handler writing back a stale row/col, causing the
   // server's canonical position to regress and the next move to be rejected.
-  sharedStorage.setItem("vworld_hb:" + userId, String(Date.now()));
+  savePlayerHeartbeatTs(userId, Date.now());
   updateOnlinePresence(userId, worldId, sessionId || "");
   return ResponseBuilder.json({ ok: true });
 }
@@ -4017,8 +4424,8 @@ function switchUserWorld(userId, targetWorldId) {
     var oldPosition = loadPlayerPosition(userId);
     if (oldPosition && oldPosition.world_id === String(oldWorldId)) {
       deletePlayerPosition(userId);
-      sharedStorage.removeItem("vworld_hb:" + userId);
-      sharedStorage.removeItem("vworld_lease:" + userId);
+      deletePlayerHeartbeat(userId);
+      deletePlayerMoveLease(userId);
       graphQLRegistry.sendSubscriptionMessageFiltered(
         "worldPlayerMoved",
         JSON.stringify({
@@ -4033,10 +4440,10 @@ function switchUserWorld(userId, targetWorldId) {
   }
 
   savePlayerWorld(userId, String(targetWorldId));
-  sharedStorage.removeItem("vworld_lease:" + userId);
+  deletePlayerMoveLease(userId);
   // Clear presence entry so login_at resets when the player establishes
   // presence in the new world on their next heartbeat.
-  sharedStorage.removeItem("vworld_online:" + userId);
+  deleteOnlinePresence(userId);
 }
 
 /**
@@ -4085,6 +4492,7 @@ function playersHandler(context) {
     players = {};
   }
   var now = Date.now();
+  var heartbeatByUserId = loadPlayerHeartbeatMap();
   var active = Object.keys(players)
     .filter(function (pid) {
       if (!players[pid] || typeof players[pid] !== "object") {
@@ -4098,7 +4506,7 @@ function playersHandler(context) {
       // A player is active if either their last move OR their last heartbeat
       // is within the TTL window.  Heartbeat ts is stored separately to avoid
       // racing with the move handler's write to the players object.
-      var hbTs = Number(sharedStorage.getItem("vworld_hb:" + pid) || 0);
+      var hbTs = Number(heartbeatByUserId[pid] || 0);
       return now - Math.max(players[pid].ts, hbTs) < 90000;
     })
     .map(function (pid) {
@@ -4302,7 +4710,7 @@ function treeActionHandler(context) {
     };
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);
-    saveWorldItems(worldId, worldItems);
+    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
 
     broadcastItemChange(
       worldId,
@@ -4346,7 +4754,7 @@ function treeActionHandler(context) {
 
     if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
     else delete worldItems[removeTileKey];
-    saveWorldItems(worldId, worldItems);
+    deleteWorldItems(removedPortals);
 
     broadcastItemChange(
       worldId,

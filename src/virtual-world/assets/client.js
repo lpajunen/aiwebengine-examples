@@ -2760,13 +2760,17 @@ function renderTileDetailPanel() {
   var treeMod = dynamicTrees[key];
   var terrainLabel;
   if (terrainType === 1) {
-    terrainLabel = "Wall";
+    terrainLabel = t("terrain.wall", "Spruce thicket");
   } else if (terrainType === 2) {
     terrainLabel =
-      treeMod && treeMod.action === "plant" ? "Tree (planted)" : "Tree";
+      treeMod && treeMod.action === "plant"
+        ? t("terrain.tree_planted", "Pine tree (planted)")
+        : t("terrain.tree", "Pine tree");
   } else {
     terrainLabel =
-      treeMod && treeMod.action === "cut" ? "Ground (tree cut)" : "Ground";
+      treeMod && treeMod.action === "cut"
+        ? t("terrain.ground_tree_cut", "Forest floor (pine cut)")
+        : t("terrain.ground", "Forest floor");
   }
 
   var tileItems = worldItemsByTile[key] || [];

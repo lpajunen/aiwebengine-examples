@@ -467,9 +467,9 @@ function getVirtualWorldPage(context) {
 
   <div class="hud" id="hud-legend">
     <strong>Legend</strong>
-    <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Ground</div>
-    <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Wall</div>
-    <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Tree</div>
+    <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Forest Floor</div>
+    <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Spruce Thicket</div>
+    <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Pine Tree</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
 

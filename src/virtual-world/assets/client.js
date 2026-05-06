@@ -245,22 +245,24 @@ function getSSEReconnectDelayMs(retryCount) {
 var I18N_MESSAGES = {
   en: {
     item: {
-      saw: { name: "Saw" },
-      knife: { name: "Knife" },
-      flower: { name: "Rose" },
-      tree_planter: { name: "Tree planting spade" },
-      portal_builder: { name: "Portal builder" },
-      portal: { name: "Portal" },
-      starter_kit: { name: "Starter Kit" },
+      saw: { name: "Woodsman's saw" },
+      knife: { name: "Puukko knife" },
+      flower: { name: "Forest flower" },
+      tree_planter: { name: "Pine sapling" },
+      portal_builder: { name: "Rune gate charm" },
+      portal: { name: "Rune gate" },
+      starter_kit: { name: "Wanderer's bundle" },
+      kantele: { name: "Kantele" },
+      rowan_charm: { name: "Rowan charm" },
       unknown: { name: "Unknown item" },
     },
     tree_action: {
-      plant: "Use tree planting spade (plant)",
-      cut: "Use saw (cut)",
-      build_portal: "Use portal builder (build portal)",
-      remove_portal: "Use portal builder (remove portal)",
-      portal_travel: "Use portal",
-      return_home: "Travel home",
+      plant: "Plant pine sapling",
+      cut: "Use woodsman's saw",
+      build_portal: "Raise rune gate",
+      remove_portal: "Close rune gate",
+      portal_travel: "Enter rune gate",
+      return_home: "Return home",
     },
     inventory: {
       empty: "empty",
@@ -272,22 +274,24 @@ var I18N_MESSAGES = {
   },
   fi: {
     item: {
-      saw: { name: "Saha" },
-      knife: { name: "Veitsi" },
-      flower: { name: "Ruusu" },
-      tree_planter: { name: "Puunistutuslapio" },
-      portal_builder: { name: "Portaalityökalu" },
-      portal: { name: "Portaali" },
-      starter_kit: { name: "Aloituspakkaus" },
+      saw: { name: "Metsurin saha" },
+      knife: { name: "Puukko" },
+      flower: { name: "Metsakukka" },
+      tree_planter: { name: "Männyn taimi" },
+      portal_builder: { name: "Riimuportin amuletti" },
+      portal: { name: "Riimuportti" },
+      starter_kit: { name: "Kulkijan nyytti" },
+      kantele: { name: "Kantele" },
+      rowan_charm: { name: "Pihlajakoriste" },
       unknown: { name: "Tuntematon esine" },
     },
     tree_action: {
-      plant: "Istuta puu",
-      cut: "Kaada puu",
-      build_portal: "Rakenna portaali",
-      remove_portal: "Tuhoa portaali",
-      portal_travel: "Matkusta portaaliin",
-      return_home: "Matkusta kotiin",
+      plant: "Istuta männyn taimi",
+      cut: "Käytä metsurin sahaa",
+      build_portal: "Nosta riimuportti",
+      remove_portal: "Sulje riimuportti",
+      portal_travel: "Astu riimuporttiin",
+      return_home: "Palaa kotiin",
     },
     inventory: {
       empty: "tyhjä",
@@ -352,6 +356,8 @@ function itemTypeToLabelKey(type) {
   if (type === "flower") return "item.flower.name";
   if (type === "tree_planter") return "item.tree_planter.name";
   if (type === "portal_builder") return "item.portal_builder.name";
+  if (type === "kantele") return "item.kantele.name";
+  if (type === "rowan_charm") return "item.rowan_charm.name";
   if (type === "portal") return "item.portal.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   return "item.unknown.name";
@@ -929,6 +935,8 @@ function itemTypeColor(type) {
   if (type === "flower") return 0xec6ea4;
   if (type === "tree_planter") return 0x54d08a;
   if (type === "portal_builder") return 0xff9f1c;
+  if (type === "kantele") return 0xc58d52;
+  if (type === "rowan_charm") return 0xc73a32;
   if (type === "portal") return 0x5ad7ff;
   return 0xf3ca40;
 }

@@ -12,7 +12,15 @@ var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
 var NPC_TICK_LEASE_MS = 2000;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
-var ITEM_TYPES = ["saw", "knife", "flower", "tree_planter", "portal_builder"];
+var ITEM_TYPES = [
+  "saw",
+  "knife",
+  "flower",
+  "tree_planter",
+  "portal_builder",
+  "kantele",
+  "rowan_charm",
+];
 var WORLD_ITEM_SPAWN_COUNT = 30;
 var npcTickerStarted = false;
 var npcTickOwnerId =

@@ -254,6 +254,10 @@ var I18N_MESSAGES = {
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Rowan charm" },
+      rune_stone: { name: "Rune stone" },
+      juniper_bundle: { name: "Juniper bundle" },
+      birch_bark_letter: { name: "Birch-bark letter" },
+      blessing_marker: { name: "Rowan blessing" },
       unknown: { name: "Unknown item" },
     },
     tree_action: {
@@ -261,6 +265,8 @@ var I18N_MESSAGES = {
       cut: "Use woodsman's saw",
       build_portal: "Raise rune gate",
       remove_portal: "Close rune gate",
+      play_tune: "Play kantele tune",
+      place_blessing: "Place rowan blessing",
       portal_travel: "Enter rune gate",
       return_home: "Return home",
     },
@@ -283,6 +289,10 @@ var I18N_MESSAGES = {
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Pihlajakoriste" },
+      rune_stone: { name: "Riimukivi" },
+      juniper_bundle: { name: "Katajanippu" },
+      birch_bark_letter: { name: "Tuohikirje" },
+      blessing_marker: { name: "Pihlajansiunaus" },
       unknown: { name: "Tuntematon esine" },
     },
     tree_action: {
@@ -290,6 +300,8 @@ var I18N_MESSAGES = {
       cut: "Käytä metsurin sahaa",
       build_portal: "Nosta riimuportti",
       remove_portal: "Sulje riimuportti",
+      play_tune: "Soita kanteleen sävel",
+      place_blessing: "Aseta pihlajansiunaus",
       portal_travel: "Astu riimuporttiin",
       return_home: "Palaa kotiin",
     },
@@ -358,6 +370,10 @@ function itemTypeToLabelKey(type) {
   if (type === "portal_builder") return "item.portal_builder.name";
   if (type === "kantele") return "item.kantele.name";
   if (type === "rowan_charm") return "item.rowan_charm.name";
+  if (type === "rune_stone") return "item.rune_stone.name";
+  if (type === "juniper_bundle") return "item.juniper_bundle.name";
+  if (type === "birch_bark_letter") return "item.birch_bark_letter.name";
+  if (type === "blessing_marker") return "item.blessing_marker.name";
   if (type === "portal") return "item.portal.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   return "item.unknown.name";
@@ -433,6 +449,8 @@ function treeActionsForItemType(type) {
   if (type === "portal_builder") return ["build_portal", "remove_portal"];
   if (type === "tree_planter") return ["plant"];
   if (type === "saw") return ["cut"];
+  if (type === "kantele") return ["play_tune"];
+  if (type === "rowan_charm") return ["place_blessing"];
   if (type === "portal") return ["portal_travel"];
   if (type === "starter_kit") return ["return_home"];
   return [];
@@ -450,6 +468,12 @@ function treeActionLabel(action) {
   }
   if (action === "remove_portal") {
     return t("tree_action.remove_portal", "Use portal builder (remove portal)");
+  }
+  if (action === "play_tune") {
+    return t("tree_action.play_tune", "Play kantele tune");
+  }
+  if (action === "place_blessing") {
+    return t("tree_action.place_blessing", "Place rowan blessing");
   }
   if (action === "portal_travel") {
     return t("tree_action.portal_travel", "Use portal (new world)");
@@ -560,6 +584,10 @@ function showCheatToast(message, isError) {
     },
     isError ? 2600 : 1800,
   );
+}
+
+function showHudToast(message, isError) {
+  showCheatToast(message, isError);
 }
 
 function applyCheatResult(result) {
@@ -763,9 +791,9 @@ var geoGround = new THREE.BoxGeometry(TILE, 0.25, TILE);
 var matGroundA = new THREE.MeshLambertMaterial({ color: 0x7ab648 });
 var matGroundB = new THREE.MeshLambertMaterial({ color: 0x6da040 });
 
-var geoWall = new THREE.BoxGeometry(TILE, 1.7, TILE);
-var matWallSides = new THREE.MeshLambertMaterial({ color: 0x9e9e9e });
-var matWallTop = new THREE.MeshLambertMaterial({ color: 0xc8c8c8 });
+var geoWall = new THREE.BoxGeometry(TILE, 1.85, TILE);
+var matWallSides = new THREE.MeshLambertMaterial({ color: 0x355c34 });
+var matWallTop = new THREE.MeshLambertMaterial({ color: 0x4d7a43 });
 // BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
 var matWall = [
   matWallSides,
@@ -937,6 +965,10 @@ function itemTypeColor(type) {
   if (type === "portal_builder") return 0xff9f1c;
   if (type === "kantele") return 0xc58d52;
   if (type === "rowan_charm") return 0xc73a32;
+  if (type === "rune_stone") return 0x7b7f8a;
+  if (type === "juniper_bundle") return 0x51764f;
+  if (type === "birch_bark_letter") return 0xe4d2a0;
+  if (type === "blessing_marker") return 0xb54434;
   if (type === "portal") return 0x5ad7ff;
   return 0xf3ca40;
 }
@@ -1129,7 +1161,14 @@ function makeNPCAvatar(npcId) {
   return g;
 }
 
-function upsertNPCAvatar(npcId, row, col, seq, rotation) {
+function npcDisplayName(npcId) {
+  if (npcAvatars[npcId] && npcAvatars[npcId].displayName) {
+    return npcAvatars[npcId].displayName;
+  }
+  return shortenId(npcId);
+}
+
+function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
   if (!npcId || !isFinite(Number(row)) || !isFinite(Number(col))) return;
   var tx = tileX(Number(col));
   var tz = tileZ(Number(row));
@@ -1151,6 +1190,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation) {
       seq: incomingSeq !== null ? incomingSeq : 0,
       row: Number(row),
       col: Number(col),
+      displayName: displayName || shortenId(npcId),
     };
   } else {
     var knownSeq = Number(npcAvatars[npcId].seq || 0);
@@ -1161,6 +1201,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation) {
     if (incomingSeq !== null) npcAvatars[npcId].seq = incomingSeq;
     npcAvatars[npcId].row = Number(row);
     npcAvatars[npcId].col = Number(col);
+    if (displayName) npcAvatars[npcId].displayName = displayName;
     refreshTileDetailIfOpen();
   }
 }
@@ -1180,7 +1221,7 @@ function syncNPCSnapshot(npcs) {
     var n = npcs[i];
     if (!n || typeof n.npc_id !== "string") continue;
     seen[n.npc_id] = true;
-    upsertNPCAvatar(n.npc_id, n.row, n.col, n.seq, n.rotation);
+    upsertNPCAvatar(n.npc_id, n.row, n.col, n.seq, n.rotation, n.display_name);
   }
   for (var npcId in npcAvatars) {
     if (!seen[npcId]) removeNPCAvatar(npcId);
@@ -1618,6 +1659,7 @@ function initMultiplayer() {
             payload.col,
             payload.seq,
             payload.rotation,
+            payload.display_name,
           );
         }
       } catch (e) {}
@@ -1992,10 +2034,12 @@ function postTreeAction(action) {
     .then(function (result) {
       if (!result.ok) {
         console.log("Use failed:", result.error);
+        if (result.error) showHudToast(result.error, true);
         updateUseButtonState();
         return;
       }
       applyItemStateFromResult(result);
+      if (result.toast_message) showHudToast(result.toast_message, false);
       if (result.switched_world) {
         window.location.href = "/virtual-world/play";
       }
@@ -2854,7 +2898,9 @@ function renderTileDetailPanel() {
   } else {
     for (var k = 0; k < npcsHere.length; k++) {
       html +=
-        '<div class="tile-row">' + escHtml(shortenId(npcsHere[k])) + "</div>";
+        '<div class="tile-row">' +
+        escHtml(npcDisplayName(npcsHere[k])) +
+        "</div>";
     }
   }
   html += "</div>";

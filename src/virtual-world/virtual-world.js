@@ -20,6 +20,9 @@ var ITEM_TYPES = [
   "portal_builder",
   "kantele",
   "rowan_charm",
+  "rune_stone",
+  "juniper_bundle",
+  "birch_bark_letter",
 ];
 var WORLD_ITEM_SPAWN_COUNT = 30;
 var npcTickerStarted = false;
@@ -33,12 +36,45 @@ var TREE_ACTION_BY_ITEM_TYPE = {
   saw: "cut",
   tree_planter: "plant",
   portal_builder: "build_portal",
+  kantele: "play_tune",
+  rowan_charm: "place_blessing",
   portal: "portal_travel",
   starter_kit: "return_home",
 };
 
 /** @type {string[]} */
-var EXTRA_ITEM_TYPES = ["portal", "starter_kit"];
+var EXTRA_ITEM_TYPES = ["portal", "starter_kit", "blessing_marker"];
+
+var WORLD_FLAVOR_TEXTS = [
+  "A low rune-song lingers between the spruce boughs.",
+  "Rowan charms sway softly where the pine paths meet.",
+  "The forest floor feels old here, as if someone just finished a quiet verse.",
+  "Juniper smoke and birdsong drift through this hidden clearing.",
+];
+
+var NPC_NAME_PREFIXES = [
+  "Aino",
+  "Ilma",
+  "Kylli",
+  "Lempi",
+  "Otso",
+  "Sampo",
+  "Tapio",
+  "Tuuli",
+  "Vesa",
+  "Virva",
+];
+
+var NPC_NAME_SUFFIXES = [
+  "of the Pines",
+  "the Rune-Hummer",
+  "the Rowan Keeper",
+  "of the Quiet Marsh",
+  "the Hearth Walker",
+  "of the Dawn Path",
+  "the Juniper Hand",
+  "of the Singing Moss",
+];
 
 /**
  * @returns {string[]}
@@ -59,6 +95,50 @@ function getAllKnownItemTypes() {
     out.push(type);
   });
   return out;
+}
+
+/**
+ * @param {string} value
+ * @returns {number}
+ */
+function hashString(value) {
+  var str = String(value || "");
+  var hash = 0;
+  for (var i = 0; i < str.length; i++) {
+    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
+
+/**
+ * @param {string} worldId
+ * @returns {string}
+ */
+function getWorldFlavorText(worldId) {
+  return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
+}
+
+/**
+ * @param {string} worldId
+ * @param {string} npcId
+ * @returns {string}
+ */
+function getNPCDisplayName(worldId, npcId) {
+  var seed = hashString(String(worldId) + ":" + String(npcId));
+  var prefix = NPC_NAME_PREFIXES[seed % NPC_NAME_PREFIXES.length];
+  var suffix =
+    NPC_NAME_SUFFIXES[
+      Math.floor(seed / NPC_NAME_PREFIXES.length) % NPC_NAME_SUFFIXES.length
+    ];
+  return prefix + " " + suffix;
+}
+
+/**
+ * @param {*} item
+ * @returns {boolean}
+ */
+function isPickableWorldItem(item) {
+  return !!item && item.type !== "portal" && item.type !== "blessing_marker";
 }
 
 /**
@@ -456,6 +536,7 @@ function getVirtualWorldPage(context) {
   const onlinePlayers = buildOnlinePlayersSnapshot();
   const initialChat = loadWorldChat(worldId).slice(-50);
   const initialDmIndex = loadDMIndex(userId);
+  const worldFlavorText = getWorldFlavorText(worldId);
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -467,6 +548,7 @@ function getVirtualWorldPage(context) {
 <body class="game">
   <div class="hud" id="hud-pos">
     <strong>Virtual World</strong>
+    <div style="margin:4px 0 6px;color:#d8e7c2;font-style:italic;max-width:220px;line-height:1.35;">${escapeHtml(worldFlavorText)}</div>
     <span id="hud-nick-row"><span id="nick-display">${escapeHtml(playerNick || authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" title="Rename">✏️</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" title="Save">✓</button><button onclick="cancelNickEdit()" title="Cancel">✗</button></span></span><br>
     World: ${worldId}<br>
     Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
@@ -476,7 +558,7 @@ function getVirtualWorldPage(context) {
   <div class="hud" id="hud-legend">
     <strong>Legend</strong>
     <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Forest Floor</div>
-    <div class="leg"><div class="leg-box" style="background:#9e9e9e;"></div> Spruce Thicket</div>
+    <div class="leg"><div class="leg-box" style="background:#355c34;"></div> Spruce Thicket</div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Pine Tree</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
@@ -853,6 +935,8 @@ function canInventoryUseTreeAction(inv, action) {
     action !== "cut" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
+    action !== "play_tune" &&
+    action !== "place_blessing" &&
     action !== "portal_travel" &&
     action !== "return_home"
   )
@@ -3365,6 +3449,7 @@ function getWorldNPCSnapshot(worldId) {
     var n = npcs[npcId] || {};
     return {
       npc_id: npcId,
+      display_name: getNPCDisplayName(worldId, npcId),
       row: Number(n.row),
       col: Number(n.col),
       seq: Number(n.seq || 0),
@@ -3470,6 +3555,7 @@ function tickWorldNPCs(worldId, now) {
           "worldNPCMoved",
           JSON.stringify({
             npc_id: npcId,
+            display_name: getNPCDisplayName(worldId, npcId),
             row: n.row,
             col: n.col,
             seq: n.seq,
@@ -3496,10 +3582,10 @@ function tickWorldNPCs(worldId, now) {
       ? worldItems[tileKey]
       : [];
     var pickableItems = allNpcTileItems.filter(function (item) {
-      return item && item.type !== "portal";
+      return isPickableWorldItem(item);
     });
     var nonPickableItems = allNpcTileItems.filter(function (item) {
-      return item && item.type === "portal";
+      return item && !isPickableWorldItem(item);
     });
     if (pickableItems.length > 0 && Math.random() < 0.65) {
       for (var pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
@@ -3841,10 +3927,10 @@ function handleItemActionForUser(userId, body) {
       ? worldItems[tileKey]
       : [];
     var picked = allTileItems.filter(function (item) {
-      return item && item.type !== "portal";
+      return isPickableWorldItem(item);
     });
     var remainingOnTile = allTileItems.filter(function (item) {
-      return item && item.type === "portal";
+      return item && !isPickableWorldItem(item);
     });
     if (picked.length > 0) {
       for (var i = 0; i < picked.length; i++) {
@@ -4683,6 +4769,8 @@ function treeActionHandler(context) {
     action !== "cut" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
+    action !== "play_tune" &&
+    action !== "place_blessing" &&
     action !== "portal_travel" &&
     action !== "return_home"
   ) {
@@ -4721,6 +4809,78 @@ function treeActionHandler(context) {
       action: "return_home",
       switched_world: true,
       world_id: "10000",
+    });
+  }
+
+  if (action === "play_tune") {
+    var tuneMsg = {
+      id:
+        "wc-" +
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).slice(2),
+      sender_id: userId,
+      sender_nick: getEffectiveNick(userId),
+      text: "lets a kantele melody drift through the spruce hush.",
+      ts: Date.now(),
+    };
+    appendWorldChatMessage(worldId, tuneMsg);
+    graphQLRegistry.sendSubscriptionMessageFiltered(
+      "worldChatMessage",
+      JSON.stringify(tuneMsg),
+      JSON.stringify({ world_id: worldId }),
+    );
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      inventory: inv,
+      items: flattenWorldItems(worldItems),
+      toast_message: "A kantele tune carries across the clearing.",
+    });
+  }
+
+  if (action === "place_blessing") {
+    var blessingTileKey = canonical.row + "_" + canonical.col;
+    var blessingItems = Array.isArray(worldItems[blessingTileKey])
+      ? worldItems[blessingTileKey]
+      : [];
+    var existingBlessing = blessingItems.some(function (item) {
+      return item && item.type === "blessing_marker";
+    });
+    if (existingBlessing) {
+      return ResponseBuilder.json({
+        ok: false,
+        error: "A blessing already rests here",
+      });
+    }
+
+    var blessingItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "blessing_marker",
+      created_at: Date.now(),
+      placed_by: userId,
+      non_droppable: true,
+    };
+    if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
+    worldItems[blessingTileKey].push(blessingItem);
+    upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "blessing_place",
+      canonical.row,
+      canonical.col,
+      [blessingItem],
+    );
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      row: canonical.row,
+      col: canonical.col,
+      inventory: inv,
+      items: flattenWorldItems(worldItems),
+      toast_message: "A rowan blessing now marks this place.",
     });
   }
 

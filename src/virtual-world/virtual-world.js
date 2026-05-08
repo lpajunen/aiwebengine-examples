@@ -25,6 +25,10 @@ var ITEM_TYPES = [
   "birch_bark_letter",
 ];
 var WORLD_ITEM_SPAWN_COUNT = 30;
+var OAK_WORLD_ID = "10000";
+var OAK_CENTER_ROW = 50;
+var OAK_CENTER_COL = 50;
+var OAK_CLEAR_RADIUS = 5;
 var npcTickerStarted = false;
 var npcTickOwnerId =
   "npc-tick-" +
@@ -116,6 +120,166 @@ function hashString(value) {
  */
 function getWorldFlavorText(worldId) {
   return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
+}
+
+/**
+ * @param {string | number} worldId
+ * @returns {boolean}
+ */
+function isOakWorld(worldId) {
+  return String(worldId) === OAK_WORLD_ID;
+}
+
+/**
+ * @param {number} row
+ * @param {number} col
+ * @returns {number}
+ */
+function oakDistanceSquared(row, col) {
+  var dr = Number(row) - OAK_CENTER_ROW;
+  var dc = Number(col) - OAK_CENTER_COL;
+  return dr * dr + dc * dc;
+}
+
+/**
+ * @param {string | number} worldId
+ * @param {number} row
+ * @param {number} col
+ * @returns {boolean}
+ */
+function isOakCenterTile(worldId, row, col) {
+  return (
+    isOakWorld(worldId) &&
+    Number(row) === OAK_CENTER_ROW &&
+    Number(col) === OAK_CENTER_COL
+  );
+}
+
+/**
+ * @param {string | number} worldId
+ * @param {number} row
+ * @param {number} col
+ * @returns {boolean}
+ */
+function isOakClearingTile(worldId, row, col) {
+  if (!isOakWorld(worldId) || isOakCenterTile(worldId, row, col)) return false;
+  return oakDistanceSquared(row, col) <= OAK_CLEAR_RADIUS * OAK_CLEAR_RADIUS;
+}
+
+/**
+ * @param {number[][]} map
+ * @param {string | number} worldId
+ * @returns {number[][]}
+ */
+function applyOakReservation(map, worldId) {
+  if (!isOakWorld(worldId)) return map;
+  for (
+    var row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
+    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
+    row++
+  ) {
+    if (row < 0 || row >= ROWS) continue;
+    for (
+      var col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
+      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
+      col++
+    ) {
+      if (col < 0 || col >= COLS) continue;
+      if (isOakCenterTile(worldId, row, col)) {
+        map[row][col] = 2;
+      } else if (isOakClearingTile(worldId, row, col)) {
+        map[row][col] = 0;
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * @param {string | number} worldId
+ * @returns {{row: number, col: number}[]}
+ */
+function getOakClearingTiles(worldId) {
+  if (!isOakWorld(worldId)) return [];
+  /** @type {{row: number, col: number, dist2: number}[]} */
+  var tiles = [];
+  for (
+    var row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
+    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
+    row++
+  ) {
+    if (row < 0 || row >= ROWS) continue;
+    for (
+      var col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
+      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
+      col++
+    ) {
+      if (col < 0 || col >= COLS) continue;
+      if (!isOakClearingTile(worldId, row, col)) continue;
+      tiles.push({ row: row, col: col, dist2: oakDistanceSquared(row, col) });
+    }
+  }
+  tiles.sort(function (a, b) {
+    if (a.dist2 !== b.dist2) return a.dist2 - b.dist2;
+    if (a.row !== b.row) return a.row - b.row;
+    return a.col - b.col;
+  });
+  return tiles.map(function (tile) {
+    return { row: tile.row, col: tile.col };
+  });
+}
+
+/**
+ * @param {string | number} worldId
+ * @param {string} userId
+ * @returns {{row: number, col: number, seq: number, rotation: number}}
+ */
+function getDefaultSpawnPosition(worldId, userId) {
+  if (!isOakWorld(worldId)) {
+    return { row: 1, col: 1, seq: 0, rotation: 0 };
+  }
+
+  var tiles = getOakClearingTiles(worldId);
+  if (tiles.length === 0) {
+    return {
+      row: OAK_CENTER_ROW + 1,
+      col: OAK_CENTER_COL,
+      seq: 0,
+      rotation: 0,
+    };
+  }
+
+  var map = getEffectiveMap(String(worldId));
+  var players = loadWorldPlayers(String(worldId));
+  /** @type {Record<string, boolean>} */
+  var occupied = {};
+  for (var playerId in players) {
+    var player = players[playerId];
+    if (!player) continue;
+    occupied[Number(player.row) + "_" + Number(player.col)] = true;
+  }
+
+  var startIndex = userId ? hashString(userId) % tiles.length : 0;
+  var fallbackTile = null;
+  for (var i = 0; i < tiles.length; i++) {
+    var tile = tiles[(startIndex + i) % tiles.length];
+    if (!tile || !map[tile.row] || map[tile.row][tile.col] !== 0) continue;
+    if (!fallbackTile) fallbackTile = tile;
+    if (!occupied[tile.row + "_" + tile.col]) {
+      return { row: tile.row, col: tile.col, seq: 0, rotation: 0 };
+    }
+  }
+
+  if (fallbackTile) {
+    return {
+      row: fallbackTile.row,
+      col: fallbackTile.col,
+      seq: 0,
+      rotation: 0,
+    };
+  }
+
+  return { row: OAK_CENTER_ROW + 1, col: OAK_CENTER_COL, seq: 0, rotation: 0 };
 }
 
 /**
@@ -227,6 +391,10 @@ function generateMap(worldId) {
     var r = 1 + Math.floor(rand() * (ROWS - 2));
     var c = 1 + Math.floor(rand() * (COLS - 2));
     if (map[r][c] === 0) map[r][c] = 2;
+  }
+
+  if (isOakWorld(worldId)) {
+    return applyOakReservation(map, worldId);
   }
 
   // Always keep spawn area clear
@@ -514,16 +682,17 @@ function getVirtualWorldPage(context) {
   const worldItems = loadWorldItems(worldId);
   const playerInventory = loadPlayerInventory(userId);
   const npcs = getWorldNPCSnapshot(worldId);
-  // Read last known position from dedicated storage (survives page refresh).
-  // Falls back to spawn (1,1) only when the player enters a fresh new world.
   const savedPos = loadPlayerPosition(userId);
-  const initRow = savedPos ? savedPos.row : 1;
-  const initCol = savedPos ? savedPos.col : 1;
-  const initSeq = savedPos ? savedPos.seq || 0 : 0;
-  const initRotation =
-    savedPos && Number.isFinite(Number(savedPos.rotation))
-      ? Number(savedPos.rotation)
-      : 0;
+  const initialPos =
+    savedPos && savedPos.world_id === String(worldId)
+      ? savedPos
+      : getDefaultSpawnPosition(worldId, userId);
+  const initRow = initialPos.row;
+  const initCol = initialPos.col;
+  const initSeq = initialPos.seq || 0;
+  const initRotation = Number.isFinite(Number(initialPos.rotation))
+    ? Number(initialPos.rotation)
+    : 0;
   let playerNick = loadPlayerNick(userId);
   if (!playerNick && authName) {
     savePlayerNick(userId, authName);
@@ -3336,6 +3505,7 @@ function getEffectiveMap(worldId) {
       }
     }
   }
+  applyOakReservation(map, worldId);
   return map;
 }
 
@@ -3659,6 +3829,9 @@ function tickWorldNPCs(worldId, now) {
         var treeKey = tr + "_" + tc;
 
         if (npcTreeActions.indexOf("cut") !== -1) {
+          if (isOakCenterTile(worldId, tr, tc)) {
+            continue;
+          }
           var hasPlantedTree =
             trees[treeKey] && trees[treeKey].action === "plant";
           var baseHasTree = map[tr][tc] === 2;
@@ -3694,7 +3867,11 @@ function tickWorldNPCs(worldId, now) {
             trees[treeKey] && trees[treeKey].action === "plant";
           var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
           var groundWalkable = map[tr][tc] === 0;
-          if (groundWalkable && !hasExistingTree) {
+          if (
+            groundWalkable &&
+            !hasExistingTree &&
+            !isOakClearingTile(worldId, tr, tc)
+          ) {
             trees[treeKey] = {
               action: "plant",
               planted_by: npcId,
@@ -3872,7 +4049,7 @@ function getCanonicalPlayerState(worldId, userId) {
   }
   var savedPos = loadPlayerPosition(userId);
   if (!savedPos || savedPos.world_id !== String(worldId)) {
-    return { row: 1, col: 1, seq: 0, rotation: 0 };
+    return getDefaultSpawnPosition(worldId, userId);
   }
   return {
     row: savedPos.row,
@@ -4627,8 +4804,9 @@ function buildActiveWorldPlayers(worldId) {
 /**
  * @param {string} userId
  * @param {string} targetWorldId
+ * @param {{row: number, col: number, seq?: number, rotation?: number}=} spawnPosition
  */
-function switchUserWorld(userId, targetWorldId) {
+function switchUserWorld(userId, targetWorldId, spawnPosition) {
   var oldWorldId = getPlayerWorld(userId);
   if (oldWorldId) {
     var oldPosition = loadPlayerPosition(userId);
@@ -4650,6 +4828,21 @@ function switchUserWorld(userId, targetWorldId) {
   }
 
   savePlayerWorld(userId, String(targetWorldId));
+  if (
+    spawnPosition &&
+    isFinite(Number(spawnPosition.row)) &&
+    isFinite(Number(spawnPosition.col))
+  ) {
+    savePlayerPosition(userId, String(targetWorldId), {
+      row: Number(spawnPosition.row),
+      col: Number(spawnPosition.col),
+      seq: isFinite(Number(spawnPosition.seq)) ? Number(spawnPosition.seq) : 0,
+      rotation: isFinite(Number(spawnPosition.rotation))
+        ? Number(spawnPosition.rotation)
+        : 0,
+      ts: Date.now(),
+    });
+  }
   deletePlayerMoveLease(userId);
   // Clear presence entry so login_at resets when the player establishes
   // presence in the new world on their next heartbeat.
@@ -4677,7 +4870,11 @@ function startWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  switchUserWorld(userId, "10000");
+  switchUserWorld(
+    userId,
+    OAK_WORLD_ID,
+    getDefaultSpawnPosition(OAK_WORLD_ID, userId),
+  );
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -4803,12 +5000,16 @@ function treeActionHandler(context) {
   }
 
   if (action === "return_home") {
-    switchUserWorld(userId, "10000");
+    switchUserWorld(
+      userId,
+      OAK_WORLD_ID,
+      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
+    );
     return ResponseBuilder.json({
       ok: true,
       action: "return_home",
       switched_world: true,
-      world_id: "10000",
+      world_id: OAK_WORLD_ID,
     });
   }
 
@@ -5033,6 +5234,12 @@ function treeActionHandler(context) {
   }
 
   if (action === "plant") {
+    if (isOakClearingTile(worldId, targetRow, targetCol)) {
+      return ResponseBuilder.json({
+        ok: false,
+        error: "The oak clearing must remain open",
+      });
+    }
     // Check if target is walkable ground (no wall, no tree)
     var hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
     var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
@@ -5053,6 +5260,12 @@ function treeActionHandler(context) {
       timestamp: Date.now(),
     };
   } else if (action === "cut") {
+    if (isOakCenterTile(worldId, targetRow, targetCol)) {
+      return ResponseBuilder.json({
+        ok: false,
+        error: "The old oak stands firm",
+      });
+    }
     // Check if target has a tree
     var hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
     var baseHasTree = map[targetRow][targetCol] === 2;

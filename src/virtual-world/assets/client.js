@@ -268,7 +268,15 @@ var I18N_MESSAGES = {
       play_tune: "Play kantele tune",
       place_blessing: "Place rowan blessing",
       portal_travel: "Enter rune gate",
-      return_home: "Return home",
+      return_home: "Travel to the old oak",
+    },
+    terrain: {
+      wall: "Spruce thicket",
+      tree: "Pine tree",
+      tree_planted: "Pine tree (planted)",
+      old_oak: "Old oak",
+      ground_tree_cut: "Forest floor (pine cut)",
+      ground: "Forest floor",
     },
     inventory: {
       empty: "empty",
@@ -303,7 +311,15 @@ var I18N_MESSAGES = {
       play_tune: "Soita kanteleen sävel",
       place_blessing: "Aseta pihlajansiunaus",
       portal_travel: "Astu riimuporttiin",
-      return_home: "Palaa kotiin",
+      return_home: "Matkaa vanhalle tammelle",
+    },
+    terrain: {
+      wall: "Kuusitiheikkö",
+      tree: "Mänty",
+      tree_planted: "Mänty (istutettu)",
+      old_oak: "Vanha tammi",
+      ground_tree_cut: "Metsäpohja (mänty kaadettu)",
+      ground: "Metsäpohja",
     },
     inventory: {
       empty: "tyhjä",
@@ -479,7 +495,7 @@ function treeActionLabel(action) {
     return t("tree_action.portal_travel", "Use portal (new world)");
   }
   if (action === "return_home") {
-    return t("tree_action.return_home", "Travel home");
+    return t("tree_action.return_home", "Travel to the old oak");
   }
   return action;
 }
@@ -2804,6 +2820,7 @@ function renderTileDetailPanel() {
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
   var key = row + "_" + col;
+  var isOldOakTile = String(worldId) === "10000" && row === 50 && col === 50;
 
   document.getElementById("tile-detail-title").textContent =
     "Square (" + col + ", " + row + ")";
@@ -2814,10 +2831,14 @@ function renderTileDetailPanel() {
   if (terrainType === 1) {
     terrainLabel = t("terrain.wall", "Spruce thicket");
   } else if (terrainType === 2) {
-    terrainLabel =
-      treeMod && treeMod.action === "plant"
-        ? t("terrain.tree_planted", "Pine tree (planted)")
-        : t("terrain.tree", "Pine tree");
+    if (isOldOakTile) {
+      terrainLabel = t("terrain.old_oak", "Old oak");
+    } else {
+      terrainLabel =
+        treeMod && treeMod.action === "plant"
+          ? t("terrain.tree_planted", "Pine tree (planted)")
+          : t("terrain.tree", "Pine tree");
+    }
   } else {
     terrainLabel =
       treeMod && treeMod.action === "cut"

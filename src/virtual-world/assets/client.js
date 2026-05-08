@@ -807,26 +807,34 @@ var geoGround = new THREE.BoxGeometry(TILE, 0.25, TILE);
 var matGroundA = new THREE.MeshLambertMaterial({ color: 0x7ab648 });
 var matGroundB = new THREE.MeshLambertMaterial({ color: 0x6da040 });
 
-var geoWall = new THREE.BoxGeometry(TILE, 1.85, TILE);
-var matWallSides = new THREE.MeshLambertMaterial({ color: 0x355c34 });
-var matWallTop = new THREE.MeshLambertMaterial({ color: 0x4d7a43 });
-// BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
-var matWall = [
-  matWallSides,
-  matWallSides,
-  matWallTop,
-  matWallSides,
-  matWallSides,
-  matWallSides,
-];
+var geoSpruceTrunk = new THREE.CylinderGeometry(0.11, 0.16, 0.95, 6);
+var geoSpruceCanopyLow = new THREE.ConeGeometry(0.78, 1.5, 8);
+var geoSpruceCanopyMid = new THREE.ConeGeometry(0.58, 1.15, 8);
+var geoSpruceCanopyTop = new THREE.ConeGeometry(0.36, 0.8, 8);
+var matSpruceTrunk = new THREE.MeshLambertMaterial({ color: 0x6d4726 });
+var matSpruceLow = new THREE.MeshLambertMaterial({ color: 0x2b5730 });
+var matSpruceMid = new THREE.MeshLambertMaterial({ color: 0x36673a });
+var matSpruceTop = new THREE.MeshLambertMaterial({ color: 0x447b45 });
 
-var geoTrunk = new THREE.BoxGeometry(0.28, 0.9, 0.28);
-var matTrunk = new THREE.MeshLambertMaterial({ color: 0x7d4f2a });
+var geoPineTrunk = new THREE.CylinderGeometry(0.09, 0.14, 1.05, 6);
+var geoPineCanopyLow = new THREE.ConeGeometry(0.48, 1.05, 8);
+var geoPineCanopyMid = new THREE.ConeGeometry(0.34, 0.8, 8);
+var geoPineCanopyTop = new THREE.ConeGeometry(0.2, 0.52, 8);
+var matPineTrunk = new THREE.MeshLambertMaterial({ color: 0x7d4f2a });
+var matPineLow = new THREE.MeshLambertMaterial({ color: 0x2d8a3e });
+var matPineMid = new THREE.MeshLambertMaterial({ color: 0x3c9f4b });
+var matPineTop = new THREE.MeshLambertMaterial({ color: 0x56bf62 });
 
-var geoFoliage1 = new THREE.BoxGeometry(1.1, 0.85, 1.1);
-var geoFoliage2 = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-var matFoliage1 = new THREE.MeshLambertMaterial({ color: 0x2d8a3e });
-var matFoliage2 = new THREE.MeshLambertMaterial({ color: 0x3dba4e });
+var geoOakTrunk = new THREE.CylinderGeometry(0.18, 0.28, 1.3, 8);
+var geoOakCanopyCore = new THREE.SphereGeometry(0.58, 10, 10);
+var geoOakCanopySide = new THREE.SphereGeometry(0.42, 10, 10);
+var matOakTrunk = new THREE.MeshLambertMaterial({ color: 0x6c4729 });
+var matOakCore = new THREE.MeshLambertMaterial({ color: 0x4f8b42 });
+var matOakSide = new THREE.MeshLambertMaterial({ color: 0x6aa651 });
+
+function isOldOakTile(row, col) {
+  return String(worldId) === "10000" && row === 50 && col === 50;
+}
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
 function tileX(col) {
@@ -840,131 +848,250 @@ var dummy = new THREE.Object3D();
 dummy.rotation.set(0, 0, 0);
 dummy.scale.set(1, 1, 1);
 
+function setInstanceTransform(mesh, index, x, y, z, scaleX, scaleY, scaleZ) {
+  dummy.position.set(x, y, z);
+  dummy.scale.set(scaleX || 1, scaleY || 1, scaleZ || 1);
+  dummy.updateMatrix();
+  mesh.setMatrixAt(index, dummy.matrix);
+}
+
+function finalizeInstancedMesh(mesh) {
+  if (!mesh) return;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.instanceMatrix.needsUpdate = true;
+}
+
+function disposeInstancedMeshes(meshes) {
+  for (var i = 0; i < meshes.length; i++) {
+    if (meshes[i]) meshes[i].dispose();
+  }
+}
+
+function setTreeMeshVisibility(visible) {
+  var display = !!visible;
+  iPineTrunk.visible = display;
+  iPineCanopyLow.visible = display;
+  iPineCanopyMid.visible = display;
+  iPineCanopyTop.visible = display;
+  if (oakGroup) oakGroup.visible = display;
+}
+
+function buildOakGroup() {
+  if (String(worldId) !== "10000") return null;
+  var group = new THREE.Group();
+  var oakX = tileX(50);
+  var oakZ = tileZ(50);
+
+  var oakTrunk = new THREE.Mesh(geoOakTrunk, matOakTrunk);
+  oakTrunk.position.set(oakX, 0.65, oakZ);
+  oakTrunk.castShadow = true;
+  oakTrunk.receiveShadow = true;
+  group.add(oakTrunk);
+
+  var canopyCore = new THREE.Mesh(geoOakCanopyCore, matOakCore);
+  canopyCore.position.set(oakX, 1.95, oakZ);
+  canopyCore.scale.set(1.2, 0.95, 1.15);
+  canopyCore.castShadow = true;
+  canopyCore.receiveShadow = true;
+  group.add(canopyCore);
+
+  var canopyLeft = new THREE.Mesh(geoOakCanopySide, matOakSide);
+  canopyLeft.position.set(oakX - 0.38, 1.82, oakZ + 0.1);
+  canopyLeft.scale.set(1.05, 0.9, 1);
+  canopyLeft.castShadow = true;
+  canopyLeft.receiveShadow = true;
+  group.add(canopyLeft);
+
+  var canopyRight = new THREE.Mesh(geoOakCanopySide, matOakSide);
+  canopyRight.position.set(oakX + 0.36, 1.78, oakZ - 0.08);
+  canopyRight.scale.set(0.98, 0.86, 0.96);
+  canopyRight.castShadow = true;
+  canopyRight.receiveShadow = true;
+  group.add(canopyRight);
+
+  var canopyFront = new THREE.Mesh(geoOakCanopySide, matOakSide);
+  canopyFront.position.set(oakX + 0.05, 1.7, oakZ + 0.42);
+  canopyFront.scale.set(0.88, 0.76, 0.92);
+  canopyFront.castShadow = true;
+  canopyFront.receiveShadow = true;
+  group.add(canopyFront);
+
+  return group;
+}
+
+function countRenderablePines() {
+  var count = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      if (MAP[row][col] === 2 && !isOldOakTile(row, col)) count++;
+    }
+  }
+  return count;
+}
+
+function rebuildPineInstances() {
+  scene.remove(iPineTrunk, iPineCanopyLow, iPineCanopyMid, iPineCanopyTop);
+  disposeInstancedMeshes([
+    iPineTrunk,
+    iPineCanopyLow,
+    iPineCanopyMid,
+    iPineCanopyTop,
+  ]);
+
+  var pineCount = countRenderablePines();
+  iPineTrunk = new THREE.InstancedMesh(geoPineTrunk, matPineTrunk, pineCount);
+  iPineCanopyLow = new THREE.InstancedMesh(
+    geoPineCanopyLow,
+    matPineLow,
+    pineCount,
+  );
+  iPineCanopyMid = new THREE.InstancedMesh(
+    geoPineCanopyMid,
+    matPineMid,
+    pineCount,
+  );
+  iPineCanopyTop = new THREE.InstancedMesh(
+    geoPineCanopyTop,
+    matPineTop,
+    pineCount,
+  );
+
+  var pineIdx = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      if (MAP[row][col] !== 2 || isOldOakTile(row, col)) continue;
+      var pineX = tileX(col);
+      var pineZ = tileZ(row);
+      setInstanceTransform(iPineTrunk, pineIdx, pineX, 0.52, pineZ, 1, 1, 1);
+      setInstanceTransform(
+        iPineCanopyLow,
+        pineIdx,
+        pineX,
+        1.12,
+        pineZ,
+        1,
+        1,
+        1,
+      );
+      setInstanceTransform(
+        iPineCanopyMid,
+        pineIdx,
+        pineX,
+        1.62,
+        pineZ,
+        1,
+        1,
+        1,
+      );
+      setInstanceTransform(iPineCanopyTop, pineIdx, pineX, 2.0, pineZ, 1, 1, 1);
+      pineIdx++;
+    }
+  }
+
+  finalizeInstancedMesh(iPineTrunk);
+  finalizeInstancedMesh(iPineCanopyLow);
+  finalizeInstancedMesh(iPineCanopyMid);
+  finalizeInstancedMesh(iPineCanopyTop);
+  scene.add(iPineTrunk, iPineCanopyLow, iPineCanopyMid, iPineCanopyTop);
+}
+
 // Count instances
 var cntA = 0,
   cntB = 0,
   cntWall = 0,
-  cntTree = 0;
+  cntSpruce = 0;
 for (var r = 0; r < ROWS; r++) {
   for (var c = 0; c < COLS; c++) {
     if ((r + c) % 2 === 0) cntA++;
     else cntB++;
-    if (MAP[r][c] === 1) cntWall++;
-    if (MAP[r][c] === 2) cntTree++;
+    if (MAP[r][c] === 1) {
+      cntWall++;
+      cntSpruce++;
+    }
   }
 }
 
 var iGroundA = new THREE.InstancedMesh(geoGround, matGroundA, cntA);
 var iGroundB = new THREE.InstancedMesh(geoGround, matGroundB, cntB);
-var iWall = new THREE.InstancedMesh(geoWall, matWall, cntWall);
-var iTrunk = new THREE.InstancedMesh(geoTrunk, matTrunk, cntTree);
-var iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, cntTree);
-var iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, cntTree);
+var iSpruceTrunk = new THREE.InstancedMesh(
+  geoSpruceTrunk,
+  matSpruceTrunk,
+  cntSpruce,
+);
+var iSpruceCanopyLow = new THREE.InstancedMesh(
+  geoSpruceCanopyLow,
+  matSpruceLow,
+  cntSpruce,
+);
+var iSpruceCanopyMid = new THREE.InstancedMesh(
+  geoSpruceCanopyMid,
+  matSpruceMid,
+  cntSpruce,
+);
+var iSpruceCanopyTop = new THREE.InstancedMesh(
+  geoSpruceCanopyTop,
+  matSpruceTop,
+  cntSpruce,
+);
+var iPineTrunk = null;
+var iPineCanopyLow = null;
+var iPineCanopyMid = null;
+var iPineCanopyTop = null;
+var oakGroup = buildOakGroup();
 
 iGroundA.receiveShadow = true;
 iGroundB.receiveShadow = true;
-iWall.castShadow = true;
-iWall.receiveShadow = true;
-iTrunk.castShadow = true;
-iFoliage1.castShadow = true;
-iFoliage2.castShadow = true;
+finalizeInstancedMesh(iSpruceTrunk);
+finalizeInstancedMesh(iSpruceCanopyLow);
+finalizeInstancedMesh(iSpruceCanopyMid);
+finalizeInstancedMesh(iSpruceCanopyTop);
 
 var idxA = 0,
   idxB = 0,
-  idxW = 0,
-  idxT = 0;
+  idxW = 0;
 for (var r = 0; r < ROWS; r++) {
   for (var c = 0; c < COLS; c++) {
     var tx = tileX(c),
       tz = tileZ(r);
 
     dummy.position.set(tx, -0.125, tz);
+    dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     if ((r + c) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
     else iGroundB.setMatrixAt(idxB++, dummy.matrix);
 
     if (MAP[r][c] === 1) {
-      dummy.position.set(tx, 0.85, tz);
-      dummy.updateMatrix();
-      iWall.setMatrixAt(idxW++, dummy.matrix);
-    } else if (MAP[r][c] === 2) {
-      dummy.position.set(tx, 0.45, tz);
-      dummy.updateMatrix();
-      iTrunk.setMatrixAt(idxT, dummy.matrix);
-      dummy.position.set(tx, 1.1, tz);
-      dummy.updateMatrix();
-      iFoliage1.setMatrixAt(idxT, dummy.matrix);
-      dummy.position.set(tx, 1.78, tz);
-      dummy.updateMatrix();
-      iFoliage2.setMatrixAt(idxT, dummy.matrix);
-      idxT++;
+      setInstanceTransform(iSpruceTrunk, idxW, tx, 0.48, tz, 1, 1, 1);
+      setInstanceTransform(iSpruceCanopyLow, idxW, tx, 1.08, tz, 1, 1, 1);
+      setInstanceTransform(iSpruceCanopyMid, idxW, tx, 1.62, tz, 1, 1, 1);
+      setInstanceTransform(iSpruceCanopyTop, idxW, tx, 2.04, tz, 1, 1, 1);
+      idxW++;
     }
   }
 }
 
 iGroundA.instanceMatrix.needsUpdate = true;
 iGroundB.instanceMatrix.needsUpdate = true;
-iWall.instanceMatrix.needsUpdate = true;
-iTrunk.instanceMatrix.needsUpdate = true;
-iFoliage1.instanceMatrix.needsUpdate = true;
-iFoliage2.instanceMatrix.needsUpdate = true;
+iSpruceTrunk.instanceMatrix.needsUpdate = true;
+iSpruceCanopyLow.instanceMatrix.needsUpdate = true;
+iSpruceCanopyMid.instanceMatrix.needsUpdate = true;
+iSpruceCanopyTop.instanceMatrix.needsUpdate = true;
 
-scene.add(iGroundA, iGroundB, iWall, iTrunk, iFoliage1, iFoliage2);
+scene.add(
+  iGroundA,
+  iGroundB,
+  iSpruceTrunk,
+  iSpruceCanopyLow,
+  iSpruceCanopyMid,
+  iSpruceCanopyTop,
+);
+if (oakGroup) scene.add(oakGroup);
+rebuildPineInstances();
 
 // ── Function to rebuild tree instances after tree modifications ───────────
 function updateTreeInstances() {
-  // Remove old tree meshes from scene
-  scene.remove(iTrunk, iFoliage1, iFoliage2);
-
-  // Dispose of old meshes to free memory
-  iTrunk.dispose();
-  iFoliage1.dispose();
-  iFoliage2.dispose();
-
-  // Count trees in current MAP state
-  var newTreeCount = 0;
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
-      if (MAP[r][c] === 2) newTreeCount++;
-    }
-  }
-
-  // Create new tree instances
-  iTrunk = new THREE.InstancedMesh(geoTrunk, matTrunk, newTreeCount);
-  iFoliage1 = new THREE.InstancedMesh(geoFoliage1, matFoliage1, newTreeCount);
-  iFoliage2 = new THREE.InstancedMesh(geoFoliage2, matFoliage2, newTreeCount);
-
-  iTrunk.castShadow = true;
-  iFoliage1.castShadow = true;
-  iFoliage2.castShadow = true;
-
-  // Populate tree instances
-  var treeIdx = 0;
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
-      if (MAP[r][c] === 2) {
-        var tx = tileX(c),
-          tz = tileZ(r);
-        dummy.position.set(tx, 0.45, tz);
-        dummy.updateMatrix();
-        iTrunk.setMatrixAt(treeIdx, dummy.matrix);
-        dummy.position.set(tx, 1.1, tz);
-        dummy.updateMatrix();
-        iFoliage1.setMatrixAt(treeIdx, dummy.matrix);
-        dummy.position.set(tx, 1.78, tz);
-        dummy.updateMatrix();
-        iFoliage2.setMatrixAt(treeIdx, dummy.matrix);
-        treeIdx++;
-      }
-    }
-  }
-
-  iTrunk.instanceMatrix.needsUpdate = true;
-  iFoliage1.instanceMatrix.needsUpdate = true;
-  iFoliage2.instanceMatrix.needsUpdate = true;
-
-  // Add new tree meshes to scene
-  scene.add(iTrunk, iFoliage1, iFoliage2);
+  rebuildPineInstances();
 }
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────

@@ -380,6 +380,7 @@ function humanizeType(type) {
 
 function itemTypeToLabelKey(type) {
   if (type === "saw") return "item.saw.name";
+  if (type === "hammer") return "item.hammer.name";
   if (type === "knife") return "item.knife.name";
   if (type === "flower") return "item.flower.name";
   if (type === "tree_planter") return "item.tree_planter.name";
@@ -397,6 +398,7 @@ function itemTypeToLabelKey(type) {
 
 // ── Dynamic tree state (client-side) ──────────────────────────────────────
 var dynamicTrees = TREE_MODS || {};
+var dynamicHouses = HOUSE_MODS || {};
 
 // Apply tree modifications to MAP
 for (var treeKey in dynamicTrees) {
@@ -409,6 +411,29 @@ for (var treeKey in dynamicTrees) {
     } else if (dynamicTrees[treeKey].action === "cut") {
       MAP[tr][tc] = 0; // Remove tree
     }
+  }
+}
+
+for (var houseKey in dynamicHouses) {
+  var houseParts = houseKey.split("_");
+  var hr = parseInt(houseParts[0], 10);
+  var hc = parseInt(houseParts[1], 10);
+  if (hr >= 0 && hr < 100 && hc >= 0 && hc < 100) {
+    MAP[hr][hc] = 3;
+  }
+}
+
+function applyHouseAction(action, row, col, actorType, actorId) {
+  var tileKey = row + "_" + col;
+  if (action === "build_house") {
+    MAP[row][col] = 3;
+    dynamicHouses[tileKey] = {
+      built_by: actorId || "",
+      actor_type: actorType || "player",
+    };
+  } else if (action === "destroy_house") {
+    MAP[row][col] = 0;
+    delete dynamicHouses[tileKey];
   }
 }
 
@@ -463,6 +488,7 @@ var unreadDmCount = 0;
 
 function treeActionsForItemType(type) {
   if (type === "portal_builder") return ["build_portal", "remove_portal"];
+  if (type === "hammer") return ["build_house", "destroy_house"];
   if (type === "tree_planter") return ["plant"];
   if (type === "saw") return ["cut"];
   if (type === "kantele") return ["play_tune"];
@@ -478,6 +504,12 @@ function treeActionLabel(action) {
   }
   if (action === "cut") {
     return t("tree_action.cut", "Use saw (cut)");
+  }
+  if (action === "build_house") {
+    return t("tree_action.build_house", "Use hammer (build house)");
+  }
+  if (action === "destroy_house") {
+    return t("tree_action.destroy_house", "Use hammer (destroy house)");
   }
   if (action === "build_portal") {
     return t("tree_action.build_portal", "Use portal builder (build portal)");
@@ -831,6 +863,21 @@ var geoOakCanopySide = new THREE.SphereGeometry(0.42, 10, 10);
 var matOakTrunk = new THREE.MeshLambertMaterial({ color: 0x6c4729 });
 var matOakCore = new THREE.MeshLambertMaterial({ color: 0x4f8b42 });
 var matOakSide = new THREE.MeshLambertMaterial({ color: 0x6aa651 });
+var geoHouseFloor = new THREE.BoxGeometry(1.82, 0.16, 1.82);
+var geoHouseBody = new THREE.BoxGeometry(1.56, 1.18, 1.56);
+var geoHouseWallNorthSouth = new THREE.BoxGeometry(1.62, 1.06, 0.12);
+var geoHouseWallEastWest = new THREE.BoxGeometry(0.12, 1.06, 1.62);
+var geoHouseRoofCore = new THREE.BoxGeometry(1.74, 0.28, 1.74);
+var geoHouseRoofNorthSouth = new THREE.BoxGeometry(1.9, 0.14, 0.28);
+var geoHouseRoofEastWest = new THREE.BoxGeometry(0.28, 0.14, 1.9);
+var geoHouseDoor = new THREE.BoxGeometry(0.34, 0.72, 0.08);
+var geoHouseChimney = new THREE.BoxGeometry(0.22, 0.62, 0.22);
+var matHouseFloor = new THREE.MeshLambertMaterial({ color: 0x8c6b49 });
+var matHouseBody = new THREE.MeshLambertMaterial({ color: 0xcaa476 });
+var matHouseWall = new THREE.MeshLambertMaterial({ color: 0x845c3b });
+var matHouseRoof = new THREE.MeshLambertMaterial({ color: 0x81503c });
+var matHouseDoor = new THREE.MeshLambertMaterial({ color: 0x4e311f });
+var matHouseChimney = new THREE.MeshLambertMaterial({ color: 0x6a6767 });
 
 function isOldOakTile(row, col) {
   return String(worldId) === "10000" && row === 50 && col === 50;
@@ -928,6 +975,113 @@ function countRenderablePines() {
     }
   }
   return count;
+}
+
+function hasHouseAt(row, col) {
+  return (
+    row >= 0 && row < ROWS && col >= 0 && col < COLS && MAP[row][col] === 3
+  );
+}
+
+function buildHouseTile(row, col) {
+  var group = new THREE.Group();
+  var x = tileX(col);
+  var z = tileZ(row);
+  var north = hasHouseAt(row - 1, col);
+  var east = hasHouseAt(row, col + 1);
+  var south = hasHouseAt(row + 1, col);
+  var west = hasHouseAt(row, col - 1);
+
+  var floor = new THREE.Mesh(geoHouseFloor, matHouseFloor);
+  floor.position.set(x, 0.08, z);
+  floor.castShadow = true;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  var body = new THREE.Mesh(geoHouseBody, matHouseBody);
+  body.position.set(x, 0.74, z);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  var roof = new THREE.Mesh(geoHouseRoofCore, matHouseRoof);
+  roof.position.set(x, 1.48, z);
+  roof.rotation.y = north || south ? 0 : Math.PI / 4;
+  roof.castShadow = true;
+  roof.receiveShadow = true;
+  group.add(roof);
+
+  function addWall(geometry, material, px, py, pz) {
+    var mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(px, py, pz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  function addRoofTrim(geometry, px, py, pz) {
+    var mesh = new THREE.Mesh(geometry, matHouseRoof);
+    mesh.position.set(px, py, pz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  if (!north) {
+    addWall(geoHouseWallNorthSouth, matHouseWall, x, 0.75, z - 0.77);
+    addRoofTrim(geoHouseRoofNorthSouth, x, 1.62, z - 0.92);
+  }
+  if (!south) {
+    addWall(geoHouseWallNorthSouth, matHouseWall, x, 0.75, z + 0.77);
+    addRoofTrim(geoHouseRoofNorthSouth, x, 1.62, z + 0.92);
+  }
+  if (!east) {
+    addWall(geoHouseWallEastWest, matHouseWall, x + 0.77, 0.75, z);
+    addRoofTrim(geoHouseRoofEastWest, x + 0.92, 1.62, z);
+  }
+  if (!west) {
+    addWall(geoHouseWallEastWest, matHouseWall, x - 0.77, 0.75, z);
+    addRoofTrim(geoHouseRoofEastWest, x - 0.92, 1.62, z);
+  }
+
+  if (!south) {
+    var door = new THREE.Mesh(geoHouseDoor, matHouseDoor);
+    door.position.set(x, 0.49, z + 0.79);
+    door.castShadow = true;
+    door.receiveShadow = true;
+    group.add(door);
+  }
+
+  if (!north && !west) {
+    var chimney = new THREE.Mesh(geoHouseChimney, matHouseChimney);
+    chimney.position.set(x - 0.42, 1.82, z - 0.42);
+    chimney.castShadow = true;
+    chimney.receiveShadow = true;
+    group.add(chimney);
+  }
+
+  return group;
+}
+
+var houseMeshGroup = new THREE.Group();
+scene.add(houseMeshGroup);
+
+function clearHouseMeshes() {
+  while (houseMeshGroup.children.length > 0) {
+    houseMeshGroup.remove(
+      houseMeshGroup.children[houseMeshGroup.children.length - 1],
+    );
+  }
+}
+
+function rebuildHouseMeshes() {
+  clearHouseMeshes();
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      if (!hasHouseAt(row, col)) continue;
+      houseMeshGroup.add(buildHouseTile(row, col));
+    }
+  }
 }
 
 function rebuildPineInstances() {
@@ -1088,10 +1242,15 @@ scene.add(
 );
 if (oakGroup) scene.add(oakGroup);
 rebuildPineInstances();
+rebuildHouseMeshes();
 
 // ── Function to rebuild tree instances after tree modifications ───────────
 function updateTreeInstances() {
   rebuildPineInstances();
+}
+
+function updateHouseMeshes() {
+  rebuildHouseMeshes();
 }
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────
@@ -1102,6 +1261,7 @@ scene.add(itemMeshGroup);
 
 function itemTypeColor(type) {
   if (type === "saw") return 0xbfc6d0;
+  if (type === "hammer") return 0x8f7f6d;
   if (type === "knife") return 0xd8dee8;
   if (type === "flower") return 0xec6ea4;
   if (type === "tree_planter") return 0x54d08a;
@@ -1777,6 +1937,66 @@ function initMultiplayer() {
 
   openTreeSSE();
 
+  var houseQuery = "subscription{worldHouseChanged}";
+  var houseSseUrl = "/graphql/sse?query=" + encodeURIComponent(houseQuery);
+  var houseReconnectTimer = null;
+  var houseRetryCount = 0;
+  var houseWaitingForOnline = false;
+
+  function openHouseSSE() {
+    var houseEs = new EventSource(houseSseUrl);
+    houseEs.onmessage = function (evt) {
+      houseRetryCount = 0;
+      try {
+        var obj = JSON.parse(evt.data);
+        var raw = obj.data.worldHouseChanged;
+        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!payload) return;
+        applyHouseAction(
+          payload.action,
+          payload.row,
+          payload.col,
+          payload.actor_type || "player",
+          payload.actor_id || payload.player_id || "",
+        );
+        updateHouseMeshes();
+        refreshTileDetailIfOpen();
+      } catch (e) {
+        console.error("House SSE parse error:", e);
+      }
+    };
+    houseEs.onerror = function () {
+      houseEs.close();
+      scheduleSSEAuthCheck("worldHouseChanged");
+      if (
+        authState === AUTH_STATE_EXPIRED ||
+        authState === AUTH_STATE_REDIRECTING
+      )
+        return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        if (!houseWaitingForOnline) {
+          houseWaitingForOnline = true;
+          function handleHouseOnline() {
+            window.removeEventListener("online", handleHouseOnline);
+            houseWaitingForOnline = false;
+            openHouseSSE();
+          }
+          window.addEventListener("online", handleHouseOnline);
+        }
+        return;
+      }
+      if (houseReconnectTimer) clearTimeout(houseReconnectTimer);
+      houseRetryCount += 1;
+      houseReconnectTimer = setTimeout(
+        openHouseSSE,
+        getSSEReconnectDelayMs(houseRetryCount),
+      );
+    };
+    return houseEs;
+  }
+
+  openHouseSSE();
+
   // Subscribe to NPC movement via GraphQL SSE
   var npcQuery = "subscription{worldNPCMoved}";
   var npcSseUrl = "/graphql/sse?query=" + encodeURIComponent(npcQuery);
@@ -2182,6 +2402,22 @@ function postTreeAction(action) {
         return;
       }
       applyItemStateFromResult(result);
+      if (
+        (result.action === "build_house" ||
+          result.action === "destroy_house") &&
+        typeof result.row === "number" &&
+        typeof result.col === "number"
+      ) {
+        applyHouseAction(
+          result.action,
+          result.row,
+          result.col,
+          "player",
+          playerId,
+        );
+        updateHouseMeshes();
+        refreshTileDetailIfOpen();
+      }
       if (result.toast_message) showHudToast(result.toast_message, false);
       if (result.switched_world) {
         window.location.href = "/virtual-world/play";
@@ -2957,6 +3193,8 @@ function renderTileDetailPanel() {
   var terrainLabel;
   if (terrainType === 1) {
     terrainLabel = t("terrain.wall", "Spruce thicket");
+  } else if (terrainType === 3) {
+    terrainLabel = t("terrain.house", "House block");
   } else if (terrainType === 2) {
     if (isOldOakTile) {
       terrainLabel = t("terrain.old_oak", "Old oak");
@@ -2999,6 +3237,12 @@ function renderTileDetailPanel() {
   html += '<div class="tile-section">';
   html += '<div class="tile-section-label">Terrain</div>';
   html += '<div class="tile-row">' + escHtml(terrainLabel) + "</div>";
+  if (terrainType === 3 && dynamicHouses[key] && dynamicHouses[key].built_by) {
+    html +=
+      '<div class="tile-row">Built by ' +
+      escHtml(getNickForPlayer(dynamicHouses[key].built_by)) +
+      "</div>";
+  }
   html += "</div>";
 
   html += '<div class="tile-section">';

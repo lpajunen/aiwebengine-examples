@@ -38,6 +38,7 @@ var npcTickOwnerId =
 /** @type {Record<string, string>} */
 var TREE_ACTION_BY_ITEM_TYPE = {
   saw: "cut",
+  hammer: "build_house",
   tree_planter: "plant",
   portal_builder: "build_portal",
   kantele: "play_tune",
@@ -47,7 +48,7 @@ var TREE_ACTION_BY_ITEM_TYPE = {
 };
 
 /** @type {string[]} */
-var EXTRA_ITEM_TYPES = ["portal", "starter_kit", "blessing_marker"];
+var EXTRA_ITEM_TYPES = ["hammer", "portal", "starter_kit", "blessing_marker"];
 
 var WORLD_FLAVOR_TEXTS = [
   "A low rune-song lingers between the spruce boughs.",
@@ -678,6 +679,7 @@ function getVirtualWorldPage(context) {
   ensureStarterKit(userId);
   const map = generateMap(worldId);
   const treeMods = loadWorldTrees(worldId);
+  const houseMods = loadWorldHouses(worldId);
   ensureWorldItems(worldId);
   const worldItems = loadWorldItems(worldId);
   const playerInventory = loadPlayerInventory(userId);
@@ -834,6 +836,7 @@ function getVirtualWorldPage(context) {
     // ── Server-injected game state ────────────────────────────────────────────
     var MAP      = ${JSON.stringify(map)};
     var TREE_MODS = ${JSON.stringify(treeMods)};
+    var HOUSE_MODS = ${JSON.stringify(houseMods)};
     var WORLD_ITEMS = ${JSON.stringify(worldItems)};
     var PLAYER_INV = ${JSON.stringify(playerInventory)};
     var NPCS = ${JSON.stringify(npcs)};
@@ -1019,6 +1022,69 @@ function saveWorldTrees(worldId, trees) {
 }
 
 /**
+ * @param {string} worldId
+ * @returns {string}
+ */
+function worldHouseStorageKey(worldId) {
+  return "vworld_houses:" + String(worldId);
+}
+
+/**
+ * @param {string} worldId
+ * @returns {Record<string, any>}
+ */
+function loadWorldHouses(worldId) {
+  var raw = sharedStorage.getItem(worldHouseStorageKey(worldId));
+  if (!raw) return {};
+  try {
+    var parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    vwLog("house storage parse failed", {
+      world_id: String(worldId),
+      error: String(e),
+    });
+    return {};
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @param {Record<string, any>} houses
+ */
+function saveWorldHouses(worldId, houses) {
+  /** @type {Record<string, any>} */
+  var out = {};
+  Object.keys(houses && typeof houses === "object" ? houses : {}).forEach(
+    function (tileKey) {
+      var house = houses[tileKey];
+      if (!house || typeof house !== "object") return;
+      var parts = String(tileKey).split("_");
+      var row = Number(parts[0]);
+      var col = Number(parts[1]);
+      if (
+        !isFinite(row) ||
+        !isFinite(col) ||
+        row < 0 ||
+        row >= ROWS ||
+        col < 0 ||
+        col >= COLS
+      ) {
+        return;
+      }
+      out[String(tileKey)] = {
+        built_by: house.built_by ? String(house.built_by) : undefined,
+        actor_type: house.actor_type ? String(house.actor_type) : undefined,
+        timestamp: isFinite(Number(house.timestamp))
+          ? Number(house.timestamp)
+          : Date.now(),
+      };
+    },
+  );
+  sharedStorage.setItem(worldHouseStorageKey(worldId), JSON.stringify(out));
+}
+
+/**
  * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
  */
 function createEmptyInventory() {
@@ -1079,6 +1145,7 @@ function getInventoryTreeActions(inv) {
    */
   function actionsForItemType(type) {
     if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    if (type === "hammer") return ["build_house", "destroy_house"];
     var action = TREE_ACTION_BY_ITEM_TYPE[type];
     return action ? [action] : [];
   }
@@ -1102,6 +1169,8 @@ function canInventoryUseTreeAction(inv, action) {
   if (
     action !== "plant" &&
     action !== "cut" &&
+    action !== "build_house" &&
+    action !== "destroy_house" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
     action !== "play_tune" &&
@@ -1127,6 +1196,7 @@ function canTileItemsUseTreeAction(items, action) {
    */
   function actionsForItemType(type) {
     if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    if (type === "hammer") return ["build_house", "destroy_house"];
     var mapped = TREE_ACTION_BY_ITEM_TYPE[type];
     return mapped ? [mapped] : [];
   }
@@ -1156,6 +1226,9 @@ function ensureStarterKit(userId) {
   var hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
   });
+  var hasHammer = allItems.some(function (item) {
+    return item && item.type === "hammer";
+  });
   if (!hasKit) {
     inv.inventory.push({
       id: "starter_kit_" + userId,
@@ -1163,8 +1236,16 @@ function ensureStarterKit(userId) {
       created_at: Date.now(),
       non_droppable: true,
     });
-    savePlayerInventory(userId, inv);
   }
+  if (!hasHammer) {
+    inv.inventory.push({
+      id: "starter_hammer_" + userId,
+      type: "hammer",
+      created_at: Date.now(),
+      non_droppable: true,
+    });
+  }
+  if (!hasKit || !hasHammer) savePlayerInventory(userId, inv);
 }
 
 /**
@@ -3492,6 +3573,7 @@ function getEffectiveMap(worldId) {
   /** @type {number[][]} */
   var map = generateMap(worldId);
   var trees = loadWorldTrees(worldId);
+  var houses = loadWorldHouses(worldId);
   // Apply tree modifications to the base map
   for (var key in trees) {
     var parts = key.split("_");
@@ -3503,6 +3585,14 @@ function getEffectiveMap(worldId) {
       } else if (trees[key].action === "cut") {
         map[row][col] = 0; // Remove tree (make walkable)
       }
+    }
+  }
+  for (var houseKey in houses) {
+    var houseParts = houseKey.split("_");
+    var houseRow = parseInt(houseParts[0], 10);
+    var houseCol = parseInt(houseParts[1], 10);
+    if (houseRow >= 0 && houseRow < ROWS && houseCol >= 0 && houseCol < COLS) {
+      map[houseRow][houseCol] = 3;
     }
   }
   applyOakReservation(map, worldId);
@@ -4302,7 +4392,7 @@ function makeCheatItemId(userId, worldId, index) {
 function grantAllItemsForUser(userId) {
   var worldId = getPlayerWorld(userId) || "";
   var inv = loadPlayerInventory(userId);
-  var itemTypes = ITEM_TYPES;
+  var itemTypes = getAllKnownItemTypes();
   var now = Date.now();
 
   // Collect types already owned across all inventory slots
@@ -4916,6 +5006,7 @@ function currentWorldHandler(context) {
     world_id: String(worldId),
     items: flattenWorldItems(loadWorldItems(worldId)),
     inventory: loadPlayerInventory(userId),
+    houses: loadWorldHouses(worldId),
   });
 }
 
@@ -4964,6 +5055,8 @@ function treeActionHandler(context) {
   if (
     action !== "plant" &&
     action !== "cut" &&
+    action !== "build_house" &&
+    action !== "destroy_house" &&
     action !== "build_portal" &&
     action !== "remove_portal" &&
     action !== "play_tune" &&
@@ -5136,7 +5229,78 @@ function treeActionHandler(context) {
 
   var map = getEffectiveMap(worldId);
   var trees = loadWorldTrees(worldId);
-  var treeKey = targetRow + "_" + targetCol;
+  var houses = loadWorldHouses(worldId);
+  var tileKey = targetRow + "_" + targetCol;
+
+  if (action === "build_house") {
+    if (isOakClearingTile(worldId, targetRow, targetCol)) {
+      return ResponseBuilder.json({
+        ok: false,
+        error: "The oak clearing must remain open",
+      });
+    }
+    if (map[targetRow][targetCol] !== 0) {
+      return ResponseBuilder.json({
+        ok: false,
+        error: "Cannot build house here",
+      });
+    }
+    if (houses[tileKey]) {
+      return ResponseBuilder.json({ ok: false, error: "House already exists" });
+    }
+    houses[tileKey] = {
+      built_by: userId,
+      actor_type: "player",
+      timestamp: Date.now(),
+    };
+    saveWorldHouses(worldId, houses);
+    graphQLRegistry.sendSubscriptionMessageFiltered(
+      "worldHouseChanged",
+      JSON.stringify({
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        actor_type: "player",
+        actor_id: userId,
+        player_id: userId,
+      }),
+      JSON.stringify({ world_id: worldId }),
+    );
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      row: targetRow,
+      col: targetCol,
+    });
+  }
+
+  if (action === "destroy_house") {
+    if (!houses[tileKey]) {
+      return ResponseBuilder.json({ ok: false, error: "No house to destroy" });
+    }
+    delete houses[tileKey];
+    saveWorldHouses(worldId, houses);
+    graphQLRegistry.sendSubscriptionMessageFiltered(
+      "worldHouseChanged",
+      JSON.stringify({
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        actor_type: "player",
+        actor_id: userId,
+        player_id: userId,
+      }),
+      JSON.stringify({ world_id: worldId }),
+    );
+    return ResponseBuilder.json({
+      ok: true,
+      action: action,
+      row: targetRow,
+      col: targetCol,
+    });
+  }
+
+  var treeKey = tileKey;
 
   if (action === "build_portal") {
     if (map[targetRow][targetCol] !== 0) {
@@ -5341,6 +5505,19 @@ function worldTreeChangedResolver(context) {
  * @param {*} context
  * @returns {Record<string, string>}
  */
+function worldHouseChangedResolver(context) {
+  var userId =
+    context.request && context.request.auth && context.request.auth.userId;
+  if (!userId) return {};
+  var worldId = getPlayerWorld(userId);
+  if (!worldId) return {};
+  return { world_id: worldId };
+}
+
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
 function worldNPCMovedResolver(context) {
   var userId =
     context.request && context.request.auth && context.request.auth.userId;
@@ -5509,6 +5686,12 @@ function init() {
     "worldTreeChanged",
     "type Subscription { worldTreeChanged: String }",
     "worldTreeChangedResolver",
+    "external",
+  );
+  safeRegisterSubscription(
+    "worldHouseChanged",
+    "type Subscription { worldHouseChanged: String }",
+    "worldHouseChangedResolver",
     "external",
   );
   safeRegisterSubscription(

@@ -437,6 +437,25 @@ function applyHouseAction(action, row, col, actorType, actorId) {
   }
 }
 
+function applyTreeAction(action, row, col, actorType, actorId) {
+  var tileKey = row + "_" + col;
+  if (action === "plant") {
+    MAP[row][col] = 2;
+    dynamicTrees[tileKey] = {
+      action: "plant",
+      actor_type: actorType || "player",
+      actor_id: actorId || "",
+    };
+  } else if (action === "cut") {
+    MAP[row][col] = 0;
+    dynamicTrees[tileKey] = {
+      action: "cut",
+      actor_type: actorType || "player",
+      actor_id: actorId || "",
+    };
+  }
+}
+
 function normalizeClientInventory(inv) {
   if (!inv || typeof inv !== "object") {
     return { left_hand: null, right_hand: null, inventory: [] };
@@ -1766,472 +1785,209 @@ function initMultiplayer() {
   fetchNPCSnapshot();
   fetchItemSnapshot();
 
-  // Subscribe to real-time moves via GraphQL SSE
-  // world_id is resolved server-side from the authenticated user's current world
-  var query = "subscription{worldPlayerMoved}";
-  var sseUrl = "/graphql/sse?query=" + encodeURIComponent(query);
-  var reconnectTimer = null;
-  var sseRetryCount = 0;
-  var sseWaitingForOnline = false;
+  var eventsSseParams = new URLSearchParams({
+    world_id: String(worldId),
+    recipient_id: String(playerId),
+  });
+  var eventsSseUrl = "/virtual-world/events?" + eventsSseParams.toString();
+  var eventsReconnectTimer = null;
+  var eventsRetryCount = 0;
+  var eventsWaitingForOnline = false;
 
-  function openSSE() {
-    var es = new EventSource(sseUrl);
-    es.onmessage = function (evt) {
-      sseRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldPlayerMoved;
-        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (payload.leaving) {
-          if (payload.player_id === playerId && payload.switched_world) {
-            window.location.href = "/virtual-world/play";
-            return;
+  function handlePlayerMovedEvent(payload) {
+    if (!payload || !payload.player_id) return;
+    if (payload.leaving) {
+      if (payload.player_id === playerId && payload.switched_world) {
+        window.location.href = "/virtual-world/play";
+        return;
+      }
+      removeRemoteAvatar(payload.player_id);
+      return;
+    }
+    if (payload.player_id === playerId) {
+      var incomingSeq = Number(payload.seq);
+      var hasIncomingSeq = isFinite(incomingSeq);
+      if (!moveInFlight && pendingMoves.length === 0) {
+        if (!hasIncomingSeq || incomingSeq >= moveSeq) {
+          avatarRow = payload.row;
+          avatarCol = payload.col;
+          targetX = tileX(avatarCol);
+          targetZ = tileZ(avatarRow);
+          if (isFinite(Number(payload.rotation))) {
+            avatar.rotation.y = Number(payload.rotation);
           }
-          removeRemoteAvatar(payload.player_id);
-        } else if (payload.player_id === playerId) {
-          var incomingSeq = Number(payload.seq);
-          var hasIncomingSeq = isFinite(incomingSeq);
-          // Another tab moved us — sync local state ONLY when this tab has
-          // no moves in flight or queued. If we are in the middle of
-          // optimistic prediction, applying an SSE for an older step would
-          // snap the position back and cause the very jump we want to fix.
-          // Idle tabs (no moves queued) always accept the update, so they
-          // are ready with the correct position when the user switches to them.
-          if (!moveInFlight && pendingMoves.length === 0) {
-            // CRITICAL: Only accept SSE updates that are newer or equal to our current state.
-            // This prevents late-arriving SSE notifications from snapping us back to old positions
-            // after we've already moved further ahead (e.g., during rapid WASD movement).
-            if (!hasIncomingSeq || incomingSeq >= moveSeq) {
-              avatarRow = payload.row;
-              avatarCol = payload.col;
-              targetX = tileX(avatarCol);
-              targetZ = tileZ(avatarRow);
-              if (isFinite(Number(payload.rotation))) {
-                avatar.rotation.y = Number(payload.rotation);
-              }
-              if (hasIncomingSeq) {
-                moveSeq = incomingSeq;
-                lastAssignedSeq = incomingSeq;
-              }
-              document.getElementById("pos-col").textContent = avatarCol;
-              document.getElementById("pos-row").textContent = avatarRow;
-              updateUseButtonState();
-            }
+          if (hasIncomingSeq) {
+            moveSeq = incomingSeq;
+            lastAssignedSeq = incomingSeq;
           }
-        } else {
-          upsertRemoteAvatar(
-            payload.player_id,
-            payload.row,
-            payload.col,
-            payload.seq,
-            payload.rotation,
-          );
+          document.getElementById("pos-col").textContent = avatarCol;
+          document.getElementById("pos-row").textContent = avatarRow;
+          updateUseButtonState();
         }
+      }
+      return;
+    }
+    upsertRemoteAvatar(
+      payload.player_id,
+      payload.row,
+      payload.col,
+      payload.seq,
+      payload.rotation,
+    );
+  }
+
+  function handleTreeChangedEvent(payload) {
+    if (!payload) return;
+    applyTreeAction(
+      payload.action,
+      payload.row,
+      payload.col,
+      payload.actor_type || "player",
+      payload.actor_id || payload.player_id || "",
+    );
+
+    updateTreeInstances();
+    refreshTileDetailIfOpen();
+  }
+
+  function handleHouseChangedEvent(payload) {
+    if (!payload) return;
+    applyHouseAction(
+      payload.action,
+      payload.row,
+      payload.col,
+      payload.actor_type || "player",
+      payload.actor_id || payload.player_id || "",
+    );
+    updateHouseMeshes();
+    refreshTileDetailIfOpen();
+  }
+
+  function handleNpcMovedEvent(payload) {
+    if (!payload || typeof payload.npc_id !== "string") return;
+    if (payload.despawn) {
+      removeNPCAvatar(payload.npc_id);
+      return;
+    }
+    upsertNPCAvatar(
+      payload.npc_id,
+      payload.row,
+      payload.col,
+      payload.seq,
+      payload.rotation,
+      payload.display_name,
+    );
+  }
+
+  function handleChatMessageEvent(msg) {
+    if (!msg || !msg.id) return;
+    var exists = worldChatMessages.some(function (m) {
+      return m.id === msg.id;
+    });
+    if (!exists) {
+      worldChatMessages.push(msg);
+      if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+    }
+  }
+
+  function handleDirectMessageEvent(msg) {
+    if (!msg || !msg.id || !msg.sender_id) return;
+    var senderId = msg.sender_id;
+    if (!dmThreads[senderId]) dmThreads[senderId] = [];
+    var exists = dmThreads[senderId].some(function (m) {
+      return m.id === msg.id;
+    });
+    if (!exists) {
+      dmThreads[senderId].push(msg);
+      if (dmIndex.indexOf(senderId) === -1) dmIndex.push(senderId);
+    }
+    if (
+      chatPanelVisible &&
+      chatActiveTab === "dm" &&
+      activeDmUserId === senderId
+    ) {
+      renderDMThread(senderId);
+    } else {
+      unreadDmCount += 1;
+      updateChatUnreadBadge();
+    }
+  }
+
+  function handleUnifiedStreamMessage(message) {
+    if (!message || typeof message.type !== "string") return;
+    var payload = message.payload;
+    if (typeof payload === "string") {
+      try {
+        payload = JSON.parse(payload);
+      } catch (e) {}
+    }
+    switch (message.type) {
+      case "player_moved":
+        handlePlayerMovedEvent(payload);
+        return;
+      case "tree_changed":
+        handleTreeChangedEvent(payload);
+        return;
+      case "house_changed":
+        handleHouseChangedEvent(payload);
+        return;
+      case "npc_moved":
+        handleNpcMovedEvent(payload);
+        return;
+      case "item_changed":
+        fetchItemSnapshot();
+        return;
+      case "chat_message":
+        handleChatMessageEvent(payload);
+        return;
+      case "direct_message":
+        handleDirectMessageEvent(payload);
+        return;
+    }
+  }
+
+  function openUnifiedSSE() {
+    var es = new EventSource(eventsSseUrl);
+    es.onmessage = function (evt) {
+      eventsRetryCount = 0;
+      try {
+        handleUnifiedStreamMessage(JSON.parse(evt.data));
       } catch (e) {}
     };
     es.onerror = function () {
       es.close();
-      scheduleSSEAuthCheck("worldPlayerMoved");
+      scheduleSSEAuthCheck("virtualWorldEvents");
       if (
         authState === AUTH_STATE_EXPIRED ||
         authState === AUTH_STATE_REDIRECTING
       )
         return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!sseWaitingForOnline) {
-          sseWaitingForOnline = true;
-          function handleOnline() {
-            window.removeEventListener("online", handleOnline);
-            sseWaitingForOnline = false;
-            openSSE();
+        if (!eventsWaitingForOnline) {
+          eventsWaitingForOnline = true;
+          function handleEventsOnline() {
+            window.removeEventListener("online", handleEventsOnline);
+            eventsWaitingForOnline = false;
+            openUnifiedSSE();
           }
-          window.addEventListener("online", handleOnline);
+          window.addEventListener("online", handleEventsOnline);
         }
         return;
       }
-      // Immediate healing snapshot, then short reconnect retry.
-      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (eventsReconnectTimer) clearTimeout(eventsReconnectTimer);
       fetchSnapshot();
-      sseRetryCount += 1;
-      reconnectTimer = setTimeout(
-        openSSE,
-        getSSEReconnectDelayMs(sseRetryCount),
+      fetchNPCSnapshot();
+      fetchItemSnapshot();
+      eventsRetryCount += 1;
+      eventsReconnectTimer = setTimeout(
+        openUnifiedSSE,
+        getSSEReconnectDelayMs(eventsRetryCount),
       );
     };
     return es;
   }
 
-  openSSE();
-
-  // Subscribe to tree changes via GraphQL SSE
-  var treeQuery = "subscription{worldTreeChanged}";
-  var treeSseUrl = "/graphql/sse?query=" + encodeURIComponent(treeQuery);
-  var treeReconnectTimer = null;
-  var treeRetryCount = 0;
-  var treeWaitingForOnline = false;
-
-  function openTreeSSE() {
-    var treeEs = new EventSource(treeSseUrl);
-    treeEs.onmessage = function (evt) {
-      treeRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldTreeChanged;
-        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
-
-        var treeKey = payload.row + "_" + payload.col;
-        var actorType = payload.actor_type || "player";
-        var actorId = payload.actor_id || payload.player_id || "";
-
-        if (payload.action === "plant") {
-          MAP[payload.row][payload.col] = 2;
-          dynamicTrees[treeKey] = {
-            action: "plant",
-            actor_type: actorType,
-            actor_id: actorId,
-          };
-        } else if (payload.action === "cut") {
-          MAP[payload.row][payload.col] = 0;
-          dynamicTrees[treeKey] = {
-            action: "cut",
-            actor_type: actorType,
-            actor_id: actorId,
-          };
-        }
-
-        updateTreeInstances();
-        refreshTileDetailIfOpen();
-      } catch (e) {
-        console.error("Tree SSE parse error:", e);
-      }
-    };
-    treeEs.onerror = function () {
-      treeEs.close();
-      scheduleSSEAuthCheck("worldTreeChanged");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!treeWaitingForOnline) {
-          treeWaitingForOnline = true;
-          function handleTreeOnline() {
-            window.removeEventListener("online", handleTreeOnline);
-            treeWaitingForOnline = false;
-            openTreeSSE();
-          }
-          window.addEventListener("online", handleTreeOnline);
-        }
-        return;
-      }
-      if (treeReconnectTimer) clearTimeout(treeReconnectTimer);
-      treeRetryCount += 1;
-      treeReconnectTimer = setTimeout(
-        openTreeSSE,
-        getSSEReconnectDelayMs(treeRetryCount),
-      );
-    };
-    return treeEs;
-  }
-
-  openTreeSSE();
-
-  var houseQuery = "subscription{worldHouseChanged}";
-  var houseSseUrl = "/graphql/sse?query=" + encodeURIComponent(houseQuery);
-  var houseReconnectTimer = null;
-  var houseRetryCount = 0;
-  var houseWaitingForOnline = false;
-
-  function openHouseSSE() {
-    var houseEs = new EventSource(houseSseUrl);
-    houseEs.onmessage = function (evt) {
-      houseRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldHouseChanged;
-        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (!payload) return;
-        applyHouseAction(
-          payload.action,
-          payload.row,
-          payload.col,
-          payload.actor_type || "player",
-          payload.actor_id || payload.player_id || "",
-        );
-        updateHouseMeshes();
-        refreshTileDetailIfOpen();
-      } catch (e) {
-        console.error("House SSE parse error:", e);
-      }
-    };
-    houseEs.onerror = function () {
-      houseEs.close();
-      scheduleSSEAuthCheck("worldHouseChanged");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!houseWaitingForOnline) {
-          houseWaitingForOnline = true;
-          function handleHouseOnline() {
-            window.removeEventListener("online", handleHouseOnline);
-            houseWaitingForOnline = false;
-            openHouseSSE();
-          }
-          window.addEventListener("online", handleHouseOnline);
-        }
-        return;
-      }
-      if (houseReconnectTimer) clearTimeout(houseReconnectTimer);
-      houseRetryCount += 1;
-      houseReconnectTimer = setTimeout(
-        openHouseSSE,
-        getSSEReconnectDelayMs(houseRetryCount),
-      );
-    };
-    return houseEs;
-  }
-
-  openHouseSSE();
-
-  // Subscribe to NPC movement via GraphQL SSE
-  var npcQuery = "subscription{worldNPCMoved}";
-  var npcSseUrl = "/graphql/sse?query=" + encodeURIComponent(npcQuery);
-  var npcReconnectTimer = null;
-  var npcRetryCount = 0;
-  var npcWaitingForOnline = false;
-
-  function openNPCSSE() {
-    var npcEs = new EventSource(npcSseUrl);
-    npcEs.onmessage = function (evt) {
-      npcRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldNPCMoved;
-        var payload = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (!payload || typeof payload.npc_id !== "string") return;
-        if (payload.despawn) {
-          removeNPCAvatar(payload.npc_id);
-        } else {
-          upsertNPCAvatar(
-            payload.npc_id,
-            payload.row,
-            payload.col,
-            payload.seq,
-            payload.rotation,
-            payload.display_name,
-          );
-        }
-      } catch (e) {}
-    };
-    npcEs.onerror = function () {
-      npcEs.close();
-      scheduleSSEAuthCheck("worldNPCMoved");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!npcWaitingForOnline) {
-          npcWaitingForOnline = true;
-          function handleNPCOnline() {
-            window.removeEventListener("online", handleNPCOnline);
-            npcWaitingForOnline = false;
-            openNPCSSE();
-          }
-          window.addEventListener("online", handleNPCOnline);
-        }
-        return;
-      }
-      if (npcReconnectTimer) clearTimeout(npcReconnectTimer);
-      fetchNPCSnapshot();
-      npcRetryCount += 1;
-      npcReconnectTimer = setTimeout(
-        openNPCSSE,
-        getSSEReconnectDelayMs(npcRetryCount),
-      );
-    };
-    return npcEs;
-  }
-
-  openNPCSSE();
-
-  // Subscribe to item changes via GraphQL SSE
-  var itemQuery = "subscription{worldItemChanged}";
-  var itemSseUrl = "/graphql/sse?query=" + encodeURIComponent(itemQuery);
-  var itemReconnectTimer = null;
-  var itemRetryCount = 0;
-  var itemWaitingForOnline = false;
-
-  function openItemSSE() {
-    var itemEs = new EventSource(itemSseUrl);
-    itemEs.onmessage = function (_evt) {
-      itemRetryCount = 0;
-      // Keep item sync authoritative by reloading snapshot on each event.
-      fetchItemSnapshot();
-    };
-    itemEs.onerror = function () {
-      itemEs.close();
-      scheduleSSEAuthCheck("worldItemChanged");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!itemWaitingForOnline) {
-          itemWaitingForOnline = true;
-          function handleItemOnline() {
-            window.removeEventListener("online", handleItemOnline);
-            itemWaitingForOnline = false;
-            openItemSSE();
-          }
-          window.addEventListener("online", handleItemOnline);
-        }
-        return;
-      }
-      if (itemReconnectTimer) clearTimeout(itemReconnectTimer);
-      fetchItemSnapshot();
-      itemRetryCount += 1;
-      itemReconnectTimer = setTimeout(
-        openItemSSE,
-        getSSEReconnectDelayMs(itemRetryCount),
-      );
-    };
-    return itemEs;
-  }
-
-  openItemSSE();
-
-  // Subscribe to world chat via GraphQL SSE
-  var chatQuery = "subscription{worldChatMessage}";
-  var chatSseUrl = "/graphql/sse?query=" + encodeURIComponent(chatQuery);
-  var chatReconnectTimer = null;
-  var chatRetryCount = 0;
-  var chatWaitingForOnline = false;
-
-  function openChatSSE() {
-    var chatEs = new EventSource(chatSseUrl);
-    chatEs.onmessage = function (evt) {
-      chatRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldChatMessage;
-        var msg = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (!msg || !msg.id) return;
-        var exists = worldChatMessages.some(function (m) {
-          return m.id === msg.id;
-        });
-        if (!exists) {
-          worldChatMessages.push(msg);
-          if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
-        }
-      } catch (e) {}
-    };
-    chatEs.onerror = function () {
-      chatEs.close();
-      scheduleSSEAuthCheck("worldChatMessage");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!chatWaitingForOnline) {
-          chatWaitingForOnline = true;
-          function handleChatOnline() {
-            window.removeEventListener("online", handleChatOnline);
-            chatWaitingForOnline = false;
-            openChatSSE();
-          }
-          window.addEventListener("online", handleChatOnline);
-        }
-        return;
-      }
-      if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
-      chatRetryCount += 1;
-      chatReconnectTimer = setTimeout(
-        openChatSSE,
-        getSSEReconnectDelayMs(chatRetryCount),
-      );
-    };
-    return chatEs;
-  }
-
-  openChatSSE();
-
-  // Subscribe to direct messages via GraphQL SSE
-  var dmQuery = "subscription{worldDirectMessage}";
-  var dmSseUrl = "/graphql/sse?query=" + encodeURIComponent(dmQuery);
-  var dmReconnectTimer = null;
-  var dmRetryCount = 0;
-  var dmWaitingForOnline = false;
-
-  function openDMSSE() {
-    var dmEs = new EventSource(dmSseUrl);
-    dmEs.onmessage = function (evt) {
-      dmRetryCount = 0;
-      try {
-        var obj = JSON.parse(evt.data);
-        var raw = obj.data.worldDirectMessage;
-        var msg = typeof raw === "string" ? JSON.parse(raw) : raw;
-        if (!msg || !msg.id || !msg.sender_id) return;
-        var senderId = msg.sender_id;
-        if (!dmThreads[senderId]) dmThreads[senderId] = [];
-        var exists = dmThreads[senderId].some(function (m) {
-          return m.id === msg.id;
-        });
-        if (!exists) {
-          dmThreads[senderId].push(msg);
-          if (dmIndex.indexOf(senderId) === -1) dmIndex.push(senderId);
-        }
-        if (
-          chatPanelVisible &&
-          chatActiveTab === "dm" &&
-          activeDmUserId === senderId
-        ) {
-          renderDMThread(senderId);
-        } else {
-          unreadDmCount += 1;
-          updateChatUnreadBadge();
-        }
-      } catch (e) {}
-    };
-    dmEs.onerror = function () {
-      dmEs.close();
-      scheduleSSEAuthCheck("worldDirectMessage");
-      if (
-        authState === AUTH_STATE_EXPIRED ||
-        authState === AUTH_STATE_REDIRECTING
-      )
-        return;
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        if (!dmWaitingForOnline) {
-          dmWaitingForOnline = true;
-          function handleDMOnline() {
-            window.removeEventListener("online", handleDMOnline);
-            dmWaitingForOnline = false;
-            openDMSSE();
-          }
-          window.addEventListener("online", handleDMOnline);
-        }
-        return;
-      }
-      if (dmReconnectTimer) clearTimeout(dmReconnectTimer);
-      dmRetryCount += 1;
-      dmReconnectTimer = setTimeout(
-        openDMSSE,
-        getSSEReconnectDelayMs(dmRetryCount),
-      );
-    };
-    return dmEs;
-  }
-
-  openDMSSE();
+  openUnifiedSSE();
 
   // Announce departure
   window.addEventListener("beforeunload", postLeave);
@@ -2402,6 +2158,21 @@ function postTreeAction(action) {
         return;
       }
       applyItemStateFromResult(result);
+      if (
+        (result.action === "plant" || result.action === "cut") &&
+        typeof result.row === "number" &&
+        typeof result.col === "number"
+      ) {
+        applyTreeAction(
+          result.action,
+          result.row,
+          result.col,
+          "player",
+          playerId,
+        );
+        updateTreeInstances();
+        refreshTileDetailIfOpen();
+      }
       if (
         (result.action === "build_house" ||
           result.action === "destroy_house") &&

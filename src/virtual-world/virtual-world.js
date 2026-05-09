@@ -29,6 +29,7 @@ var OAK_WORLD_ID = "10000";
 var OAK_CENTER_ROW = 50;
 var OAK_CENTER_COL = 50;
 var OAK_CLEAR_RADIUS = 5;
+var VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 var npcTickerStarted = false;
 var npcTickOwnerId =
   "npc-tick-" +
@@ -3376,22 +3377,82 @@ function broadcastItemChange(
   col,
   items,
 ) {
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldItemChanged",
-    JSON.stringify({
-      actor_type: actorType,
-      actor_id: actorId,
-      action: action,
-      row: row,
-      col: col,
-      items: Array.isArray(items)
-        ? items.map(function (it) {
-            return { id: it.id, type: it.type };
-          })
-        : [],
-    }),
-    JSON.stringify({ world_id: worldId }),
-  );
+  sendWorldScopedStreamEvent(String(worldId), "item_changed", {
+    actor_type: actorType,
+    actor_id: actorId,
+    action: action,
+    row: row,
+    col: col,
+    items: Array.isArray(items)
+      ? items.map(function (it) {
+          return { id: it.id, type: it.type };
+        })
+      : [],
+  });
+}
+
+/**
+ * @param {*} context
+ * @returns {Record<string, string>}
+ */
+function virtualWorldEventsStreamCustomizer(context) {
+  var userId =
+    context &&
+    context.request &&
+    context.request.auth &&
+    context.request.auth.userId;
+  if (!userId) return {};
+  /** @type {Record<string, string>} */
+  var metadata = { recipient_id: String(userId) };
+  var worldId = getPlayerWorld(userId);
+  if (worldId) metadata.world_id = String(worldId);
+  return metadata;
+}
+
+/**
+ * @param {string} type
+ * @param {*} payload
+ * @param {Record<string, string>} filter
+ */
+function sendVirtualWorldStreamEvent(type, payload, filter) {
+  try {
+    routeRegistry.sendStreamMessageFiltered(
+      VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+      {
+        type: String(type),
+        payload: payload,
+      },
+      JSON.stringify(filter || {}),
+    );
+  } catch (e) {
+    vwLog("stream broadcast failed", {
+      type: String(type),
+      filter: JSON.stringify(filter || {}),
+      error: String(e),
+    });
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @param {string} type
+ * @param {*} payload
+ */
+function sendWorldScopedStreamEvent(worldId, type, payload) {
+  if (!worldId) return;
+  sendVirtualWorldStreamEvent(type, payload, { world_id: String(worldId) });
+}
+
+/**
+ * @param {string} recipientId
+ * @param {string} type
+ * @param {*} payload
+ */
+function sendRecipientScopedStreamEvent(recipientId, type, payload) {
+  if (!recipientId) return;
+  sendVirtualWorldStreamEvent(type, payload, {
+    recipient_id: String(recipientId),
+  });
 }
 
 /**
@@ -3811,19 +3872,15 @@ function tickWorldNPCs(worldId, now) {
         moved = true;
         occupiedNPCs[key] = npcId;
 
-        graphQLRegistry.sendSubscriptionMessageFiltered(
-          "worldNPCMoved",
-          JSON.stringify({
-            npc_id: npcId,
-            display_name: getNPCDisplayName(worldId, npcId),
-            row: n.row,
-            col: n.col,
-            seq: n.seq,
-            rotation: n.rotation,
-            state: n.state,
-          }),
-          JSON.stringify({ world_id: worldId }),
-        );
+        sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
+          npc_id: npcId,
+          display_name: getNPCDisplayName(worldId, npcId),
+          row: n.row,
+          col: n.col,
+          seq: n.seq,
+          rotation: n.rotation,
+          state: n.state,
+        });
         break;
       }
 
@@ -3937,17 +3994,13 @@ function tickWorldNPCs(worldId, now) {
             treeChanges = true;
             hasChanges = true;
             didTreeAction = true;
-            graphQLRegistry.sendSubscriptionMessageFiltered(
-              "worldTreeChanged",
-              JSON.stringify({
-                action: "cut",
-                row: tr,
-                col: tc,
-                actor_type: "npc",
-                actor_id: npcId,
-              }),
-              JSON.stringify({ world_id: worldId }),
-            );
+            sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
+              action: "cut",
+              row: tr,
+              col: tc,
+              actor_type: "npc",
+              actor_id: npcId,
+            });
             continue;
           }
         }
@@ -3972,17 +4025,13 @@ function tickWorldNPCs(worldId, now) {
             treeChanges = true;
             hasChanges = true;
             didTreeAction = true;
-            graphQLRegistry.sendSubscriptionMessageFiltered(
-              "worldTreeChanged",
-              JSON.stringify({
-                action: "plant",
-                row: tr,
-                col: tc,
-                actor_type: "npc",
-                actor_id: npcId,
-              }),
-              JSON.stringify({ world_id: worldId }),
-            );
+            sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
+              action: "plant",
+              row: tr,
+              col: tc,
+              actor_type: "npc",
+              actor_id: npcId,
+            });
           }
         }
       }
@@ -4529,11 +4578,7 @@ function chatHandler(context) {
     ts: Date.now(),
   };
   appendWorldChatMessage(worldId, msg);
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldChatMessage",
-    JSON.stringify(msg),
-    JSON.stringify({ world_id: worldId }),
-  );
+  sendWorldScopedStreamEvent(String(worldId), "chat_message", msg);
   return ResponseBuilder.json({ ok: true, message: msg });
 }
 
@@ -4577,11 +4622,7 @@ function dmHandler(context) {
   appendDMMessage(userId, to, msg);
   addToDMIndex(userId, to, msg.ts);
   addToDMIndex(to, userId, msg.ts);
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldDirectMessage",
-    JSON.stringify(msg),
-    JSON.stringify({ recipient_id: to }),
-  );
+  sendRecipientScopedStreamEvent(String(to), "direct_message", msg);
   return ResponseBuilder.json({ ok: true, message: msg });
 }
 
@@ -4757,11 +4798,7 @@ function moveHandler(context) {
     seq: cur.seq + 1,
     rotation: rotation,
   });
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldPlayerMoved",
-    msg,
-    JSON.stringify({ world_id: worldId }),
-  );
+  sendWorldScopedStreamEvent(String(worldId), "player_moved", JSON.parse(msg));
   vwLog("move accepted", {
     user_id: userId,
     world_id: worldId,
@@ -4801,11 +4838,7 @@ function leaveHandler(context) {
   deletePlayerMoveLease(userId);
   deleteOnlinePresence(userId);
   var msg = JSON.stringify({ player_id: userId, leaving: true });
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldPlayerMoved",
-    msg,
-    JSON.stringify({ world_id: worldId }),
-  );
+  sendWorldScopedStreamEvent(String(worldId), "player_moved", JSON.parse(msg));
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -4904,16 +4937,12 @@ function switchUserWorld(userId, targetWorldId, spawnPosition) {
       deletePlayerPosition(userId);
       deletePlayerHeartbeat(userId);
       deletePlayerMoveLease(userId);
-      graphQLRegistry.sendSubscriptionMessageFiltered(
-        "worldPlayerMoved",
-        JSON.stringify({
-          player_id: userId,
-          leaving: true,
-          switched_world: true,
-          target_world_id: String(targetWorldId),
-        }),
-        JSON.stringify({ world_id: oldWorldId }),
-      );
+      sendWorldScopedStreamEvent(String(oldWorldId), "player_moved", {
+        player_id: userId,
+        leaving: true,
+        switched_world: true,
+        target_world_id: String(targetWorldId),
+      });
     }
   }
 
@@ -5119,11 +5148,7 @@ function treeActionHandler(context) {
       ts: Date.now(),
     };
     appendWorldChatMessage(worldId, tuneMsg);
-    graphQLRegistry.sendSubscriptionMessageFiltered(
-      "worldChatMessage",
-      JSON.stringify(tuneMsg),
-      JSON.stringify({ world_id: worldId }),
-    );
+    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
     return ResponseBuilder.json({
       ok: true,
       action: action,
@@ -5254,18 +5279,14 @@ function treeActionHandler(context) {
       timestamp: Date.now(),
     };
     saveWorldHouses(worldId, houses);
-    graphQLRegistry.sendSubscriptionMessageFiltered(
-      "worldHouseChanged",
-      JSON.stringify({
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        actor_type: "player",
-        actor_id: userId,
-        player_id: userId,
-      }),
-      JSON.stringify({ world_id: worldId }),
-    );
+    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      actor_type: "player",
+      actor_id: userId,
+      player_id: userId,
+    });
     return ResponseBuilder.json({
       ok: true,
       action: action,
@@ -5280,18 +5301,14 @@ function treeActionHandler(context) {
     }
     delete houses[tileKey];
     saveWorldHouses(worldId, houses);
-    graphQLRegistry.sendSubscriptionMessageFiltered(
-      "worldHouseChanged",
-      JSON.stringify({
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        actor_type: "player",
-        actor_id: userId,
-        player_id: userId,
-      }),
-      JSON.stringify({ world_id: worldId }),
-    );
+    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      actor_type: "player",
+      actor_id: userId,
+      player_id: userId,
+    });
     return ResponseBuilder.json({
       ok: true,
       action: action,
@@ -5453,19 +5470,15 @@ function treeActionHandler(context) {
   saveWorldTrees(worldId, trees);
 
   // Broadcast tree change
-  var msg = JSON.stringify({
+  var msg = {
     action: action,
     row: targetRow,
     col: targetCol,
     actor_type: "player",
     actor_id: userId,
     player_id: userId,
-  });
-  graphQLRegistry.sendSubscriptionMessageFiltered(
-    "worldTreeChanged",
-    msg,
-    JSON.stringify({ world_id: worldId }),
-  );
+  };
+  sendWorldScopedStreamEvent(String(worldId), "tree_changed", msg);
 
   return ResponseBuilder.json({
     ok: true,
@@ -5473,95 +5486,6 @@ function treeActionHandler(context) {
     row: targetRow,
     col: targetCol,
   });
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldPlayerMovedResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldTreeChangedResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldHouseChangedResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldNPCMovedResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldItemChangedResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldChatMessageResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) return {};
-  return { world_id: worldId };
-}
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function worldDirectMessageResolver(context) {
-  var userId =
-    context.request && context.request.auth && context.request.auth.userId;
-  if (!userId) return {};
-  return { recipient_id: userId };
 }
 
 function init() {
@@ -5591,17 +5515,19 @@ function init() {
   }
 
   /**
-   * @param {string} name
-   * @param {string} schema
-   * @param {string} resolver
-   * @param {string} type
+   * @param {string} path
+   * @param {string} customizationFunction
    */
-  function safeRegisterSubscription(name, schema, resolver, type) {
+  function safeRegisterStreamRoute(path, customizationFunction) {
     try {
-      graphQLRegistry.registerSubscription(name, schema, resolver, type);
+      if (customizationFunction) {
+        routeRegistry.registerStreamRoute(path, customizationFunction);
+      } else {
+        routeRegistry.registerStreamRoute(path);
+      }
     } catch (e) {
-      vwLog("subscription registration skipped", {
-        name: name,
+      vwLog("stream route registration skipped", {
+        path: path,
         error: String(e),
       });
     }
@@ -5669,47 +5595,8 @@ function init() {
   safeRegisterRoute("/virtual-world/chat", "chatHandler", "POST");
   safeRegisterRoute("/virtual-world/dm", "dmHandler", "POST");
   safeRegisterRoute("/virtual-world/dm-history", "dmHistoryHandler", "GET");
-
-  safeRegisterSubscription(
-    "worldItemChanged",
-    "type Subscription { worldItemChanged: String }",
-    "worldItemChangedResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldPlayerMoved",
-    "type Subscription { worldPlayerMoved: String }",
-    "worldPlayerMovedResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldTreeChanged",
-    "type Subscription { worldTreeChanged: String }",
-    "worldTreeChangedResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldHouseChanged",
-    "type Subscription { worldHouseChanged: String }",
-    "worldHouseChangedResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldNPCMoved",
-    "type Subscription { worldNPCMoved: String }",
-    "worldNPCMovedResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldChatMessage",
-    "type Subscription { worldChatMessage: String }",
-    "worldChatMessageResolver",
-    "external",
-  );
-  safeRegisterSubscription(
-    "worldDirectMessage",
-    "type Subscription { worldDirectMessage: String }",
-    "worldDirectMessageResolver",
-    "external",
+  safeRegisterStreamRoute(
+    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+    "virtualWorldEventsStreamCustomizer",
   );
 }

@@ -396,64 +396,238 @@ function itemTypeToLabelKey(type) {
   return "item.unknown.name";
 }
 
-// ── Dynamic tree state (client-side) ──────────────────────────────────────
-var dynamicTrees = TREE_MODS || {};
-var dynamicHouses = HOUSE_MODS || {};
+// ── Dynamic world-mod state (client-side) ─────────────────────────────────
+var clientTileDefs =
+  typeof WORLD_TILE_DEFS === "object" && WORLD_TILE_DEFS
+    ? WORLD_TILE_DEFS
+    : {
+        ground: { value: 0, walkable: true, layer: "terrain" },
+        spruce_thicket: { value: 1, walkable: false, layer: "terrain" },
+        pine_tree: { value: 2, walkable: false, layer: "object" },
+        house: { value: 3, walkable: false, layer: "object" },
+        ocean: { value: 4, walkable: false, layer: "terrain" },
+        lake: { value: 5, walkable: false, layer: "terrain" },
+        river: { value: 6, walkable: false, layer: "terrain" },
+        rock: { value: 7, walkable: false, layer: "terrain" },
+        mountain: { value: 8, walkable: false, layer: "terrain" },
+      };
+/** @type {Record<number, string>} */
+var clientTileNamesByValue = {};
+Object.keys(clientTileDefs).forEach(function (tileName) {
+  clientTileNamesByValue[Number(clientTileDefs[tileName].value)] = tileName;
+});
 
-// Apply tree modifications to MAP
-for (var treeKey in dynamicTrees) {
-  var parts = treeKey.split("_");
-  var tr = parseInt(parts[0], 10);
-  var tc = parseInt(parts[1], 10);
-  if (tr >= 0 && tr < 100 && tc >= 0 && tc < 100) {
-    if (dynamicTrees[treeKey].action === "plant") {
-      MAP[tr][tc] = 2; // Add tree
-    } else if (dynamicTrees[treeKey].action === "cut") {
-      MAP[tr][tc] = 0; // Remove tree
+/**
+ * @param {number} tileValue
+ * @returns {string}
+ */
+function clientTileNameForValue(tileValue) {
+  return clientTileNamesByValue[Number(tileValue)] || "ground";
+}
+
+/**
+ * @param {string} tileName
+ * @returns {number}
+ */
+function clientTileValueForName(tileName) {
+  var def = clientTileDefs[String(tileName)] || clientTileDefs.ground;
+  return Number(def.value || 0);
+}
+
+/**
+ * @param {number} tileValue
+ * @returns {boolean}
+ */
+function isWalkableTileValue(tileValue) {
+  var def =
+    clientTileDefs[clientTileNameForValue(tileValue)] || clientTileDefs.ground;
+  return !!def.walkable;
+}
+
+/**
+ * @returns {{terrain: Record<string, any>, object: Record<string, any>}}
+ */
+function createEmptyClientWorldMods() {
+  return { terrain: {}, object: {} };
+}
+
+/**
+ * @param {*} raw
+ * @returns {{terrain: Record<string, any>, object: Record<string, any>}}
+ */
+function normalizeWorldMods(raw) {
+  var out = createEmptyClientWorldMods();
+  if (!raw || typeof raw !== "object") return out;
+  ["terrain", "object"].forEach(function (layer) {
+    var mods = raw[layer];
+    if (!mods || typeof mods !== "object") return;
+    Object.keys(mods).forEach(function (tileKey) {
+      var mod = mods[tileKey];
+      if (!mod || typeof mod !== "object") return;
+      out[layer][tileKey] = {
+        row: Number(mod.row),
+        col: Number(mod.col),
+        tile_type: String(mod.tile_type || "ground"),
+        actor_id: mod.actor_id ? String(mod.actor_id) : "",
+        actor_type: mod.actor_type ? String(mod.actor_type) : "",
+        payload:
+          mod.payload && typeof mod.payload === "object" ? mod.payload : {},
+      };
+    });
+  });
+  return out;
+}
+
+/**
+ * @returns {{terrain: Record<string, any>, object: Record<string, any>}}
+ */
+function buildLegacyWorldModsFromBootstrap() {
+  var mods = createEmptyClientWorldMods();
+  var bootTrees = TREE_MODS || {};
+  var bootHouses = HOUSE_MODS || {};
+  Object.keys(bootTrees).forEach(function (tileKey) {
+    var tree = bootTrees[tileKey];
+    var parts = tileKey.split("_");
+    var row = Number(parts[0]);
+    var col = Number(parts[1]);
+    if (!tree || !isFinite(row) || !isFinite(col)) return;
+    mods.object[tileKey] = {
+      row: row,
+      col: col,
+      tile_type: tree.action === "plant" ? "pine_tree" : "ground",
+      actor_id: String(tree.planted_by || tree.cut_by || ""),
+      actor_type: "player",
+      payload: { source_kind: "tree", action: String(tree.action || "") },
+    };
+  });
+  Object.keys(bootHouses).forEach(function (tileKey) {
+    var house = bootHouses[tileKey];
+    var parts = tileKey.split("_");
+    var row = Number(parts[0]);
+    var col = Number(parts[1]);
+    if (!house || !isFinite(row) || !isFinite(col)) return;
+    mods.object[tileKey] = {
+      row: row,
+      col: col,
+      tile_type: "house",
+      actor_id: String(house.built_by || ""),
+      actor_type: String(house.actor_type || "player"),
+      payload: { source_kind: "house" },
+    };
+  });
+  return mods;
+}
+
+/**
+ * @param {{terrain: Record<string, any>, object: Record<string, any>}} mods
+ * @returns {boolean}
+ */
+function hasAnyWorldMods(mods) {
+  return (
+    !!mods &&
+    ((mods.terrain && Object.keys(mods.terrain).length > 0) ||
+      (mods.object && Object.keys(mods.object).length > 0))
+  );
+}
+
+var worldMods = normalizeWorldMods(
+  typeof WORLD_MODS !== "undefined" ? WORLD_MODS : null,
+);
+if (!hasAnyWorldMods(worldMods)) {
+  worldMods = buildLegacyWorldModsFromBootstrap();
+}
+
+/**
+ * @returns {void}
+ */
+function applyWorldModsToClientMap() {
+  ["terrain", "object"].forEach(function (layer) {
+    var mods = worldMods[layer] || {};
+    Object.keys(mods).forEach(function (tileKey) {
+      var mod = mods[tileKey];
+      if (!mod) return;
+      var row = Number(mod.row);
+      var col = Number(mod.col);
+      if (row < 0 || row >= 100 || col < 0 || col >= 100) return;
+      MAP[row][col] = clientTileValueForName(mod.tile_type);
+    });
+  });
+}
+
+/**
+ * @returns {void}
+ */
+function rebuildLegacyDynamicViews() {
+  dynamicTrees = {};
+  dynamicHouses = {};
+  Object.keys(worldMods.object || {}).forEach(function (tileKey) {
+    var mod = worldMods.object[tileKey];
+    var payload =
+      mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
+    if (payload.source_kind === "tree") {
+      dynamicTrees[tileKey] = {
+        action: String(payload.action || "plant"),
+        actor_type: mod.actor_type || "player",
+        actor_id: mod.actor_id || "",
+      };
     }
-  }
+    if (payload.source_kind === "house") {
+      dynamicHouses[tileKey] = {
+        built_by: mod.actor_id || "",
+        actor_type: mod.actor_type || "player",
+      };
+    }
+  });
 }
 
-for (var houseKey in dynamicHouses) {
-  var houseParts = houseKey.split("_");
-  var hr = parseInt(houseParts[0], 10);
-  var hc = parseInt(houseParts[1], 10);
-  if (hr >= 0 && hr < 100 && hc >= 0 && hc < 100) {
-    MAP[hr][hc] = 3;
-  }
-}
+var dynamicTrees = {};
+var dynamicHouses = {};
+applyWorldModsToClientMap();
+rebuildLegacyDynamicViews();
 
 function applyHouseAction(action, row, col, actorType, actorId) {
   var tileKey = row + "_" + col;
   if (action === "build_house") {
-    MAP[row][col] = 3;
-    dynamicHouses[tileKey] = {
-      built_by: actorId || "",
+    worldMods.object[tileKey] = {
+      row: row,
+      col: col,
+      tile_type: "house",
+      actor_id: actorId || "",
       actor_type: actorType || "player",
+      payload: { source_kind: "house" },
     };
+    MAP[row][col] = clientTileValueForName("house");
   } else if (action === "destroy_house") {
-    MAP[row][col] = 0;
-    delete dynamicHouses[tileKey];
+    delete worldMods.object[tileKey];
+    MAP[row][col] = clientTileValueForName("ground");
   }
+  rebuildLegacyDynamicViews();
 }
 
 function applyTreeAction(action, row, col, actorType, actorId) {
   var tileKey = row + "_" + col;
   if (action === "plant") {
-    MAP[row][col] = 2;
-    dynamicTrees[tileKey] = {
-      action: "plant",
-      actor_type: actorType || "player",
+    worldMods.object[tileKey] = {
+      row: row,
+      col: col,
+      tile_type: "pine_tree",
       actor_id: actorId || "",
+      actor_type: actorType || "player",
+      payload: { source_kind: "tree", action: "plant" },
     };
+    MAP[row][col] = clientTileValueForName("pine_tree");
   } else if (action === "cut") {
-    MAP[row][col] = 0;
-    dynamicTrees[tileKey] = {
-      action: "cut",
-      actor_type: actorType || "player",
+    worldMods.object[tileKey] = {
+      row: row,
+      col: col,
+      tile_type: "ground",
       actor_id: actorId || "",
+      actor_type: actorType || "player",
+      payload: { source_kind: "tree", action: "cut" },
     };
+    MAP[row][col] = clientTileValueForName("ground");
   }
+  rebuildLegacyDynamicViews();
 }
 
 function normalizeClientInventory(inv) {
@@ -882,6 +1056,14 @@ var geoOakCanopySide = new THREE.SphereGeometry(0.42, 10, 10);
 var matOakTrunk = new THREE.MeshLambertMaterial({ color: 0x6c4729 });
 var matOakCore = new THREE.MeshLambertMaterial({ color: 0x4f8b42 });
 var matOakSide = new THREE.MeshLambertMaterial({ color: 0x6aa651 });
+var geoWaterTile = new THREE.BoxGeometry(TILE, 0.12, TILE);
+var geoRock = new THREE.DodecahedronGeometry(0.42, 0);
+var geoMountain = new THREE.ConeGeometry(0.78, 1.9, 7);
+var matOcean = new THREE.MeshLambertMaterial({ color: 0x2f6fa3 });
+var matLake = new THREE.MeshLambertMaterial({ color: 0x4f91c9 });
+var matRiver = new THREE.MeshLambertMaterial({ color: 0x62b9d9 });
+var matRock = new THREE.MeshLambertMaterial({ color: 0x7f8892 });
+var matMountain = new THREE.MeshLambertMaterial({ color: 0x8a8178 });
 var geoHouseFloor = new THREE.BoxGeometry(1.82, 0.16, 1.82);
 var geoHouseBody = new THREE.BoxGeometry(1.56, 1.18, 1.56);
 var geoHouseWallNorthSouth = new THREE.BoxGeometry(1.62, 1.06, 0.12);
@@ -986,11 +1168,94 @@ function buildOakGroup() {
   return group;
 }
 
+function countTilesByValue(tileValue) {
+  var count = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      if (MAP[row][col] === tileValue) count++;
+    }
+  }
+  return count;
+}
+
+var iOcean = null;
+var iLake = null;
+var iRiver = null;
+var iRock = null;
+var iMountain = null;
+
+function rebuildTerrainFeatureMeshes() {
+  scene.remove(iOcean, iLake, iRiver, iRock, iMountain);
+  disposeInstancedMeshes([iOcean, iLake, iRiver, iRock, iMountain]);
+
+  iOcean = new THREE.InstancedMesh(
+    geoWaterTile,
+    matOcean,
+    countTilesByValue(clientTileValueForName("ocean")),
+  );
+  iLake = new THREE.InstancedMesh(
+    geoWaterTile,
+    matLake,
+    countTilesByValue(clientTileValueForName("lake")),
+  );
+  iRiver = new THREE.InstancedMesh(
+    geoWaterTile,
+    matRiver,
+    countTilesByValue(clientTileValueForName("river")),
+  );
+  iRock = new THREE.InstancedMesh(
+    geoRock,
+    matRock,
+    countTilesByValue(clientTileValueForName("rock")),
+  );
+  iMountain = new THREE.InstancedMesh(
+    geoMountain,
+    matMountain,
+    countTilesByValue(clientTileValueForName("mountain")),
+  );
+
+  var oceanIdx = 0;
+  var lakeIdx = 0;
+  var riverIdx = 0;
+  var rockIdx = 0;
+  var mountainIdx = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      var tileValue = MAP[row][col];
+      var x = tileX(col);
+      var z = tileZ(row);
+      if (tileValue === clientTileValueForName("ocean")) {
+        setInstanceTransform(iOcean, oceanIdx++, x, -0.055, z, 1, 1, 1);
+      } else if (tileValue === clientTileValueForName("lake")) {
+        setInstanceTransform(iLake, lakeIdx++, x, -0.05, z, 1, 1, 1);
+      } else if (tileValue === clientTileValueForName("river")) {
+        setInstanceTransform(iRiver, riverIdx++, x, -0.045, z, 1, 1, 1);
+      } else if (tileValue === clientTileValueForName("rock")) {
+        setInstanceTransform(iRock, rockIdx++, x, 0.2, z, 1, 1, 1);
+      } else if (tileValue === clientTileValueForName("mountain")) {
+        setInstanceTransform(iMountain, mountainIdx++, x, 0.92, z, 1, 1, 1);
+      }
+    }
+  }
+
+  finalizeInstancedMesh(iOcean);
+  finalizeInstancedMesh(iLake);
+  finalizeInstancedMesh(iRiver);
+  finalizeInstancedMesh(iRock);
+  finalizeInstancedMesh(iMountain);
+  scene.add(iOcean, iLake, iRiver, iRock, iMountain);
+}
+
 function countRenderablePines() {
   var count = 0;
   for (var row = 0; row < ROWS; row++) {
     for (var col = 0; col < COLS; col++) {
-      if (MAP[row][col] === 2 && !isOldOakTile(row, col)) count++;
+      if (
+        MAP[row][col] === clientTileValueForName("pine_tree") &&
+        !isOldOakTile(row, col)
+      ) {
+        count++;
+      }
     }
   }
   return count;
@@ -998,7 +1263,11 @@ function countRenderablePines() {
 
 function hasHouseAt(row, col) {
   return (
-    row >= 0 && row < ROWS && col >= 0 && col < COLS && MAP[row][col] === 3
+    row >= 0 &&
+    row < ROWS &&
+    col >= 0 &&
+    col < COLS &&
+    MAP[row][col] === clientTileValueForName("house")
   );
 }
 
@@ -1133,7 +1402,12 @@ function rebuildPineInstances() {
   var pineIdx = 0;
   for (var row = 0; row < ROWS; row++) {
     for (var col = 0; col < COLS; col++) {
-      if (MAP[row][col] !== 2 || isOldOakTile(row, col)) continue;
+      if (
+        MAP[row][col] !== clientTileValueForName("pine_tree") ||
+        isOldOakTile(row, col)
+      ) {
+        continue;
+      }
       var pineX = tileX(col);
       var pineZ = tileZ(row);
       setInstanceTransform(iPineTrunk, pineIdx, pineX, 0.52, pineZ, 1, 1, 1);
@@ -1178,7 +1452,7 @@ for (var r = 0; r < ROWS; r++) {
   for (var c = 0; c < COLS; c++) {
     if ((r + c) % 2 === 0) cntA++;
     else cntB++;
-    if (MAP[r][c] === 1) {
+    if (MAP[r][c] === clientTileValueForName("spruce_thicket")) {
       cntWall++;
       cntSpruce++;
     }
@@ -1234,7 +1508,7 @@ for (var r = 0; r < ROWS; r++) {
     if ((r + c) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
     else iGroundB.setMatrixAt(idxB++, dummy.matrix);
 
-    if (MAP[r][c] === 1) {
+    if (MAP[r][c] === clientTileValueForName("spruce_thicket")) {
       setInstanceTransform(iSpruceTrunk, idxW, tx, 0.48, tz, 1, 1, 1);
       setInstanceTransform(iSpruceCanopyLow, idxW, tx, 1.08, tz, 1, 1, 1);
       setInstanceTransform(iSpruceCanopyMid, idxW, tx, 1.62, tz, 1, 1, 1);
@@ -1260,6 +1534,7 @@ scene.add(
   iSpruceCanopyTop,
 );
 if (oakGroup) scene.add(oakGroup);
+rebuildTerrainFeatureMeshes();
 rebuildPineInstances();
 rebuildHouseMeshes();
 
@@ -1270,6 +1545,10 @@ function updateTreeInstances() {
 
 function updateHouseMeshes() {
   rebuildHouseMeshes();
+}
+
+function updateTerrainFeatureMeshes() {
+  rebuildTerrainFeatureMeshes();
 }
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────
@@ -2028,7 +2307,9 @@ function initMultiplayer() {
 
 // ── Collision & movement ─────────────────────────────────────────────────
 function isWalkable(r, c) {
-  return r >= 0 && r < ROWS && c >= 0 && c < COLS && MAP[r][c] === 0;
+  return (
+    r >= 0 && r < ROWS && c >= 0 && c < COLS && isWalkableTileValue(MAP[r][c])
+  );
 }
 
 var lastMoveIntentKey = null;
@@ -2962,12 +3243,12 @@ function renderTileDetailPanel() {
   var terrainType = MAP[row][col];
   var treeMod = dynamicTrees[key];
   var terrainLabel;
-  if (terrainType === 1) {
+  if (terrainType === clientTileValueForName("spruce_thicket")) {
     terrainLabel = t("terrain.wall", "Spruce thicket");
-  } else if (terrainType === 3) {
+  } else if (terrainType === clientTileValueForName("house")) {
     terrainLabel = t("terrain.house", "House block");
-  } else if (terrainType === 2) {
-    if (isOldOakTile) {
+  } else if (terrainType === clientTileValueForName("pine_tree")) {
+    if (isOldOakTile(row, col)) {
       terrainLabel = t("terrain.old_oak", "Old oak");
     } else {
       terrainLabel =
@@ -2975,6 +3256,16 @@ function renderTileDetailPanel() {
           ? t("terrain.tree_planted", "Pine tree (planted)")
           : t("terrain.tree", "Pine tree");
     }
+  } else if (terrainType === clientTileValueForName("ocean")) {
+    terrainLabel = t("terrain.ocean", "Ocean");
+  } else if (terrainType === clientTileValueForName("lake")) {
+    terrainLabel = t("terrain.lake", "Lake");
+  } else if (terrainType === clientTileValueForName("river")) {
+    terrainLabel = t("terrain.river", "River");
+  } else if (terrainType === clientTileValueForName("rock")) {
+    terrainLabel = t("terrain.rock", "Rock field");
+  } else if (terrainType === clientTileValueForName("mountain")) {
+    terrainLabel = t("terrain.mountain", "Mountain");
   } else {
     terrainLabel =
       treeMod && treeMod.action === "cut"
@@ -3008,7 +3299,11 @@ function renderTileDetailPanel() {
   html += '<div class="tile-section">';
   html += '<div class="tile-section-label">Terrain</div>';
   html += '<div class="tile-row">' + escHtml(terrainLabel) + "</div>";
-  if (terrainType === 3 && dynamicHouses[key] && dynamicHouses[key].built_by) {
+  if (
+    terrainType === clientTileValueForName("house") &&
+    dynamicHouses[key] &&
+    dynamicHouses[key].built_by
+  ) {
     html +=
       '<div class="tile-row">Built by ' +
       escHtml(getNickForPlayer(dynamicHouses[key].built_by)) +

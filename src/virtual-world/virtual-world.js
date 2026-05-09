@@ -30,6 +30,45 @@ var OAK_CENTER_ROW = 50;
 var OAK_CENTER_COL = 50;
 var OAK_CLEAR_RADIUS = 5;
 var VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
+var WORLD_MOD_LAYER_TERRAIN = "terrain";
+var WORLD_MOD_LAYER_OBJECT = "object";
+var WORLD_TILE_GROUND = "ground";
+var WORLD_TILE_SPRUCE_THICKET = "spruce_thicket";
+var WORLD_TILE_PINE_TREE = "pine_tree";
+var WORLD_TILE_HOUSE = "house";
+var WORLD_TILE_OCEAN = "ocean";
+var WORLD_TILE_LAKE = "lake";
+var WORLD_TILE_RIVER = "river";
+var WORLD_TILE_ROCK = "rock";
+var WORLD_TILE_MOUNTAIN = "mountain";
+/** @type {Record<string, {value: number, walkable: boolean, layer: string}>} */
+var WORLD_TILE_DEFS = {
+  ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
+  spruce_thicket: {
+    value: 1,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+  },
+  pine_tree: { value: 2, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
+  house: { value: 3, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
+  ocean: { value: 4, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  lake: { value: 5, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  river: { value: 6, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  rock: { value: 7, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  mountain: { value: 8, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+};
+/** @type {Record<number, string>} */
+var WORLD_TILE_NAME_BY_VALUE = {
+  0: WORLD_TILE_GROUND,
+  1: WORLD_TILE_SPRUCE_THICKET,
+  2: WORLD_TILE_PINE_TREE,
+  3: WORLD_TILE_HOUSE,
+  4: WORLD_TILE_OCEAN,
+  5: WORLD_TILE_LAKE,
+  6: WORLD_TILE_RIVER,
+  7: WORLD_TILE_ROCK,
+  8: WORLD_TILE_MOUNTAIN,
+};
 var npcTickerStarted = false;
 var npcTickOwnerId =
   "npc-tick-" +
@@ -265,7 +304,13 @@ function getDefaultSpawnPosition(worldId, userId) {
   var fallbackTile = null;
   for (var i = 0; i < tiles.length; i++) {
     var tile = tiles[(startIndex + i) % tiles.length];
-    if (!tile || !map[tile.row] || map[tile.row][tile.col] !== 0) continue;
+    if (
+      !tile ||
+      !map[tile.row] ||
+      !isWorldTileWalkable(map[tile.row][tile.col])
+    ) {
+      continue;
+    }
     if (!fallbackTile) fallbackTile = tile;
     if (!occupied[tile.row + "_" + tile.col]) {
       return { row: tile.row, col: tile.col, seq: 0, rotation: 0 };
@@ -336,12 +381,12 @@ function generateMap(worldId) {
   }
   // Solid border
   for (var r = 0; r < ROWS; r++) {
-    map[r][0] = 1;
-    map[r][COLS - 1] = 1;
+    map[r][0] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
+    map[r][COLS - 1] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
   }
   for (var c = 0; c < COLS; c++) {
-    map[0][c] = 1;
-    map[ROWS - 1][c] = 1;
+    map[0][c] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
+    map[ROWS - 1][c] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
   }
 
   // Rectangular room outlines, each with a door on all four sides
@@ -356,7 +401,9 @@ function generateMap(worldId) {
           (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
           map[rr + dr][cc + dc] === 0
         )
-          map[rr + dr][cc + dc] = 1;
+          map[rr + dr][cc + dc] = worldTileValueForName(
+            WORLD_TILE_SPRUCE_THICKET,
+          );
       }
     }
     var mh = Math.floor(rh / 2),
@@ -376,7 +423,7 @@ function generateMap(worldId) {
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
         if (k !== gap && c0 + k < COLS - 1 && map[r0][c0 + k] === 0)
-          map[r0][c0 + k] = 1;
+          map[r0][c0 + k] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
     } else {
       var r0 = 2 + Math.floor(rand() * (ROWS - 20));
       var c0 = 2 + Math.floor(rand() * (COLS - 4));
@@ -384,7 +431,84 @@ function generateMap(worldId) {
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
         if (k !== gap && r0 + k < ROWS - 1 && map[r0 + k][c0] === 0)
-          map[r0 + k][c0] = 1;
+          map[r0 + k][c0] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
+    }
+  }
+
+  /**
+   * @param {number} centerRow
+   * @param {number} centerCol
+   * @param {number} radius
+   * @param {string} tileName
+   */
+  function paintTerrainCircle(centerRow, centerCol, radius, tileName) {
+    var radiusSquared = radius * radius;
+    for (var row = centerRow - radius; row <= centerRow + radius; row++) {
+      if (row <= 0 || row >= ROWS - 1) continue;
+      for (var col = centerCol - radius; col <= centerCol + radius; col++) {
+        if (col <= 0 || col >= COLS - 1) continue;
+        var dr = row - centerRow;
+        var dc = col - centerCol;
+        if (dr * dr + dc * dc > radiusSquared) continue;
+        map[row][col] = worldTileValueForName(tileName);
+      }
+    }
+  }
+
+  // Ocean coastline on the far east.
+  var coastWidth = 7 + Math.floor(rand() * 6);
+  for (var coastRow = 1; coastRow < ROWS - 1; coastRow++) {
+    var coastInset = Math.floor(rand() * 4);
+    for (
+      var coastCol = COLS - 1 - coastWidth - coastInset;
+      coastCol < COLS - 1;
+      coastCol++
+    ) {
+      if (coastCol <= 0 || coastCol >= COLS - 1) continue;
+      map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
+    }
+  }
+
+  // Meandering north-south river.
+  var riverCol = Math.floor(COLS * (0.35 + rand() * 0.3));
+  for (var riverRow = 1; riverRow < ROWS - 1; riverRow++) {
+    riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
+    riverCol = Math.max(8, Math.min(COLS - 9, riverCol));
+    var riverRadius = rand() < 0.2 ? 1 : 0;
+    for (
+      var riverOffset = -riverRadius;
+      riverOffset <= riverRadius;
+      riverOffset++
+    ) {
+      map[riverRow][riverCol + riverOffset] =
+        worldTileValueForName(WORLD_TILE_RIVER);
+    }
+  }
+
+  // Lakes inland.
+  for (var lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
+    paintTerrainCircle(
+      12 + Math.floor(rand() * (ROWS - 24)),
+      12 + Math.floor(rand() * (COLS - 24)),
+      2 + Math.floor(rand() * 3),
+      WORLD_TILE_LAKE,
+    );
+  }
+
+  // Rocky ridges and mountains.
+  for (var mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
+    paintTerrainCircle(
+      10 + Math.floor(rand() * (ROWS - 20)),
+      10 + Math.floor(rand() * (COLS - 20)),
+      2 + Math.floor(rand() * 3),
+      WORLD_TILE_MOUNTAIN,
+    );
+  }
+  for (var rockIndex = 0; rockIndex < 140; rockIndex++) {
+    var rockRow = 1 + Math.floor(rand() * (ROWS - 2));
+    var rockCol = 1 + Math.floor(rand() * (COLS - 2));
+    if (map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)) {
+      map[rockRow][rockCol] = worldTileValueForName(WORLD_TILE_ROCK);
     }
   }
 
@@ -392,7 +516,9 @@ function generateMap(worldId) {
   for (var i = 0; i < 500; i++) {
     var r = 1 + Math.floor(rand() * (ROWS - 2));
     var c = 1 + Math.floor(rand() * (COLS - 2));
-    if (map[r][c] === 0) map[r][c] = 2;
+    if (map[r][c] === worldTileValueForName(WORLD_TILE_GROUND)) {
+      map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
+    }
   }
 
   if (isOakWorld(worldId)) {
@@ -404,6 +530,40 @@ function generateMap(worldId) {
   map[1][2] = 0;
   map[2][1] = 0;
   return map;
+}
+
+/**
+ * @param {string} tileName
+ * @returns {{value: number, walkable: boolean, layer: string}}
+ */
+function getWorldTileDef(tileName) {
+  return (
+    WORLD_TILE_DEFS[String(tileName)] || WORLD_TILE_DEFS[WORLD_TILE_GROUND]
+  );
+}
+
+/**
+ * @param {number} tileValue
+ * @returns {string}
+ */
+function worldTileNameForValue(tileValue) {
+  return WORLD_TILE_NAME_BY_VALUE[Number(tileValue)] || WORLD_TILE_GROUND;
+}
+
+/**
+ * @param {string} tileName
+ * @returns {number}
+ */
+function worldTileValueForName(tileName) {
+  return getWorldTileDef(tileName).value;
+}
+
+/**
+ * @param {number} tileValue
+ * @returns {boolean}
+ */
+function isWorldTileWalkable(tileValue) {
+  return !!getWorldTileDef(worldTileNameForValue(tileValue)).walkable;
 }
 
 /**
@@ -679,6 +839,7 @@ function getVirtualWorldPage(context) {
   markNPCWorldActive(worldId);
   ensureStarterKit(userId);
   const map = generateMap(worldId);
+  const worldMods = loadWorldMods(worldId);
   const treeMods = loadWorldTrees(worldId);
   const houseMods = loadWorldHouses(worldId);
   ensureWorldItems(worldId);
@@ -732,6 +893,8 @@ function getVirtualWorldPage(context) {
     <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Forest Floor</div>
     <div class="leg"><div class="leg-box" style="background:#355c34;"></div> Spruce Thicket</div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Pine Tree</div>
+    <div class="leg"><div class="leg-box" style="background:#4f91c9;"></div> Water</div>
+    <div class="leg"><div class="leg-box" style="background:#7f8892;"></div> Rock / Mountain</div>
     <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
 
@@ -836,6 +999,8 @@ function getVirtualWorldPage(context) {
   <script>
     // ── Server-injected game state ────────────────────────────────────────────
     var MAP      = ${JSON.stringify(map)};
+    var WORLD_MODS = ${JSON.stringify(worldMods)};
+    var WORLD_TILE_DEFS = ${JSON.stringify(WORLD_TILE_DEFS)};
     var TREE_MODS = ${JSON.stringify(treeMods)};
     var HOUSE_MODS = ${JSON.stringify(houseMods)};
     var WORLD_ITEMS = ${JSON.stringify(worldItems)};
@@ -933,33 +1098,30 @@ function saveWorldPlayers(worldId, players) {
  * @returns {Record<string, any>}
  */
 function loadWorldTrees(worldId) {
-  var rows = queryWorldRows(
-    VWORLD_TREE_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "asc",
-  );
-  if (rows.length > 0) {
-    /** @type {Record<string, any>} */
-    var fromRows = {};
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row || !row.tile_key || !row.action) continue;
-      fromRows[String(row.tile_key)] = {
-        action: String(row.action),
-        timestamp: fromStoredWorldTimestamp(row.timestamp),
-      };
-      if (String(row.action) === "plant" && row.actor_id) {
-        fromRows[String(row.tile_key)].planted_by = String(row.actor_id);
-      }
-      if (String(row.action) === "cut" && row.actor_id) {
-        fromRows[String(row.tile_key)].cut_by = String(row.actor_id);
-      }
+  var worldMods = loadWorldMods(worldId);
+  /** @type {Record<string, any>} */
+  var trees = {};
+  var objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
+  Object.keys(objectMods).forEach(function (tileKey) {
+    var mod = objectMods[tileKey];
+    var payload =
+      mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
+    if (payload.source_kind !== "tree") return;
+    if (payload.action !== "plant" && payload.action !== "cut") return;
+    trees[tileKey] = {
+      action: String(payload.action),
+      timestamp: isFinite(Number(mod.timestamp))
+        ? Number(mod.timestamp)
+        : Date.now(),
+    };
+    if (payload.action === "plant" && mod.actor_id) {
+      trees[tileKey].planted_by = String(mod.actor_id);
     }
-    return fromRows;
-  }
-  return {};
+    if (payload.action === "cut" && mod.actor_id) {
+      trees[tileKey].cut_by = String(mod.actor_id);
+    }
+  });
+  return trees;
 }
 
 /**
@@ -967,21 +1129,8 @@ function loadWorldTrees(worldId) {
  * @param {Record<string, any>} trees
  */
 function saveWorldTrees(worldId, trees) {
-  var existingRows = queryWorldRows(
-    VWORLD_TREE_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "desc",
-  );
   /** @type {Record<string, any>} */
-  var existingByTileKey = {};
-  for (var i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].tile_key) {
-      existingByTileKey[String(existingRows[i].tile_key)] = existingRows[i];
-    }
-  }
-
+  var treeMods = {};
   Object.keys(trees && typeof trees === "object" ? trees : {}).forEach(
     function (tileKey) {
       var tree = trees[tileKey];
@@ -991,35 +1140,29 @@ function saveWorldTrees(worldId, trees) {
       var col = Number(parts[1]);
       if (!isFinite(row) || !isFinite(col)) return;
       var actorId = tree.planted_by || tree.cut_by || null;
-      var actorType =
-        actorId && String(actorId).indexOf("npc_") === 0
-          ? "npc"
-          : actorId
-            ? "player"
-            : null;
-      upsertWorldRow(VWORLD_TREE_TABLE, ["world_id", "tile_key"], {
-        world_id: String(worldId),
-        tile_key: String(tileKey),
+      treeMods[tileKey] = {
         row: row,
         col: col,
-        action: String(tree.action || ""),
+        tile_type:
+          tree.action === "plant" ? WORLD_TILE_PINE_TREE : WORLD_TILE_GROUND,
         actor_id: actorId ? String(actorId) : null,
-        actor_type: actorType,
-        timestamp: toStoredWorldTimestamp(
-          isFinite(Number(tree.timestamp))
-            ? Number(tree.timestamp)
-            : Date.now(),
-        ),
-      });
-      delete existingByTileKey[tileKey];
+        actor_type:
+          actorId && String(actorId).indexOf("npc_") === 0
+            ? "npc"
+            : actorId
+              ? "player"
+              : null,
+        timestamp: isFinite(Number(tree.timestamp))
+          ? Number(tree.timestamp)
+          : Date.now(),
+        payload: {
+          source_kind: "tree",
+          action: String(tree.action || ""),
+        },
+      };
     },
   );
-
-  Object.keys(existingByTileKey).forEach(function (tileKey) {
-    var row = existingByTileKey[tileKey];
-    if (!row || !isFinite(Number(row.id))) return;
-    deleteWorldRow(VWORLD_TREE_TABLE, Number(row.id));
-  });
+  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "tree", treeMods);
 }
 
 /**
@@ -1035,18 +1178,24 @@ function worldHouseStorageKey(worldId) {
  * @returns {Record<string, any>}
  */
 function loadWorldHouses(worldId) {
-  var raw = sharedStorage.getItem(worldHouseStorageKey(worldId));
-  if (!raw) return {};
-  try {
-    var parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (e) {
-    vwLog("house storage parse failed", {
-      world_id: String(worldId),
-      error: String(e),
-    });
-    return {};
-  }
+  var worldMods = loadWorldMods(worldId);
+  /** @type {Record<string, any>} */
+  var houses = {};
+  var objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
+  Object.keys(objectMods).forEach(function (tileKey) {
+    var mod = objectMods[tileKey];
+    var payload =
+      mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
+    if (payload.source_kind !== "house") return;
+    houses[tileKey] = {
+      built_by: mod.actor_id ? String(mod.actor_id) : undefined,
+      actor_type: mod.actor_type ? String(mod.actor_type) : undefined,
+      timestamp: isFinite(Number(mod.timestamp))
+        ? Number(mod.timestamp)
+        : Date.now(),
+    };
+  });
+  return houses;
 }
 
 /**
@@ -1055,7 +1204,7 @@ function loadWorldHouses(worldId) {
  */
 function saveWorldHouses(worldId, houses) {
   /** @type {Record<string, any>} */
-  var out = {};
+  var houseMods = {};
   Object.keys(houses && typeof houses === "object" ? houses : {}).forEach(
     function (tileKey) {
       var house = houses[tileKey];
@@ -1073,16 +1222,195 @@ function saveWorldHouses(worldId, houses) {
       ) {
         return;
       }
-      out[String(tileKey)] = {
-        built_by: house.built_by ? String(house.built_by) : undefined,
-        actor_type: house.actor_type ? String(house.actor_type) : undefined,
+      houseMods[String(tileKey)] = {
+        row: row,
+        col: col,
+        tile_type: WORLD_TILE_HOUSE,
+        actor_id: house.built_by ? String(house.built_by) : null,
+        actor_type: house.actor_type ? String(house.actor_type) : null,
         timestamp: isFinite(Number(house.timestamp))
           ? Number(house.timestamp)
           : Date.now(),
+        payload: { source_kind: "house" },
       };
     },
   );
-  sharedStorage.setItem(worldHouseStorageKey(worldId), JSON.stringify(out));
+  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "house", houseMods);
+}
+
+/**
+ * @returns {Record<string, Record<string, any>>}
+ */
+function createEmptyWorldMods() {
+  /** @type {Record<string, Record<string, any>>} */
+  var mods = {};
+  mods[WORLD_MOD_LAYER_TERRAIN] = {};
+  mods[WORLD_MOD_LAYER_OBJECT] = {};
+  return mods;
+}
+
+/**
+ * @param {*} raw
+ * @returns {*}
+ */
+function parseWorldModPayload(raw) {
+  if (!raw || typeof raw !== "string") return {};
+  try {
+    var parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    vwLog("world mod payload parse failed", { error: String(e) });
+    return {};
+  }
+}
+
+/**
+ * @param {string} worldId
+ * @returns {Record<string, Record<string, any>>}
+ */
+function loadWorldMods(worldId) {
+  var rows = queryWorldRows(
+    VWORLD_WORLD_MOD_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    5000,
+    "id",
+    "asc",
+  );
+  var mods = createEmptyWorldMods();
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row || !row.tile_key || !row.layer || !row.tile_type) continue;
+    var layer = String(row.layer);
+    if (!mods[layer]) mods[layer] = {};
+    mods[layer][String(row.tile_key)] = {
+      row: Number(row.row),
+      col: Number(row.col),
+      layer: layer,
+      tile_type: String(row.tile_type),
+      actor_id: row.actor_id ? String(row.actor_id) : null,
+      actor_type: row.actor_type ? String(row.actor_type) : null,
+      timestamp: fromStoredWorldTimestamp(row.timestamp),
+      payload: parseWorldModPayload(row.payload_json),
+    };
+  }
+
+  var legacyTreeRows = queryWorldRows(
+    VWORLD_TREE_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    5000,
+    "id",
+    "asc",
+  );
+  for (var j = 0; j < legacyTreeRows.length; j++) {
+    var legacyRow = legacyTreeRows[j];
+    if (!legacyRow || !legacyRow.tile_key || !legacyRow.action) continue;
+    var legacyTileKey = String(legacyRow.tile_key);
+    if (mods[WORLD_MOD_LAYER_OBJECT][legacyTileKey]) continue;
+    mods[WORLD_MOD_LAYER_OBJECT][legacyTileKey] = {
+      row: Number(legacyRow.row),
+      col: Number(legacyRow.col),
+      layer: WORLD_MOD_LAYER_OBJECT,
+      tile_type:
+        String(legacyRow.action) === "plant"
+          ? WORLD_TILE_PINE_TREE
+          : WORLD_TILE_GROUND,
+      actor_id: legacyRow.actor_id ? String(legacyRow.actor_id) : null,
+      actor_type: legacyRow.actor_type ? String(legacyRow.actor_type) : null,
+      timestamp: fromStoredWorldTimestamp(legacyRow.timestamp),
+      payload: {
+        source_kind: "tree",
+        action: String(legacyRow.action),
+      },
+    };
+  }
+
+  return mods;
+}
+
+/**
+ * @param {string} worldId
+ * @param {string} layer
+ * @param {string} sourceKind
+ * @param {Record<string, any>} entries
+ */
+function saveWorldModLayer(worldId, layer, sourceKind, entries) {
+  var rows = queryWorldRows(
+    VWORLD_WORLD_MOD_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    5000,
+    "id",
+    "desc",
+  );
+  /** @type {Record<string, any>} */
+  var existingByTileKey = {};
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (
+      row &&
+      row.tile_key &&
+      String(row.layer) === String(layer) &&
+      parseWorldModPayload(row.payload_json).source_kind === String(sourceKind)
+    ) {
+      existingByTileKey[String(row.tile_key)] = row;
+    }
+  }
+
+  Object.keys(entries && typeof entries === "object" ? entries : {}).forEach(
+    function (tileKey) {
+      var entry = entries[tileKey];
+      if (!entry || typeof entry !== "object") return;
+      upsertWorldRow(
+        VWORLD_WORLD_MOD_TABLE,
+        ["world_id", "tile_key", "layer"],
+        {
+          world_id: String(worldId),
+          tile_key: String(tileKey),
+          row: Number(entry.row),
+          col: Number(entry.col),
+          layer: String(layer),
+          tile_type: String(entry.tile_type || WORLD_TILE_GROUND),
+          actor_id: entry.actor_id ? String(entry.actor_id) : null,
+          actor_type: entry.actor_type ? String(entry.actor_type) : null,
+          timestamp: toStoredWorldTimestamp(
+            isFinite(Number(entry.timestamp))
+              ? Number(entry.timestamp)
+              : Date.now(),
+          ),
+          payload_json: JSON.stringify(entry.payload || {}),
+        },
+      );
+      delete existingByTileKey[String(tileKey)];
+    },
+  );
+
+  Object.keys(existingByTileKey).forEach(function (tileKey) {
+    var row = existingByTileKey[tileKey];
+    if (!row || !isFinite(Number(row.id))) return;
+    deleteWorldRow(VWORLD_WORLD_MOD_TABLE, Number(row.id));
+  });
+}
+
+/**
+ * @param {number[][]} map
+ * @param {Record<string, Record<string, any>>} worldMods
+ * @returns {number[][]}
+ */
+function applyWorldModsToMap(map, worldMods) {
+  var layerOrder = [WORLD_MOD_LAYER_TERRAIN, WORLD_MOD_LAYER_OBJECT];
+  for (var i = 0; i < layerOrder.length; i++) {
+    var layer = layerOrder[i];
+    var layerMods = worldMods[layer] || {};
+    Object.keys(layerMods).forEach(function (tileKey) {
+      var mod = layerMods[tileKey];
+      if (!mod) return;
+      var row = Number(mod.row);
+      var col = Number(mod.col);
+      if (!isFinite(row) || !isFinite(col)) return;
+      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+      map[row][col] = worldTileValueForName(mod.tile_type);
+    });
+  }
+  return map;
 }
 
 /**
@@ -1459,6 +1787,7 @@ var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
 var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
 var VWORLD_PLAYER_INVENTORY_TABLE = "vworld_player_inventory";
 var VWORLD_TREE_TABLE = "vworld_tree_mods";
+var VWORLD_WORLD_MOD_TABLE = "vworld_world_mods";
 var VWORLD_WORLD_ITEM_TABLE = "vworld_world_items";
 var VWORLD_WORLD_ITEM_META_TABLE = "vworld_world_item_meta";
 var VWORLD_NPC_TABLE = "vworld_npcs";
@@ -2481,6 +2810,102 @@ function ensureWorldDatabaseSchema() {
       database.addUniqueIndex(
         VWORLD_TREE_TABLE,
         JSON.stringify(["world_id", "tile_key"]),
+      ),
+    ),
+  );
+
+  reportWorldSchemaResult(
+    "createTable",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(database.createTable(VWORLD_WORLD_MOD_TABLE)),
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "world_id", false),
+    ),
+    "world_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "tile_key", false),
+    ),
+    "tile_key",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(VWORLD_WORLD_MOD_TABLE, "row", false),
+    ),
+    "row",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(VWORLD_WORLD_MOD_TABLE, "col", false),
+    ),
+    "col",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "layer", false),
+    ),
+    "layer",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "tile_type", false),
+    ),
+    "tile_type",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "actor_id", true),
+    ),
+    "actor_id",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "actor_type", true),
+    ),
+    "actor_type",
+  );
+  reportWorldSchemaResult(
+    "addIntegerColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addIntegerColumn(VWORLD_WORLD_MOD_TABLE, "timestamp", false),
+    ),
+    "timestamp",
+  );
+  reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(VWORLD_WORLD_MOD_TABLE, "payload_json", true),
+    ),
+    "payload_json",
+  );
+  reportWorldSchemaResult(
+    "addUniqueIndex",
+    VWORLD_WORLD_MOD_TABLE,
+    parseWorldDbResult(
+      database.addUniqueIndex(
+        VWORLD_WORLD_MOD_TABLE,
+        JSON.stringify(["world_id", "tile_key", "layer"]),
       ),
     ),
   );
@@ -3644,29 +4069,7 @@ function saveNPCLastTick(worldId, lastTickTs) {
 function getEffectiveMap(worldId) {
   /** @type {number[][]} */
   var map = generateMap(worldId);
-  var trees = loadWorldTrees(worldId);
-  var houses = loadWorldHouses(worldId);
-  // Apply tree modifications to the base map
-  for (var key in trees) {
-    var parts = key.split("_");
-    var row = parseInt(parts[0], 10);
-    var col = parseInt(parts[1], 10);
-    if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
-      if (trees[key].action === "plant") {
-        map[row][col] = 2; // Add tree
-      } else if (trees[key].action === "cut") {
-        map[row][col] = 0; // Remove tree (make walkable)
-      }
-    }
-  }
-  for (var houseKey in houses) {
-    var houseParts = houseKey.split("_");
-    var houseRow = parseInt(houseParts[0], 10);
-    var houseCol = parseInt(houseParts[1], 10);
-    if (houseRow >= 0 && houseRow < ROWS && houseCol >= 0 && houseCol < COLS) {
-      map[houseRow][houseCol] = 3;
-    }
-  }
+  applyWorldModsToMap(map, loadWorldMods(worldId));
   applyOakReservation(map, worldId);
   return map;
 }
@@ -4762,7 +5165,7 @@ function moveHandler(context) {
   var map = getEffectiveMap(worldId);
   var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
   var singleStep = dr + dc === 1;
-  var walkable = withinBounds && map[toRow][toCol] === 0;
+  var walkable = withinBounds && isWorldTileWalkable(map[toRow][toCol]);
 
   if (!singleStep || !walkable) {
     vwLog("move rejected: invalid step", {
@@ -5046,6 +5449,7 @@ function currentWorldHandler(context) {
     world_id: String(worldId),
     items: flattenWorldItems(loadWorldItems(worldId)),
     inventory: loadPlayerInventory(userId),
+    world_mods: loadWorldMods(worldId),
     houses: loadWorldHouses(worldId),
   });
 }

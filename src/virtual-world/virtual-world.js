@@ -3402,11 +3402,7 @@ function virtualWorldEventsStreamCustomizer(context) {
     context.request.auth &&
     context.request.auth.userId;
   if (!userId) return {};
-  /** @type {Record<string, string>} */
-  var metadata = { recipient_id: String(userId) };
-  var worldId = getPlayerWorld(userId);
-  if (worldId) metadata.world_id = String(worldId);
-  return metadata;
+  return { recipient_id: String(userId) };
 }
 
 /**
@@ -3416,14 +3412,25 @@ function virtualWorldEventsStreamCustomizer(context) {
  */
 function sendVirtualWorldStreamEvent(type, payload, filter) {
   try {
-    routeRegistry.sendStreamMessageFiltered(
+    var message = JSON.stringify({
+      type: String(type),
+      payload: payload,
+    });
+    var result = routeRegistry.sendStreamMessageFiltered(
       VIRTUAL_WORLD_EVENTS_STREAM_PATH,
-      {
-        type: String(type),
-        payload: payload,
-      },
+      message,
       JSON.stringify(filter || {}),
     );
+    if (
+      typeof result === "string" &&
+      (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
+    ) {
+      vwLog("stream broadcast returned error", {
+        type: String(type),
+        filter: JSON.stringify(filter || {}),
+        result: result,
+      });
+    }
   } catch (e) {
     vwLog("stream broadcast failed", {
       type: String(type),
@@ -3440,7 +3447,11 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
  */
 function sendWorldScopedStreamEvent(worldId, type, payload) {
   if (!worldId) return;
-  sendVirtualWorldStreamEvent(type, payload, { world_id: String(worldId) });
+  var players = loadWorldPlayers(String(worldId));
+  var playerIds = Object.keys(players || {});
+  for (var i = 0; i < playerIds.length; i++) {
+    sendRecipientScopedStreamEvent(playerIds[i], type, payload);
+  }
 }
 
 /**

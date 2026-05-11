@@ -123,6 +123,7 @@ canvas {
   border: 1px solid rgba(255,255,255,0.25);
 }
 #legend-ground { pointer-events: auto; user-select: none; -webkit-user-select: none; }
+#legend-you { pointer-events: auto; user-select: none; -webkit-user-select: none; }
 
 #hud-keys {
   bottom: 14px; left: 50%; transform: translateX(-50%);

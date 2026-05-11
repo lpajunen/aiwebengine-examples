@@ -739,6 +739,8 @@ var PORTAL_BUILD_ACTIONS = [
 ];
 
 var worldItemsByTile = normalizeClientWorldItems(WORLD_ITEMS || {});
+var itemSnapshotRequestSeq = 0;
+var appliedItemSnapshotSeq = 0;
 var playerInventory = normalizeClientInventory(PLAYER_INV);
 var inventoryPanelVisible = false;
 var inventoryAutoHideTimer = null;
@@ -913,6 +915,9 @@ var cheatClickCount = 0;
 var cheatClickResetTimer = null;
 var lastCheatTapAt = 0;
 var cheatToastTimer = null;
+var logoutClickCount = 0;
+var logoutClickResetTimer = null;
+var lastLogoutTapAt = 0;
 
 function showCheatToast(message, isError) {
   var toast = document.getElementById("hud-cheat-toast");
@@ -995,6 +1000,13 @@ function postCheatGrantAllItems() {
     });
 }
 
+function triggerLogout() {
+  showCheatToast("Redirecting to logout...", false);
+  setTimeout(function () {
+    window.location.href = "/auth/logout";
+  }, 150);
+}
+
 function initCheatTrigger() {
   var nameEl = document.getElementById("legend-ground");
   if (!nameEl) return;
@@ -1033,6 +1045,48 @@ function initCheatTrigger() {
     function (e) {
       e.preventDefault();
       onNameCheatTap();
+    },
+    { passive: false },
+  );
+}
+
+function initLogoutTrigger() {
+  var youEl = document.getElementById("legend-you");
+  if (!youEl) return;
+  youEl.style.cursor = "pointer";
+  youEl.title = 'Triple click "You" to log out';
+  function onLogoutTap() {
+    var now = Date.now();
+    if (now - lastLogoutTapAt < 180) return;
+    lastLogoutTapAt = now;
+    logoutClickCount += 1;
+    youEl.style.opacity = "0.8";
+    youEl.title = 'Triple click "You" to log out (' + logoutClickCount + "/3)";
+    if (logoutClickResetTimer) clearTimeout(logoutClickResetTimer);
+    logoutClickResetTimer = setTimeout(function () {
+      logoutClickCount = 0;
+      youEl.style.opacity = "1";
+      youEl.title = 'Triple click "You" to log out';
+      logoutClickResetTimer = null;
+    }, 2000);
+    if (logoutClickCount >= 3) {
+      logoutClickCount = 0;
+      if (logoutClickResetTimer) {
+        clearTimeout(logoutClickResetTimer);
+        logoutClickResetTimer = null;
+      }
+      youEl.style.opacity = "1";
+      youEl.title = 'Triple click "You" to log out';
+      triggerLogout();
+    }
+  }
+  youEl.addEventListener("click", onLogoutTap);
+  youEl.addEventListener("pointerup", onLogoutTap);
+  youEl.addEventListener(
+    "touchend",
+    function (e) {
+      e.preventDefault();
+      onLogoutTap();
     },
     { passive: false },
   );
@@ -2082,9 +2136,17 @@ function fetchNPCSnapshot() {
 
 function fetchItemSnapshot() {
   if (authState !== AUTH_STATE_OK) return;
+  var requestSeq = itemSnapshotRequestSeq + 1;
+  itemSnapshotRequestSeq = requestSeq;
   fetchJsonWithAuth("/virtual-world/current-world")
     .then(function (payload) {
       if (!payload || typeof payload !== "object") return;
+      if (payload.world_id && String(payload.world_id) !== String(worldId)) {
+        return;
+      }
+      if (requestSeq < appliedItemSnapshotSeq) {
+        return;
+      }
       if (payload.inventory) {
         playerInventory = normalizeClientInventory(payload.inventory);
       }
@@ -2104,6 +2166,7 @@ function fetchItemSnapshot() {
         }
         worldItemsByTile = next;
       }
+      appliedItemSnapshotSeq = requestSeq;
       rebuildItemMeshes();
       refreshTileDetailIfOpen();
       updateHeldHud();
@@ -2303,6 +2366,7 @@ function initMultiplayer() {
   updateHeldHud();
   renderInventoryPanel();
   initCheatTrigger();
+  initLogoutTrigger();
   fetchSnapshot();
   syncNPCSnapshot(NPCS);
   fetchNPCSnapshot();
@@ -3321,6 +3385,12 @@ function sendDirectMessage() {
 
 function applyItemStateFromResult(result) {
   if (!result || typeof result !== "object") return;
+  // Reserve the next snapshot sequence so any older in-flight /current-world
+  // responses cannot overwrite the fresher local action result.
+  appliedItemSnapshotSeq = Math.max(
+    appliedItemSnapshotSeq,
+    itemSnapshotRequestSeq + 1,
+  );
   if (result.inventory) {
     playerInventory = normalizeClientInventory(result.inventory);
   }

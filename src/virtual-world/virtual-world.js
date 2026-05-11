@@ -1103,10 +1103,21 @@ function getVirtualWorldPage(context) {
   const playerInventory = loadPlayerInventory(userId);
   const npcs = getWorldNPCSnapshot(worldId);
   const savedPos = loadPlayerPosition(userId);
-  const initialPos =
-    savedPos && savedPos.world_id === String(worldId)
-      ? savedPos
-      : getDefaultSpawnPosition(worldId, userId);
+  const hasSavedPos = savedPos && savedPos.world_id === String(worldId);
+  const initialPos = hasSavedPos
+    ? savedPos
+    : getDefaultSpawnPosition(worldId, userId);
+  if (!hasSavedPos) {
+    savePlayerPosition(userId, worldId, {
+      row: initialPos.row,
+      col: initialPos.col,
+      seq: initialPos.seq || 0,
+      rotation: Number.isFinite(Number(initialPos.rotation))
+        ? Number(initialPos.rotation)
+        : 0,
+      ts: Date.now(),
+    });
+  }
   const initRow = initialPos.row;
   const initCol = initialPos.col;
   const initSeq = initialPos.seq || 0;
@@ -1151,7 +1162,7 @@ function getVirtualWorldPage(context) {
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Pine Tree</div>
     <div class="leg"><div class="leg-box" style="background:#4f91c9;"></div> Water</div>
     <div class="leg"><div class="leg-box" style="background:#7f8892;"></div> Rock / Mountain</div>
-    <div class="leg"><div class="leg-box" style="background:#2980b9;"></div> You</div>
+    <div class="leg" id="legend-you"><div class="leg-box" style="background:#2980b9;"></div> You</div>
   </div>
 
   <div class="hud" id="hud-keys">
@@ -1550,36 +1561,6 @@ function loadWorldMods(worldId) {
     };
   }
 
-  var legacyTreeRows = queryWorldRows(
-    VWORLD_TREE_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "asc",
-  );
-  for (var j = 0; j < legacyTreeRows.length; j++) {
-    var legacyRow = legacyTreeRows[j];
-    if (!legacyRow || !legacyRow.tile_key || !legacyRow.action) continue;
-    var legacyTileKey = String(legacyRow.tile_key);
-    if (mods[WORLD_MOD_LAYER_OBJECT][legacyTileKey]) continue;
-    mods[WORLD_MOD_LAYER_OBJECT][legacyTileKey] = {
-      row: Number(legacyRow.row),
-      col: Number(legacyRow.col),
-      layer: WORLD_MOD_LAYER_OBJECT,
-      tile_type:
-        String(legacyRow.action) === "plant"
-          ? WORLD_TILE_PINE_TREE
-          : WORLD_TILE_GROUND,
-      actor_id: legacyRow.actor_id ? String(legacyRow.actor_id) : null,
-      actor_type: legacyRow.actor_type ? String(legacyRow.actor_type) : null,
-      timestamp: fromStoredWorldTimestamp(legacyRow.timestamp),
-      payload: {
-        source_kind: "tree",
-        action: String(legacyRow.action),
-      },
-    };
-  }
-
   return mods;
 }
 
@@ -1816,9 +1797,6 @@ function ensureStarterKit(userId) {
   var hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
   });
-  var hasHammer = allItems.some(function (item) {
-    return item && item.type === "hammer";
-  });
   if (!hasKit) {
     inv.inventory.push({
       id: "starter_kit_" + userId,
@@ -1827,15 +1805,7 @@ function ensureStarterKit(userId) {
       non_droppable: true,
     });
   }
-  if (!hasHammer) {
-    inv.inventory.push({
-      id: "starter_hammer_" + userId,
-      type: "hammer",
-      created_at: Date.now(),
-      non_droppable: true,
-    });
-  }
-  if (!hasKit || !hasHammer) savePlayerInventory(userId, inv);
+  if (!hasKit) savePlayerInventory(userId, inv);
 }
 
 /**
@@ -2048,7 +2018,6 @@ var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
 var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
 var VWORLD_PLAYER_INVENTORY_TABLE = "vworld_player_inventory";
 var VWORLD_WORLD_TYPE_TABLE = "vworld_world_types";
-var VWORLD_TREE_TABLE = "vworld_tree_mods";
 var VWORLD_WORLD_MOD_TABLE = "vworld_world_mods";
 var VWORLD_WORLD_ITEM_TABLE = "vworld_world_items";
 var VWORLD_WORLD_ITEM_META_TABLE = "vworld_world_item_meta";
@@ -3036,86 +3005,6 @@ function ensureWorldDatabaseSchema() {
       database.addUniqueIndex(
         VWORLD_PLAYER_INVENTORY_TABLE,
         JSON.stringify(["user_id"]),
-      ),
-    ),
-  );
-
-  reportWorldSchemaResult(
-    "createTable",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(database.createTable(VWORLD_TREE_TABLE)),
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_TREE_TABLE, "world_id", false),
-    ),
-    "world_id",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_TREE_TABLE, "tile_key", false),
-    ),
-    "tile_key",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_TREE_TABLE, "row", false),
-    ),
-    "row",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_TREE_TABLE, "col", false),
-    ),
-    "col",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_TREE_TABLE, "action", false),
-    ),
-    "action",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_TREE_TABLE, "actor_id", true),
-    ),
-    "actor_id",
-  );
-  reportWorldSchemaResult(
-    "addTextColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addTextColumn(VWORLD_TREE_TABLE, "actor_type", true),
-    ),
-    "actor_type",
-  );
-  reportWorldSchemaResult(
-    "addIntegerColumn",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addIntegerColumn(VWORLD_TREE_TABLE, "timestamp", false),
-    ),
-    "timestamp",
-  );
-  reportWorldSchemaResult(
-    "addUniqueIndex",
-    VWORLD_TREE_TABLE,
-    parseWorldDbResult(
-      database.addUniqueIndex(
-        VWORLD_TREE_TABLE,
-        JSON.stringify(["world_id", "tile_key"]),
       ),
     ),
   );
@@ -4800,6 +4689,9 @@ function tickWorldNPCs(worldId, now) {
       npc_count: npcIds.length,
     });
   }
+  if (itemChanges) {
+    saveWorldItems(worldId, worldItems);
+  }
   if (treeChanges) {
     saveWorldTrees(worldId, trees);
   }
@@ -5014,6 +4906,7 @@ function handleItemActionForUser(userId, body) {
         delete worldItems[tileKey];
       }
       savePlayerInventory(userId, inv);
+      saveWorldItems(worldId, worldItems);
       broadcastItemChange(
         worldId,
         "player",
@@ -5072,6 +4965,7 @@ function handleItemActionForUser(userId, body) {
 
     savePlayerInventory(userId, inv);
     upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
+    saveWorldItems(worldId, worldItems);
     broadcastItemChange(
       worldId,
       "player",
@@ -5196,7 +5090,9 @@ function makeCheatItemId(userId, worldId, index) {
 function grantAllItemsForUser(userId) {
   var worldId = getPlayerWorld(userId) || "";
   var inv = loadPlayerInventory(userId);
-  var itemTypes = getAllKnownItemTypes();
+  var itemTypes = getAllKnownItemTypes().filter(function (type) {
+    return type !== "portal";
+  });
   var now = Date.now();
 
   // Collect types already owned across all inventory slots
@@ -5422,14 +5318,15 @@ function moveHandler(context) {
   } catch (e) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
-  // Support both old format (row/col) and new format (fromRow/fromCol/toRow/toCol)
   var fromRow = body.fromRow !== undefined ? Number(body.fromRow) : null;
   var fromCol = body.fromCol !== undefined ? Number(body.fromCol) : null;
   var toRow = body.toRow !== undefined ? Number(body.toRow) : Number(body.row);
   var toCol = body.toCol !== undefined ? Number(body.toCol) : Number(body.col);
   var rotation = Number(body.rotation);
-  // Backward compatible fallback keeps legacy tabs functional.
   var sessionId = body.session_id ? String(body.session_id) : "legacy";
+  if (!isFinite(toRow) || !isFinite(toCol)) {
+    return ResponseBuilder.json({ error: "Invalid move payload" }, 400);
+  }
 
   // Derive world from server-side storage — never trust client for this
   var worldId = getPlayerWorld(userId);
@@ -5461,11 +5358,14 @@ function moveHandler(context) {
   var cur = players[userId];
   if (!cur) {
     var savedPos = loadPlayerPosition(userId);
+    var defaultSpawn = getDefaultSpawnPosition(worldId, userId);
     cur = {
-      row: savedPos ? savedPos.row : 1,
-      col: savedPos ? savedPos.col : 1,
-      seq: savedPos ? savedPos.seq : 0,
-      rotation: savedPos ? Number(savedPos.rotation) : 0,
+      row: savedPos ? savedPos.row : defaultSpawn.row,
+      col: savedPos ? savedPos.col : defaultSpawn.col,
+      seq: savedPos ? savedPos.seq : defaultSpawn.seq,
+      rotation: savedPos
+        ? Number(savedPos.rotation)
+        : Number(defaultSpawn.rotation),
       session_id: savedPos ? savedPos.session_id : "",
     };
   }
@@ -5945,6 +5845,7 @@ function treeActionHandler(context) {
     if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
     worldItems[blessingTileKey].push(blessingItem);
     upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
+    saveWorldItems(worldId, worldItems);
     broadcastItemChange(
       worldId,
       "player",
@@ -6112,6 +6013,7 @@ function treeActionHandler(context) {
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);
     upsertWorldItem(worldId, targetRow, targetCol, portalItem);
+    saveWorldItems(worldId, worldItems);
 
     broadcastItemChange(
       worldId,
@@ -6156,6 +6058,7 @@ function treeActionHandler(context) {
     if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
     else delete worldItems[removeTileKey];
     deleteWorldItems(removedPortals);
+    saveWorldItems(worldId, worldItems);
 
     broadcastItemChange(
       worldId,

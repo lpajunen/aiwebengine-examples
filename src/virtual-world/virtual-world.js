@@ -948,7 +948,9 @@ function loadPlayerHeartbeatMap() {
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
     if (!row || !row.user_id) continue;
-    out[String(row.user_id)] = fromStoredWorldTimestamp(row.heartbeat_ts);
+    var heartbeatUserId = String(row.user_id);
+    if (out[heartbeatUserId]) continue;
+    out[heartbeatUserId] = fromStoredWorldTimestamp(row.heartbeat_ts);
   }
   return out;
 }
@@ -1308,7 +1310,9 @@ function loadWorldPlayers(worldId) {
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
     if (!row || !row.user_id) continue;
-    players[String(row.user_id)] = {
+    var playerUserId = String(row.user_id);
+    if (players[playerUserId]) continue;
+    players[playerUserId] = {
       row: isFinite(Number(row.row)) ? Number(row.row) : 1,
       col: isFinite(Number(row.col)) ? Number(row.col) : 1,
       seq: isFinite(Number(row.seq)) ? Number(row.seq) : 0,
@@ -1952,6 +1956,7 @@ function buildOnlinePlayersSnapshot() {
     var row = rows[i];
     if (!row || !row.user_id) continue;
     var userId = String(row.user_id);
+    if (byUserId[userId]) continue;
     var pos = positionsByUserId[userId] || null;
     var presenceLastActive = fromStoredWorldTimestamp(row.last_active_ts);
     var canonicalLastActive = Math.max(
@@ -5479,6 +5484,11 @@ function leaveHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
+  var sessionId = "";
+  try {
+    var body = JSON.parse(context.request.body || "{}");
+    sessionId = body.session_id ? String(body.session_id) : "";
+  } catch (e) {}
   // Derive world from storage. newWorldHandler already broadcasts the leave when
   // switching worlds, so by the time this fires after a New World navigation the
   // player is no longer recorded in the new world — making this a safe no-op.
@@ -5486,6 +5496,22 @@ function leaveHandler(context) {
   if (!worldId) return ResponseBuilder.json({ ok: true });
   var position = loadPlayerPosition(userId);
   if (!position || position.world_id !== String(worldId)) {
+    return ResponseBuilder.json({ ok: true });
+  }
+  if (!sessionId) {
+    vwLog("leave ignored: missing session id", {
+      user_id: userId,
+      world_id: worldId,
+    });
+    return ResponseBuilder.json({ ok: true });
+  }
+  if (position.session_id && position.session_id !== sessionId) {
+    vwLog("leave ignored: stale session", {
+      user_id: userId,
+      world_id: worldId,
+      position_session: position.session_id,
+      session_id: sessionId,
+    });
     return ResponseBuilder.json({ ok: true });
   }
   markPlayerPositionInactive(userId);
@@ -5548,7 +5574,7 @@ function heartbeatHandler(context) {
 
 /**
  * @param {string} worldId
- * @returns {Array<{player_id: string, row: number, col: number, seq: number, rotation: number, last_active: number}>}
+ * @returns {Array<{player_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, last_active: number}>}
  */
 function buildActiveWorldPlayers(worldId) {
   if (!worldId) return [];
@@ -5574,6 +5600,10 @@ function buildActiveWorldPlayers(worldId) {
         rotation: isFinite(Number(players[pid].rotation))
           ? Number(players[pid].rotation)
           : 0,
+        session_id:
+          typeof players[pid].session_id === "string"
+            ? players[pid].session_id
+            : "",
         last_active: Math.max(Number(players[pid].ts || 0), hbTs),
       };
     });
@@ -5671,6 +5701,7 @@ function playersHandler(context) {
       col: pid.col,
       seq: pid.seq || 0,
       rotation: isFinite(Number(pid.rotation)) ? Number(pid.rotation) : 0,
+      session_id: typeof pid.session_id === "string" ? pid.session_id : "",
     };
   });
   return ResponseBuilder.json(active);

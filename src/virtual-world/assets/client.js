@@ -2302,7 +2302,9 @@ function postLeave() {
   // world_id and player_id are determined server-side from auth session
   navigator.sendBeacon(
     "/virtual-world/leave",
-    new Blob(["{}"], { type: "application/json" }),
+    new Blob([JSON.stringify({ session_id: sessionId })], {
+      type: "application/json",
+    }),
   );
 }
 
@@ -2313,6 +2315,11 @@ function fetchSnapshot() {
       players.forEach(function (p) {
         if (p.player_id === playerId) {
           var snapSeq = Number(p.seq || 0);
+          var snapshotSessionId =
+            typeof p.session_id === "string" ? p.session_id : "";
+          if (snapshotSessionId && snapshotSessionId !== sessionId) {
+            return;
+          }
           // Snapshot healing for same-user tabs when SSE is delayed/flaky.
           // Only accept snapshot if we're idle AND it's not stale (older than our current state).
           if (

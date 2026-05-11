@@ -140,19 +140,19 @@ function create_rest_endpoint(context) {
 
   const code = `
 // ${description}
-function handle${resourceName}${method}(request) {
+function handle${resourceName}${method}(context) {
   console.log("${method} ${path} called");
   
   // TODO: Implement ${resourceName} ${method} logic here
   
-  return {
+  return ResponseBuilder.json({
     success: true,
     data: []
-  };
+  });
 }
 
 // Register the endpoint
-endpoints.register("${method} ${path}", handle${resourceName}${method});
+routeRegistry.registerRoute("${path}", "handle${resourceName}${method}", "${method}");
 console.log("Registered ${method} ${path}");
   `.trim();
 
@@ -257,7 +257,12 @@ function ${queryName}Resolver(args, context) {
 }
 
 // Register the query
-graphqlRegistry.registerQuery("${queryName}", ${queryName}Schema, ${queryName}Resolver);
+graphQLRegistry.registerQuery(
+  "${queryName}",
+  ${queryName}Schema,
+  "${queryName}Resolver",
+  "external",
+);
 console.log("Registered GraphQL query: ${queryName}");
   `.trim();
 

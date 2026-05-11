@@ -2095,7 +2095,12 @@ function fetchItemSnapshot() {
           if (!it || !it.id || !it.type) continue;
           var key = it.row + "_" + it.col;
           if (!next[key]) next[key] = [];
-          next[key].push({ id: it.id, type: it.type });
+          next[key].push({
+            id: it.id,
+            type: it.type,
+            destination_world_id: it.destination_world_id,
+            destination_world_type: it.destination_world_type,
+          });
         }
         worldItemsByTile = next;
       }

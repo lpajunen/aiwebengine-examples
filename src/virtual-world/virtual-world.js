@@ -1040,6 +1040,21 @@ function saveWorldType(worldId, worldType) {
 }
 
 /**
+ * @param {{destination_world_id?: string, destination_world_type?: string}=} item
+ * @returns {string | undefined}
+ */
+function resolvePortalDestinationWorldType(item) {
+  if (!item || typeof item !== "object") return undefined;
+  if (typeof item.destination_world_type === "string") {
+    return normalizeWorldType(item.destination_world_type);
+  }
+  if (typeof item.destination_world_id === "string") {
+    return getWorldType(item.destination_world_id);
+  }
+  return undefined;
+}
+
+/**
  * @param {string | undefined | null} worldType
  * @returns {{world_id: string, world_type: string}}
  */
@@ -3912,10 +3927,16 @@ function loadWorldItems(worldId) {
           typeof row.destination_world_id === "string"
             ? row.destination_world_id
             : undefined,
-        destination_world_type:
-          typeof row.destination_world_type === "string"
-            ? normalizeWorldType(row.destination_world_type)
-            : undefined,
+        destination_world_type: resolvePortalDestinationWorldType({
+          destination_world_id:
+            typeof row.destination_world_id === "string"
+              ? row.destination_world_id
+              : undefined,
+          destination_world_type:
+            typeof row.destination_world_type === "string"
+              ? row.destination_world_type
+              : undefined,
+        }),
       });
     }
     return fromRows;
@@ -4097,10 +4118,7 @@ function flattenWorldItems(itemsByTile) {
           typeof item.destination_world_id === "string"
             ? item.destination_world_id
             : undefined,
-        destination_world_type:
-          typeof item.destination_world_type === "string"
-            ? normalizeWorldType(item.destination_world_type)
-            : undefined,
+        destination_world_type: resolvePortalDestinationWorldType(item),
       });
     });
   });

@@ -264,6 +264,10 @@ var I18N_MESSAGES = {
       plant: "Plant pine sapling",
       cut: "Use woodsman's saw",
       build_portal: "Raise rune gate",
+      build_portal_forest: "Raise rune gate to forest world",
+      build_portal_island: "Raise rune gate to island world",
+      build_portal_cave: "Raise rune gate to cave world",
+      build_portal_building: "Raise rune gate to house world",
       remove_portal: "Close rune gate",
       play_tune: "Play kantele tune",
       place_blessing: "Place rowan blessing",
@@ -272,9 +276,18 @@ var I18N_MESSAGES = {
     },
     terrain: {
       wall: "Spruce thicket",
+      house: "House wall",
       tree: "Pine tree",
       tree_planted: "Pine tree (planted)",
       old_oak: "Old oak",
+      ocean: "Ocean",
+      lake: "Lake",
+      river: "River",
+      rock: "Rock field",
+      mountain: "Mountain",
+      sand: "Sand",
+      cave_floor: "Cave floor",
+      wood_floor: "Wood floor",
       ground_tree_cut: "Forest floor (pine cut)",
       ground: "Forest floor",
     },
@@ -307,6 +320,10 @@ var I18N_MESSAGES = {
       plant: "Istuta männyn taimi",
       cut: "Käytä metsurin sahaa",
       build_portal: "Nosta riimuportti",
+      build_portal_forest: "Nosta riimuportti metsämaailmaan",
+      build_portal_island: "Nosta riimuportti saareen",
+      build_portal_cave: "Nosta riimuportti luolaan",
+      build_portal_building: "Nosta riimuportti taloon",
       remove_portal: "Sulje riimuportti",
       play_tune: "Soita kanteleen sävel",
       place_blessing: "Aseta pihlajansiunaus",
@@ -315,9 +332,18 @@ var I18N_MESSAGES = {
     },
     terrain: {
       wall: "Kuusitiheikkö",
+      house: "Talon seinä",
       tree: "Mänty",
       tree_planted: "Mänty (istutettu)",
       old_oak: "Vanha tammi",
+      ocean: "Meri",
+      lake: "Järvi",
+      river: "Joki",
+      rock: "Kivikko",
+      mountain: "Vuori",
+      sand: "Hiekka",
+      cave_floor: "Luolan lattia",
+      wood_floor: "Puutaso",
       ground_tree_cut: "Metsäpohja (mänty kaadettu)",
       ground: "Metsäpohja",
     },
@@ -410,6 +436,9 @@ var clientTileDefs =
         river: { value: 6, walkable: false, layer: "terrain" },
         rock: { value: 7, walkable: false, layer: "terrain" },
         mountain: { value: 8, walkable: false, layer: "terrain" },
+        sand: { value: 9, walkable: true, layer: "terrain" },
+        cave_floor: { value: 10, walkable: true, layer: "terrain" },
+        wood_floor: { value: 11, walkable: true, layer: "terrain" },
       };
 /** @type {Record<number, string>} */
 var clientTileNamesByValue = {};
@@ -651,13 +680,63 @@ function normalizeClientWorldItems(items) {
   if (!items || typeof items !== "object") return out;
   for (var tileKey in items) {
     if (!Array.isArray(items[tileKey])) continue;
-    var filtered = items[tileKey].filter(function (it) {
-      return it && it.id && it.type;
-    });
+    var filtered = items[tileKey]
+      .filter(function (it) {
+        return it && it.id && it.type;
+      })
+      .map(function (it) {
+        return {
+          id: it.id,
+          type: it.type,
+          destination_world_id: it.destination_world_id,
+          destination_world_type: it.destination_world_type,
+        };
+      });
     if (filtered.length > 0) out[tileKey] = filtered;
   }
   return out;
 }
+
+function normalizeWorldType(worldType) {
+  var normalized = String(worldType || "").toLowerCase();
+  if (
+    normalized === "forest" ||
+    normalized === "island" ||
+    normalized === "cave" ||
+    normalized === "building"
+  ) {
+    return normalized;
+  }
+  return "forest";
+}
+
+function worldTypeLabel(worldType) {
+  var normalized = normalizeWorldType(worldType);
+  if (normalized === "island") return "Island";
+  if (normalized === "cave") return "Cave";
+  if (normalized === "building") return "House";
+  return "Forest";
+}
+
+function portalDestinationLabel(item) {
+  var destinationType = normalizeWorldType(
+    item && item.destination_world_type
+      ? item.destination_world_type
+      : "forest",
+  );
+  var worldLabel = worldTypeLabel(destinationType);
+  if (item && item.destination_world_id) {
+    return worldLabel + " world (#" + String(item.destination_world_id) + ")";
+  }
+  return worldLabel + " world";
+}
+
+var PORTAL_BUILD_ACTIONS = [
+  "build_portal_forest",
+  "build_portal_island",
+  "build_portal_cave",
+  "build_portal_building",
+];
 
 var worldItemsByTile = normalizeClientWorldItems(WORLD_ITEMS || {});
 var playerInventory = normalizeClientInventory(PLAYER_INV);
@@ -680,7 +759,9 @@ var activeDmUserId = null;
 var unreadDmCount = 0;
 
 function treeActionsForItemType(type) {
-  if (type === "portal_builder") return ["build_portal", "remove_portal"];
+  if (type === "portal_builder") {
+    return PORTAL_BUILD_ACTIONS.concat(["remove_portal"]);
+  }
   if (type === "hammer") return ["build_house", "destroy_house"];
   if (type === "tree_planter") return ["plant"];
   if (type === "saw") return ["cut"];
@@ -706,6 +787,30 @@ function treeActionLabel(action) {
   }
   if (action === "build_portal") {
     return t("tree_action.build_portal", "Use portal builder (build portal)");
+  }
+  if (action === "build_portal_forest") {
+    return t(
+      "tree_action.build_portal_forest",
+      "Use portal builder (build forest portal)",
+    );
+  }
+  if (action === "build_portal_island") {
+    return t(
+      "tree_action.build_portal_island",
+      "Use portal builder (build island portal)",
+    );
+  }
+  if (action === "build_portal_cave") {
+    return t(
+      "tree_action.build_portal_cave",
+      "Use portal builder (build cave portal)",
+    );
+  }
+  if (action === "build_portal_building") {
+    return t(
+      "tree_action.build_portal_building",
+      "Use portal builder (build house portal)",
+    );
   }
   if (action === "remove_portal") {
     return t("tree_action.remove_portal", "Use portal builder (remove portal)");
@@ -1029,8 +1134,15 @@ scene.add(bgPlane);
 
 // ── Reusable geometries and materials ────────────────────────────────────
 var geoGround = new THREE.BoxGeometry(TILE, 0.25, TILE);
+var geoFloorOverlay = new THREE.BoxGeometry(TILE, 0.05, TILE);
 var matGroundA = new THREE.MeshLambertMaterial({ color: 0x7ab648 });
 var matGroundB = new THREE.MeshLambertMaterial({ color: 0x6da040 });
+var matSandA = new THREE.MeshLambertMaterial({ color: 0xd7c182 });
+var matSandB = new THREE.MeshLambertMaterial({ color: 0xcbb170 });
+var matCaveFloorA = new THREE.MeshLambertMaterial({ color: 0x6a6b72 });
+var matCaveFloorB = new THREE.MeshLambertMaterial({ color: 0x5a5c63 });
+var matWoodFloorA = new THREE.MeshLambertMaterial({ color: 0x9b6c3f });
+var matWoodFloorB = new THREE.MeshLambertMaterial({ color: 0x835730 });
 
 var geoSpruceTrunk = new THREE.CylinderGeometry(0.11, 0.16, 0.95, 6);
 var geoSpruceCanopyLow = new THREE.ConeGeometry(0.78, 1.5, 8);
@@ -1183,6 +1295,131 @@ var iLake = null;
 var iRiver = null;
 var iRock = null;
 var iMountain = null;
+var iSandA = null;
+var iSandB = null;
+var iCaveFloorA = null;
+var iCaveFloorB = null;
+var iWoodFloorA = null;
+var iWoodFloorB = null;
+
+function countParityTiles(tileName, parity) {
+  var tileValue = clientTileValueForName(tileName);
+  var count = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      if (((row + col) & 1) !== parity) continue;
+      if (MAP[row][col] === tileValue) count++;
+    }
+  }
+  return count;
+}
+
+function rebuildFloorOverlayMeshes() {
+  scene.remove(
+    iSandA,
+    iSandB,
+    iCaveFloorA,
+    iCaveFloorB,
+    iWoodFloorA,
+    iWoodFloorB,
+  );
+  disposeInstancedMeshes([
+    iSandA,
+    iSandB,
+    iCaveFloorA,
+    iCaveFloorB,
+    iWoodFloorA,
+    iWoodFloorB,
+  ]);
+
+  iSandA = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matSandA,
+    countParityTiles("sand", 0),
+  );
+  iSandB = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matSandB,
+    countParityTiles("sand", 1),
+  );
+  iCaveFloorA = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matCaveFloorA,
+    countParityTiles("cave_floor", 0),
+  );
+  iCaveFloorB = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matCaveFloorB,
+    countParityTiles("cave_floor", 1),
+  );
+  iWoodFloorA = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matWoodFloorA,
+    countParityTiles("wood_floor", 0),
+  );
+  iWoodFloorB = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matWoodFloorB,
+    countParityTiles("wood_floor", 1),
+  );
+
+  var sandAIdx = 0;
+  var sandBIdx = 0;
+  var caveAIdx = 0;
+  var caveBIdx = 0;
+  var woodAIdx = 0;
+  var woodBIdx = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      var tileValue = MAP[row][col];
+      var x = tileX(col);
+      var z = tileZ(row);
+      var parity = (row + col) & 1;
+      if (tileValue === clientTileValueForName("sand")) {
+        setInstanceTransform(
+          parity === 0 ? iSandA : iSandB,
+          parity === 0 ? sandAIdx++ : sandBIdx++,
+          x,
+          0.01,
+          z,
+          1,
+          1,
+          1,
+        );
+      } else if (tileValue === clientTileValueForName("cave_floor")) {
+        setInstanceTransform(
+          parity === 0 ? iCaveFloorA : iCaveFloorB,
+          parity === 0 ? caveAIdx++ : caveBIdx++,
+          x,
+          0.01,
+          z,
+          1,
+          1,
+          1,
+        );
+      } else if (tileValue === clientTileValueForName("wood_floor")) {
+        setInstanceTransform(
+          parity === 0 ? iWoodFloorA : iWoodFloorB,
+          parity === 0 ? woodAIdx++ : woodBIdx++,
+          x,
+          0.01,
+          z,
+          1,
+          1,
+          1,
+        );
+      }
+    }
+  }
+
+  finalizeInstancedMesh(iSandA);
+  finalizeInstancedMesh(iSandB);
+  finalizeInstancedMesh(iCaveFloorA);
+  finalizeInstancedMesh(iCaveFloorB);
+  finalizeInstancedMesh(iWoodFloorA);
+  finalizeInstancedMesh(iWoodFloorB);
+  scene.add(iSandA, iSandB, iCaveFloorA, iCaveFloorB, iWoodFloorA, iWoodFloorB);
+}
 
 function rebuildTerrainFeatureMeshes() {
   scene.remove(iOcean, iLake, iRiver, iRock, iMountain);
@@ -1534,6 +1771,7 @@ scene.add(
   iSpruceCanopyTop,
 );
 if (oakGroup) scene.add(oakGroup);
+rebuildFloorOverlayMeshes();
 rebuildTerrainFeatureMeshes();
 rebuildPineInstances();
 rebuildHouseMeshes();
@@ -1548,6 +1786,7 @@ function updateHouseMeshes() {
 }
 
 function updateTerrainFeatureMeshes() {
+  rebuildFloorOverlayMeshes();
   rebuildTerrainFeatureMeshes();
 }
 
@@ -3088,7 +3327,12 @@ function applyItemStateFromResult(result) {
       if (!it || !it.id || !it.type) continue;
       var key = it.row + "_" + it.col;
       if (!next[key]) next[key] = [];
-      next[key].push({ id: it.id, type: it.type });
+      next[key].push({
+        id: it.id,
+        type: it.type,
+        destination_world_id: it.destination_world_id,
+        destination_world_type: it.destination_world_type,
+      });
     }
     worldItemsByTile = next;
   }
@@ -3266,6 +3510,12 @@ function renderTileDetailPanel() {
     terrainLabel = t("terrain.rock", "Rock field");
   } else if (terrainType === clientTileValueForName("mountain")) {
     terrainLabel = t("terrain.mountain", "Mountain");
+  } else if (terrainType === clientTileValueForName("sand")) {
+    terrainLabel = t("terrain.sand", "Sand");
+  } else if (terrainType === clientTileValueForName("cave_floor")) {
+    terrainLabel = t("terrain.cave_floor", "Cave floor");
+  } else if (terrainType === clientTileValueForName("wood_floor")) {
+    terrainLabel = t("terrain.wood_floor", "Wood floor");
   } else {
     terrainLabel =
       treeMod && treeMod.action === "cut"
@@ -3321,6 +3571,12 @@ function renderTileDetailPanel() {
       var itm = tileItems[i];
       var label = t(itemTypeToLabelKey(itm.type), humanizeType(itm.type));
       html += '<div class="tile-row">' + escHtml(label) + "</div>";
+      if (itm.type === "portal") {
+        html +=
+          '<div class="tile-row">Leads to ' +
+          escHtml(portalDestinationLabel(itm)) +
+          "</div>";
+      }
     }
   }
   html += "</div>";

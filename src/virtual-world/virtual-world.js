@@ -41,6 +41,31 @@ var WORLD_TILE_LAKE = "lake";
 var WORLD_TILE_RIVER = "river";
 var WORLD_TILE_ROCK = "rock";
 var WORLD_TILE_MOUNTAIN = "mountain";
+var WORLD_TILE_SAND = "sand";
+var WORLD_TILE_CAVE_FLOOR = "cave_floor";
+var WORLD_TILE_WOOD_FLOOR = "wood_floor";
+var WORLD_TYPE_FOREST = "forest";
+var WORLD_TYPE_ISLAND = "island";
+var WORLD_TYPE_CAVE = "cave";
+var WORLD_TYPE_BUILDING = "building";
+var WORLD_TYPES = [
+  WORLD_TYPE_FOREST,
+  WORLD_TYPE_ISLAND,
+  WORLD_TYPE_CAVE,
+  WORLD_TYPE_BUILDING,
+];
+/** @type {Record<string, string>} */
+var PORTAL_BUILD_ACTION_BY_WORLD_TYPE = {
+  forest: "build_portal_forest",
+  island: "build_portal_island",
+  cave: "build_portal_cave",
+  building: "build_portal_building",
+};
+var PORTAL_BUILD_ACTIONS = Object.keys(PORTAL_BUILD_ACTION_BY_WORLD_TYPE).map(
+  function (worldType) {
+    return PORTAL_BUILD_ACTION_BY_WORLD_TYPE[worldType];
+  },
+);
 /** @type {Record<string, {value: number, walkable: boolean, layer: string}>} */
 var WORLD_TILE_DEFS = {
   ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
@@ -56,6 +81,9 @@ var WORLD_TILE_DEFS = {
   river: { value: 6, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
   rock: { value: 7, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
   mountain: { value: 8, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  sand: { value: 9, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
+  cave_floor: { value: 10, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
+  wood_floor: { value: 11, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
 };
 /** @type {Record<number, string>} */
 var WORLD_TILE_NAME_BY_VALUE = {
@@ -68,6 +96,9 @@ var WORLD_TILE_NAME_BY_VALUE = {
   6: WORLD_TILE_RIVER,
   7: WORLD_TILE_ROCK,
   8: WORLD_TILE_MOUNTAIN,
+  9: WORLD_TILE_SAND,
+  10: WORLD_TILE_CAVE_FLOOR,
+  11: WORLD_TILE_WOOD_FLOOR,
 };
 var npcTickerStarted = false;
 var npcTickOwnerId =
@@ -161,6 +192,155 @@ function hashString(value) {
  */
 function getWorldFlavorText(worldId) {
   return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
+}
+
+/**
+ * @param {string | undefined | null} worldType
+ * @returns {string}
+ */
+function normalizeWorldType(worldType) {
+  var normalized = String(worldType || "").toLowerCase();
+  return WORLD_TYPES.indexOf(normalized) !== -1
+    ? normalized
+    : WORLD_TYPE_FOREST;
+}
+
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
+function portalBuildActionForWorldType(worldType) {
+  return (
+    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[normalizeWorldType(worldType)] ||
+    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[WORLD_TYPE_FOREST]
+  );
+}
+
+/**
+ * @param {string | undefined | null} action
+ * @returns {string | null}
+ */
+function worldTypeForPortalBuildAction(action) {
+  var normalizedAction = String(action || "");
+  for (var i = 0; i < WORLD_TYPES.length; i++) {
+    var worldType = WORLD_TYPES[i];
+    if (portalBuildActionForWorldType(worldType) === normalizedAction) {
+      return worldType;
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} action
+ * @returns {string}
+ */
+function canonicalTreeAction(action) {
+  return worldTypeForPortalBuildAction(action)
+    ? "build_portal"
+    : String(action);
+}
+
+/**
+ * @param {string | number} worldId
+ * @returns {string}
+ */
+function getDefaultWorldTypeForWorldId(worldId) {
+  return isOakWorld(worldId) ? WORLD_TYPE_FOREST : WORLD_TYPE_FOREST;
+}
+
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
+function getWorldFloorTileName(worldType) {
+  var normalizedType = normalizeWorldType(worldType);
+  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_SAND;
+  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_CAVE_FLOOR;
+  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_WOOD_FLOOR;
+  return WORLD_TILE_GROUND;
+}
+
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
+function getWorldWallTileName(worldType) {
+  var normalizedType = normalizeWorldType(worldType);
+  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_ROCK;
+  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
+  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
+  return WORLD_TILE_SPRUCE_THICKET;
+}
+
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
+function getWorldBoundaryTileName(worldType) {
+  var normalizedType = normalizeWorldType(worldType);
+  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_OCEAN;
+  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
+  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
+  return WORLD_TILE_SPRUCE_THICKET;
+}
+
+/**
+ * @param {number[][]} map
+ * @param {string} tileName
+ */
+function paintWorldBorder(map, tileName) {
+  var tileValue = worldTileValueForName(tileName);
+  for (var r = 0; r < ROWS; r++) {
+    map[r][0] = tileValue;
+    map[r][COLS - 1] = tileValue;
+  }
+  for (var c = 0; c < COLS; c++) {
+    map[0][c] = tileValue;
+    map[ROWS - 1][c] = tileValue;
+  }
+}
+
+/**
+ * @param {number[][]} map
+ * @param {string} tileName
+ * @param {number} inset
+ */
+function paintWorldRing(map, tileName, inset) {
+  var tileValue = worldTileValueForName(tileName);
+  var minRow = Math.max(0, Number(inset) || 0);
+  var minCol = minRow;
+  var maxRow = ROWS - 1 - minRow;
+  var maxCol = COLS - 1 - minCol;
+  for (var row = minRow; row <= maxRow; row++) {
+    map[row][minCol] = tileValue;
+    map[row][maxCol] = tileValue;
+  }
+  for (var col = minCol; col <= maxCol; col++) {
+    map[minRow][col] = tileValue;
+    map[maxRow][col] = tileValue;
+  }
+}
+
+/**
+ * @param {number[][]} map
+ * @param {string} fillTileName
+ * @param {number} inset
+ */
+function fillWorldInterior(map, fillTileName, inset) {
+  var tileValue = worldTileValueForName(fillTileName);
+  for (var row = inset; row < ROWS - inset; row++) {
+    for (var col = inset; col < COLS - inset; col++) {
+      map[row][col] = tileValue;
+    }
+  }
+}
+
+/**
+ * @returns {string}
+ */
+function createWorldId() {
+  return String(Math.floor(Math.random() * 999999) + 1);
 }
 
 /**
@@ -373,21 +553,23 @@ function mulberry32(seed) {
 function generateMap(worldId) {
   var seed = parseInt(String(worldId), 10);
   var rand = mulberry32(seed);
+  var worldType = getWorldType(worldId);
+  var floorTileName = getWorldFloorTileName(worldType);
+  var boundaryTileName = getWorldBoundaryTileName(worldType);
+  var wallTileName = getWorldWallTileName(worldType);
   /** @type {number[][]} */
   var map = [];
   for (var r = 0; r < ROWS; r++) {
     map[r] = [];
-    for (var c = 0; c < COLS; c++) map[r][c] = 0;
+    for (var c = 0; c < COLS; c++) {
+      map[r][c] = worldTileValueForName(floorTileName);
+    }
   }
-  // Solid border
-  for (var r = 0; r < ROWS; r++) {
-    map[r][0] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
-    map[r][COLS - 1] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
-  }
-  for (var c = 0; c < COLS; c++) {
-    map[0][c] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
-    map[ROWS - 1][c] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
-  }
+  paintWorldBorder(map, boundaryTileName);
+  if (worldType === WORLD_TYPE_ISLAND) paintWorldRing(map, WORLD_TILE_OCEAN, 1);
+  if (worldType === WORLD_TYPE_CAVE) paintWorldRing(map, WORLD_TILE_ROCK, 1);
+  if (worldType === WORLD_TYPE_BUILDING)
+    paintWorldRing(map, WORLD_TILE_HOUSE, 1);
 
   // Rectangular room outlines, each with a door on all four sides
   for (var i = 0; i < 30; i++) {
@@ -399,19 +581,17 @@ function generateMap(worldId) {
       for (var dc = 0; dc <= rw; dc++) {
         if (
           (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
-          map[rr + dr][cc + dc] === 0
+          isWorldTileWalkable(map[rr + dr][cc + dc])
         )
-          map[rr + dr][cc + dc] = worldTileValueForName(
-            WORLD_TILE_SPRUCE_THICKET,
-          );
+          map[rr + dr][cc + dc] = worldTileValueForName(wallTileName);
       }
     }
     var mh = Math.floor(rh / 2),
       mw = Math.floor(rw / 2);
-    map[rr][cc + mw] = 0;
-    map[rr + rh][cc + mw] = 0;
-    map[rr + mh][cc] = 0;
-    map[rr + mh][cc + rw] = 0;
+    map[rr][cc + mw] = worldTileValueForName(floorTileName);
+    map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
+    map[rr + mh][cc] = worldTileValueForName(floorTileName);
+    map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
   }
 
   // Wall segments with a gap
@@ -422,16 +602,24 @@ function generateMap(worldId) {
       var len = 6 + Math.floor(rand() * 14);
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
-        if (k !== gap && c0 + k < COLS - 1 && map[r0][c0 + k] === 0)
-          map[r0][c0 + k] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
+        if (
+          k !== gap &&
+          c0 + k < COLS - 1 &&
+          isWorldTileWalkable(map[r0][c0 + k])
+        )
+          map[r0][c0 + k] = worldTileValueForName(wallTileName);
     } else {
       var r0 = 2 + Math.floor(rand() * (ROWS - 20));
       var c0 = 2 + Math.floor(rand() * (COLS - 4));
       var len = 6 + Math.floor(rand() * 14);
       var gap = Math.floor(rand() * len);
       for (var k = 0; k < len; k++)
-        if (k !== gap && r0 + k < ROWS - 1 && map[r0 + k][c0] === 0)
-          map[r0 + k][c0] = worldTileValueForName(WORLD_TILE_SPRUCE_THICKET);
+        if (
+          k !== gap &&
+          r0 + k < ROWS - 1 &&
+          isWorldTileWalkable(map[r0 + k][c0])
+        )
+          map[r0 + k][c0] = worldTileValueForName(wallTileName);
     }
   }
 
@@ -455,69 +643,80 @@ function generateMap(worldId) {
     }
   }
 
-  // Ocean coastline on the far east.
-  var coastWidth = 7 + Math.floor(rand() * 6);
-  for (var coastRow = 1; coastRow < ROWS - 1; coastRow++) {
-    var coastInset = Math.floor(rand() * 4);
-    for (
-      var coastCol = COLS - 1 - coastWidth - coastInset;
-      coastCol < COLS - 1;
-      coastCol++
-    ) {
-      if (coastCol <= 0 || coastCol >= COLS - 1) continue;
-      map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
+  if (worldType === WORLD_TYPE_FOREST) {
+    var coastWidth = 7 + Math.floor(rand() * 6);
+    for (var coastRow = 1; coastRow < ROWS - 1; coastRow++) {
+      var coastInset = Math.floor(rand() * 4);
+      for (
+        var coastCol = COLS - 1 - coastWidth - coastInset;
+        coastCol < COLS - 1;
+        coastCol++
+      ) {
+        if (coastCol <= 0 || coastCol >= COLS - 1) continue;
+        map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
+      }
+    }
+
+    var riverCol = Math.floor(COLS * (0.35 + rand() * 0.3));
+    for (var riverRow = 1; riverRow < ROWS - 1; riverRow++) {
+      riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
+      riverCol = Math.max(8, Math.min(COLS - 9, riverCol));
+      var riverRadius = rand() < 0.2 ? 1 : 0;
+      for (
+        var riverOffset = -riverRadius;
+        riverOffset <= riverRadius;
+        riverOffset++
+      ) {
+        map[riverRow][riverCol + riverOffset] =
+          worldTileValueForName(WORLD_TILE_RIVER);
+      }
+    }
+
+    for (var lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
+      paintTerrainCircle(
+        12 + Math.floor(rand() * (ROWS - 24)),
+        12 + Math.floor(rand() * (COLS - 24)),
+        2 + Math.floor(rand() * 3),
+        WORLD_TILE_LAKE,
+      );
     }
   }
 
-  // Meandering north-south river.
-  var riverCol = Math.floor(COLS * (0.35 + rand() * 0.3));
-  for (var riverRow = 1; riverRow < ROWS - 1; riverRow++) {
-    riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
-    riverCol = Math.max(8, Math.min(COLS - 9, riverCol));
-    var riverRadius = rand() < 0.2 ? 1 : 0;
-    for (
-      var riverOffset = -riverRadius;
-      riverOffset <= riverRadius;
-      riverOffset++
-    ) {
-      map[riverRow][riverCol + riverOffset] =
-        worldTileValueForName(WORLD_TILE_RIVER);
+  if (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_CAVE) {
+    for (var mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
+      paintTerrainCircle(
+        10 + Math.floor(rand() * (ROWS - 20)),
+        10 + Math.floor(rand() * (COLS - 20)),
+        2 + Math.floor(rand() * 3),
+        WORLD_TILE_MOUNTAIN,
+      );
     }
-  }
-
-  // Lakes inland.
-  for (var lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
-    paintTerrainCircle(
-      12 + Math.floor(rand() * (ROWS - 24)),
-      12 + Math.floor(rand() * (COLS - 24)),
-      2 + Math.floor(rand() * 3),
-      WORLD_TILE_LAKE,
-    );
-  }
-
-  // Rocky ridges and mountains.
-  for (var mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
-    paintTerrainCircle(
-      10 + Math.floor(rand() * (ROWS - 20)),
-      10 + Math.floor(rand() * (COLS - 20)),
-      2 + Math.floor(rand() * 3),
-      WORLD_TILE_MOUNTAIN,
-    );
-  }
-  for (var rockIndex = 0; rockIndex < 140; rockIndex++) {
-    var rockRow = 1 + Math.floor(rand() * (ROWS - 2));
-    var rockCol = 1 + Math.floor(rand() * (COLS - 2));
-    if (map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)) {
-      map[rockRow][rockCol] = worldTileValueForName(WORLD_TILE_ROCK);
+    for (var rockIndex = 0; rockIndex < 140; rockIndex++) {
+      var rockRow = 1 + Math.floor(rand() * (ROWS - 2));
+      var rockCol = 1 + Math.floor(rand() * (COLS - 2));
+      if (
+        isWorldTileWalkable(map[rockRow][rockCol]) ||
+        map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)
+      ) {
+        map[rockRow][rockCol] = worldTileValueForName(WORLD_TILE_ROCK);
+      }
     }
   }
 
   // Scatter trees in open ground
-  for (var i = 0; i < 500; i++) {
-    var r = 1 + Math.floor(rand() * (ROWS - 2));
-    var c = 1 + Math.floor(rand() * (COLS - 2));
-    if (map[r][c] === worldTileValueForName(WORLD_TILE_GROUND)) {
-      map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
+  var treeScatterCount =
+    worldType === WORLD_TYPE_FOREST
+      ? 500
+      : worldType === WORLD_TYPE_ISLAND
+        ? 140
+        : 0;
+  if (treeScatterCount > 0) {
+    for (var i = 0; i < treeScatterCount; i++) {
+      var r = 1 + Math.floor(rand() * (ROWS - 2));
+      var c = 1 + Math.floor(rand() * (COLS - 2));
+      if (map[r][c] === worldTileValueForName(floorTileName)) {
+        map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
+      }
     }
   }
 
@@ -526,9 +725,9 @@ function generateMap(worldId) {
   }
 
   // Always keep spawn area clear
-  map[1][1] = 0;
-  map[1][2] = 0;
-  map[2][1] = 0;
+  map[1][1] = worldTileValueForName(floorTileName);
+  map[1][2] = worldTileValueForName(floorTileName);
+  map[2][1] = worldTileValueForName(floorTileName);
   return map;
 }
 
@@ -805,8 +1004,50 @@ function getOrCreatePlayerWorld(userId) {
   if (!worldId) {
     worldId = "10000";
     savePlayerWorld(userId, worldId);
+    saveWorldType(worldId, getDefaultWorldTypeForWorldId(worldId));
   }
   return worldId;
+}
+
+/**
+ * @param {string | number} worldId
+ * @returns {string}
+ */
+function getWorldType(worldId) {
+  var normalizedWorldId = String(worldId || "");
+  var row = querySingleWorldRow(
+    VWORLD_WORLD_TYPE_TABLE,
+    JSON.stringify({ world_id: normalizedWorldId }),
+  );
+  if (row && row.world_type) return normalizeWorldType(String(row.world_type));
+  return getDefaultWorldTypeForWorldId(normalizedWorldId);
+}
+
+/**
+ * @param {string | number} worldId
+ * @param {string | undefined | null} worldType
+ * @returns {string}
+ */
+function saveWorldType(worldId, worldType) {
+  var normalizedWorldId = String(worldId || "");
+  var normalizedType = normalizeWorldType(worldType);
+  upsertWorldRow(VWORLD_WORLD_TYPE_TABLE, ["world_id"], {
+    world_id: normalizedWorldId,
+    world_type: normalizedType,
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  });
+  return normalizedType;
+}
+
+/**
+ * @param {string | undefined | null} worldType
+ * @returns {{world_id: string, world_type: string}}
+ */
+function createWorldOfType(worldType) {
+  var normalizedType = normalizeWorldType(worldType);
+  var worldId = createWorldId();
+  saveWorldType(worldId, normalizedType);
+  return { world_id: worldId, world_type: normalizedType };
 }
 
 /**
@@ -1473,7 +1714,9 @@ function getInventoryTreeActions(inv) {
    * @returns {string[]}
    */
   function actionsForItemType(type) {
-    if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    if (type === "portal_builder") {
+      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
+    }
     if (type === "hammer") return ["build_house", "destroy_house"];
     var action = TREE_ACTION_BY_ITEM_TYPE[type];
     return action ? [action] : [];
@@ -1495,20 +1738,21 @@ function getInventoryTreeActions(inv) {
  * @returns {boolean}
  */
 function canInventoryUseTreeAction(inv, action) {
+  var normalizedAction = canonicalTreeAction(action);
   if (
-    action !== "plant" &&
-    action !== "cut" &&
-    action !== "build_house" &&
-    action !== "destroy_house" &&
-    action !== "build_portal" &&
-    action !== "remove_portal" &&
-    action !== "play_tune" &&
-    action !== "place_blessing" &&
-    action !== "portal_travel" &&
-    action !== "return_home"
+    normalizedAction !== "plant" &&
+    normalizedAction !== "cut" &&
+    normalizedAction !== "build_house" &&
+    normalizedAction !== "destroy_house" &&
+    normalizedAction !== "build_portal" &&
+    normalizedAction !== "remove_portal" &&
+    normalizedAction !== "play_tune" &&
+    normalizedAction !== "place_blessing" &&
+    normalizedAction !== "portal_travel" &&
+    normalizedAction !== "return_home"
   )
     return false;
-  return getInventoryTreeActions(inv).indexOf(action) !== -1;
+  return getInventoryTreeActions(inv).indexOf(String(action)) !== -1;
 }
 
 /**
@@ -1524,7 +1768,9 @@ function canTileItemsUseTreeAction(items, action) {
    * @returns {string[]}
    */
   function actionsForItemType(type) {
-    if (type === "portal_builder") return ["build_portal", "remove_portal"];
+    if (type === "portal_builder") {
+      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
+    }
     if (type === "hammer") return ["build_house", "destroy_house"];
     var mapped = TREE_ACTION_BY_ITEM_TYPE[type];
     return mapped ? [mapped] : [];
@@ -1786,6 +2032,7 @@ var VWORLD_PLAYER_NICK_TABLE = "vworld_player_nicks";
 var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
 var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
 var VWORLD_PLAYER_INVENTORY_TABLE = "vworld_player_inventory";
+var VWORLD_WORLD_TYPE_TABLE = "vworld_world_types";
 var VWORLD_TREE_TABLE = "vworld_tree_mods";
 var VWORLD_WORLD_MOD_TABLE = "vworld_world_mods";
 var VWORLD_WORLD_ITEM_TABLE = "vworld_world_items";
@@ -1966,6 +2213,50 @@ function runChatSchemaStep(op, tableName, run, columnName, collector) {
  * @param {Array<any>} [collector]
  */
 function ensureLateWorldDatabaseSchema(collector) {
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_WORLD_TYPE_TABLE,
+    function () {
+      return database.createTable(VWORLD_WORLD_TYPE_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_WORLD_TYPE_TABLE,
+    function () {
+      return database.addTextColumn(VWORLD_WORLD_TYPE_TABLE, "world_id", false);
+    },
+    "world_id",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_WORLD_TYPE_TABLE,
+    function () {
+      return database.addTextColumn(
+        VWORLD_WORLD_TYPE_TABLE,
+        "world_type",
+        false,
+      );
+    },
+    "world_type",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_WORLD_TYPE_TABLE,
+    function () {
+      return database.addIntegerColumn(
+        VWORLD_WORLD_TYPE_TABLE,
+        "updated_ts",
+        false,
+      );
+    },
+    "updated_ts",
+    collector,
+  );
   runWorldSchemaStep(
     "createTable",
     VWORLD_NPC_TABLE,
@@ -2976,6 +3267,18 @@ function ensureWorldDatabaseSchema() {
     "destination_world_id",
   );
   reportWorldSchemaResult(
+    "addTextColumn",
+    VWORLD_WORLD_ITEM_TABLE,
+    parseWorldDbResult(
+      database.addTextColumn(
+        VWORLD_WORLD_ITEM_TABLE,
+        "destination_world_type",
+        true,
+      ),
+    ),
+    "destination_world_type",
+  );
+  reportWorldSchemaResult(
     "addUniqueIndex",
     VWORLD_WORLD_ITEM_TABLE,
     parseWorldDbResult(
@@ -3609,6 +3912,10 @@ function loadWorldItems(worldId) {
           typeof row.destination_world_id === "string"
             ? row.destination_world_id
             : undefined,
+        destination_world_type:
+          typeof row.destination_world_type === "string"
+            ? normalizeWorldType(row.destination_world_type)
+            : undefined,
       });
     }
     return fromRows;
@@ -3654,6 +3961,10 @@ function saveWorldItems(worldId, items) {
           typeof item.destination_world_id === "string"
             ? item.destination_world_id
             : null,
+        destination_world_type:
+          typeof item.destination_world_type === "string"
+            ? normalizeWorldType(item.destination_world_type)
+            : null,
       });
     });
   });
@@ -3681,6 +3992,10 @@ function upsertWorldItem(worldId, row, col, item) {
     destination_world_id:
       typeof item.destination_world_id === "string"
         ? item.destination_world_id
+        : null,
+    destination_world_type:
+      typeof item.destination_world_type === "string"
+        ? normalizeWorldType(item.destination_world_type)
         : null,
   });
 }
@@ -3758,10 +4073,10 @@ function ensureWorldItems(worldId) {
 
 /**
  * @param {Record<string, any[]>} itemsByTile
- * @returns {Array<{id: string, type: string, row: number, col: number}>}
+ * @returns {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string}>}
  */
 function flattenWorldItems(itemsByTile) {
-  /** @type {Array<{id: string, type: string, row: number, col: number}>} */
+  /** @type {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string}>} */
   var out = [];
   if (!itemsByTile || typeof itemsByTile !== "object") return out;
   Object.keys(itemsByTile).forEach(function (tileKey) {
@@ -3778,6 +4093,14 @@ function flattenWorldItems(itemsByTile) {
         type: item.type,
         row: row,
         col: col,
+        destination_world_id:
+          typeof item.destination_world_id === "string"
+            ? item.destination_world_id
+            : undefined,
+        destination_world_type:
+          typeof item.destination_world_type === "string"
+            ? normalizeWorldType(item.destination_world_type)
+            : undefined,
       });
     });
   });
@@ -5390,8 +5713,8 @@ function newWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  var newWorldId = String(Math.floor(Math.random() * 999999) + 1);
-  switchUserWorld(userId, newWorldId);
+  var createdWorld = createWorldOfType(WORLD_TYPE_FOREST);
+  switchUserWorld(userId, createdWorld.world_id);
   return ResponseBuilder.json({ ok: true });
 }
 
@@ -5403,6 +5726,7 @@ function startWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
+  saveWorldType(OAK_WORLD_ID, WORLD_TYPE_FOREST);
   switchUserWorld(
     userId,
     OAK_WORLD_ID,
@@ -5447,6 +5771,7 @@ function currentWorldHandler(context) {
   ensureWorldItems(worldId);
   return ResponseBuilder.json({
     world_id: String(worldId),
+    world_type: getWorldType(worldId),
     items: flattenWorldItems(loadWorldItems(worldId)),
     inventory: loadPlayerInventory(userId),
     world_mods: loadWorldMods(worldId),
@@ -5482,7 +5807,11 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
 
-  var action = body.action; // "plant", "cut", "build_portal", "remove_portal" or "portal_travel"
+  var rawAction = body.action;
+  var action = canonicalTreeAction(rawAction);
+  var requestedPortalWorldType =
+    worldTypeForPortalBuildAction(rawAction) ||
+    normalizeWorldType(body.destination_world_type);
   var playerRow = Number(body.row);
   var playerCol = Number(body.col);
   var rotation = Number(body.rotation);
@@ -5754,11 +6083,13 @@ function treeActionHandler(context) {
         error: "Portal already exists",
       });
     }
+    var createdDestinationWorld = createWorldOfType(requestedPortalWorldType);
     var portalItem = {
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),
       type: "portal",
       created_at: Date.now(),
-      destination_world_id: String(Math.floor(Math.random() * 999999) + 1),
+      destination_world_id: createdDestinationWorld.world_id,
+      destination_world_type: createdDestinationWorld.world_type,
     };
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);

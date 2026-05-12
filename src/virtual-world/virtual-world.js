@@ -4852,6 +4852,972 @@ function getCanonicalPlayerState(worldId, userId) {
 
 /**
  * @param {*} context
+ * @returns {string|null}
+ */
+function getAuthenticatedUserId(context) {
+  if (
+    !context ||
+    !context.request ||
+    !context.request.auth ||
+    !context.request.auth.isAuthenticated ||
+    !context.request.auth.userId
+  ) {
+    return null;
+  }
+  return String(context.request.auth.userId);
+}
+
+/**
+ * @param {number} tileValue
+ * @returns {string}
+ */
+function worldTileNameForValue(tileValue) {
+  if (WORLD_TILE_NAME_BY_VALUE[tileValue]) {
+    return WORLD_TILE_NAME_BY_VALUE[tileValue];
+  }
+  return "unknown";
+}
+
+/**
+ * @param {{left_hand: any, right_hand: any, inventory: any[]}} inventory
+ * @param {any[]} currentTileItems
+ * @returns {string[]}
+ */
+function getAvailableWorldActions(inventory, currentTileItems) {
+  /** @type {Record<string, boolean>} */
+  var actionMap = {};
+
+  /**
+   * @param {*} item
+   */
+  function addItemAction(item) {
+    if (!item || !item.type) return;
+    var action = TREE_ACTION_BY_ITEM_TYPE[String(item.type)];
+    if (action) actionMap[action] = true;
+  }
+
+  addItemAction(inventory && inventory.left_hand);
+  addItemAction(inventory && inventory.right_hand);
+
+  var invItems =
+    inventory && Array.isArray(inventory.inventory) ? inventory.inventory : [];
+  for (var i = 0; i < invItems.length; i++) {
+    addItemAction(invItems[i]);
+  }
+
+  var tileItems = Array.isArray(currentTileItems) ? currentTileItems : [];
+  for (var j = 0; j < tileItems.length; j++) {
+    addItemAction(tileItems[j]);
+  }
+
+  return Object.keys(actionMap).sort();
+}
+
+/**
+ * @param {number} row
+ * @param {number} col
+ * @param {number} rotation
+ * @returns {{row: number, col: number, direction: string}}
+ */
+function getTargetTileFromRotation(row, col, rotation) {
+  var targetRow = row;
+  var targetCol = col;
+  var direction = "south";
+  var angle = isFinite(Number(rotation)) ? Number(rotation) : 0;
+
+  while (angle > Math.PI) angle -= 2 * Math.PI;
+  while (angle < -Math.PI) angle += 2 * Math.PI;
+
+  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
+    targetRow = row + 1;
+    direction = "south";
+  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
+    targetCol = col + 1;
+    direction = "east";
+  } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
+    targetRow = row - 1;
+    direction = "north";
+  } else {
+    targetCol = col - 1;
+    direction = "west";
+  }
+
+  return { row: targetRow, col: targetCol, direction: direction };
+}
+
+/**
+ * @param {string} direction
+ * @returns {string}
+ */
+function normalizeMoveDirection(direction) {
+  var value = String(direction || "").toLowerCase();
+  if (value === "up") return "north";
+  if (value === "down") return "south";
+  if (value === "left") return "west";
+  if (value === "right") return "east";
+  return value;
+}
+
+/**
+ * @param {string} direction
+ * @returns {number|null}
+ */
+function rotationForDirection(direction) {
+  if (direction === "south") return 0;
+  if (direction === "east") return Math.PI / 2;
+  if (direction === "north") return Math.PI;
+  if (direction === "west") return -Math.PI / 2;
+  return null;
+}
+
+/**
+ * @param {string} worldId
+ * @param {{row: number, col: number}} canonical
+ * @returns {Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>}
+ */
+function getMoveOptions(worldId, canonical) {
+  var map = getEffectiveMap(worldId);
+  /** @type {Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>} */
+  var options = {};
+  /** @type {Record<string, {row: number, col: number}>} */
+  var deltas = {
+    north: { row: -1, col: 0 },
+    south: { row: 1, col: 0 },
+    east: { row: 0, col: 1 },
+    west: { row: 0, col: -1 },
+  };
+  var directions = Object.keys(deltas);
+  for (var i = 0; i < directions.length; i++) {
+    var direction = directions[i];
+    var delta = deltas[direction];
+    var targetRow = canonical.row + delta.row;
+    var targetCol = canonical.col + delta.col;
+    var inBounds =
+      targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS;
+    var tileValue = inBounds ? map[targetRow][targetCol] : 0;
+    options[direction] = {
+      row: targetRow,
+      col: targetCol,
+      walkable: inBounds && isWorldTileWalkable(tileValue),
+      tile_type: inBounds ? worldTileNameForValue(tileValue) : "out_of_bounds",
+      in_bounds: inBounds,
+    };
+  }
+  return options;
+}
+
+/**
+ * @param {string} userId
+ * @returns {{ok: boolean, world_id: string, world_type: string, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {left_hand: any, right_hand: any, inventory: any[]}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
+ */
+function getCurrentWorldStateForUser(userId) {
+  var worldId = getOrCreatePlayerWorld(userId);
+  markNPCWorldActive(worldId);
+  ensureWorldItems(worldId);
+
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var inventory = loadPlayerInventory(userId);
+  var worldItems = loadWorldItems(worldId);
+  var tileKey = canonical.row + "_" + canonical.col;
+  var currentTileItems = Array.isArray(worldItems[tileKey])
+    ? worldItems[tileKey]
+    : [];
+
+  return {
+    ok: true,
+    world_id: String(worldId),
+    world_type: getWorldType(worldId),
+    player: {
+      row: canonical.row,
+      col: canonical.col,
+      seq: canonical.seq,
+      rotation: canonical.rotation,
+    },
+    items: flattenWorldItems(worldItems),
+    tile_items: currentTileItems,
+    inventory: inventory,
+    world_mods: loadWorldMods(worldId),
+    houses: loadWorldHouses(worldId),
+    available_actions: getAvailableWorldActions(inventory, currentTileItems),
+    move_options: getMoveOptions(String(worldId), canonical),
+    facing_tile: getTargetTileFromRotation(
+      canonical.row,
+      canonical.col,
+      canonical.rotation,
+    ),
+  };
+}
+
+/**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function movePlayerForUser(userId, body) {
+  var toRow =
+    body && body.toRow !== undefined
+      ? Number(body.toRow)
+      : Number(body && body.row);
+  var toCol =
+    body && body.toCol !== undefined
+      ? Number(body.toCol)
+      : Number(body && body.col);
+  var rotation = Number(body && body.rotation);
+  var sessionId = body && body.session_id ? String(body.session_id) : "legacy";
+
+  if (!isFinite(toRow) || !isFinite(toCol)) {
+    return {
+      status: 400,
+      payload: { ok: false, error: "Invalid move payload" },
+    };
+  }
+
+  var worldId = getPlayerWorld(userId);
+  if (!worldId) {
+    return { status: 200, payload: { ok: false, row: 1, col: 1 } };
+  }
+  markNPCWorldActive(worldId);
+
+  var lease = loadPlayerMoveLease(userId);
+  var now = Date.now();
+  var leaseSessionId =
+    lease && typeof lease.session_id === "string" ? lease.session_id : "";
+  var leaseValid = !!lease && Number(lease.expires_at || 0) > now;
+  if (leaseValid && leaseSessionId !== sessionId) {
+    vwLog("move taking over lease", {
+      user_id: userId,
+      world_id: worldId,
+      previous_session: leaseSessionId,
+      session_id: sessionId,
+    });
+  }
+  savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
+
+  var players = loadWorldPlayers(worldId);
+  var cur = players[userId];
+  if (!cur) {
+    var savedPos = loadPlayerPosition(userId);
+    var defaultSpawn = getDefaultSpawnPosition(worldId, userId);
+    cur = {
+      row: savedPos ? savedPos.row : defaultSpawn.row,
+      col: savedPos ? savedPos.col : defaultSpawn.col,
+      seq: savedPos ? savedPos.seq : defaultSpawn.seq,
+      rotation: savedPos
+        ? Number(savedPos.rotation)
+        : Number(defaultSpawn.rotation),
+      session_id: savedPos ? savedPos.session_id : "",
+    };
+  }
+  if (!isFinite(rotation)) rotation = Number(cur && cur.rotation);
+  if (!isFinite(rotation)) rotation = 0;
+
+  var expectedSeq = cur.seq + 1;
+  var clientSeq =
+    body && body.seq !== undefined ? Number(body.seq) : expectedSeq;
+  if (clientSeq !== expectedSeq) {
+    vwLog("move rejected: stale seq", {
+      user_id: userId,
+      world_id: worldId,
+      session_id: sessionId,
+      expected_seq: expectedSeq,
+      client_seq: clientSeq,
+      cur_row: cur.row,
+      cur_col: cur.col,
+      req_row: toRow,
+      req_col: toCol,
+    });
+    return {
+      status: 200,
+      payload: {
+        ok: false,
+        stale: true,
+        row: cur.row,
+        col: cur.col,
+        seq: cur.seq,
+      },
+    };
+  }
+
+  var dr = Math.abs(toRow - cur.row);
+  var dc = Math.abs(toCol - cur.col);
+  var map = getEffectiveMap(worldId);
+  var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
+  var singleStep = dr + dc === 1;
+  var walkable = withinBounds && isWorldTileWalkable(map[toRow][toCol]);
+
+  if (!singleStep || !walkable) {
+    vwLog("move rejected: invalid step", {
+      user_id: userId,
+      world_id: worldId,
+      session_id: sessionId,
+      from_row: cur.row,
+      from_col: cur.col,
+      to_row: toRow,
+      to_col: toCol,
+      single_step: singleStep,
+      walkable: walkable,
+    });
+    return {
+      status: 200,
+      payload: {
+        ok: false,
+        stale: false,
+        row: cur.row,
+        col: cur.col,
+        seq: cur.seq,
+      },
+    };
+  }
+
+  players[userId] = {
+    row: toRow,
+    col: toCol,
+    seq: cur.seq + 1,
+    rotation: rotation,
+    session_id: sessionId,
+    ts: Date.now(),
+  };
+  saveWorldPlayers(worldId, players);
+  savePlayerPosition(userId, worldId, {
+    row: toRow,
+    col: toCol,
+    seq: cur.seq + 1,
+    rotation: rotation,
+    session_id: sessionId,
+    ts: Date.now(),
+  });
+  sendWorldScopedStreamEvent(String(worldId), "player_moved", {
+    player_id: userId,
+    row: toRow,
+    col: toCol,
+    seq: cur.seq + 1,
+    rotation: rotation,
+  });
+  vwLog("move accepted", {
+    user_id: userId,
+    world_id: worldId,
+    session_id: sessionId,
+    row: toRow,
+    col: toCol,
+    seq: cur.seq + 1,
+  });
+  return {
+    status: 200,
+    payload: {
+      ok: true,
+      row: toRow,
+      col: toCol,
+      seq: cur.seq + 1,
+      rotation: rotation,
+      world_id: String(worldId),
+    },
+  };
+}
+
+/**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function performTreeActionForUser(userId, body) {
+  var rawAction = body && body.action;
+  var action = canonicalTreeAction(rawAction);
+  var requestedPortalWorldType =
+    worldTypeForPortalBuildAction(rawAction) ||
+    normalizeWorldType(body && body.destination_world_type);
+
+  if (action === "pick" || action === "drop" || action === "equip") {
+    return handleItemActionForUser(userId, body || {});
+  }
+
+  if (action === "cheat_grant_all") {
+    return { status: 200, payload: grantAllItemsForUser(userId) };
+  }
+
+  if (
+    action !== "plant" &&
+    action !== "cut" &&
+    action !== "build_house" &&
+    action !== "destroy_house" &&
+    action !== "build_portal" &&
+    action !== "remove_portal" &&
+    action !== "play_tune" &&
+    action !== "place_blessing" &&
+    action !== "portal_travel" &&
+    action !== "return_home"
+  ) {
+    return { status: 400, payload: { ok: false, error: "Invalid action" } };
+  }
+
+  var worldId = getPlayerWorld(userId);
+  if (!worldId) {
+    return { status: 200, payload: { ok: false, error: "No world found" } };
+  }
+  ensureWorldItems(worldId);
+
+  var inv = loadPlayerInventory(userId);
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var playerRow = isFinite(Number(body && body.row))
+    ? Number(body.row)
+    : canonical.row;
+  var playerCol = isFinite(Number(body && body.col))
+    ? Number(body.col)
+    : canonical.col;
+  var rotation = isFinite(Number(body && body.rotation))
+    ? Number(body.rotation)
+    : canonical.rotation;
+  var currentTileKey = canonical.row + "_" + canonical.col;
+  var worldItems = loadWorldItems(worldId);
+  var currentTileItems = Array.isArray(worldItems[currentTileKey])
+    ? worldItems[currentTileKey]
+    : [];
+  var canUseAction =
+    canInventoryUseTreeAction(inv, action) ||
+    canTileItemsUseTreeAction(currentTileItems, action);
+
+  if (!canUseAction) {
+    return {
+      status: 200,
+      payload: {
+        ok: false,
+        error: "Missing required item for action",
+      },
+    };
+  }
+
+  if (action === "return_home") {
+    switchUserWorld(
+      userId,
+      OAK_WORLD_ID,
+      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
+    );
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: "return_home",
+        switched_world: true,
+        world_id: OAK_WORLD_ID,
+      },
+    };
+  }
+
+  if (action === "play_tune") {
+    var tuneMsg = {
+      id:
+        "wc-" +
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).slice(2),
+      sender_id: userId,
+      sender_nick: getEffectiveNick(userId),
+      text: "lets a kantele melody drift through the spruce hush.",
+      ts: Date.now(),
+    };
+    appendWorldChatMessage(worldId, tuneMsg);
+    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        inventory: inv,
+        items: flattenWorldItems(worldItems),
+        toast_message: "A kantele tune carries across the clearing.",
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  if (action === "place_blessing") {
+    var blessingTileKey = canonical.row + "_" + canonical.col;
+    var blessingItems = Array.isArray(worldItems[blessingTileKey])
+      ? worldItems[blessingTileKey]
+      : [];
+    var existingBlessing = blessingItems.some(function (item) {
+      return item && item.type === "blessing_marker";
+    });
+    if (existingBlessing) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: "A blessing already rests here",
+        },
+      };
+    }
+
+    var blessingItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "blessing_marker",
+      created_at: Date.now(),
+      placed_by: userId,
+      non_droppable: true,
+    };
+    if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
+    worldItems[blessingTileKey].push(blessingItem);
+    upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
+    saveWorldItems(worldId, worldItems);
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "blessing_place",
+      canonical.row,
+      canonical.col,
+      [blessingItem],
+    );
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        row: canonical.row,
+        col: canonical.col,
+        inventory: inv,
+        items: flattenWorldItems(worldItems),
+        toast_message: "A rowan blessing now marks this place.",
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  if (action === "portal_travel") {
+    var portalEntry = currentTileItems.find(function (item) {
+      return item && item.type === "portal";
+    });
+    var newWorldId =
+      portalEntry && portalEntry.destination_world_id
+        ? String(portalEntry.destination_world_id)
+        : "10000";
+    switchUserWorld(userId, newWorldId);
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        switched_world: true,
+        world_id: newWorldId,
+      },
+    };
+  }
+
+  var targetTile = getTargetTileFromRotation(playerRow, playerCol, rotation);
+  var targetRow = targetTile.row;
+  var targetCol = targetTile.col;
+
+  if (
+    targetRow < 0 ||
+    targetRow >= ROWS ||
+    targetCol < 0 ||
+    targetCol >= COLS
+  ) {
+    return {
+      status: 200,
+      payload: { ok: false, error: "Target out of bounds" },
+    };
+  }
+
+  var map = getEffectiveMap(worldId);
+  var trees = loadWorldTrees(worldId);
+  var houses = loadWorldHouses(worldId);
+  var tileKey = targetRow + "_" + targetCol;
+
+  if (action === "build_house") {
+    if (isOakClearingTile(worldId, targetRow, targetCol)) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: "The oak clearing must remain open",
+        },
+      };
+    }
+    if (map[targetRow][targetCol] !== 0) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Cannot build house here" },
+      };
+    }
+    if (houses[tileKey]) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "House already exists" },
+      };
+    }
+    houses[tileKey] = {
+      built_by: userId,
+      actor_type: "player",
+      timestamp: Date.now(),
+    };
+    saveWorldHouses(worldId, houses);
+    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      actor_type: "player",
+      actor_id: userId,
+      player_id: userId,
+    });
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  if (action === "destroy_house") {
+    if (!houses[tileKey]) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "No house to destroy" },
+      };
+    }
+    delete houses[tileKey];
+    saveWorldHouses(worldId, houses);
+    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      actor_type: "player",
+      actor_id: userId,
+      player_id: userId,
+    });
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  var treeKey = tileKey;
+
+  if (action === "build_portal") {
+    if (map[targetRow][targetCol] !== 0) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Cannot build portal here" },
+      };
+    }
+    var targetTileKey = targetRow + "_" + targetCol;
+    var targetItems = Array.isArray(worldItems[targetTileKey])
+      ? worldItems[targetTileKey]
+      : [];
+    var hasPortal = targetItems.some(function (item) {
+      return item && item.type === "portal";
+    });
+    if (hasPortal) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Portal already exists" },
+      };
+    }
+    var createdDestinationWorld = createWorldOfType(requestedPortalWorldType);
+    var portalItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "portal",
+      created_at: Date.now(),
+      destination_world_id: createdDestinationWorld.world_id,
+      destination_world_type: createdDestinationWorld.world_type,
+    };
+    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
+    worldItems[targetTileKey].push(portalItem);
+    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
+    saveWorldItems(worldId, worldItems);
+
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "portal_create",
+      targetRow,
+      targetCol,
+      [portalItem],
+    );
+
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        items: flattenWorldItems(worldItems),
+        inventory: inv,
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  if (action === "remove_portal") {
+    var removeTileKey = targetRow + "_" + targetCol;
+    var removeItems = Array.isArray(worldItems[removeTileKey])
+      ? worldItems[removeTileKey]
+      : [];
+    var keptItems = [];
+    var removedPortals = [];
+    for (var removeIdx = 0; removeIdx < removeItems.length; removeIdx++) {
+      var removeItem = removeItems[removeIdx];
+      if (removeItem && removeItem.type === "portal") {
+        removedPortals.push(removeItem);
+      } else {
+        keptItems.push(removeItem);
+      }
+    }
+
+    if (removedPortals.length === 0) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "No portal to remove" },
+      };
+    }
+
+    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
+    else delete worldItems[removeTileKey];
+    deleteWorldItems(removedPortals);
+    saveWorldItems(worldId, worldItems);
+
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "portal_remove",
+      targetRow,
+      targetCol,
+      removedPortals,
+    );
+
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        row: targetRow,
+        col: targetCol,
+        removed_count: removedPortals.length,
+        items: flattenWorldItems(worldItems),
+        inventory: inv,
+        world_id: String(worldId),
+      },
+    };
+  }
+
+  if (action === "plant") {
+    if (isOakClearingTile(worldId, targetRow, targetCol)) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: "The oak clearing must remain open",
+        },
+      };
+    }
+    var hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
+    var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
+    var baseHasTree = map[targetRow][targetCol] === 2;
+
+    if (map[targetRow][targetCol] !== 0 && !wasTreeCut) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Cannot plant here" },
+      };
+    }
+    if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Tree already exists" },
+      };
+    }
+
+    trees[treeKey] = {
+      action: "plant",
+      planted_by: userId,
+      timestamp: Date.now(),
+    };
+  } else if (action === "cut") {
+    if (isOakCenterTile(worldId, targetRow, targetCol)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "The old oak stands firm" },
+      };
+    }
+    var hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
+    var baseTreeExists = map[targetRow][targetCol] === 2;
+    var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
+
+    if (!hasPlantedTree && !baseTreeExists) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "No tree to cut" },
+      };
+    }
+    if (alreadyCut) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "Tree already cut" },
+      };
+    }
+
+    trees[treeKey] = {
+      action: "cut",
+      cut_by: userId,
+      timestamp: Date.now(),
+    };
+  }
+
+  saveWorldTrees(worldId, trees);
+  sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
+    action: action,
+    row: targetRow,
+    col: targetCol,
+    actor_type: "player",
+    actor_id: userId,
+    player_id: userId,
+  });
+
+  return {
+    status: 200,
+    payload: {
+      ok: true,
+      action: action,
+      row: targetRow,
+      col: targetCol,
+      world_id: String(worldId),
+    },
+  };
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldGetStateToolHandler(context) {
+  var userId = getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+  return JSON.stringify(getCurrentWorldStateForUser(userId));
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldMoveToolHandler(context) {
+  var userId = getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  var args = context.args || {};
+  var direction = normalizeMoveDirection(args.direction);
+  if (
+    direction !== "north" &&
+    direction !== "south" &&
+    direction !== "east" &&
+    direction !== "west"
+  ) {
+    return JSON.stringify({
+      ok: false,
+      error: "direction must be one of north, south, east, or west",
+    });
+  }
+
+  var worldId = getOrCreatePlayerWorld(userId);
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var moveOptions = getMoveOptions(String(worldId), canonical);
+  var target = moveOptions[direction];
+  var rotation = isFinite(Number(args.rotation))
+    ? Number(args.rotation)
+    : rotationForDirection(direction);
+  var result = movePlayerForUser(userId, {
+    toRow: target.row,
+    toCol: target.col,
+    rotation: rotation,
+    session_id: args.session_id ? String(args.session_id) : "mcp",
+    seq:
+      args.seq !== undefined && isFinite(Number(args.seq))
+        ? Number(args.seq)
+        : canonical.seq + 1,
+  });
+  result.payload.status = result.status;
+  result.payload.direction = direction;
+  return JSON.stringify(result.payload);
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldManageItemsToolHandler(context) {
+  var userId = getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  var args = context.args || {};
+  var action = String(args.action || "list");
+  if (action === "list") {
+    var state = getCurrentWorldStateForUser(userId);
+    return JSON.stringify({
+      ok: true,
+      world_id: state.world_id,
+      player: state.player,
+      tile_items: state.tile_items,
+      inventory: state.inventory,
+      available_actions: state.available_actions,
+    });
+  }
+
+  var result = handleItemActionForUser(userId, {
+    action: action,
+    from: args.from,
+    to: args.to,
+    index: args.index,
+  });
+  result.payload.status = result.status;
+  result.payload.world_id = getPlayerWorld(userId);
+  return JSON.stringify(result.payload);
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldActToolHandler(context) {
+  var userId = getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  var args = context.args || {};
+  var worldId = getOrCreatePlayerWorld(userId);
+  var canonical = getCanonicalPlayerState(worldId, userId);
+  var result = performTreeActionForUser(userId, {
+    action: args.action,
+    row: isFinite(Number(args.row)) ? Number(args.row) : canonical.row,
+    col: isFinite(Number(args.col)) ? Number(args.col) : canonical.col,
+    rotation: isFinite(Number(args.rotation))
+      ? Number(args.rotation)
+      : canonical.rotation,
+    destination_world_type: args.destination_world_type,
+  });
+  result.payload.status = result.status;
+  return JSON.stringify(result.payload);
+}
+
+/**
+ * @param {*} context
  */
 function itemsHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
@@ -5323,157 +6289,8 @@ function moveHandler(context) {
   } catch (e) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
-  var fromRow = body.fromRow !== undefined ? Number(body.fromRow) : null;
-  var fromCol = body.fromCol !== undefined ? Number(body.fromCol) : null;
-  var toRow = body.toRow !== undefined ? Number(body.toRow) : Number(body.row);
-  var toCol = body.toCol !== undefined ? Number(body.toCol) : Number(body.col);
-  var rotation = Number(body.rotation);
-  var sessionId = body.session_id ? String(body.session_id) : "legacy";
-  if (!isFinite(toRow) || !isFinite(toCol)) {
-    return ResponseBuilder.json({ error: "Invalid move payload" }, 400);
-  }
-
-  // Derive world from server-side storage — never trust client for this
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    return ResponseBuilder.json({ ok: false, row: 1, col: 1 });
-  }
-  markNPCWorldActive(worldId);
-
-  var lease = loadPlayerMoveLease(userId);
-  var now = Date.now();
-  var leaseSessionId =
-    lease && typeof lease.session_id === "string" ? lease.session_id : "";
-  var leaseValid = !!lease && Number(lease.expires_at || 0) > now;
-  if (leaseValid && leaseSessionId !== sessionId) {
-    vwLog("move taking over lease", {
-      user_id: userId,
-      world_id: worldId,
-      previous_session: leaseSessionId,
-      session_id: sessionId,
-    });
-  }
-  // Acquire or renew writer lease for this session before processing move.
-  savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
-
-  var players = loadWorldPlayers(worldId);
-  // When players[userId] is absent (player reconnected after a refresh — leaveHandler
-  // removed the presence entry on the previous page close), restore from the persisted
-  // position key so the adjacency check doesn't incorrectly snap back to (1,1).
-  var cur = players[userId];
-  if (!cur) {
-    var savedPos = loadPlayerPosition(userId);
-    var defaultSpawn = getDefaultSpawnPosition(worldId, userId);
-    cur = {
-      row: savedPos ? savedPos.row : defaultSpawn.row,
-      col: savedPos ? savedPos.col : defaultSpawn.col,
-      seq: savedPos ? savedPos.seq : defaultSpawn.seq,
-      rotation: savedPos
-        ? Number(savedPos.rotation)
-        : Number(defaultSpawn.rotation),
-      session_id: savedPos ? savedPos.session_id : "",
-    };
-  }
-  if (!isFinite(rotation)) rotation = Number(cur && cur.rotation);
-  if (!isFinite(rotation)) rotation = 0;
-
-  // Reject stale moves from a tab that is no longer the active mover.
-  // A stale move has a seq that doesn't continue from the stored seq.
-  // This check must come BEFORE position validation to prevent false rejections
-  // during rapid sequential moves (where client has optimistically moved ahead).
-  var expectedSeq = cur.seq + 1;
-  var clientSeq = body.seq !== undefined ? Number(body.seq) : expectedSeq;
-  if (clientSeq !== expectedSeq) {
-    vwLog("move rejected: stale seq", {
-      user_id: userId,
-      world_id: worldId,
-      session_id: sessionId,
-      expected_seq: expectedSeq,
-      client_seq: clientSeq,
-      cur_row: cur.row,
-      cur_col: cur.col,
-      req_row: toRow,
-      req_col: toCol,
-    });
-    return ResponseBuilder.json({
-      ok: false,
-      stale: true,
-      row: cur.row,
-      col: cur.col,
-      seq: cur.seq,
-    });
-  }
-
-  // Server-authoritative validation
-  var dr = Math.abs(toRow - cur.row);
-  var dc = Math.abs(toCol - cur.col);
-  // Movement must respect tree modifications (planted/cut), not just base terrain.
-  var map = getEffectiveMap(worldId);
-  var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
-  var singleStep = dr + dc === 1;
-  var walkable = withinBounds && isWorldTileWalkable(map[toRow][toCol]);
-
-  if (!singleStep || !walkable) {
-    vwLog("move rejected: invalid step", {
-      user_id: userId,
-      world_id: worldId,
-      session_id: sessionId,
-      from_row: cur.row,
-      from_col: cur.col,
-      to_row: toRow,
-      to_col: toCol,
-      single_step: singleStep,
-      walkable: walkable,
-    });
-    // Reject — return the canonical position so the client can snap back
-    return ResponseBuilder.json({
-      ok: false,
-      stale: false,
-      row: cur.row,
-      col: cur.col,
-    });
-  }
-
-  players[userId] = {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-    session_id: sessionId,
-    ts: Date.now(),
-  };
-  saveWorldPlayers(worldId, players);
-  savePlayerPosition(userId, worldId, {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-    session_id: sessionId,
-    ts: Date.now(),
-  });
-  var msg = JSON.stringify({
-    player_id: userId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-  });
-  sendWorldScopedStreamEvent(String(worldId), "player_moved", JSON.parse(msg));
-  vwLog("move accepted", {
-    user_id: userId,
-    world_id: worldId,
-    session_id: sessionId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-  });
-  return ResponseBuilder.json({
-    ok: true,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-  });
+  var handled = movePlayerForUser(userId, body);
+  return ResponseBuilder.json(handled.payload, handled.status);
 }
 
 /**
@@ -5715,17 +6532,7 @@ function currentWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  var worldId = getOrCreatePlayerWorld(userId);
-  markNPCWorldActive(worldId);
-  ensureWorldItems(worldId);
-  return ResponseBuilder.json({
-    world_id: String(worldId),
-    world_type: getWorldType(worldId),
-    items: flattenWorldItems(loadWorldItems(worldId)),
-    inventory: loadPlayerInventory(userId),
-    world_mods: loadWorldMods(worldId),
-    houses: loadWorldHouses(worldId),
-  });
+  return ResponseBuilder.json(getCurrentWorldStateForUser(userId));
 }
 
 /**
@@ -5755,435 +6562,8 @@ function treeActionHandler(context) {
   } catch (e) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
-
-  var rawAction = body.action;
-  var action = canonicalTreeAction(rawAction);
-  var requestedPortalWorldType =
-    worldTypeForPortalBuildAction(rawAction) ||
-    normalizeWorldType(body.destination_world_type);
-  var playerRow = Number(body.row);
-  var playerCol = Number(body.col);
-  var rotation = Number(body.rotation);
-
-  if (action === "pick" || action === "drop" || action === "equip") {
-    var handled = handleItemActionForUser(userId, body);
-    return ResponseBuilder.json(handled.payload, handled.status);
-  }
-
-  if (action === "cheat_grant_all") {
-    return ResponseBuilder.json(grantAllItemsForUser(userId));
-  }
-
-  if (
-    action !== "plant" &&
-    action !== "cut" &&
-    action !== "build_house" &&
-    action !== "destroy_house" &&
-    action !== "build_portal" &&
-    action !== "remove_portal" &&
-    action !== "play_tune" &&
-    action !== "place_blessing" &&
-    action !== "portal_travel" &&
-    action !== "return_home"
-  ) {
-    return ResponseBuilder.json({ error: "Invalid action" }, 400);
-  }
-
-  // Derive world from server-side storage
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    return ResponseBuilder.json({ ok: false, error: "No world found" });
-  }
-  ensureWorldItems(worldId);
-
-  var inv = loadPlayerInventory(userId);
-  var canonical = getCanonicalPlayerState(worldId, userId);
-  var currentTileKey = canonical.row + "_" + canonical.col;
-  var worldItems = loadWorldItems(worldId);
-  var currentTileItems = Array.isArray(worldItems[currentTileKey])
-    ? worldItems[currentTileKey]
-    : [];
-  var canUseAction =
-    canInventoryUseTreeAction(inv, action) ||
-    canTileItemsUseTreeAction(currentTileItems, action);
-
-  if (!canUseAction) {
-    return ResponseBuilder.json({
-      ok: false,
-      error: "Missing required item for action",
-    });
-  }
-
-  if (action === "return_home") {
-    switchUserWorld(
-      userId,
-      OAK_WORLD_ID,
-      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
-    );
-    return ResponseBuilder.json({
-      ok: true,
-      action: "return_home",
-      switched_world: true,
-      world_id: OAK_WORLD_ID,
-    });
-  }
-
-  if (action === "play_tune") {
-    var tuneMsg = {
-      id:
-        "wc-" +
-        Date.now().toString(36) +
-        "-" +
-        Math.random().toString(36).slice(2),
-      sender_id: userId,
-      sender_nick: getEffectiveNick(userId),
-      text: "lets a kantele melody drift through the spruce hush.",
-      ts: Date.now(),
-    };
-    appendWorldChatMessage(worldId, tuneMsg);
-    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      inventory: inv,
-      items: flattenWorldItems(worldItems),
-      toast_message: "A kantele tune carries across the clearing.",
-    });
-  }
-
-  if (action === "place_blessing") {
-    var blessingTileKey = canonical.row + "_" + canonical.col;
-    var blessingItems = Array.isArray(worldItems[blessingTileKey])
-      ? worldItems[blessingTileKey]
-      : [];
-    var existingBlessing = blessingItems.some(function (item) {
-      return item && item.type === "blessing_marker";
-    });
-    if (existingBlessing) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "A blessing already rests here",
-      });
-    }
-
-    var blessingItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "blessing_marker",
-      created_at: Date.now(),
-      placed_by: userId,
-      non_droppable: true,
-    };
-    if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
-    worldItems[blessingTileKey].push(blessingItem);
-    upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
-    saveWorldItems(worldId, worldItems);
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "blessing_place",
-      canonical.row,
-      canonical.col,
-      [blessingItem],
-    );
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      row: canonical.row,
-      col: canonical.col,
-      inventory: inv,
-      items: flattenWorldItems(worldItems),
-      toast_message: "A rowan blessing now marks this place.",
-    });
-  }
-
-  if (action === "portal_travel") {
-    var portalEntry = currentTileItems.find(function (item) {
-      return item && item.type === "portal";
-    });
-    var newWorldId =
-      portalEntry && portalEntry.destination_world_id
-        ? String(portalEntry.destination_world_id)
-        : "10000";
-    switchUserWorld(userId, newWorldId);
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      switched_world: true,
-      world_id: newWorldId,
-    });
-  }
-
-  // Calculate target tile based on player rotation.
-  // Must match client indicator/movement mapping:
-  // 0 = south (+row), Math.PI/2 = east (+col), Math.PI = north (-row), -Math.PI/2 = west (-col)
-  var targetRow = playerRow;
-  var targetCol = playerCol;
-
-  var angle = rotation;
-  // Normalize angle to [-π, π]
-  while (angle > Math.PI) angle -= 2 * Math.PI;
-  while (angle < -Math.PI) angle += 2 * Math.PI;
-
-  // Determine direction based on angle
-  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
-    targetRow = playerRow + 1; // South
-  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
-    targetCol = playerCol + 1; // East
-  } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
-    targetRow = playerRow - 1; // North
-  } else {
-    targetCol = playerCol - 1; // West
-  }
-
-  // Validate target is within bounds
-  if (
-    targetRow < 0 ||
-    targetRow >= ROWS ||
-    targetCol < 0 ||
-    targetCol >= COLS
-  ) {
-    return ResponseBuilder.json({ ok: false, error: "Target out of bounds" });
-  }
-
-  var map = getEffectiveMap(worldId);
-  var trees = loadWorldTrees(worldId);
-  var houses = loadWorldHouses(worldId);
-  var tileKey = targetRow + "_" + targetCol;
-
-  if (action === "build_house") {
-    if (isOakClearingTile(worldId, targetRow, targetCol)) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "The oak clearing must remain open",
-      });
-    }
-    if (map[targetRow][targetCol] !== 0) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "Cannot build house here",
-      });
-    }
-    if (houses[tileKey]) {
-      return ResponseBuilder.json({ ok: false, error: "House already exists" });
-    }
-    houses[tileKey] = {
-      built_by: userId,
-      actor_type: "player",
-      timestamp: Date.now(),
-    };
-    saveWorldHouses(worldId, houses);
-    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-    });
-  }
-
-  if (action === "destroy_house") {
-    if (!houses[tileKey]) {
-      return ResponseBuilder.json({ ok: false, error: "No house to destroy" });
-    }
-    delete houses[tileKey];
-    saveWorldHouses(worldId, houses);
-    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-    });
-  }
-
-  var treeKey = tileKey;
-
-  if (action === "build_portal") {
-    if (map[targetRow][targetCol] !== 0) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "Cannot build portal here",
-      });
-    }
-    var targetTileKey = targetRow + "_" + targetCol;
-    var targetItems = Array.isArray(worldItems[targetTileKey])
-      ? worldItems[targetTileKey]
-      : [];
-    var hasPortal = targetItems.some(function (item) {
-      return item && item.type === "portal";
-    });
-    if (hasPortal) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "Portal already exists",
-      });
-    }
-    var createdDestinationWorld = createWorldOfType(requestedPortalWorldType);
-    var portalItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "portal",
-      created_at: Date.now(),
-      destination_world_id: createdDestinationWorld.world_id,
-      destination_world_type: createdDestinationWorld.world_type,
-    };
-    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
-    worldItems[targetTileKey].push(portalItem);
-    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
-    saveWorldItems(worldId, worldItems);
-
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_create",
-      targetRow,
-      targetCol,
-      [portalItem],
-    );
-
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      items: flattenWorldItems(worldItems),
-      inventory: inv,
-    });
-  }
-
-  if (action === "remove_portal") {
-    var removeTileKey = targetRow + "_" + targetCol;
-    var removeItems = Array.isArray(worldItems[removeTileKey])
-      ? worldItems[removeTileKey]
-      : [];
-    var keptItems = [];
-    var removedPortals = [];
-    for (var removeIdx = 0; removeIdx < removeItems.length; removeIdx++) {
-      var removeItem = removeItems[removeIdx];
-      if (removeItem && removeItem.type === "portal") {
-        removedPortals.push(removeItem);
-      } else {
-        keptItems.push(removeItem);
-      }
-    }
-
-    if (removedPortals.length === 0) {
-      return ResponseBuilder.json({ ok: false, error: "No portal to remove" });
-    }
-
-    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
-    else delete worldItems[removeTileKey];
-    deleteWorldItems(removedPortals);
-    saveWorldItems(worldId, worldItems);
-
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_remove",
-      targetRow,
-      targetCol,
-      removedPortals,
-    );
-
-    return ResponseBuilder.json({
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      removed_count: removedPortals.length,
-      items: flattenWorldItems(worldItems),
-      inventory: inv,
-    });
-  }
-
-  if (action === "plant") {
-    if (isOakClearingTile(worldId, targetRow, targetCol)) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "The oak clearing must remain open",
-      });
-    }
-    // Check if target is walkable ground (no wall, no tree)
-    var hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
-    var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
-    var baseHasTree = map[targetRow][targetCol] === 2;
-
-    // Can only plant on empty ground
-    if (map[targetRow][targetCol] !== 0 && !wasTreeCut) {
-      return ResponseBuilder.json({ ok: false, error: "Cannot plant here" });
-    }
-    if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-      return ResponseBuilder.json({ ok: false, error: "Tree already exists" });
-    }
-
-    // Plant the tree
-    trees[treeKey] = {
-      action: "plant",
-      planted_by: userId,
-      timestamp: Date.now(),
-    };
-  } else if (action === "cut") {
-    if (isOakCenterTile(worldId, targetRow, targetCol)) {
-      return ResponseBuilder.json({
-        ok: false,
-        error: "The old oak stands firm",
-      });
-    }
-    // Check if target has a tree
-    var hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
-    var baseHasTree = map[targetRow][targetCol] === 2;
-    var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
-
-    if (!hasPlantedTree && !baseHasTree) {
-      return ResponseBuilder.json({ ok: false, error: "No tree to cut" });
-    }
-    if (alreadyCut) {
-      return ResponseBuilder.json({ ok: false, error: "Tree already cut" });
-    }
-
-    // Cut the tree
-    trees[treeKey] = {
-      action: "cut",
-      cut_by: userId,
-      timestamp: Date.now(),
-    };
-  }
-
-  saveWorldTrees(worldId, trees);
-
-  // Broadcast tree change
-  var msg = {
-    action: action,
-    row: targetRow,
-    col: targetCol,
-    actor_type: "player",
-    actor_id: userId,
-    player_id: userId,
-  };
-  sendWorldScopedStreamEvent(String(worldId), "tree_changed", msg);
-
-  return ResponseBuilder.json({
-    ok: true,
-    action: action,
-    row: targetRow,
-    col: targetCol,
-  });
+  var handled = performTreeActionForUser(userId, body);
+  return ResponseBuilder.json(handled.payload, handled.status);
 }
 
 function init() {
@@ -6231,10 +6611,153 @@ function init() {
     }
   }
 
+  /**
+   * @param {string} name
+   * @param {string} description
+   * @param {string} schema
+   * @param {string} handlerName
+   */
+  function safeRegisterTool(name, description, schema, handlerName) {
+    try {
+      mcpRegistry.registerTool(name, description, schema, handlerName);
+    } catch (e) {
+      vwLog("mcp tool registration skipped", {
+        name: name,
+        handler: handlerName,
+        error: String(e),
+      });
+    }
+  }
+
+  var virtualWorldStateSchema = JSON.stringify({
+    type: "object",
+    properties: {},
+  });
+  var virtualWorldMoveSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      direction: {
+        type: "string",
+        enum: ["north", "south", "east", "west", "up", "down", "left", "right"],
+        description: "Direction to move the player by one tile",
+      },
+      rotation: {
+        type: "number",
+        description:
+          "Optional facing rotation in radians; defaults to the chosen direction",
+      },
+      seq: {
+        type: "number",
+        description:
+          "Optional client sequence number; defaults to the next canonical sequence",
+      },
+      session_id: {
+        type: "string",
+        description: "Optional movement session identifier; defaults to 'mcp'",
+        default: "mcp",
+      },
+    },
+    required: ["direction"],
+  });
+  var virtualWorldManageItemsSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "pick", "drop", "equip"],
+        description:
+          "List nearby items or perform an inventory/world item action",
+        default: "list",
+      },
+      from: {
+        type: "string",
+        enum: ["left_hand", "right_hand", "inventory"],
+        description: "Source slot for drop or equip",
+      },
+      to: {
+        type: "string",
+        enum: ["left_hand", "right_hand", "inventory"],
+        description: "Destination slot for equip",
+      },
+      index: {
+        type: "number",
+        description: "Inventory index used for drop or equip from inventory",
+      },
+    },
+  });
+  var virtualWorldActSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: [
+          "plant",
+          "cut",
+          "build_house",
+          "destroy_house",
+          "build_portal",
+          "remove_portal",
+          "play_tune",
+          "place_blessing",
+          "portal_travel",
+          "return_home",
+          "build_portal_forest",
+          "build_portal_island",
+          "build_portal_cave",
+          "build_portal_building",
+        ],
+        description: "World or item action to perform",
+      },
+      rotation: {
+        type: "number",
+        description:
+          "Optional player facing rotation in radians; defaults to current player rotation",
+      },
+      row: {
+        type: "number",
+        description: "Optional player row; defaults to canonical player row",
+      },
+      col: {
+        type: "number",
+        description: "Optional player col; defaults to canonical player col",
+      },
+      destination_world_type: {
+        type: "string",
+        enum: ["forest", "island", "cave", "building"],
+        description: "Optional portal destination world type for build_portal",
+      },
+    },
+    required: ["action"],
+  });
+
   // Register new endpoints first so they are available even in hot-reload sessions
   // where older routes may already exist.
   safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
   safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
+  safeRegisterTool(
+    "virtualWorldGetState",
+    "Get the authenticated player's current world, position, items, inventory, available actions, and movement options",
+    virtualWorldStateSchema,
+    "virtualWorldGetStateToolHandler",
+  );
+  safeRegisterTool(
+    "virtualWorldMove",
+    "Move the authenticated player one tile in a cardinal direction",
+    virtualWorldMoveSchema,
+    "virtualWorldMoveToolHandler",
+  );
+  safeRegisterTool(
+    "virtualWorldManageItems",
+    "List, pick up, drop, or equip items for the authenticated player",
+    virtualWorldManageItemsSchema,
+    "virtualWorldManageItemsToolHandler",
+  );
+  safeRegisterTool(
+    "virtualWorldAct",
+    "Perform authenticated player world actions such as cutting, planting, building, portal use, or blessings",
+    virtualWorldActSchema,
+    "virtualWorldActToolHandler",
+  );
 
   try {
     routeRegistry.registerAssetRoute("/virtual-world", "welcome.html");

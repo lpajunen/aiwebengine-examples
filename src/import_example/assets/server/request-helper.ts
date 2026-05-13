@@ -1,3 +1,3 @@
 export function buildMessage(target: string) {
-    return `hello-from-${target}`;
+  return `hello-from-${target}`;
 }

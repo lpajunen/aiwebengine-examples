@@ -8,6 +8,7 @@
     "oauth-login": "node scripts/oauth_pkce_token.js",
     "upload-virtual-world": "node scripts/upload-script.js --script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets",
     "upload-virtual-world-dry-run": "node scripts/upload-script.js --script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets --dry-run",
+    "upload-import-example": "node scripts/upload-script.js --script-path src/import_example/import_example.ts --script-uri https://example.com/import-example --assets-dir src/import_example/assets",
     "install": "npm install && echo '✓ Dependencies installed'",
     "outdated": "npm outdated || echo '✓ Checked for outdated packages'",
     "format": "prettier --write \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ JavaScript files formatted'",

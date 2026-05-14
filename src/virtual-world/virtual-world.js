@@ -6760,7 +6760,7 @@ function init() {
   );
 
   try {
-    routeRegistry.registerAssetRoute("/virtual-world", "welcome.html");
+    routeRegistry.registerAssetRoute("/virtual-world", "public/welcome.html");
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: "/virtual-world",
@@ -6768,7 +6768,7 @@ function init() {
     });
   }
   try {
-    routeRegistry.registerAssetRoute("/virtual-world/styles.css", "styles.css");
+    routeRegistry.registerAssetRoute("/virtual-world/styles.css", "public/styles.css");
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: "/virtual-world/styles.css",
@@ -6776,7 +6776,7 @@ function init() {
     });
   }
   try {
-    routeRegistry.registerAssetRoute("/virtual-world/client.js", "client.js");
+    routeRegistry.registerAssetRoute("/virtual-world/client.js", "public/client.js");
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: "/virtual-world/client.js",

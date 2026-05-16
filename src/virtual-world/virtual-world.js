@@ -59,6 +59,33 @@ import {
   worldTileValueForName,
   worldTypeForPortalBuildAction,
 } from "./server/world-domain.ts";
+import {
+  deleteWorldRow as deleteWorldRowImpl,
+  deleteWorldRowsWhere as deleteWorldRowsWhereImpl,
+  insertWorldRow as insertWorldRowImpl,
+  parseWorldDbResult as parseWorldDbResultImpl,
+  querySingleWorldRow as querySingleWorldRowImpl,
+  queryWorldRows as queryWorldRowsImpl,
+  updateWorldRow as updateWorldRowImpl,
+  upsertWorldRow as upsertWorldRowImpl,
+} from "./server/world-db.ts";
+import {
+  deletePlayerHeartbeat as deletePlayerHeartbeatImpl,
+  deletePlayerMoveLease as deletePlayerMoveLeaseImpl,
+  deletePlayerPosition as deletePlayerPositionImpl,
+  getPlayerWorld as getPlayerWorldImpl,
+  loadAllPlayerPositions as loadAllPlayerPositionsImpl,
+  loadPlayerHeartbeatMap as loadPlayerHeartbeatMapImpl,
+  loadPlayerHeartbeatTs as loadPlayerHeartbeatTsImpl,
+  loadPlayerMoveLease as loadPlayerMoveLeaseImpl,
+  loadPlayerPosition as loadPlayerPositionImpl,
+  markPlayerPositionInactive as markPlayerPositionInactiveImpl,
+  normalizePlayerPositionRow as normalizePlayerPositionRowImpl,
+  savePlayerHeartbeatTs as savePlayerHeartbeatTsImpl,
+  savePlayerMoveLease as savePlayerMoveLeaseImpl,
+  savePlayerPosition as savePlayerPositionImpl,
+  savePlayerWorld as savePlayerWorldImpl,
+} from "./server/player-persistence.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -162,12 +189,7 @@ function generateMap(worldId) {
  * @returns {string}
  */
 function getPlayerWorld(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_WORLD_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (row && row.world_id) return String(row.world_id);
-  return "";
+  return getPlayerWorldImpl(userId, VWORLD_PLAYER_WORLD_TABLE, vwLog);
 }
 
 /**
@@ -176,12 +198,7 @@ function getPlayerWorld(userId) {
  * @returns {string}
  */
 function savePlayerWorld(userId, worldId) {
-  upsertWorldRow(VWORLD_PLAYER_WORLD_TABLE, ["user_id"], {
-    user_id: String(userId),
-    world_id: String(worldId),
-    updated_ts: toStoredWorldTimestamp(Date.now()),
-  });
-  return String(worldId);
+  return savePlayerWorldImpl(userId, worldId, VWORLD_PLAYER_WORLD_TABLE, vwLog);
 }
 
 /**
@@ -189,18 +206,7 @@ function savePlayerWorld(userId, worldId) {
  * @returns {{world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number} | null}
  */
 function normalizePlayerPositionRow(row) {
-  if (!row || !isFinite(Number(row.row)) || !isFinite(Number(row.col))) {
-    return null;
-  }
-  return {
-    world_id: String(row.world_id || ""),
-    row: Number(row.row),
-    col: Number(row.col),
-    seq: isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-    rotation: isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
-    session_id: typeof row.session_id === "string" ? row.session_id : "",
-    ts: fromStoredWorldTimestamp(row.updated_ts),
-  };
+  return normalizePlayerPositionRowImpl(row);
 }
 
 /**
@@ -208,35 +214,14 @@ function normalizePlayerPositionRow(row) {
  * @returns {{world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number} | null}
  */
 function loadPlayerPosition(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_POSITION_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  return normalizePlayerPositionRow(row);
+  return loadPlayerPositionImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
  * @returns {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>}
  */
 function loadAllPlayerPositions() {
-  var rows = queryWorldRows(
-    VWORLD_PLAYER_POSITION_TABLE,
-    "",
-    1000,
-    "updated_ts",
-    "desc",
-  );
-  /** @type {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>} */
-  var out = {};
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var userId = row && row.user_id ? String(row.user_id) : "";
-    if (!userId || out[userId]) continue;
-    var normalized = normalizePlayerPositionRow(row);
-    if (!normalized) continue;
-    out[userId] = normalized;
-  }
-  return out;
+  return loadAllPlayerPositionsImpl(VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -245,31 +230,20 @@ function loadAllPlayerPositions() {
  * @param {{row:number,col:number,seq:number,rotation:number,session_id?:string,ts?:number}} position
  */
 function savePlayerPosition(userId, worldId, position) {
-  upsertWorldRow(VWORLD_PLAYER_POSITION_TABLE, ["user_id"], {
-    user_id: String(userId),
-    world_id: String(worldId),
-    row: Number(position.row),
-    col: Number(position.col),
-    seq: isFinite(Number(position.seq)) ? Number(position.seq) : 0,
-    rotation: isFinite(Number(position.rotation))
-      ? Number(position.rotation)
-      : 0,
-    session_id:
-      typeof position.session_id === "string" ? position.session_id : "",
-    updated_ts: toStoredWorldTimestamp(
-      isFinite(Number(position.ts)) ? Number(position.ts) : Date.now(),
-    ),
-  });
+  savePlayerPositionImpl(
+    userId,
+    worldId,
+    position,
+    VWORLD_PLAYER_POSITION_TABLE,
+    vwLog,
+  );
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerPosition(userId) {
-  deleteWorldRowsWhere(
-    VWORLD_PLAYER_POSITION_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
+  deletePlayerPositionImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -277,15 +251,7 @@ function deletePlayerPosition(userId) {
  * @returns {{session_id: string, expires_at: number} | null}
  */
 function loadPlayerMoveLease(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_MOVE_LEASE_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (!row) return null;
-  return {
-    session_id: typeof row.session_id === "string" ? row.session_id : "",
-    expires_at: fromStoredWorldTimestamp(row.expires_ts),
-  };
+  return loadPlayerMoveLeaseImpl(userId, VWORLD_PLAYER_MOVE_LEASE_TABLE, vwLog);
 }
 
 /**
@@ -294,21 +260,20 @@ function loadPlayerMoveLease(userId) {
  * @param {number} expiresAt
  */
 function savePlayerMoveLease(userId, sessionId, expiresAt) {
-  upsertWorldRow(VWORLD_PLAYER_MOVE_LEASE_TABLE, ["user_id"], {
-    user_id: String(userId),
-    session_id: String(sessionId || ""),
-    expires_ts: toStoredWorldTimestamp(expiresAt),
-  });
+  savePlayerMoveLeaseImpl(
+    userId,
+    sessionId,
+    expiresAt,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
+    vwLog,
+  );
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerMoveLease(userId) {
-  deleteWorldRowsWhere(
-    VWORLD_PLAYER_MOVE_LEASE_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
+  deletePlayerMoveLeaseImpl(userId, VWORLD_PLAYER_MOVE_LEASE_TABLE, vwLog);
 }
 
 /**
@@ -316,35 +281,14 @@ function deletePlayerMoveLease(userId) {
  * @returns {number}
  */
 function loadPlayerHeartbeatTs(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (!row) return 0;
-  return fromStoredWorldTimestamp(row.heartbeat_ts);
+  return loadPlayerHeartbeatTsImpl(userId, VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
 }
 
 /**
  * @returns {Record<string, number>}
  */
 function loadPlayerHeartbeatMap() {
-  var rows = queryWorldRows(
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    "",
-    1000,
-    "heartbeat_ts",
-    "desc",
-  );
-  /** @type {Record<string, number>} */
-  var out = {};
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (!row || !row.user_id) continue;
-    var heartbeatUserId = String(row.user_id);
-    if (out[heartbeatUserId]) continue;
-    out[heartbeatUserId] = fromStoredWorldTimestamp(row.heartbeat_ts);
-  }
-  return out;
+  return loadPlayerHeartbeatMapImpl(VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
 }
 
 /**
@@ -352,41 +296,26 @@ function loadPlayerHeartbeatMap() {
  * @param {number} heartbeatTs
  */
 function savePlayerHeartbeatTs(userId, heartbeatTs) {
-  upsertWorldRow(VWORLD_PLAYER_HEARTBEAT_TABLE, ["user_id"], {
-    user_id: String(userId),
-    heartbeat_ts: toStoredWorldTimestamp(heartbeatTs),
-  });
+  savePlayerHeartbeatTsImpl(
+    userId,
+    heartbeatTs,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    vwLog,
+  );
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerHeartbeat(userId) {
-  deleteWorldRowsWhere(
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
+  deletePlayerHeartbeatImpl(userId, VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
 }
 
 /**
  * @param {string} userId
  */
 function markPlayerPositionInactive(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_POSITION_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (!row || !isFinite(Number(row.id))) return;
-  updateWorldRow(VWORLD_PLAYER_POSITION_TABLE, Number(row.id), {
-    user_id: String(row.user_id || userId),
-    world_id: String(row.world_id || "10000"),
-    row: isFinite(Number(row.row)) ? Number(row.row) : 1,
-    col: isFinite(Number(row.col)) ? Number(row.col) : 1,
-    seq: isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-    rotation: isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
-    session_id: typeof row.session_id === "string" ? row.session_id : "",
-    updated_ts: 0,
-  });
+  markPlayerPositionInactiveImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -1311,13 +1240,7 @@ function parseChatDbResult(raw) {
  * @returns {*}
  */
 function parseWorldDbResult(raw) {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    vwLog("world db parse failed", { error: String(e) });
-    return null;
-  }
+  return parseWorldDbResultImpl(raw, vwLog);
 }
 
 /**
@@ -1724,20 +1647,7 @@ function ensureLateWorldDatabaseSchema(collector) {
  * @returns {any[]}
  */
 function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
-  var result = parseWorldDbResult(
-    database.query(tableName, filters, limit, orderBy, orderDir),
-  );
-  if (!Array.isArray(result)) {
-    if (result && result.error) {
-      vwLog("world db query failed", {
-        table: tableName,
-        filters: filters || "",
-        error: String(result.error),
-      });
-    }
-    return [];
-  }
-  return result;
+  return queryWorldRowsImpl(tableName, filters, limit, orderBy, orderDir, vwLog);
 }
 
 /**
@@ -1746,17 +1656,7 @@ function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
  * @returns {*}
  */
 function insertWorldRow(tableName, data) {
-  var result = parseWorldDbResult(
-    database.insert(tableName, JSON.stringify(data)),
-  );
-  if (result && result.error) {
-    vwLog("world db insert failed", {
-      table: tableName,
-      error: String(result.error),
-    });
-    return null;
-  }
-  return result;
+  return insertWorldRowImpl(tableName, data, vwLog);
 }
 
 /**
@@ -1766,40 +1666,7 @@ function insertWorldRow(tableName, data) {
  * @returns {*}
  */
 function upsertWorldRow(tableName, keyColumns, data) {
-  var result = parseWorldDbResult(
-    database.upsert(
-      tableName,
-      JSON.stringify(keyColumns),
-      JSON.stringify(data),
-    ),
-  );
-  if (!result || result.error) {
-    vwLog("world db upsert failed", {
-      table: tableName,
-      keys: keyColumns.join(","),
-      error: String(result && result.error ? result.error : "unknown"),
-    });
-
-    /** @type {Record<string, any>} */
-    var keyFilters = {};
-    for (var i = 0; i < keyColumns.length; i++) {
-      var key = keyColumns[i];
-      if (!Object.prototype.hasOwnProperty.call(data || {}, key)) {
-        return null;
-      }
-      keyFilters[key] = data[key];
-    }
-
-    var existingRow = querySingleWorldRow(
-      tableName,
-      JSON.stringify(keyFilters),
-    );
-    if (existingRow && isFinite(Number(existingRow.id))) {
-      return updateWorldRow(tableName, Number(existingRow.id), data);
-    }
-    return insertWorldRow(tableName, data);
-  }
-  return result;
+  return upsertWorldRowImpl(tableName, keyColumns, data, vwLog);
 }
 
 /**
@@ -1809,18 +1676,7 @@ function upsertWorldRow(tableName, keyColumns, data) {
  * @returns {*}
  */
 function updateWorldRow(tableName, id, data) {
-  var result = parseWorldDbResult(
-    database.update(tableName, id, JSON.stringify(data)),
-  );
-  if (result && result.error) {
-    vwLog("world db update failed", {
-      table: tableName,
-      id: id,
-      error: String(result.error),
-    });
-    return null;
-  }
-  return result;
+  return updateWorldRowImpl(tableName, id, data, vwLog);
 }
 
 /**
@@ -1828,13 +1684,7 @@ function updateWorldRow(tableName, id, data) {
  * @param {string} filters
  */
 function deleteWorldRowsWhere(tableName, filters) {
-  var result = parseWorldDbResult(database.deleteWhere(tableName, filters));
-  if (result && result.error) {
-    vwLog("world db deleteWhere failed", {
-      table: tableName,
-      error: String(result.error),
-    });
-  }
+  deleteWorldRowsWhereImpl(tableName, filters, vwLog);
 }
 
 /**
@@ -1842,14 +1692,7 @@ function deleteWorldRowsWhere(tableName, filters) {
  * @param {number} id
  */
 function deleteWorldRow(tableName, id) {
-  var result = parseWorldDbResult(database.delete(tableName, id));
-  if (result && result.error) {
-    vwLog("world db delete failed", {
-      table: tableName,
-      id: id,
-      error: String(result.error),
-    });
-  }
+  deleteWorldRowImpl(tableName, id, vwLog);
 }
 
 /**
@@ -1858,8 +1701,7 @@ function deleteWorldRow(tableName, id) {
  * @returns {any | null}
  */
 function querySingleWorldRow(tableName, filters) {
-  var rows = queryWorldRows(tableName, filters, 1, "id", "desc");
-  return rows.length > 0 ? rows[0] : null;
+  return querySingleWorldRowImpl(tableName, filters, vwLog);
 }
 
 function ensureWorldDatabaseSchema() {

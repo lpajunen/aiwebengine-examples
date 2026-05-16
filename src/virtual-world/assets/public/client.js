@@ -19,6 +19,7 @@ var authProbeInFlight = false;
 var authSseCheckPending = false;
 var authRefreshPromise = null;
 var authRefreshIntervalTimer = null;
+var browserFetch = window.fetch.bind(window);
 var AUTH_PROBE_MAX_ATTEMPTS = 3;
 var AUTH_LOGIN_REDIRECT_DELAY_MS = 800;
 var AUTH_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
@@ -69,7 +70,7 @@ function handleAuthRecovery() {
 function refreshSessionSilently(reason) {
   if (isAuthUnavailable()) return Promise.resolve(false);
   if (authRefreshPromise) return authRefreshPromise;
-  authRefreshPromise = fetch("/auth/refresh", {
+  authRefreshPromise = browserFetch("/auth/refresh", {
     method: "POST",
     cache: "no-store",
   })
@@ -87,7 +88,7 @@ function refreshSessionSilently(reason) {
 }
 
 function probeAuthStatus() {
-  return fetch("/virtual-world/current-world", {
+  return browserFetch("/virtual-world/current-world", {
     method: "GET",
     cache: "no-store",
   })
@@ -154,8 +155,12 @@ function isAuthUnavailable() {
   );
 }
 
+/**
+ * @param {string} code
+ * @returns {Error & { code: string }}
+ */
 function createAuthError(code) {
-  var authErr = new Error(code);
+  var authErr = /** @type {Error & { code: string }} */ (new Error(code));
   authErr.code = code;
   return authErr;
 }
@@ -190,7 +195,7 @@ function fetchWithAuth(path, options) {
     return Promise.reject(createAuthError("AUTH_STOPPED"));
   }
   var requestOptions = options || {};
-  return fetch(path, requestOptions)
+  return browserFetch(path, requestOptions)
     .then(function (res) {
       if (res.status !== 401) return res;
       return refreshSessionSilently("request_retry").then(function (refreshed) {
@@ -198,7 +203,7 @@ function fetchWithAuth(path, options) {
           handleAuth401(path);
           throw createAuthError("AUTH_401");
         }
-        return fetch(path, requestOptions).then(function (retryRes) {
+        return browserFetch(path, requestOptions).then(function (retryRes) {
           if (retryRes.status === 401) {
             handleAuth401(path);
             throw createAuthError("AUTH_401");
@@ -863,7 +868,9 @@ function closeUsePicker() {
 }
 
 function updateUseButtonState() {
-  var btn = document.getElementById("btn-use");
+  var btn = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById("btn-use")
+  );
   if (!btn) return;
   var actions = getOwnedTreeActions();
   if (actions.length === 0) {
@@ -2217,8 +2224,8 @@ function flushMove() {
             avatarCol = result.col;
             targetX = tileX(avatarCol);
             targetZ = tileZ(avatarRow);
-            document.getElementById("pos-col").textContent = avatarCol;
-            document.getElementById("pos-row").textContent = avatarRow;
+            document.getElementById("pos-col").textContent = String(avatarCol);
+            document.getElementById("pos-row").textContent = String(avatarRow);
           }
           if (typeof result.seq === "number" && isFinite(result.seq)) {
             moveSeq = result.seq;
@@ -2252,8 +2259,8 @@ function flushMove() {
           avatarCol = lastPos.col;
           targetX = tileX(avatarCol);
           targetZ = tileZ(avatarRow);
-          document.getElementById("pos-col").textContent = avatarCol;
-          document.getElementById("pos-row").textContent = avatarRow;
+          document.getElementById("pos-col").textContent = String(avatarCol);
+          document.getElementById("pos-row").textContent = String(avatarRow);
         }
       } else {
         // Confirmed — update the last confirmed server sequence number.
@@ -2336,8 +2343,8 @@ function fetchSnapshot() {
             }
             moveSeq = snapSeq;
             lastAssignedSeq = snapSeq;
-            document.getElementById("pos-col").textContent = avatarCol;
-            document.getElementById("pos-row").textContent = avatarRow;
+            document.getElementById("pos-col").textContent = String(avatarCol);
+            document.getElementById("pos-row").textContent = String(avatarRow);
           }
         } else {
           upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
@@ -2414,8 +2421,8 @@ function initMultiplayer() {
             moveSeq = incomingSeq;
             lastAssignedSeq = incomingSeq;
           }
-          document.getElementById("pos-col").textContent = avatarCol;
-          document.getElementById("pos-row").textContent = avatarRow;
+          document.getElementById("pos-col").textContent = String(avatarCol);
+          document.getElementById("pos-row").textContent = String(avatarRow);
           updateUseButtonState();
         }
       }
@@ -3052,7 +3059,9 @@ function togglePlayersPanel() {
 }
 
 function startNickEdit() {
-  var inp = document.getElementById("nick-input");
+  var inp = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("nick-input")
+  );
   if (inp) {
     inp.value = playerNick || "";
     inp.onkeydown = function (e) {
@@ -3081,7 +3090,9 @@ function cancelNickEdit() {
 }
 
 function commitNickEdit() {
-  var inp = document.getElementById("nick-input");
+  var inp = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("nick-input")
+  );
   if (!inp) return;
   var val = inp.value.trim().slice(0, 24);
   if (!val) {
@@ -3177,7 +3188,9 @@ function renderWorldChat() {
 }
 
 function sendWorldChatMessage() {
-  var input = document.getElementById("world-chat-input");
+  var input = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("world-chat-input")
+  );
   if (!input) return;
   var text = input.value.trim();
   if (!text) return;
@@ -3360,7 +3373,9 @@ function renderDMThread(otherUserId) {
 
 function sendDirectMessage() {
   if (!activeDmUserId) return;
-  var input = document.getElementById("dm-chat-input");
+  var input = /** @type {HTMLInputElement | null} */ (
+    document.getElementById("dm-chat-input")
+  );
   if (!input) return;
   var text = input.value.trim();
   if (!text) return;
@@ -3561,7 +3576,7 @@ function renderTileDetailPanel() {
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
   var key = row + "_" + col;
-  var isOldOakTile = String(worldId) === "10000" && row === 50 && col === 50;
+  var isOakCenter = String(worldId) === "10000" && row === 50 && col === 50;
 
   document.getElementById("tile-detail-title").textContent =
     "Square (" + col + ", " + row + ")";
@@ -3574,7 +3589,7 @@ function renderTileDetailPanel() {
   } else if (terrainType === clientTileValueForName("house")) {
     terrainLabel = t("terrain.house", "House block");
   } else if (terrainType === clientTileValueForName("pine_tree")) {
-    if (isOldOakTile(row, col)) {
+    if (isOakCenter || isOldOakTile(row, col)) {
       terrainLabel = t("terrain.old_oak", "Old oak");
     } else {
       terrainLabel =

@@ -102,6 +102,19 @@ import {
   saveWorldModLayer as saveWorldModLayerImpl,
   saveWorldTrees as saveWorldTreesImpl,
 } from "./server/world-mod-storage.ts";
+import {
+  sendRecipientScopedStreamEvent as sendRecipientScopedStreamEventImpl,
+  sendVirtualWorldStreamEvent as sendVirtualWorldStreamEventImpl,
+  sendWorldScopedStreamEvent as sendWorldScopedStreamEventImpl,
+} from "./server/stream-broadcast.ts";
+import {
+  buildOnlinePlayersSnapshot as buildOnlinePlayersSnapshotImpl,
+  deleteOnlinePresence as deleteOnlinePresenceImpl,
+  getEffectiveNick as getEffectiveNickImpl,
+  loadPlayerNick as loadPlayerNickImpl,
+  savePlayerNick as savePlayerNickImpl,
+  updateOnlinePresence as updateOnlinePresenceImpl,
+} from "./server/social-state.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -831,12 +844,7 @@ function savePlayerInventory(userId, inventory) {
  * @returns {string}
  */
 function loadPlayerNick(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_NICK_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (!row || typeof row.nick !== "string") return "";
-  return row.nick;
+  return loadPlayerNickImpl(userId, VWORLD_PLAYER_NICK_TABLE, vwLog);
 }
 
 /**
@@ -844,11 +852,7 @@ function loadPlayerNick(userId) {
  * @param {string} nick
  */
 function savePlayerNick(userId, nick) {
-  upsertWorldRow(VWORLD_PLAYER_NICK_TABLE, ["user_id"], {
-    user_id: String(userId),
-    nick: String(nick || ""),
-    updated_ts: toStoredWorldTimestamp(Date.now()),
-  });
+  savePlayerNickImpl(userId, nick, VWORLD_PLAYER_NICK_TABLE, vwLog);
 }
 
 /**
@@ -857,8 +861,7 @@ function savePlayerNick(userId, nick) {
  * @returns {string}
  */
 function getEffectiveNick(userId) {
-  var nick = loadPlayerNick(userId);
-  return nick || userId.slice(0, 16);
+  return getEffectiveNickImpl(userId, VWORLD_PLAYER_NICK_TABLE, vwLog);
 }
 
 // ── Global online presence ────────────────────────────────────────────────────
@@ -872,33 +875,21 @@ function getEffectiveNick(userId) {
  * @param {string} sessionId
  */
 function updateOnlinePresence(userId, worldId, sessionId) {
-  var now = Date.now();
-  var existing = querySingleWorldRow(
+  updateOnlinePresenceImpl(
+    userId,
+    worldId,
+    sessionId,
     VWORLD_ONLINE_PRESENCE_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
+    VWORLD_PLAYER_NICK_TABLE,
+    vwLog,
   );
-  var loginAt =
-    existing && existing.session_id === sessionId && existing.login_at
-      ? fromStoredWorldTimestamp(existing.login_at)
-      : now;
-  upsertWorldRow(VWORLD_ONLINE_PRESENCE_TABLE, ["user_id"], {
-    user_id: String(userId),
-    world_id: String(worldId),
-    nick: getEffectiveNick(userId),
-    login_at: toStoredWorldTimestamp(loginAt),
-    last_active_ts: toStoredWorldTimestamp(now),
-    session_id: String(sessionId || ""),
-  });
 }
 
 /**
  * @param {string} userId
  */
 function deleteOnlinePresence(userId) {
-  deleteWorldRowsWhere(
-    VWORLD_ONLINE_PRESENCE_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
+  deleteOnlinePresenceImpl(userId, VWORLD_ONLINE_PRESENCE_TABLE, vwLog);
 }
 
 /**
@@ -906,75 +897,15 @@ function deleteOnlinePresence(userId) {
  * @returns {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>}
  */
 function buildOnlinePlayersSnapshot() {
-  var rows = queryWorldRows(
+  return buildOnlinePlayersSnapshotImpl(
     VWORLD_ONLINE_PRESENCE_TABLE,
-    "",
-    1000,
-    "last_active_ts",
-    "desc",
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    VWORLD_PLAYER_POSITION_TABLE,
+    VWORLD_PLAYER_WORLD_TABLE,
+    VWORLD_PLAYER_NICK_TABLE,
+    vwLog,
+    90000,
   );
-  var now = Date.now();
-  // 90 s TTL — gives headroom for background-tab heartbeat throttling.
-  var TTL = 90000;
-  var heartbeatByUserId = loadPlayerHeartbeatMap();
-  var positionsByUserId = loadAllPlayerPositions();
-  /** @type {Record<string, {player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
-  var byUserId = {};
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (!row || !row.user_id) continue;
-    var userId = String(row.user_id);
-    if (byUserId[userId]) continue;
-    var pos = positionsByUserId[userId] || null;
-    var presenceLastActive = fromStoredWorldTimestamp(row.last_active_ts);
-    var canonicalLastActive = Math.max(
-      presenceLastActive,
-      Number(heartbeatByUserId[userId] || 0),
-      pos ? Number(pos.ts || 0) : 0,
-    );
-    if (now - canonicalLastActive > TTL) continue;
-    byUserId[userId] = {
-      player_id: userId,
-      nick: row.nick || getEffectiveNick(userId),
-      world_id: String(row.world_id || (pos ? pos.world_id : "") || ""),
-      login_at: fromStoredWorldTimestamp(row.login_at) || canonicalLastActive,
-      last_active: canonicalLastActive,
-    };
-  }
-  Object.keys(positionsByUserId).forEach(function (userId) {
-    var pos = positionsByUserId[userId];
-    if (!pos) return;
-    var canonicalLastActive = Math.max(
-      Number(pos.ts || 0),
-      Number(heartbeatByUserId[userId] || 0),
-    );
-    if (now - canonicalLastActive > TTL) return;
-    if (!byUserId[userId]) {
-      byUserId[userId] = {
-        player_id: userId,
-        nick: getEffectiveNick(userId),
-        world_id: String(pos.world_id || getPlayerWorld(userId) || ""),
-        login_at: canonicalLastActive,
-        last_active: canonicalLastActive,
-      };
-      return;
-    }
-    if (!byUserId[userId].world_id && pos.world_id) {
-      byUserId[userId].world_id = String(pos.world_id);
-    }
-    if (canonicalLastActive > byUserId[userId].last_active) {
-      byUserId[userId].last_active = canonicalLastActive;
-    }
-  });
-  /** @type {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>} */
-  var result = Object.keys(byUserId)
-    .map(function (userId) {
-      return byUserId[userId];
-    })
-    .sort(function (a, b) {
-      return b.last_active - a.last_active;
-    });
-  return result;
 }
 
 // ── World chat ────────────────────────────────────────────────────────────────
@@ -2943,33 +2874,13 @@ function virtualWorldEventsStreamCustomizer(context) {
  * @param {Record<string, string>} filter
  */
 function sendVirtualWorldStreamEvent(type, payload, filter) {
-  try {
-    var message = JSON.stringify({
-      type: String(type),
-      payload: payload,
-    });
-    var result = routeRegistry.sendStreamMessageFiltered(
-      VIRTUAL_WORLD_EVENTS_STREAM_PATH,
-      message,
-      JSON.stringify(filter || {}),
-    );
-    if (
-      typeof result === "string" &&
-      (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
-    ) {
-      vwLog("stream broadcast returned error", {
-        type: String(type),
-        filter: JSON.stringify(filter || {}),
-        result: result,
-      });
-    }
-  } catch (e) {
-    vwLog("stream broadcast failed", {
-      type: String(type),
-      filter: JSON.stringify(filter || {}),
-      error: String(e),
-    });
-  }
+  sendVirtualWorldStreamEventImpl(
+    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+    type,
+    payload,
+    filter,
+    vwLog,
+  );
 }
 
 /**
@@ -2978,12 +2889,14 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
  * @param {*} payload
  */
 function sendWorldScopedStreamEvent(worldId, type, payload) {
-  if (!worldId) return;
-  var players = loadWorldPlayers(String(worldId));
-  var playerIds = Object.keys(players || {});
-  for (var i = 0; i < playerIds.length; i++) {
-    sendRecipientScopedStreamEvent(playerIds[i], type, payload);
-  }
+  sendWorldScopedStreamEventImpl(
+    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+    worldId,
+    type,
+    payload,
+    VWORLD_PLAYER_POSITION_TABLE,
+    vwLog,
+  );
 }
 
 /**
@@ -2992,10 +2905,13 @@ function sendWorldScopedStreamEvent(worldId, type, payload) {
  * @param {*} payload
  */
 function sendRecipientScopedStreamEvent(recipientId, type, payload) {
-  if (!recipientId) return;
-  sendVirtualWorldStreamEvent(type, payload, {
-    recipient_id: String(recipientId),
-  });
+  sendRecipientScopedStreamEventImpl(
+    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+    recipientId,
+    type,
+    payload,
+    vwLog,
+  );
 }
 
 /**

@@ -92,6 +92,16 @@ import {
   loadWorldPlayers as loadWorldPlayersImpl,
   saveWorldPlayers as saveWorldPlayersImpl,
 } from "./server/player-snapshots.ts";
+import {
+  createEmptyWorldMods as createEmptyWorldModsImpl,
+  loadWorldHouses as loadWorldHousesImpl,
+  loadWorldMods as loadWorldModsImpl,
+  loadWorldTrees as loadWorldTreesImpl,
+  parseWorldModPayload as parseWorldModPayloadImpl,
+  saveWorldHouses as saveWorldHousesImpl,
+  saveWorldModLayer as saveWorldModLayerImpl,
+  saveWorldTrees as saveWorldTreesImpl,
+} from "./server/world-mod-storage.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -645,30 +655,7 @@ function saveWorldPlayers(worldId, players) {
  * @returns {Record<string, any>}
  */
 function loadWorldTrees(worldId) {
-  var worldMods = loadWorldMods(worldId);
-  /** @type {Record<string, any>} */
-  var trees = {};
-  var objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
-  Object.keys(objectMods).forEach(function (tileKey) {
-    var mod = objectMods[tileKey];
-    var payload =
-      mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
-    if (payload.source_kind !== "tree") return;
-    if (payload.action !== "plant" && payload.action !== "cut") return;
-    trees[tileKey] = {
-      action: String(payload.action),
-      timestamp: isFinite(Number(mod.timestamp))
-        ? Number(mod.timestamp)
-        : Date.now(),
-    };
-    if (payload.action === "plant" && mod.actor_id) {
-      trees[tileKey].planted_by = String(mod.actor_id);
-    }
-    if (payload.action === "cut" && mod.actor_id) {
-      trees[tileKey].cut_by = String(mod.actor_id);
-    }
-  });
-  return trees;
+  return loadWorldTreesImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
 }
 
 /**
@@ -676,40 +663,7 @@ function loadWorldTrees(worldId) {
  * @param {Record<string, any>} trees
  */
 function saveWorldTrees(worldId, trees) {
-  /** @type {Record<string, any>} */
-  var treeMods = {};
-  Object.keys(trees && typeof trees === "object" ? trees : {}).forEach(
-    function (tileKey) {
-      var tree = trees[tileKey];
-      if (!tree || typeof tree !== "object") return;
-      var parts = tileKey.split("_");
-      var row = Number(parts[0]);
-      var col = Number(parts[1]);
-      if (!isFinite(row) || !isFinite(col)) return;
-      var actorId = tree.planted_by || tree.cut_by || null;
-      treeMods[tileKey] = {
-        row: row,
-        col: col,
-        tile_type:
-          tree.action === "plant" ? WORLD_TILE_PINE_TREE : WORLD_TILE_GROUND,
-        actor_id: actorId ? String(actorId) : null,
-        actor_type:
-          actorId && String(actorId).indexOf("npc_") === 0
-            ? "npc"
-            : actorId
-              ? "player"
-              : null,
-        timestamp: isFinite(Number(tree.timestamp))
-          ? Number(tree.timestamp)
-          : Date.now(),
-        payload: {
-          source_kind: "tree",
-          action: String(tree.action || ""),
-        },
-      };
-    },
-  );
-  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "tree", treeMods);
+  saveWorldTreesImpl(worldId, trees, VWORLD_WORLD_MOD_TABLE, vwLog);
 }
 
 /**
@@ -725,24 +679,7 @@ function worldHouseStorageKey(worldId) {
  * @returns {Record<string, any>}
  */
 function loadWorldHouses(worldId) {
-  var worldMods = loadWorldMods(worldId);
-  /** @type {Record<string, any>} */
-  var houses = {};
-  var objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
-  Object.keys(objectMods).forEach(function (tileKey) {
-    var mod = objectMods[tileKey];
-    var payload =
-      mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
-    if (payload.source_kind !== "house") return;
-    houses[tileKey] = {
-      built_by: mod.actor_id ? String(mod.actor_id) : undefined,
-      actor_type: mod.actor_type ? String(mod.actor_type) : undefined,
-      timestamp: isFinite(Number(mod.timestamp))
-        ? Number(mod.timestamp)
-        : Date.now(),
-    };
-  });
-  return houses;
+  return loadWorldHousesImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
 }
 
 /**
@@ -750,50 +687,14 @@ function loadWorldHouses(worldId) {
  * @param {Record<string, any>} houses
  */
 function saveWorldHouses(worldId, houses) {
-  /** @type {Record<string, any>} */
-  var houseMods = {};
-  Object.keys(houses && typeof houses === "object" ? houses : {}).forEach(
-    function (tileKey) {
-      var house = houses[tileKey];
-      if (!house || typeof house !== "object") return;
-      var parts = String(tileKey).split("_");
-      var row = Number(parts[0]);
-      var col = Number(parts[1]);
-      if (
-        !isFinite(row) ||
-        !isFinite(col) ||
-        row < 0 ||
-        row >= ROWS ||
-        col < 0 ||
-        col >= COLS
-      ) {
-        return;
-      }
-      houseMods[String(tileKey)] = {
-        row: row,
-        col: col,
-        tile_type: WORLD_TILE_HOUSE,
-        actor_id: house.built_by ? String(house.built_by) : null,
-        actor_type: house.actor_type ? String(house.actor_type) : null,
-        timestamp: isFinite(Number(house.timestamp))
-          ? Number(house.timestamp)
-          : Date.now(),
-        payload: { source_kind: "house" },
-      };
-    },
-  );
-  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "house", houseMods);
+  saveWorldHousesImpl(worldId, houses, VWORLD_WORLD_MOD_TABLE, vwLog);
 }
 
 /**
  * @returns {Record<string, Record<string, any>>}
  */
 function createEmptyWorldMods() {
-  /** @type {Record<string, Record<string, any>>} */
-  var mods = {};
-  mods[WORLD_MOD_LAYER_TERRAIN] = {};
-  mods[WORLD_MOD_LAYER_OBJECT] = {};
-  return mods;
+  return createEmptyWorldModsImpl();
 }
 
 /**
@@ -801,14 +702,7 @@ function createEmptyWorldMods() {
  * @returns {*}
  */
 function parseWorldModPayload(raw) {
-  if (!raw || typeof raw !== "string") return {};
-  try {
-    var parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (e) {
-    vwLog("world mod payload parse failed", { error: String(e) });
-    return {};
-  }
+  return parseWorldModPayloadImpl(raw, vwLog);
 }
 
 /**
@@ -816,32 +710,7 @@ function parseWorldModPayload(raw) {
  * @returns {Record<string, Record<string, any>>}
  */
 function loadWorldMods(worldId) {
-  var rows = queryWorldRows(
-    VWORLD_WORLD_MOD_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "asc",
-  );
-  var mods = createEmptyWorldMods();
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (!row || !row.tile_key || !row.layer || !row.tile_type) continue;
-    var layer = String(row.layer);
-    if (!mods[layer]) mods[layer] = {};
-    mods[layer][String(row.tile_key)] = {
-      row: Number(row.row),
-      col: Number(row.col),
-      layer: layer,
-      tile_type: String(row.tile_type),
-      actor_id: row.actor_id ? String(row.actor_id) : null,
-      actor_type: row.actor_type ? String(row.actor_type) : null,
-      timestamp: fromStoredWorldTimestamp(row.timestamp),
-      payload: parseWorldModPayload(row.payload_json),
-    };
-  }
-
-  return mods;
+  return loadWorldModsImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
 }
 
 /**
@@ -851,60 +720,14 @@ function loadWorldMods(worldId) {
  * @param {Record<string, any>} entries
  */
 function saveWorldModLayer(worldId, layer, sourceKind, entries) {
-  var rows = queryWorldRows(
+  saveWorldModLayerImpl(
+    worldId,
+    layer,
+    sourceKind,
+    entries,
     VWORLD_WORLD_MOD_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "desc",
+    vwLog,
   );
-  /** @type {Record<string, any>} */
-  var existingByTileKey = {};
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (
-      row &&
-      row.tile_key &&
-      String(row.layer) === String(layer) &&
-      parseWorldModPayload(row.payload_json).source_kind === String(sourceKind)
-    ) {
-      existingByTileKey[String(row.tile_key)] = row;
-    }
-  }
-
-  Object.keys(entries && typeof entries === "object" ? entries : {}).forEach(
-    function (tileKey) {
-      var entry = entries[tileKey];
-      if (!entry || typeof entry !== "object") return;
-      upsertWorldRow(
-        VWORLD_WORLD_MOD_TABLE,
-        ["world_id", "tile_key", "layer"],
-        {
-          world_id: String(worldId),
-          tile_key: String(tileKey),
-          row: Number(entry.row),
-          col: Number(entry.col),
-          layer: String(layer),
-          tile_type: String(entry.tile_type || WORLD_TILE_GROUND),
-          actor_id: entry.actor_id ? String(entry.actor_id) : null,
-          actor_type: entry.actor_type ? String(entry.actor_type) : null,
-          timestamp: toStoredWorldTimestamp(
-            isFinite(Number(entry.timestamp))
-              ? Number(entry.timestamp)
-              : Date.now(),
-          ),
-          payload_json: JSON.stringify(entry.payload || {}),
-        },
-      );
-      delete existingByTileKey[String(tileKey)];
-    },
-  );
-
-  Object.keys(existingByTileKey).forEach(function (tileKey) {
-    var row = existingByTileKey[tileKey];
-    if (!row || !isFinite(Number(row.id))) return;
-    deleteWorldRow(VWORLD_WORLD_MOD_TABLE, Number(row.id));
-  });
 }
 
 /**

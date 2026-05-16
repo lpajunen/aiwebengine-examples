@@ -7,6 +7,7 @@
 // Storage Layer - Helper Functions
 // ============================================
 
+/** @returns {Array<Record<string, any>>} */
 function loadChannels() {
   try {
     const data = sharedStorage.getItem("chat:channels");
@@ -17,6 +18,7 @@ function loadChannels() {
   }
 }
 
+/** @param {Array<Record<string, any>>} channels */
 function saveChannels(channels) {
   try {
     sharedStorage.setItem("chat:channels", JSON.stringify(channels));
@@ -27,6 +29,11 @@ function saveChannels(channels) {
   }
 }
 
+/**
+ * @param {string} channelId
+ * @param {number} [limit]
+ * @returns {Array<Record<string, any>>}
+ */
 function loadMessages(channelId, limit) {
   try {
     const key = "chat:messages:" + channelId;
@@ -46,6 +53,10 @@ function loadMessages(channelId, limit) {
   }
 }
 
+/**
+ * @param {string} channelId
+ * @param {Record<string, any>} message
+ */
 function saveMessage(channelId, message) {
   try {
     const key = "chat:messages:" + channelId;
@@ -66,16 +77,29 @@ function saveMessage(channelId, message) {
   }
 }
 
+/** @param {unknown} error */
 function getErrorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
+
+const CHAT_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
 
 // ============================================
 // GraphQL Query Resolvers
 // ============================================
 
+/** @param {HandlerContext} context */
 function channelsResolver(context) {
-  const req = context.request || {};
+  const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
     // Require authentication
@@ -91,8 +115,9 @@ function channelsResolver(context) {
   }
 }
 
+/** @param {HandlerContext} context */
 function messagesResolver(context) {
-  const req = context.request || {};
+  const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
     // Require authentication
@@ -115,8 +140,9 @@ function messagesResolver(context) {
   }
 }
 
+/** @param {HandlerContext} context */
 function currentUserResolver(context) {
-  const req = context.request || {};
+  const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
     if (!req.auth.isAuthenticated) {
@@ -137,8 +163,9 @@ function currentUserResolver(context) {
 // GraphQL Mutation Resolvers
 // ============================================
 
+/** @param {HandlerContext} context */
 function createChannelResolver(context) {
-  const req = context.request || {};
+  const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
     // Require authentication
@@ -198,8 +225,9 @@ function createChannelResolver(context) {
   }
 }
 
+/** @param {HandlerContext} context */
 function sendMessageResolver(context) {
-  const req = context.request || {};
+  const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
     // Require authentication
@@ -276,9 +304,10 @@ function sendMessageResolver(context) {
 // GraphQL Subscription Resolver
 // ============================================
 
+/** @param {HandlerContext} context */
 function chatUpdatesResolver(context) {
   try {
-    const req = context.request || {};
+    const req = context.request || CHAT_EMPTY_REQUEST;
     const args = context.args || {};
     const queryParams = req.query || {};
     const channelId = args.channelId || queryParams.channelId;
@@ -332,9 +361,10 @@ function chatUpdatesResolver(context) {
 // HTTP Handler - Chat Interface
 // ============================================
 
+/** @param {HandlerContext} context */
 function chatInterfaceHandler(context) {
   try {
-    const req = context.request || {};
+    const req = context.request || CHAT_EMPTY_REQUEST;
     // Require authentication
     if (!req.auth.isAuthenticated) {
       throw new Error("Authentication required");
@@ -904,7 +934,7 @@ function chatInterfaceHandler(context) {
     return ResponseBuilder.html(html);
   } catch (error) {
     // User not authenticated, redirect to login
-    const req = context.request || {};
+    const req = context.request || CHAT_EMPTY_REQUEST;
     const currentPath = encodeURIComponent(req.path || "/chat");
     const loginUrl = "/auth/login?redirect=" + currentPath;
 
@@ -916,6 +946,7 @@ function chatInterfaceHandler(context) {
 // Initialization
 // ============================================
 
+/** @param {HandlerContext} context */
 function init(context) {
   console.log("Initializing chat_app.js at " + new Date().toISOString());
 

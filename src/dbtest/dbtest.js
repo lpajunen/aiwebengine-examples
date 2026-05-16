@@ -3,6 +3,7 @@
 // dbtest.js
 // New script created at 2025-12-14T08:17:31.242Z
 
+/** @param {HandlerContext} context */
 function handler(context) {
   return ResponseBuilder.text("Hello from dbtest.js!");
 }

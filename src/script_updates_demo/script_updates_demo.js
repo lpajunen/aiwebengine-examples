@@ -3,6 +3,7 @@
 // GraphQL Script Updates Demo Page
 // This example demonstrates real-time script updates using GraphQL subscriptions
 
+/** @param {HandlerContext} context */
 function scriptUpdatesDemoPage(context) {
   return ResponseBuilder.html(`
 <!DOCTYPE html>

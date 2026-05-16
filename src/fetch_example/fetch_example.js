@@ -14,6 +14,7 @@ function init() {
 }
 
 // Example 1: Simple GET request
+/** @param {HandlerContext} context */
 function fetchExample(context) {
   const req = context.request;
 
@@ -47,6 +48,7 @@ function fetchExample(context) {
 }
 
 // Example 2: Using secret injection for API keys
+/** @param {HandlerContext} context */
 function fetchWithSecret(context) {
   console.log("Fetching with secret injection");
 
@@ -91,6 +93,7 @@ function fetchWithSecret(context) {
 }
 
 // Example 3: POST request with JSON body
+/** @param {HandlerContext} context */
 function fetchPost(context) {
   const req = context.request;
   console.log("Making POST request");

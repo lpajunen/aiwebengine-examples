@@ -9,6 +9,10 @@
  * GitHub MCP Client wrapper class for easier interaction
  */
 class GitHubMcpClient {
+  /**
+   * @param {string} serverUrl
+   * @param {string} secretIdentifier
+   */
   constructor(serverUrl, secretIdentifier) {
     const clientDataJson = McpClient.constructor(serverUrl, secretIdentifier);
     this._clientData = JSON.parse(clientDataJson);
@@ -19,6 +23,10 @@ class GitHubMcpClient {
     return JSON.parse(toolsJson);
   }
 
+  /**
+   * @param {string} toolName
+   * @param {Record<string, unknown>} args
+   */
   callTool(toolName, args) {
     const resultJson = McpClient._callTool(
       JSON.stringify(this._clientData),

@@ -4,6 +4,7 @@
 // This script demonstrates how to register and use MCP tools
 
 // MCP tool handler for getting current time
+/** @param {HandlerContext} context */
 function getCurrentTimeHandler(context) {
   const args = context.args || {};
   const timezone = args.timezone || "UTC";
@@ -20,6 +21,7 @@ function getCurrentTimeHandler(context) {
 }
 
 // MCP tool handler for calculating simple math operations
+/** @param {HandlerContext} context */
 function calculateHandler(context) {
   const args = context.args || {};
   const operation = args.operation;
@@ -66,6 +68,7 @@ function calculateHandler(context) {
 }
 
 // MCP tool handler for fetching weather information (simulated)
+/** @param {HandlerContext} context */
 function getWeatherHandler(context) {
   const args = context.args || {};
   const location = args.location || "Unknown";
@@ -86,6 +89,7 @@ function getWeatherHandler(context) {
 }
 
 // MCP tool handler for generating a random ID
+/** @param {HandlerContext} context */
 function generateIdHandler(context) {
   const args = context.args || {};
   const prefix = args.prefix || "id";
@@ -105,6 +109,7 @@ function generateIdHandler(context) {
 }
 
 // Initialization function - called when script is loaded or updated
+/** @param {HandlerContext} context */
 function init(context) {
   console.log("Initializing MCP tools demo at " + new Date().toISOString());
 

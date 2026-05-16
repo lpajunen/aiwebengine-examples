@@ -21,6 +21,7 @@ const aphorisms = [
   "I learned that courage was not the absence of fear, but the triumph over it. - Nelson Mandela",
 ];
 
+/** @param {HandlerContext} context */
 function getDailyAphorism(context) {
   try {
     const today = new Date();

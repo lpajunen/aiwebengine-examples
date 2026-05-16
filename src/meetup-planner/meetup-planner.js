@@ -7,6 +7,18 @@
 // Storage Helper Functions
 // ============================================
 
+const MEETUP_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
+/** @returns {Array<Record<string, any>>} */
 function loadMeetups() {
   try {
     const data = sharedStorage.getItem("meetups");
@@ -17,6 +29,7 @@ function loadMeetups() {
   }
 }
 
+/** @param {Array<Record<string, any>>} meetups */
 function saveMeetups(meetups) {
   try {
     sharedStorage.setItem("meetups", JSON.stringify(meetups));
@@ -27,11 +40,16 @@ function saveMeetups(meetups) {
   }
 }
 
+/**
+ * @param {string} id
+ * @returns {Record<string, any> | undefined}
+ */
 function getMeetupById(id) {
   const meetups = loadMeetups();
   return meetups.find((m) => m.id === id);
 }
 
+/** @param {Record<string, any>} meetup */
 function saveMeetup(meetup) {
   const meetups = loadMeetups();
   const index = meetups.findIndex((m) => m.id === meetup.id);
@@ -47,6 +65,7 @@ function saveMeetup(meetup) {
 // HTTP Handlers
 // ============================================
 
+/** @param {HandlerContext} context */
 function meetup_handler(context) {
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -127,8 +146,9 @@ function meetup_handler(context) {
   return ResponseBuilder.html(html);
 }
 
+/** @param {HandlerContext} context */
 function meetup_dashboard_handler(context) {
-  const req = context.request || {};
+  const req = context.request || MEETUP_EMPTY_REQUEST;
 
   // Require authentication
   if (!req.auth || !req.auth.isAuthenticated) {
@@ -140,7 +160,7 @@ function meetup_dashboard_handler(context) {
   const user = req.auth.user;
 
   // Load user's meetup IDs from sharedStorage (personal data with user prefix)
-  let userMeetupIds = [];
+  let userMeetupIds = /** @type {string[]} */ ([]);
   try {
     const userKey = "personal_" + user.id + "_meetups";
     const stored = sharedStorage.getItem(userKey);
@@ -155,7 +175,9 @@ function meetup_dashboard_handler(context) {
 
   const meetupsHtml = userMeetups
     .map((meetup) => {
-      const members = Object.values(meetup.members || {});
+      const members = /** @type {Array<Record<string, any>>} */ (
+        Object.values(meetup.members || {})
+      );
       const agreeCount = members.filter((m) => m.response === "agree").length;
       const totalMembers = members.length;
 
@@ -356,8 +378,9 @@ function meetup_dashboard_handler(context) {
   return ResponseBuilder.html(html);
 }
 
+/** @param {HandlerContext} context */
 function create_meetup_handler(context) {
-  const req = context.request || {};
+  const req = context.request || MEETUP_EMPTY_REQUEST;
 
   if (!req.auth || !req.auth.isAuthenticated) {
     return ResponseBuilder.error(401, "Unauthorized");
@@ -415,8 +438,9 @@ function create_meetup_handler(context) {
   }
 }
 
+/** @param {HandlerContext} context */
 function join_meetup_handler(context) {
-  const req = context.request || {};
+  const req = context.request || MEETUP_EMPTY_REQUEST;
   const path = req.path || "";
   const meetupId = path.split("/meetup/join/")[1];
 
@@ -463,7 +487,9 @@ function join_meetup_handler(context) {
   }
 
   const member = meetup.members[user.id];
-  const members = Object.values(meetup.members || {});
+  const members = /** @type {Array<Record<string, any>>} */ (
+    Object.values(meetup.members || {})
+  );
   const agreeCount = members.filter((m) => m.response === "agree").length;
   const disagreeCount = members.filter((m) => m.response === "disagree").length;
   const pendingCount = members.filter((m) => m.response === "pending").length;
@@ -684,8 +710,9 @@ function join_meetup_handler(context) {
   return ResponseBuilder.html(html);
 }
 
+/** @param {HandlerContext} context */
 function update_response_handler(context) {
-  const req = context.request || {};
+  const req = context.request || MEETUP_EMPTY_REQUEST;
   const path = req.path || "";
   const meetupId = path.split("/meetup/")[1]?.split("/response")[0];
 

@@ -22,6 +22,7 @@ const bingoItems = [
   "FREE SPACE",
 ];
 
+/** @param {HandlerContext} context */
 function getBingoPage(context) {
   const html = `
 <!DOCTYPE html>

@@ -882,6 +882,7 @@ function hello() {
 </html>`,
 };
 
+/** @param {HandlerContext} context */
 function init(context) {
   // Register routes for the blog
   routeRegistry.registerRoute("/blog", "blogRouter", "GET");
@@ -914,7 +915,7 @@ function init(context) {
   }
 
   // No existing posts, add bootstrap example posts
-  const examplePosts = {
+  const examplePosts = /** @type {Record<string, string>} */ ({
     welcome: `# Welcome to My Blog
 
 This is my **first blog post** using the new markdown conversion feature!
@@ -994,10 +995,10 @@ function fibonacci(n) {
 
 > This is a blockquote
 > It can span multiple lines`,
-  };
+  });
 
   // Store example posts and initialize index
-  const postSlugs = [];
+  const postSlugs = /** @type {string[]} */ ([]);
   for (const slug in examplePosts) {
     sharedStorage.setItem("blog:" + slug, examplePosts[slug]);
     postSlugs.push(slug);
@@ -1009,6 +1010,7 @@ function fibonacci(n) {
   console.log("Blog initialized with example posts");
 }
 
+/** @param {HandlerContext} context */
 function blogRouter(context) {
   const req = context.request;
 
@@ -1048,16 +1050,17 @@ function blogRouter(context) {
   return ResponseBuilder.error(404, "Not found");
 }
 
+/** @param {HandlerContext} context */
 function listPosts(context) {
   const req = context.request;
 
   // Get all blog posts from storage using the index
-  const posts = [];
+  const posts = /** @type {Array<{slug: string, title: string}>} */ ([]);
 
   try {
     // Get the index of all post slugs
     const indexJson = sharedStorage.getItem("blog:index");
-    let postSlugs = [];
+    let postSlugs = /** @type {string[]} */ ([]);
 
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
@@ -1097,6 +1100,10 @@ function listPosts(context) {
   return ResponseBuilder.html(html);
 }
 
+/**
+ * @param {HandlerContext} context
+ * @param {string} slug
+ */
 function showPost(context, slug) {
   const req = context.request;
 
@@ -1192,6 +1199,7 @@ function showPost(context, slug) {
   };
 }
 
+/** @param {HandlerContext} context */
 function newPostForm(context) {
   const req = context.request;
 
@@ -1227,6 +1235,10 @@ function newPostForm(context) {
   };
 }
 
+/**
+ * @param {HandlerContext} context
+ * @param {string} slug
+ */
 function editPostForm(context, slug) {
   const req = context.request;
 
@@ -1289,6 +1301,7 @@ function editPostForm(context, slug) {
   };
 }
 
+/** @param {HandlerContext} context */
 function createPost(context) {
   const req = context.request;
 
@@ -1405,7 +1418,7 @@ function createPost(context) {
   // Update the index
   try {
     const indexJson = sharedStorage.getItem("blog:index");
-    let postSlugs = [];
+    let postSlugs = /** @type {string[]} */ ([]);
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
     }
@@ -1444,6 +1457,7 @@ function createPost(context) {
   };
 }
 
+/** @param {HandlerContext} context */
 function updatePost(context) {
   const req = context.request;
 
@@ -1584,7 +1598,7 @@ function updatePost(context) {
   try {
     // Get current index
     const indexJson = sharedStorage.getItem("blog:index");
-    let postSlugs = [];
+    let postSlugs = /** @type {string[]} */ ([]);
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
     }
@@ -1662,6 +1676,7 @@ function updatePost(context) {
   }
 }
 
+/** @param {HandlerContext} context */
 function deletePost(context) {
   const req = context.request;
 

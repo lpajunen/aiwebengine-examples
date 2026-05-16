@@ -3,7 +3,17 @@
 // MCP (Model Context Protocol) Prompts Demo
 // This script demonstrates how to register MCP prompts for common development tasks
 
+/**
+ * @typedef {{
+ *   mode?: string,
+ *   completingArgument?: string,
+ *   partialValue?: string,
+ *   arguments?: Record<string, string>
+ * }} PromptHandlerContext
+ */
+
 // Initialization function - called when script is loaded or updated
+/** @param {unknown} context */
 function init(context) {
   console.log("Initializing MCP prompts demo at " + new Date().toISOString());
 
@@ -66,6 +76,7 @@ function init(context) {
 }
 
 // Handler for create_rest_endpoint prompt
+/** @param {PromptHandlerContext} context */
 function create_rest_endpoint(context) {
   // Check if we're in completion mode
   if (context.mode === "completion") {
@@ -177,6 +188,7 @@ console.log("Registered ${method} ${path}");
 }
 
 // Handler for add_graphql_query prompt
+/** @param {PromptHandlerContext} context */
 function add_graphql_query(context) {
   // Check if we're in completion mode
   if (context.mode === "completion") {

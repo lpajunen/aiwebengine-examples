@@ -18,6 +18,7 @@ function getCallCount() {
   return parseInt(sharedStorage.getItem("callCount") || "0", 10);
 }
 
+/** @param {string} currentPage */
 function getNavigationLinks(currentPage) {
   const links = [
     { title: "English", url: "/jooss", active: currentPage === "english" },
@@ -68,6 +69,7 @@ function getNavigationLinks(currentPage) {
   return navHtml;
 }
 
+/** @param {HttpRequest} req */
 function handler(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("english");
@@ -83,6 +85,7 @@ function handler(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function finnishGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("finnish");
@@ -98,6 +101,7 @@ function finnishGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function swedishGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("swedish");
@@ -113,6 +117,7 @@ function swedishGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function germanGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("german");
@@ -128,6 +133,7 @@ function germanGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function italianGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("italian");
@@ -143,6 +149,7 @@ function italianGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function spanishGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("spanish");
@@ -158,6 +165,7 @@ function spanishGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function polishGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("polish");
@@ -173,6 +181,7 @@ function polishGreeting(req) {
   };
 }
 
+/** @param {HttpRequest} req */
 function greekGreeting(req) {
   const count = incrementCounter();
   const navHtml = getNavigationLinks("greek");

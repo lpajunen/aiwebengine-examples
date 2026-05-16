@@ -206,6 +206,7 @@ function feedback_form_handler(context) {
   return ResponseBuilder.html(html);
 }
 
+/** @param {HandlerContext} context */
 function feedback_submit_handler(context) {
   const req = context.request;
 

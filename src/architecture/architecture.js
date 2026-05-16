@@ -3,6 +3,7 @@
 // Architecture SVG server
 // Serves the architecture diagram as SVG
 
+/** @param {HandlerContext} context */
 function serveArchitecture(context) {
   try {
     const svg =

@@ -3,13 +3,30 @@
 // GraphQL Subscription Example with Streaming
 // This script shows how to create GraphQL subscriptions that work with Server-Sent Events
 
+const GRAPHQL_SUBSCRIPTION_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
+/**
+ * @param {string} text
+ * @param {string} [type]
+ * @returns {{id: string, text: string, timestamp: string, sender: string, type?: string}}
+ */
 function broadcastLiveMessage(text, type) {
-  const payload = {
-    id: Math.random().toString(36).substr(2, 9),
-    text,
-    timestamp: new Date().toISOString(),
-    sender: "system",
-  };
+  const payload =
+    /** @type {{id: string, text: string, timestamp: string, sender: string, type?: string}} */ ({
+      id: Math.random().toString(36).substr(2, 9),
+      text,
+      timestamp: new Date().toISOString(),
+      sender: "system",
+    });
 
   if (type) {
     payload.type = type;
@@ -24,8 +41,9 @@ function broadcastLiveMessage(text, type) {
 }
 
 // The subscription resolver - called when a client subscribes
+/** @param {HandlerContext} context */
 function liveMessagesResolver(context) {
-  const req = context.request || {};
+  const req = context.request || GRAPHQL_SUBSCRIPTION_EMPTY_REQUEST;
   console.log("Client subscribed to liveMessages from:", req.path);
 
   // Get user information
@@ -49,6 +67,7 @@ function liveMessagesResolver(context) {
 }
 
 // The mutation resolver - triggers subscription messages
+/** @param {HandlerContext} context */
 function sendMessageResolver(context) {
   const args = context.args || {};
   const message = args.text;
@@ -65,8 +84,9 @@ function sendMessageResolver(context) {
 // Optional: You can also use the lower-level API
 // routeRegistry.sendStreamMessage("/graphql/subscription/liveMessages", JSON.stringify(messageData));
 
+/** @param {HandlerContext} context */
 function triggerMessageHandler(context) {
-  const req = context.request || {};
+  const req = context.request || GRAPHQL_SUBSCRIPTION_EMPTY_REQUEST;
   const messageBody = req.body;
   const message =
     (typeof messageBody === "string" && messageBody.trim()) ||
@@ -81,6 +101,7 @@ function triggerMessageHandler(context) {
   });
 }
 
+/** @param {HandlerContext} context */
 function subscriptionDemoPage(context) {
   return ResponseBuilder.html(`
         <!DOCTYPE html>

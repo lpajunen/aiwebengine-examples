@@ -28,6 +28,7 @@ const jokes = [
   "Why did the bicycle fall over? Because it was two-tired!",
 ];
 
+/** @param {string} joke */
 function getJokeHash(joke) {
   let hash = 0;
   for (let i = 0; i < joke.length; i++) {
@@ -38,6 +39,10 @@ function getJokeHash(joke) {
   return "joke_" + Math.abs(hash);
 }
 
+/**
+ * @param {string} joke
+ * @returns {{thumbsUp: number, thumbsDown: number}}
+ */
 function getFeedbackForJoke(joke) {
   const jokeId = getJokeHash(joke);
   const stored = sharedStorage.getItem(jokeId);
@@ -47,15 +52,21 @@ function getFeedbackForJoke(joke) {
   return { thumbsUp: 0, thumbsDown: 0 };
 }
 
+/**
+ * @param {string} joke
+ * @param {{thumbsUp: number, thumbsDown: number}} data
+ */
 function saveFeedbackForJoke(joke, data) {
   const jokeId = getJokeHash(joke);
   sharedStorage.setItem(jokeId, JSON.stringify(data));
 }
 
+/** @returns {string} */
 function getRandomJoke() {
   return jokes[Math.floor(Math.random() * jokes.length)];
 }
 
+/** @param {HttpRequest} req */
 function serveJoke(req) {
   try {
     const randomJoke = getRandomJoke();
@@ -90,6 +101,7 @@ function serveJoke(req) {
   }
 }
 
+/** @param {HttpRequest} req */
 function handleFeedback(req) {
   try {
     if (req.method === "POST") {
@@ -160,6 +172,10 @@ function handleFeedback(req) {
   }
 }
 
+/**
+ * @param {Record<string, unknown>} args
+ * @returns {{success: boolean, joke: string | null, thumbsUp?: number, thumbsDown?: number, error?: string}}
+ */
 function resolveGetJoke(args) {
   try {
     const joke = getRandomJoke();

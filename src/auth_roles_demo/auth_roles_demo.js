@@ -10,8 +10,20 @@
  * Properties: isAuthenticated, isAdmin, isEditor, userId, userEmail, userName, provider
  */
 
+const AUTH_ROLES_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
+/** @param {HandlerContext} context */
 function handleRequest(context) {
-  const request = context.request || {};
+  const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
 
   // Check if user is authenticated
   if (!request.auth.isAuthenticated) {
@@ -85,8 +97,9 @@ function handleRequest(context) {
 /**
  * Example: Editor-only endpoint
  */
+/** @param {HandlerContext} context */
 function editorOnly(context) {
-  const request = context.request || {};
+  const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
 
   // Check authentication
   if (!request.auth.isAuthenticated) {
@@ -116,8 +129,9 @@ function editorOnly(context) {
 /**
  * Example: Admin-only endpoint
  */
+/** @param {HandlerContext} context */
 function adminOnly(context) {
-  const request = context.request || {};
+  const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
 
   // Check authentication
   if (!request.auth.isAuthenticated) {

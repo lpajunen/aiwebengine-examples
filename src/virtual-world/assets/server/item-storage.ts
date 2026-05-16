@@ -18,6 +18,25 @@ type ResolvePortalDestinationWorldType = (item?: {
   destination_world_id?: string;
   destination_world_type?: string;
 }) => string | undefined;
+type EnsureWorldItemsDeps = {
+  loadWorldItemMeta: (worldId: string) => {
+    next_item_seq: number;
+    seeded: number;
+    updated_ts: number;
+  };
+  getEffectiveMap: (worldId: string) => number[][];
+  loadWorldItems: (worldId: string) => Record<string, any[]>;
+  nextWorldItemId: (worldId: string) => number;
+  saveWorldItems: (worldId: string, items: Record<string, any[]>) => void;
+  saveWorldItemMeta: (
+    worldId: string,
+    meta: { next_item_seq: number; seeded: number; updated_ts?: number },
+  ) => void;
+  WORLD_ITEM_SPAWN_COUNT: number;
+  ROWS: number;
+  COLS: number;
+  ITEM_TYPES: readonly string[];
+};
 
 export function loadPlayerInventory(
   userId: string,
@@ -300,6 +319,43 @@ export function nextWorldItemId(
     log,
   );
   return nextSeq;
+}
+
+export function ensureWorldItems(
+  worldId: string,
+  deps: EnsureWorldItemsDeps,
+): void {
+  const meta = deps.loadWorldItemMeta(worldId);
+  if (meta.seeded === 1) return;
+
+  const map = deps.getEffectiveMap(worldId);
+  const items = deps.loadWorldItems(worldId);
+  for (let i = 0; i < deps.WORLD_ITEM_SPAWN_COUNT; i++) {
+    let attempts = 0;
+    while (attempts < 1000) {
+      attempts++;
+      const row = 1 + Math.floor(Math.random() * (deps.ROWS - 2));
+      const col = 1 + Math.floor(Math.random() * (deps.COLS - 2));
+      if (map[row][col] !== 0) continue;
+      const tileKey = row + "_" + col;
+      if (!items[tileKey]) items[tileKey] = [];
+      items[tileKey].push({
+        id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
+        type: deps.ITEM_TYPES[
+          Math.floor(Math.random() * deps.ITEM_TYPES.length)
+        ],
+        created_at: Date.now(),
+      });
+      break;
+    }
+  }
+
+  deps.saveWorldItems(worldId, items);
+  deps.saveWorldItemMeta(worldId, {
+    next_item_seq: deps.loadWorldItemMeta(worldId).next_item_seq,
+    seeded: 1,
+    updated_ts: Date.now(),
+  });
 }
 
 export function flattenWorldItems(

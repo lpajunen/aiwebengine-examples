@@ -7,6 +7,32 @@ import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
+type EffectiveMapDeps = {
+  generateMap: (worldId: string) => number[][];
+  applyWorldModsToMap: (
+    map: number[][],
+    worldMods: Record<string, any>,
+  ) => number[][];
+  loadWorldMods: (worldId: string) => Record<string, any>;
+  applyOakReservation: (map: number[][], worldId: string) => void;
+};
+
+type EnsureWorldNPCsDeps = {
+  loadWorldNPCs: (worldId: string) => Record<string, any>;
+  saveWorldNPCs: (worldId: string, npcs: Record<string, any>) => void;
+  normalizeInventory: (inventory: any) => {
+    left_hand: any;
+    right_hand: any;
+    inventory: any[];
+  };
+  getEffectiveMap: (worldId: string) => number[][];
+  loadWorldPlayers: (worldId: string) => Record<string, any>;
+  NPC_MIN_COUNT: number;
+  NPC_MAX_COUNT: number;
+  ROWS: number;
+  COLS: number;
+};
+
 export function getOrCreatePlayerWorld(
   userId: string,
   getPlayerWorld: (userId: string) => string,
@@ -89,4 +115,108 @@ export function createWorldOfType(
   const worldId = createWorldId();
   saveWorldType(worldId, normalizedType);
   return { world_id: worldId, world_type: normalizedType };
+}
+
+export function getEffectiveMap(
+  worldId: string,
+  deps: EffectiveMapDeps,
+): number[][] {
+  const map = deps.generateMap(worldId);
+  deps.applyWorldModsToMap(map, deps.loadWorldMods(worldId));
+  deps.applyOakReservation(map, worldId);
+  return map;
+}
+
+export function ensureWorldNPCs(
+  worldId: string,
+  deps: EnsureWorldNPCsDeps,
+): Record<string, any> {
+  const existing = deps.loadWorldNPCs(worldId);
+  if (existing && Object.keys(existing).length > 0) {
+    let hasNormalizationChanges = false;
+    Object.keys(existing).forEach((npcId) => {
+      const npc = existing[npcId];
+      if (!npc || typeof npc !== "object") {
+        existing[npcId] = {
+          row: 1,
+          col: 1,
+          seq: 0,
+          rotation: 0,
+          state: "idle",
+          ts: Date.now(),
+          left_hand: null,
+          right_hand: null,
+          inventory: [],
+        };
+        hasNormalizationChanges = true;
+        return;
+      }
+
+      const inventory = deps.normalizeInventory(npc);
+      if (
+        npc.left_hand !== inventory.left_hand ||
+        npc.right_hand !== inventory.right_hand ||
+        !Array.isArray(npc.inventory)
+      ) {
+        npc.left_hand = inventory.left_hand;
+        npc.right_hand = inventory.right_hand;
+        npc.inventory = inventory.inventory;
+        hasNormalizationChanges = true;
+      }
+    });
+
+    if (hasNormalizationChanges) {
+      deps.saveWorldNPCs(worldId, existing);
+    }
+    return existing;
+  }
+
+  const map = deps.getEffectiveMap(worldId);
+  const players = deps.loadWorldPlayers(worldId);
+  const occupied: Record<string, boolean> = {};
+  Object.keys(players).forEach((playerId) => {
+    const player = players[playerId];
+    if (
+      !player ||
+      !isFinite(Number(player.row)) ||
+      !isFinite(Number(player.col))
+    ) {
+      return;
+    }
+    occupied[player.row + "_" + player.col] = true;
+  });
+
+  const targetCount =
+    deps.NPC_MIN_COUNT +
+    Math.floor(Math.random() * (deps.NPC_MAX_COUNT - deps.NPC_MIN_COUNT + 1));
+  const npcs: Record<string, any> = {};
+  let attempts = 0;
+  const maxAttempts = 4000;
+
+  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
+    attempts++;
+    const row = 1 + Math.floor(Math.random() * (deps.ROWS - 2));
+    const col = 1 + Math.floor(Math.random() * (deps.COLS - 2));
+    const tileKey = row + "_" + col;
+    if (map[row][col] !== 0 || occupied[tileKey]) {
+      continue;
+    }
+    occupied[tileKey] = true;
+    const index = Object.keys(npcs).length + 1;
+    const npcId = "npc_" + worldId + "_" + index;
+    npcs[npcId] = {
+      row,
+      col,
+      seq: 0,
+      rotation: 0,
+      state: "idle",
+      ts: Date.now(),
+      left_hand: null,
+      right_hand: null,
+      inventory: [],
+    };
+  }
+
+  deps.saveWorldNPCs(worldId, npcs);
+  return npcs;
 }

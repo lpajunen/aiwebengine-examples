@@ -78,3 +78,31 @@ export function sendWorldScopedStreamEvent(
     );
   }
 }
+
+export function broadcastItemChange(
+  worldId: string,
+  actorType: string,
+  actorId: string,
+  action: string,
+  row: number,
+  col: number,
+  items: any[],
+  sendWorldScopedStreamEvent: (
+    worldId: string,
+    type: string,
+    payload: unknown,
+  ) => void,
+): void {
+  sendWorldScopedStreamEvent(String(worldId), "item_changed", {
+    actor_type: actorType,
+    actor_id: actorId,
+    action: action,
+    row: row,
+    col: col,
+    items: Array.isArray(items)
+      ? items.map(function (item) {
+          return { id: item.id, type: item.type };
+        })
+      : [],
+  });
+}

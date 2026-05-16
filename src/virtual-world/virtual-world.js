@@ -4,7 +4,6 @@ import {
   canInventoryUseTreeAction,
   canTileItemsUseTreeAction,
   createWorldId,
-  EXTRA_ITEM_TYPES,
   getAllKnownItemTypes,
   getInventoryTreeActions,
   getNPCDisplayName,
@@ -17,45 +16,19 @@ import {
   applyOakReservation,
   canonicalTreeAction,
   createEmptyInventory,
-  getDefaultWorldTypeForWorldId,
   getOakClearingTiles,
-  getWorldBoundaryTileName,
-  getWorldFloorTileName,
-  getWorldTileDef,
-  getWorldWallTileName,
   isOakCenterTile,
   isOakClearingTile,
   isOakWorld,
-  isValidItem,
   isWorldTileWalkable,
   normalizeInventory,
   normalizeWorldType,
-  PORTAL_BUILD_ACTIONS,
   TREE_ACTION_BY_ITEM_TYPE,
-  portalBuildActionForWorldType,
-  toStoredWorldTimestamp,
-  fromStoredWorldTimestamp,
   WORLD_MOD_LAYER_OBJECT,
   WORLD_MOD_LAYER_TERRAIN,
-  WORLD_TILE_CAVE_FLOOR,
   WORLD_TILE_DEFS,
-  WORLD_TILE_GROUND,
-  WORLD_TILE_HOUSE,
-  WORLD_TILE_LAKE,
-  WORLD_TILE_MOUNTAIN,
   WORLD_TILE_NAME_BY_VALUE,
-  WORLD_TILE_OCEAN,
-  WORLD_TILE_PINE_TREE,
-  WORLD_TILE_RIVER,
-  WORLD_TILE_ROCK,
-  WORLD_TILE_SAND,
-  WORLD_TILE_SPRUCE_THICKET,
-  WORLD_TILE_WOOD_FLOOR,
-  WORLD_TYPE_BUILDING,
-  WORLD_TYPE_CAVE,
   WORLD_TYPE_FOREST,
-  WORLD_TYPE_ISLAND,
-  WORLD_TYPES,
   worldTileValueForName,
   worldTypeForPortalBuildAction,
 } from "./server/world-domain.ts";
@@ -103,6 +76,7 @@ import {
   saveWorldTrees as saveWorldTreesImpl,
 } from "./server/world-mod-storage.ts";
 import {
+  broadcastItemChange as broadcastItemChangeImpl,
   sendRecipientScopedStreamEvent as sendRecipientScopedStreamEventImpl,
   sendVirtualWorldStreamEvent as sendVirtualWorldStreamEventImpl,
   sendWorldScopedStreamEvent as sendWorldScopedStreamEventImpl,
@@ -118,6 +92,7 @@ import {
 import {
   deleteWorldItemById as deleteWorldItemByIdImpl,
   deleteWorldItems as deleteWorldItemsImpl,
+  ensureWorldItems as ensureWorldItemsImpl,
   flattenWorldItems as flattenWorldItemsImpl,
   loadPlayerInventory as loadPlayerInventoryImpl,
   loadWorldItemMeta as loadWorldItemMetaImpl,
@@ -139,6 +114,8 @@ import {
 } from "./server/world-switch.ts";
 import {
   createWorldOfType as createWorldOfTypeImpl,
+  ensureWorldNPCs as ensureWorldNPCsImpl,
+  getEffectiveMap as getEffectiveMapImpl,
   getOrCreatePlayerWorld as getOrCreatePlayerWorldImpl,
   getWorldType as getWorldTypeImpl,
   resolvePortalDestinationWorldType as resolvePortalDestinationWorldTypeImpl,
@@ -164,6 +141,23 @@ import {
   postWorldChatForUser as postWorldChatForUserImpl,
   setNicknameForUser as setNicknameForUserImpl,
 } from "./server/http-handler-helpers.ts";
+import {
+  getAvailableWorldActions as getAvailableWorldActionsImpl,
+  getCurrentWorldStateForUser as getCurrentWorldStateForUserImpl,
+  getMoveOptions as getMoveOptionsImpl,
+  getTargetTileFromRotation as getTargetTileFromRotationImpl,
+  normalizeMoveDirection as normalizeMoveDirectionImpl,
+  rotationForDirection as rotationForDirectionImpl,
+  worldTileNameForValue as worldTileNameForValueImpl,
+} from "./server/current-world-state.ts";
+import { movePlayerForUser as movePlayerForUserImpl } from "./server/move-player.ts";
+import {
+  buildVirtualWorldPageState as buildVirtualWorldPageStateImpl,
+  ensureStarterKit as ensureStarterKitImpl,
+  escapeHtml as escapeHtmlImpl,
+  getDefaultSpawnPosition as getDefaultSpawnPositionImpl,
+  renderVirtualWorldPageHtml as renderVirtualWorldPageHtmlImpl,
+} from "./server/page-bootstrap.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -236,57 +230,16 @@ var npcTickOwnerId =
  * @returns {{row: number, col: number, seq: number, rotation: number}}
  */
 function getDefaultSpawnPosition(worldId, userId) {
-  if (!isOakWorld(worldId)) {
-    return { row: 1, col: 1, seq: 0, rotation: 0 };
-  }
-
-  var tiles = getOakClearingTiles(worldId);
-  if (tiles.length === 0) {
-    return {
-      row: OAK_CENTER_ROW + 1,
-      col: OAK_CENTER_COL,
-      seq: 0,
-      rotation: 0,
-    };
-  }
-
-  var map = getEffectiveMap(String(worldId));
-  var players = loadWorldPlayers(String(worldId));
-  /** @type {Record<string, boolean>} */
-  var occupied = {};
-  for (var playerId in players) {
-    var player = players[playerId];
-    if (!player) continue;
-    occupied[Number(player.row) + "_" + Number(player.col)] = true;
-  }
-
-  var startIndex = userId ? hashString(userId) % tiles.length : 0;
-  var fallbackTile = null;
-  for (var i = 0; i < tiles.length; i++) {
-    var tile = tiles[(startIndex + i) % tiles.length];
-    if (
-      !tile ||
-      !map[tile.row] ||
-      !isWorldTileWalkable(map[tile.row][tile.col])
-    ) {
-      continue;
-    }
-    if (!fallbackTile) fallbackTile = tile;
-    if (!occupied[tile.row + "_" + tile.col]) {
-      return { row: tile.row, col: tile.col, seq: 0, rotation: 0 };
-    }
-  }
-
-  if (fallbackTile) {
-    return {
-      row: fallbackTile.row,
-      col: fallbackTile.col,
-      seq: 0,
-      rotation: 0,
-    };
-  }
-
-  return { row: OAK_CENTER_ROW + 1, col: OAK_CENTER_COL, seq: 0, rotation: 0 };
+  return getDefaultSpawnPositionImpl(worldId, userId, {
+    isOakWorld: isOakWorld,
+    getOakClearingTiles: getOakClearingTiles,
+    OAK_CENTER_ROW: OAK_CENTER_ROW,
+    OAK_CENTER_COL: OAK_CENTER_COL,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldPlayers: loadWorldPlayers,
+    hashString: hashString,
+    isWorldTileWalkable: isWorldTileWalkable,
+  });
 }
 
 /**
@@ -494,11 +447,7 @@ function createWorldOfType(worldType) {
  * @returns {string}
  */
 function escapeHtml(value) {
-  return String(value || "").replace(/[<>&]/g, function (c) {
-    if (c === "<") return "&lt;";
-    if (c === ">") return "&gt;";
-    return "&amp;";
-  });
+  return escapeHtmlImpl(value);
 }
 
 /**
@@ -511,208 +460,35 @@ function getVirtualWorldPage(context) {
       "/auth/login?redirect=" + encodeURIComponent("/virtual-world/play"),
     );
   }
-  const userId = req.auth.userId;
-  const authName = req.auth.userName || "";
-
-  // ── Server-side state ─────────────────────────────────────────────────────
-  const worldId = getOrCreatePlayerWorld(userId);
-  markNPCWorldActive(worldId);
-  ensureStarterKit(userId);
-  const map = generateMap(worldId);
-  const worldMods = loadWorldMods(worldId);
-  const treeMods = loadWorldTrees(worldId);
-  const houseMods = loadWorldHouses(worldId);
-  ensureWorldItems(worldId);
-  const worldItems = loadWorldItems(worldId);
-  const playerInventory = loadPlayerInventory(userId);
-  const npcs = getWorldNPCSnapshot(worldId);
-  const savedPos = loadPlayerPosition(userId);
-  const hasSavedPos = savedPos && savedPos.world_id === String(worldId);
-  const initialPos = hasSavedPos
-    ? savedPos
-    : getDefaultSpawnPosition(worldId, userId);
-  if (!hasSavedPos) {
-    savePlayerPosition(userId, worldId, {
-      row: initialPos.row,
-      col: initialPos.col,
-      seq: initialPos.seq || 0,
-      rotation: Number.isFinite(Number(initialPos.rotation))
-        ? Number(initialPos.rotation)
-        : 0,
-      ts: Date.now(),
-    });
-  }
-  const initRow = initialPos.row;
-  const initCol = initialPos.col;
-  const initSeq = initialPos.seq || 0;
-  const initRotation = Number.isFinite(Number(initialPos.rotation))
-    ? Number(initialPos.rotation)
-    : 0;
-  let playerNick = loadPlayerNick(userId);
-  if (!playerNick && authName) {
-    savePlayerNick(userId, authName);
-    playerNick = authName;
-  }
-  // Register presence NOW so the loading player appears in the snapshot they receive
-  // and in other players' next poll.  Session ID is not yet known (it's client-generated),
-  // so pass ""; the first heartbeat will claim the session and preserve login_at.
-  updateOnlinePresence(userId, worldId, "");
-  const onlinePlayers = buildOnlinePlayersSnapshot();
-  const initialChat = loadWorldChat(worldId).slice(-50);
-  const initialDmIndex = loadDMIndex(userId);
-  const worldFlavorText = getWorldFlavorText(worldId);
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Virtual World</title>
-  <link rel="stylesheet" href="/virtual-world/styles.css">
-</head>
-<body class="game">
-  <div class="hud" id="hud-pos">
-    <strong>Virtual World</strong>
-    <div style="margin:4px 0 6px;color:#d8e7c2;font-style:italic;max-width:220px;line-height:1.35;">${escapeHtml(worldFlavorText)}</div>
-    <span id="hud-nick-row"><span id="nick-display">${escapeHtml(playerNick || authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" title="Rename">✏️</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" title="Save">✓</button><button onclick="cancelNickEdit()" title="Cancel">✗</button></span></span><br>
-    World: ${worldId}<br>
-    Position: <span id="pos-col">${initCol}</span>, <span id="pos-row">${initRow}</span><br>
-    L: <span id="held-left">-</span> | R: <span id="held-right">-</span>
-  </div>
-
-  <div class="hud" id="hud-legend">
-    <strong>Legend</strong>
-    <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> Forest Floor</div>
-    <div class="leg"><div class="leg-box" style="background:#355c34;"></div> Spruce Thicket</div>
-    <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> Pine Tree</div>
-    <div class="leg"><div class="leg-box" style="background:#4f91c9;"></div> Water</div>
-    <div class="leg"><div class="leg-box" style="background:#7f8892;"></div> Rock / Mountain</div>
-    <div class="leg" id="legend-you"><div class="leg-box" style="background:#2980b9;"></div> You</div>
-  </div>
-
-  <div class="hud" id="hud-keys">
-    Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> &nbsp;or&nbsp; <kbd>&uarr;</kbd><kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>
-    &nbsp;&nbsp;|&nbsp;&nbsp; Camera: <kbd>drag</kbd> to orbit &nbsp; <kbd>scroll</kbd> to zoom
-  </div>
-
-  <div class="hud" id="hud-auth-status" aria-live="polite"></div>
-
-  <div class="hud" id="hud-cheat-toast" aria-live="polite"></div>
-
-  <div class="hud" id="hud-tree-actions">
-    <button id="btn-use" onclick="useItem()">Use</button>
-    <button id="btn-pick" onclick="pickItemsOnTile()">📦 Pick</button>
-    <button id="btn-items" onclick="toggleInventoryPanel()">🎒 Items</button>
-    <button id="btn-players" onclick="togglePlayersPanel()">👥 Players</button>
-    <button id="btn-chat" onclick="toggleChatPanel()">💬 Chat<span class="unread-badge" id="chat-unread-badge"></span></button>
-  </div>
-
-  <div class="hud" id="hud-use-picker">
-    <div class="panel-header">
-      <span class="panel-title">Choose Action</span>
-      <button class="panel-close" onclick="closeUsePicker()" title="Close">×</button>
-    </div>
-    <div id="use-picker-actions"></div>
-  </div>
-
-  <div class="hud" id="hud-inventory-panel">
-    <div class="panel-header">
-      <span class="panel-title">Inventory</span>
-      <button class="panel-close" onclick="closeInventoryPanel()" title="Close">×</button>
-    </div>
-    <div class="inv-hands">
-      <div class="inv-hand" id="inv-left-hand"></div>
-      <div class="inv-hand" id="inv-right-hand"></div>
-    </div>
-    <div id="inv-list"></div>
-    <div id="inv-footer">
-      <span id="inv-count">0 items</span>
-    </div>
-  </div>
-
-  <div class="hud" id="hud-tile-detail" aria-live="polite">
-    <div class="panel-header">
-      <span class="panel-title" id="tile-detail-title">Square (0, 0)</span>
-      <button class="panel-close" onclick="closeTileDetail()" title="Close">×</button>
-    </div>
-    <div id="tile-detail-body"></div>
-  </div>
-
-  <div class="hud" id="hud-players-panel">
-    <div class="panel-header">
-      <span class="panel-title">Players Online</span>
-      <button class="panel-close" onclick="closePlayersPanel()" title="Close">×</button>
-    </div>
-    <div id="players-list-wrap">
-      <table class="players-table">
-        <thead><tr>
-          <th>Name</th><th>World</th><th>Online since</th><th>Last active</th><th></th>
-        </tr></thead>
-        <tbody id="players-table-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="hud" id="hud-chat-panel">
-    <div class="panel-header">
-      <span class="panel-title" id="chat-panel-title">Chat</span>
-      <button class="panel-close" onclick="closeChatPanel()" title="Close">×</button>
-    </div>
-    <div class="chat-tabs">
-      <button class="chat-tab active" id="chat-tab-world" onclick="switchChatTab('world')">World</button>
-      <button class="chat-tab" id="chat-tab-dm" onclick="switchChatTab('dm')">Direct Messages<span class="unread-badge" id="dm-tab-badge"></span></button>
-    </div>
-    <div class="chat-content" id="chat-content-world">
-      <div class="chat-msgs" id="world-chat-msgs"></div>
-      <div class="chat-input-row">
-        <input type="text" id="world-chat-input" placeholder="Say something…" maxlength="500" onkeydown="if(event.key==='Enter')sendWorldChatMessage()">
-        <button onclick="sendWorldChatMessage()">Send</button>
-      </div>
-    </div>
-    <div class="chat-content hidden" id="chat-content-dm">
-      <div id="dm-thread-view" style="display:none;flex:1;min-height:0;flex-direction:column;">
-        <button class="dm-back" onclick="showDMConvoList()">← Back</button>
-        <div class="chat-msgs" id="dm-thread-msgs"></div>
-        <div class="chat-input-row">
-          <input type="text" id="dm-chat-input" placeholder="Send a direct message…" maxlength="500" onkeydown="if(event.key==='Enter')sendDirectMessage()">
-          <button onclick="sendDirectMessage()">Send</button>
-        </div>
-      </div>
-      <div id="dm-convo-list" class="dm-convos" style="overflow-y:auto;flex:1;min-height:0;"></div>
-    </div>
-  </div>
-
-  <div id="joystick-container">
-    <div id="joystick-base"></div>
-    <div id="joystick-stick"></div>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script>
-    // ── Server-injected game state ────────────────────────────────────────────
-    var MAP      = ${JSON.stringify(map)};
-    var WORLD_MODS = ${JSON.stringify(worldMods)};
-    var WORLD_TILE_DEFS = ${JSON.stringify(WORLD_TILE_DEFS)};
-    var TREE_MODS = ${JSON.stringify(treeMods)};
-    var HOUSE_MODS = ${JSON.stringify(houseMods)};
-    var WORLD_ITEMS = ${JSON.stringify(worldItems)};
-    var PLAYER_INV = ${JSON.stringify(playerInventory)};
-    var NPCS = ${JSON.stringify(npcs)};
-    var worldId  = ${JSON.stringify(worldId)};
-    var playerId = ${JSON.stringify(userId)};
-    var PLAYER_NICK = ${JSON.stringify(playerNick)};
-    var ONLINE_PLAYERS = ${JSON.stringify(onlinePlayers)};
-    var INITIAL_CHAT = ${JSON.stringify(initialChat)};
-    var INITIAL_DM_INDEX = ${JSON.stringify(initialDmIndex)};
-    var INIT_ROW = ${JSON.stringify(initRow)};
-    var INIT_COL = ${JSON.stringify(initCol)};
-    var INIT_SEQ = ${JSON.stringify(initSeq)};
-    var INIT_ROTATION = ${JSON.stringify(initRotation)};
-  </script>
-  <script src="/virtual-world/client.js"></script>
-</body>
-</html>`;
-
-  return ResponseBuilder.html(html);
+  const state = buildVirtualWorldPageStateImpl(
+    req.auth.userId,
+    req.auth.userName || "",
+    {
+      getOrCreatePlayerWorld: getOrCreatePlayerWorld,
+      markNPCWorldActive: markNPCWorldActive,
+      ensureStarterKit: ensureStarterKit,
+      generateMap: generateMap,
+      loadWorldMods: loadWorldMods,
+      loadWorldTrees: loadWorldTrees,
+      loadWorldHouses: loadWorldHouses,
+      ensureWorldItems: ensureWorldItems,
+      loadWorldItems: loadWorldItems,
+      loadPlayerInventory: loadPlayerInventory,
+      getWorldNPCSnapshot: getWorldNPCSnapshot,
+      loadPlayerPosition: loadPlayerPosition,
+      getDefaultSpawnPosition: getDefaultSpawnPosition,
+      savePlayerPosition: savePlayerPosition,
+      loadPlayerNick: loadPlayerNick,
+      savePlayerNick: savePlayerNick,
+      updateOnlinePresence: updateOnlinePresence,
+      buildOnlinePlayersSnapshot: buildOnlinePlayersSnapshot,
+      loadWorldChat: loadWorldChat,
+      loadDMIndex: loadDMIndex,
+      getWorldFlavorText: getWorldFlavorText,
+      worldTileDefs: WORLD_TILE_DEFS,
+    },
+  );
+  return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
 }
 
 /**
@@ -840,25 +616,10 @@ function applyWorldModsToMap(map, worldMods) {
  * @param {string} userId
  */
 function ensureStarterKit(userId) {
-  var inv = loadPlayerInventory(userId);
-  var allItems = [];
-  if (inv.left_hand) allItems.push(inv.left_hand);
-  if (inv.right_hand) allItems.push(inv.right_hand);
-  if (Array.isArray(inv.inventory)) {
-    allItems = allItems.concat(inv.inventory);
-  }
-  var hasKit = allItems.some(function (item) {
-    return item && item.type === "starter_kit";
+  ensureStarterKitImpl(userId, {
+    loadPlayerInventory: loadPlayerInventory,
+    savePlayerInventory: savePlayerInventory,
   });
-  if (!hasKit) {
-    inv.inventory.push({
-      id: "starter_kit_" + userId,
-      type: "starter_kit",
-      created_at: Date.now(),
-      non_droppable: true,
-    });
-  }
-  if (!hasKit) savePlayerInventory(userId, inv);
 }
 
 /**
@@ -1560,33 +1321,17 @@ function nextWorldItemId(worldId) {
  * @param {string} worldId
  */
 function ensureWorldItems(worldId) {
-  var meta = loadWorldItemMeta(worldId);
-  if (meta.seeded === 1) return;
-
-  var map = getEffectiveMap(worldId);
-  var items = loadWorldItems(worldId);
-  for (var i = 0; i < WORLD_ITEM_SPAWN_COUNT; i++) {
-    var attempts = 0;
-    while (attempts < 1000) {
-      attempts++;
-      var row = 1 + Math.floor(Math.random() * (ROWS - 2));
-      var col = 1 + Math.floor(Math.random() * (COLS - 2));
-      if (map[row][col] !== 0) continue;
-      var tileKey = row + "_" + col;
-      if (!items[tileKey]) items[tileKey] = [];
-      items[tileKey].push({
-        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-        type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
-        created_at: Date.now(),
-      });
-      break;
-    }
-  }
-  saveWorldItems(worldId, items);
-  saveWorldItemMeta(worldId, {
-    next_item_seq: loadWorldItemMeta(worldId).next_item_seq,
-    seeded: 1,
-    updated_ts: Date.now(),
+  ensureWorldItemsImpl(worldId, {
+    loadWorldItemMeta: loadWorldItemMeta,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldItems: loadWorldItems,
+    nextWorldItemId: nextWorldItemId,
+    saveWorldItems: saveWorldItems,
+    saveWorldItemMeta: saveWorldItemMeta,
+    WORLD_ITEM_SPAWN_COUNT: WORLD_ITEM_SPAWN_COUNT,
+    ROWS: ROWS,
+    COLS: COLS,
+    ITEM_TYPES: ITEM_TYPES,
   });
 }
 
@@ -1616,18 +1361,16 @@ function broadcastItemChange(
   col,
   items,
 ) {
-  sendWorldScopedStreamEvent(String(worldId), "item_changed", {
-    actor_type: actorType,
-    actor_id: actorId,
-    action: action,
-    row: row,
-    col: col,
-    items: Array.isArray(items)
-      ? items.map(function (it) {
-          return { id: it.id, type: it.type };
-        })
-      : [],
-  });
+  broadcastItemChangeImpl(
+    worldId,
+    actorType,
+    actorId,
+    action,
+    row,
+    col,
+    items,
+    sendWorldScopedStreamEvent,
+  );
 }
 
 /**
@@ -1748,11 +1491,12 @@ function saveNPCLastTick(worldId, lastTickTs) {
  * @returns {number[][]}
  */
 function getEffectiveMap(worldId) {
-  /** @type {number[][]} */
-  var map = generateMap(worldId);
-  applyWorldModsToMap(map, loadWorldMods(worldId));
-  applyOakReservation(map, worldId);
-  return map;
+  return getEffectiveMapImpl(worldId, {
+    generateMap: generateMap,
+    applyWorldModsToMap: applyWorldModsToMap,
+    loadWorldMods: loadWorldMods,
+    applyOakReservation: applyOakReservation,
+  });
 }
 
 /**
@@ -1760,84 +1504,17 @@ function getEffectiveMap(worldId) {
  * @returns {Record<string, any>}
  */
 function ensureWorldNPCs(worldId) {
-  var existing = loadWorldNPCs(worldId);
-  if (existing && Object.keys(existing).length > 0) {
-    var hasNormalizationChanges = false;
-    Object.keys(existing).forEach(function (npcId) {
-      var n = existing[npcId];
-      if (!n || typeof n !== "object") {
-        existing[npcId] = {
-          row: 1,
-          col: 1,
-          seq: 0,
-          rotation: 0,
-          state: "idle",
-          ts: Date.now(),
-          left_hand: null,
-          right_hand: null,
-          inventory: [],
-        };
-        hasNormalizationChanges = true;
-        return;
-      }
-      var inv = normalizeInventory(n);
-      if (
-        n.left_hand !== inv.left_hand ||
-        n.right_hand !== inv.right_hand ||
-        !Array.isArray(n.inventory)
-      ) {
-        n.left_hand = inv.left_hand;
-        n.right_hand = inv.right_hand;
-        n.inventory = inv.inventory;
-        hasNormalizationChanges = true;
-      }
-    });
-    if (hasNormalizationChanges) saveWorldNPCs(worldId, existing);
-    return existing;
-  }
-
-  var map = getEffectiveMap(worldId);
-  var players = loadWorldPlayers(worldId);
-  /** @type {Record<string, boolean>} */
-  var occupied = {};
-  Object.keys(players).forEach(function (pid) {
-    var p = players[pid];
-    if (!p || !isFinite(Number(p.row)) || !isFinite(Number(p.col))) return;
-    occupied[p.row + "_" + p.col] = true;
+  return ensureWorldNPCsImpl(worldId, {
+    loadWorldNPCs: loadWorldNPCs,
+    saveWorldNPCs: saveWorldNPCs,
+    normalizeInventory: normalizeInventory,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldPlayers: loadWorldPlayers,
+    NPC_MIN_COUNT: NPC_MIN_COUNT,
+    NPC_MAX_COUNT: NPC_MAX_COUNT,
+    ROWS: ROWS,
+    COLS: COLS,
   });
-
-  var targetCount =
-    NPC_MIN_COUNT +
-    Math.floor(Math.random() * (NPC_MAX_COUNT - NPC_MIN_COUNT + 1));
-  /** @type {Record<string, any>} */
-  var npcs = {};
-  var attempts = 0;
-  var maxAttempts = 4000;
-
-  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
-    attempts++;
-    var row = 1 + Math.floor(Math.random() * (ROWS - 2));
-    var col = 1 + Math.floor(Math.random() * (COLS - 2));
-    var tileKey = row + "_" + col;
-    if (map[row][col] !== 0 || occupied[tileKey]) continue;
-    occupied[tileKey] = true;
-    var idx = Object.keys(npcs).length + 1;
-    var npcId = "npc_" + worldId + "_" + idx;
-    npcs[npcId] = {
-      row: row,
-      col: col,
-      seq: 0,
-      rotation: 0,
-      state: "idle",
-      ts: Date.now(),
-      left_hand: null,
-      right_hand: null,
-      inventory: [],
-    };
-  }
-
-  saveWorldNPCs(worldId, npcs);
-  return npcs;
 }
 
 /**
@@ -2147,10 +1824,7 @@ function getAuthenticatedUserId(context) {
  * @returns {string}
  */
 function worldTileNameForValue(tileValue) {
-  if (WORLD_TILE_NAME_BY_VALUE[tileValue]) {
-    return WORLD_TILE_NAME_BY_VALUE[tileValue];
-  }
-  return "unknown";
+  return worldTileNameForValueImpl(tileValue, WORLD_TILE_NAME_BY_VALUE);
 }
 
 /**
@@ -2159,33 +1833,11 @@ function worldTileNameForValue(tileValue) {
  * @returns {string[]}
  */
 function getAvailableWorldActions(inventory, currentTileItems) {
-  /** @type {Record<string, boolean>} */
-  var actionMap = {};
-
-  /**
-   * @param {*} item
-   */
-  function addItemAction(item) {
-    if (!item || !item.type) return;
-    var action = TREE_ACTION_BY_ITEM_TYPE[String(item.type)];
-    if (action) actionMap[action] = true;
-  }
-
-  addItemAction(inventory && inventory.left_hand);
-  addItemAction(inventory && inventory.right_hand);
-
-  var invItems =
-    inventory && Array.isArray(inventory.inventory) ? inventory.inventory : [];
-  for (var i = 0; i < invItems.length; i++) {
-    addItemAction(invItems[i]);
-  }
-
-  var tileItems = Array.isArray(currentTileItems) ? currentTileItems : [];
-  for (var j = 0; j < tileItems.length; j++) {
-    addItemAction(tileItems[j]);
-  }
-
-  return Object.keys(actionMap).sort();
+  return getAvailableWorldActionsImpl(
+    inventory,
+    currentTileItems,
+    TREE_ACTION_BY_ITEM_TYPE,
+  );
 }
 
 /**
@@ -2195,29 +1847,7 @@ function getAvailableWorldActions(inventory, currentTileItems) {
  * @returns {{row: number, col: number, direction: string}}
  */
 function getTargetTileFromRotation(row, col, rotation) {
-  var targetRow = row;
-  var targetCol = col;
-  var direction = "south";
-  var angle = isFinite(Number(rotation)) ? Number(rotation) : 0;
-
-  while (angle > Math.PI) angle -= 2 * Math.PI;
-  while (angle < -Math.PI) angle += 2 * Math.PI;
-
-  if (angle >= -Math.PI / 4 && angle < Math.PI / 4) {
-    targetRow = row + 1;
-    direction = "south";
-  } else if (angle >= Math.PI / 4 && angle < (3 * Math.PI) / 4) {
-    targetCol = col + 1;
-    direction = "east";
-  } else if (angle >= (3 * Math.PI) / 4 || angle < (-3 * Math.PI) / 4) {
-    targetRow = row - 1;
-    direction = "north";
-  } else {
-    targetCol = col - 1;
-    direction = "west";
-  }
-
-  return { row: targetRow, col: targetCol, direction: direction };
+  return getTargetTileFromRotationImpl(row, col, rotation);
 }
 
 /**
@@ -2225,12 +1855,7 @@ function getTargetTileFromRotation(row, col, rotation) {
  * @returns {string}
  */
 function normalizeMoveDirection(direction) {
-  var value = String(direction || "").toLowerCase();
-  if (value === "up") return "north";
-  if (value === "down") return "south";
-  if (value === "left") return "west";
-  if (value === "right") return "east";
-  return value;
+  return normalizeMoveDirectionImpl(direction);
 }
 
 /**
@@ -2238,11 +1863,7 @@ function normalizeMoveDirection(direction) {
  * @returns {number|null}
  */
 function rotationForDirection(direction) {
-  if (direction === "south") return 0;
-  if (direction === "east") return Math.PI / 2;
-  if (direction === "north") return Math.PI;
-  if (direction === "west") return -Math.PI / 2;
-  return null;
+  return rotationForDirectionImpl(direction);
 }
 
 /**
@@ -2251,34 +1872,13 @@ function rotationForDirection(direction) {
  * @returns {Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>}
  */
 function getMoveOptions(worldId, canonical) {
-  var map = getEffectiveMap(worldId);
-  /** @type {Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>} */
-  var options = {};
-  /** @type {Record<string, {row: number, col: number}>} */
-  var deltas = {
-    north: { row: -1, col: 0 },
-    south: { row: 1, col: 0 },
-    east: { row: 0, col: 1 },
-    west: { row: 0, col: -1 },
-  };
-  var directions = Object.keys(deltas);
-  for (var i = 0; i < directions.length; i++) {
-    var direction = directions[i];
-    var delta = deltas[direction];
-    var targetRow = canonical.row + delta.row;
-    var targetCol = canonical.col + delta.col;
-    var inBounds =
-      targetRow >= 0 && targetRow < ROWS && targetCol >= 0 && targetCol < COLS;
-    var tileValue = inBounds ? map[targetRow][targetCol] : 0;
-    options[direction] = {
-      row: targetRow,
-      col: targetCol,
-      walkable: inBounds && isWorldTileWalkable(tileValue),
-      tile_type: inBounds ? worldTileNameForValue(tileValue) : "out_of_bounds",
-      in_bounds: inBounds,
-    };
-  }
-  return options;
+  return getMoveOptionsImpl(worldId, canonical, {
+    getEffectiveMap: getEffectiveMap,
+    isWorldTileWalkable: isWorldTileWalkable,
+    worldTileNameForValue: worldTileNameForValue,
+    ROWS: ROWS,
+    COLS: COLS,
+  });
 }
 
 /**
@@ -2286,41 +1886,21 @@ function getMoveOptions(worldId, canonical) {
  * @returns {{ok: boolean, world_id: string, world_type: string, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {left_hand: any, right_hand: any, inventory: any[]}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
  */
 function getCurrentWorldStateForUser(userId) {
-  var worldId = getOrCreatePlayerWorld(userId);
-  markNPCWorldActive(worldId);
-  ensureWorldItems(worldId);
-
-  var canonical = getCanonicalPlayerState(worldId, userId);
-  var inventory = loadPlayerInventory(userId);
-  var worldItems = loadWorldItems(worldId);
-  var tileKey = canonical.row + "_" + canonical.col;
-  var currentTileItems = Array.isArray(worldItems[tileKey])
-    ? worldItems[tileKey]
-    : [];
-
-  return {
-    ok: true,
-    world_id: String(worldId),
-    world_type: getWorldType(worldId),
-    player: {
-      row: canonical.row,
-      col: canonical.col,
-      seq: canonical.seq,
-      rotation: canonical.rotation,
-    },
-    items: flattenWorldItems(worldItems),
-    tile_items: currentTileItems,
-    inventory: inventory,
-    world_mods: loadWorldMods(worldId),
-    houses: loadWorldHouses(worldId),
-    available_actions: getAvailableWorldActions(inventory, currentTileItems),
-    move_options: getMoveOptions(String(worldId), canonical),
-    facing_tile: getTargetTileFromRotation(
-      canonical.row,
-      canonical.col,
-      canonical.rotation,
-    ),
-  };
+  return getCurrentWorldStateForUserImpl(userId, {
+    getOrCreatePlayerWorld: getOrCreatePlayerWorld,
+    markNPCWorldActive: markNPCWorldActive,
+    ensureWorldItems: ensureWorldItems,
+    getCanonicalPlayerState: getCanonicalPlayerState,
+    loadPlayerInventory: loadPlayerInventory,
+    loadWorldItems: loadWorldItems,
+    flattenWorldItems: flattenWorldItems,
+    loadWorldMods: loadWorldMods,
+    loadWorldHouses: loadWorldHouses,
+    getWorldType: getWorldType,
+    getAvailableWorldActions: getAvailableWorldActions,
+    getMoveOptions: getMoveOptions,
+    getTargetTileFromRotation: getTargetTileFromRotation,
+  });
 }
 
 /**

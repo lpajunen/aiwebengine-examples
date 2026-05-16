@@ -1,20 +1,29 @@
 /// <reference path="../../types/aiwebengine.d.ts" />
 
 import {
+  applyOakReservation,
   canonicalTreeAction,
+  createEmptyInventory,
   getDefaultWorldTypeForWorldId,
+  getOakClearingTiles,
   getWorldBoundaryTileName,
   getWorldFloorTileName,
   getWorldTileDef,
   getWorldWallTileName,
+  isOakCenterTile,
+  isOakClearingTile,
+  isOakWorld,
+  isValidItem,
   isWorldTileWalkable,
+  normalizeInventory,
   normalizeWorldType,
   portalBuildActionForWorldType,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
   worldTileValueForName,
   worldTypeForPortalBuildAction,
-} from "server/world-domain.ts";
+} from "./server/world-domain.ts";
+import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.
@@ -211,168 +220,10 @@ function getWorldFlavorText(worldId) {
 }
 
 /**
- * @param {number[][]} map
- * @param {string} tileName
- */
-function paintWorldBorder(map, tileName) {
-  var tileValue = worldTileValueForName(tileName);
-  for (var r = 0; r < ROWS; r++) {
-    map[r][0] = tileValue;
-    map[r][COLS - 1] = tileValue;
-  }
-  for (var c = 0; c < COLS; c++) {
-    map[0][c] = tileValue;
-    map[ROWS - 1][c] = tileValue;
-  }
-}
-
-/**
- * @param {number[][]} map
- * @param {string} tileName
- * @param {number} inset
- */
-function paintWorldRing(map, tileName, inset) {
-  var tileValue = worldTileValueForName(tileName);
-  var minRow = Math.max(0, Number(inset) || 0);
-  var minCol = minRow;
-  var maxRow = ROWS - 1 - minRow;
-  var maxCol = COLS - 1 - minCol;
-  for (var row = minRow; row <= maxRow; row++) {
-    map[row][minCol] = tileValue;
-    map[row][maxCol] = tileValue;
-  }
-  for (var col = minCol; col <= maxCol; col++) {
-    map[minRow][col] = tileValue;
-    map[maxRow][col] = tileValue;
-  }
-}
-
-/**
- * @param {number[][]} map
- * @param {string} fillTileName
- * @param {number} inset
- */
-function fillWorldInterior(map, fillTileName, inset) {
-  var tileValue = worldTileValueForName(fillTileName);
-  for (var row = inset; row < ROWS - inset; row++) {
-    for (var col = inset; col < COLS - inset; col++) {
-      map[row][col] = tileValue;
-    }
-  }
-}
-
-/**
  * @returns {string}
  */
 function createWorldId() {
   return String(Math.floor(Math.random() * 999999) + 1);
-}
-
-/**
- * @param {string | number} worldId
- * @returns {boolean}
- */
-function isOakWorld(worldId) {
-  return String(worldId) === OAK_WORLD_ID;
-}
-
-/**
- * @param {number} row
- * @param {number} col
- * @returns {number}
- */
-function oakDistanceSquared(row, col) {
-  var dr = Number(row) - OAK_CENTER_ROW;
-  var dc = Number(col) - OAK_CENTER_COL;
-  return dr * dr + dc * dc;
-}
-
-/**
- * @param {string | number} worldId
- * @param {number} row
- * @param {number} col
- * @returns {boolean}
- */
-function isOakCenterTile(worldId, row, col) {
-  return (
-    isOakWorld(worldId) &&
-    Number(row) === OAK_CENTER_ROW &&
-    Number(col) === OAK_CENTER_COL
-  );
-}
-
-/**
- * @param {string | number} worldId
- * @param {number} row
- * @param {number} col
- * @returns {boolean}
- */
-function isOakClearingTile(worldId, row, col) {
-  if (!isOakWorld(worldId) || isOakCenterTile(worldId, row, col)) return false;
-  return oakDistanceSquared(row, col) <= OAK_CLEAR_RADIUS * OAK_CLEAR_RADIUS;
-}
-
-/**
- * @param {number[][]} map
- * @param {string | number} worldId
- * @returns {number[][]}
- */
-function applyOakReservation(map, worldId) {
-  if (!isOakWorld(worldId)) return map;
-  for (
-    var row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
-    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
-    row++
-  ) {
-    if (row < 0 || row >= ROWS) continue;
-    for (
-      var col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
-      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
-      col++
-    ) {
-      if (col < 0 || col >= COLS) continue;
-      if (isOakCenterTile(worldId, row, col)) {
-        map[row][col] = 2;
-      } else if (isOakClearingTile(worldId, row, col)) {
-        map[row][col] = 0;
-      }
-    }
-  }
-  return map;
-}
-
-/**
- * @param {string | number} worldId
- * @returns {{row: number, col: number}[]}
- */
-function getOakClearingTiles(worldId) {
-  if (!isOakWorld(worldId)) return [];
-  /** @type {{row: number, col: number, dist2: number}[]} */
-  var tiles = [];
-  for (
-    var row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
-    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
-    row++
-  ) {
-    if (row < 0 || row >= ROWS) continue;
-    for (
-      var col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
-      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
-      col++
-    ) {
-      if (col < 0 || col >= COLS) continue;
-      if (!isOakClearingTile(worldId, row, col)) continue;
-      tiles.push({ row: row, col: col, dist2: oakDistanceSquared(row, col) });
-    }
-  }
-  tiles.sort(function (a, b) {
-    if (a.dist2 !== b.dist2) return a.dist2 - b.dist2;
-    if (a.row !== b.row) return a.row - b.row;
-    return a.col - b.col;
-  });
-  return tiles.map(function (tile) {
-    return { row: tile.row, col: tile.col };
-  });
 }
 
 /**
@@ -458,202 +309,11 @@ function isPickableWorldItem(item) {
 }
 
 /**
- * @param {number} seed
- * @returns {() => number}
- */
-function mulberry32(seed) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
  * @param {string | number} worldId
  * @returns {number[][]}
  */
 function generateMap(worldId) {
-  var seed = parseInt(String(worldId), 10);
-  var rand = mulberry32(seed);
-  var worldType = getWorldType(worldId);
-  var floorTileName = getWorldFloorTileName(worldType);
-  var boundaryTileName = getWorldBoundaryTileName(worldType);
-  var wallTileName = getWorldWallTileName(worldType);
-  /** @type {number[][]} */
-  var map = [];
-  for (var r = 0; r < ROWS; r++) {
-    map[r] = [];
-    for (var c = 0; c < COLS; c++) {
-      map[r][c] = worldTileValueForName(floorTileName);
-    }
-  }
-  paintWorldBorder(map, boundaryTileName);
-  if (worldType === WORLD_TYPE_ISLAND) paintWorldRing(map, WORLD_TILE_OCEAN, 1);
-  if (worldType === WORLD_TYPE_CAVE) paintWorldRing(map, WORLD_TILE_ROCK, 1);
-  if (worldType === WORLD_TYPE_BUILDING)
-    paintWorldRing(map, WORLD_TILE_HOUSE, 1);
-
-  // Rectangular room outlines, each with a door on all four sides
-  for (var i = 0; i < 30; i++) {
-    var rr = 3 + Math.floor(rand() * (ROWS - 18));
-    var cc = 3 + Math.floor(rand() * (COLS - 18));
-    var rh = 4 + Math.floor(rand() * 9);
-    var rw = 4 + Math.floor(rand() * 9);
-    for (var dr = 0; dr <= rh; dr++) {
-      for (var dc = 0; dc <= rw; dc++) {
-        if (
-          (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
-          isWorldTileWalkable(map[rr + dr][cc + dc])
-        )
-          map[rr + dr][cc + dc] = worldTileValueForName(wallTileName);
-      }
-    }
-    var mh = Math.floor(rh / 2),
-      mw = Math.floor(rw / 2);
-    map[rr][cc + mw] = worldTileValueForName(floorTileName);
-    map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
-    map[rr + mh][cc] = worldTileValueForName(floorTileName);
-    map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
-  }
-
-  // Wall segments with a gap
-  for (var i = 0; i < 40; i++) {
-    if (rand() > 0.5) {
-      var r0 = 2 + Math.floor(rand() * (ROWS - 4));
-      var c0 = 2 + Math.floor(rand() * (COLS - 20));
-      var len = 6 + Math.floor(rand() * 14);
-      var gap = Math.floor(rand() * len);
-      for (var k = 0; k < len; k++)
-        if (
-          k !== gap &&
-          c0 + k < COLS - 1 &&
-          isWorldTileWalkable(map[r0][c0 + k])
-        )
-          map[r0][c0 + k] = worldTileValueForName(wallTileName);
-    } else {
-      var r0 = 2 + Math.floor(rand() * (ROWS - 20));
-      var c0 = 2 + Math.floor(rand() * (COLS - 4));
-      var len = 6 + Math.floor(rand() * 14);
-      var gap = Math.floor(rand() * len);
-      for (var k = 0; k < len; k++)
-        if (
-          k !== gap &&
-          r0 + k < ROWS - 1 &&
-          isWorldTileWalkable(map[r0 + k][c0])
-        )
-          map[r0 + k][c0] = worldTileValueForName(wallTileName);
-    }
-  }
-
-  /**
-   * @param {number} centerRow
-   * @param {number} centerCol
-   * @param {number} radius
-   * @param {string} tileName
-   */
-  function paintTerrainCircle(centerRow, centerCol, radius, tileName) {
-    var radiusSquared = radius * radius;
-    for (var row = centerRow - radius; row <= centerRow + radius; row++) {
-      if (row <= 0 || row >= ROWS - 1) continue;
-      for (var col = centerCol - radius; col <= centerCol + radius; col++) {
-        if (col <= 0 || col >= COLS - 1) continue;
-        var dr = row - centerRow;
-        var dc = col - centerCol;
-        if (dr * dr + dc * dc > radiusSquared) continue;
-        map[row][col] = worldTileValueForName(tileName);
-      }
-    }
-  }
-
-  if (worldType === WORLD_TYPE_FOREST) {
-    var coastWidth = 7 + Math.floor(rand() * 6);
-    for (var coastRow = 1; coastRow < ROWS - 1; coastRow++) {
-      var coastInset = Math.floor(rand() * 4);
-      for (
-        var coastCol = COLS - 1 - coastWidth - coastInset;
-        coastCol < COLS - 1;
-        coastCol++
-      ) {
-        if (coastCol <= 0 || coastCol >= COLS - 1) continue;
-        map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
-      }
-    }
-
-    var riverCol = Math.floor(COLS * (0.35 + rand() * 0.3));
-    for (var riverRow = 1; riverRow < ROWS - 1; riverRow++) {
-      riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
-      riverCol = Math.max(8, Math.min(COLS - 9, riverCol));
-      var riverRadius = rand() < 0.2 ? 1 : 0;
-      for (
-        var riverOffset = -riverRadius;
-        riverOffset <= riverRadius;
-        riverOffset++
-      ) {
-        map[riverRow][riverCol + riverOffset] =
-          worldTileValueForName(WORLD_TILE_RIVER);
-      }
-    }
-
-    for (var lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
-      paintTerrainCircle(
-        12 + Math.floor(rand() * (ROWS - 24)),
-        12 + Math.floor(rand() * (COLS - 24)),
-        2 + Math.floor(rand() * 3),
-        WORLD_TILE_LAKE,
-      );
-    }
-  }
-
-  if (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_CAVE) {
-    for (var mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
-      paintTerrainCircle(
-        10 + Math.floor(rand() * (ROWS - 20)),
-        10 + Math.floor(rand() * (COLS - 20)),
-        2 + Math.floor(rand() * 3),
-        WORLD_TILE_MOUNTAIN,
-      );
-    }
-    for (var rockIndex = 0; rockIndex < 140; rockIndex++) {
-      var rockRow = 1 + Math.floor(rand() * (ROWS - 2));
-      var rockCol = 1 + Math.floor(rand() * (COLS - 2));
-      if (
-        isWorldTileWalkable(map[rockRow][rockCol]) ||
-        map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)
-      ) {
-        map[rockRow][rockCol] = worldTileValueForName(WORLD_TILE_ROCK);
-      }
-    }
-  }
-
-  // Scatter trees in open ground
-  var treeScatterCount =
-    worldType === WORLD_TYPE_FOREST
-      ? 500
-      : worldType === WORLD_TYPE_ISLAND
-        ? 140
-        : 0;
-  if (treeScatterCount > 0) {
-    for (var i = 0; i < treeScatterCount; i++) {
-      var r = 1 + Math.floor(rand() * (ROWS - 2));
-      var c = 1 + Math.floor(rand() * (COLS - 2));
-      if (map[r][c] === worldTileValueForName(floorTileName)) {
-        map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
-      }
-    }
-  }
-
-  if (isOakWorld(worldId)) {
-    return applyOakReservation(map, worldId);
-  }
-
-  // Always keep spawn area clear
-  map[1][1] = worldTileValueForName(floorTileName);
-  map[1][2] = worldTileValueForName(floorTileName);
-  map[2][1] = worldTileValueForName(floorTileName);
-  return map;
+  return generateWorldMap(worldId, getWorldType(worldId));
 }
 
 /**
@@ -1543,45 +1203,6 @@ function applyWorldModsToMap(map, worldMods) {
     });
   }
   return map;
-}
-
-/**
- * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
- */
-function createEmptyInventory() {
-  return {
-    left_hand: null,
-    right_hand: null,
-    inventory: [],
-  };
-}
-
-/**
- * @param {*} item
- * @returns {boolean}
- */
-function isValidItem(item) {
-  return (
-    !!item &&
-    typeof item === "object" &&
-    typeof item.id === "string" &&
-    typeof item.type === "string"
-  );
-}
-
-/**
- * @param {*} inv
- * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
- */
-function normalizeInventory(inv) {
-  var out = createEmptyInventory();
-  if (!inv || typeof inv !== "object") return out;
-  if (isValidItem(inv.left_hand)) out.left_hand = inv.left_hand;
-  if (isValidItem(inv.right_hand)) out.right_hand = inv.right_hand;
-  if (Array.isArray(inv.inventory)) {
-    out.inventory = inv.inventory.filter(isValidItem);
-  }
-  return out;
 }
 
 /**

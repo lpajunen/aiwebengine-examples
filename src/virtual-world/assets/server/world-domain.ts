@@ -82,6 +82,8 @@ export interface WorldTileDef {
 export interface InventoryItem {
   id: string;
   type: string;
+  destination_world_id?: string;
+  destination_world_type?: string;
   [key: string]: unknown;
 }
 

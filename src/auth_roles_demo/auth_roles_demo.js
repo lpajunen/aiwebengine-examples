@@ -24,9 +24,10 @@ const AUTH_ROLES_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
 /** @param {HandlerContext} context */
 function handleRequest(context) {
   const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
+  const auth = request.auth;
 
   // Check if user is authenticated
-  if (!request.auth.isAuthenticated) {
+  if (!auth || !auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -35,9 +36,6 @@ function handleRequest(context) {
       401,
     );
   }
-
-  // Get current user information from AuthContext
-  const auth = request.auth;
 
   // Build response based on user roles
   const roles = ["Authenticated"];
@@ -100,9 +98,10 @@ function handleRequest(context) {
 /** @param {HandlerContext} context */
 function editorOnly(context) {
   const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
+  const auth = request.auth;
 
   // Check authentication
-  if (!request.auth.isAuthenticated) {
+  if (!auth || !auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -112,7 +111,7 @@ function editorOnly(context) {
   }
 
   // Check editor role (editors and admins can access)
-  if (!request.auth.isEditor && !request.auth.isAdmin) {
+  if (!auth.isEditor && !auth.isAdmin) {
     return ResponseBuilder.json(
       {
         error: "Editor access required",
@@ -122,7 +121,7 @@ function editorOnly(context) {
   }
 
   return ResponseBuilder.text(
-    `Hello ${request.auth.userName}, you have editor access!`,
+    `Hello ${auth.userName}, you have editor access!`,
   );
 }
 
@@ -132,9 +131,10 @@ function editorOnly(context) {
 /** @param {HandlerContext} context */
 function adminOnly(context) {
   const request = context.request || AUTH_ROLES_EMPTY_REQUEST;
+  const auth = request.auth;
 
   // Check authentication
-  if (!request.auth.isAuthenticated) {
+  if (!auth || !auth.isAuthenticated) {
     return ResponseBuilder.json(
       {
         error: "Authentication required",
@@ -144,7 +144,7 @@ function adminOnly(context) {
   }
 
   // Check admin role
-  if (!request.auth.isAdmin) {
+  if (!auth.isAdmin) {
     return ResponseBuilder.json(
       {
         error: "Administrator access required",
@@ -154,7 +154,7 @@ function adminOnly(context) {
   }
 
   return ResponseBuilder.text(
-    `Hello ${request.auth.userName}, you have administrator access!`,
+    `Hello ${auth.userName}, you have administrator access!`,
   );
 }
 

@@ -88,7 +88,7 @@ function githubHandler(context) {
     return ResponseBuilder.json(
       {
         error: "Internal server error",
-        message: error.toString(),
+        message: String(error),
       },
       500,
     );

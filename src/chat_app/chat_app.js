@@ -102,8 +102,9 @@ function channelsResolver(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
+    const auth = req.auth;
     // Require authentication
-    if (!req.auth.isAuthenticated) {
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
 
@@ -120,8 +121,9 @@ function messagesResolver(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
+    const auth = req.auth;
     // Require authentication
-    if (!req.auth.isAuthenticated) {
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
 
@@ -145,13 +147,14 @@ function currentUserResolver(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
-    if (!req.auth.isAuthenticated) {
+    const auth = req.auth;
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     return {
-      id: req.auth.userId,
-      name: req.auth.userName || req.auth.userEmail,
-      email: req.auth.userEmail,
+      id: auth.userId,
+      name: auth.userName || auth.userEmail,
+      email: auth.userEmail,
     };
   } catch (error) {
     console.error("Error in currentUserResolver: " + error);
@@ -168,14 +171,15 @@ function createChannelResolver(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
+    const auth = req.auth;
     // Require authentication
-    if (!req.auth.isAuthenticated) {
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
-      id: req.auth.userId,
-      name: req.auth.userName,
-      email: req.auth.userEmail,
+      id: auth.userId,
+      name: auth.userName,
+      email: auth.userEmail,
     };
 
     const name = args.name;
@@ -230,14 +234,15 @@ function sendMessageResolver(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
   const args = context.args || {};
   try {
+    const auth = req.auth;
     // Require authentication
-    if (!req.auth.isAuthenticated) {
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
-      id: req.auth.userId,
-      name: req.auth.userName,
-      email: req.auth.userEmail,
+      id: auth.userId,
+      name: auth.userName,
+      email: auth.userEmail,
     };
 
     const channelId = args.channelId;
@@ -325,15 +330,16 @@ function chatUpdatesResolver(context) {
     }
 
     // Check authentication manually
-    if (!req.auth.isAuthenticated) {
+    const auth = req.auth;
+    if (!auth || !auth.isAuthenticated) {
       console.error("Authentication check failed for channel subscription");
       throw new Error("Authentication required");
     }
 
     const user = {
-      id: req.auth.userId,
-      name: req.auth.userName,
-      email: req.auth.userEmail,
+      id: auth.userId,
+      name: auth.userName,
+      email: auth.userEmail,
     };
 
     console.log(
@@ -346,7 +352,7 @@ function chatUpdatesResolver(context) {
     // Return an object with string values for filtering
     // This will be converted to HashMap<String, String> and stored as connection metadata
     // sendSubscriptionMessageFiltered will match against these key-value pairs
-    var filterCriteria = {};
+    var filterCriteria = /** @type {{channelId?: string}} */ ({});
     filterCriteria.channelId = String(channelId);
     return filterCriteria;
   } catch (error) {
@@ -365,14 +371,15 @@ function chatUpdatesResolver(context) {
 function chatInterfaceHandler(context) {
   try {
     const req = context.request || CHAT_EMPTY_REQUEST;
+    const auth = req.auth;
     // Require authentication
-    if (!req.auth.isAuthenticated) {
+    if (!auth || !auth.isAuthenticated) {
       throw new Error("Authentication required");
     }
     const user = {
-      id: req.auth.userId,
-      name: req.auth.userName,
-      email: req.auth.userEmail,
+      id: auth.userId,
+      name: auth.userName,
+      email: auth.userEmail,
     };
 
     const html = `<!DOCTYPE html>

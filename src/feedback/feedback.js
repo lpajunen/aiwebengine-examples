@@ -206,9 +206,20 @@ function feedback_form_handler(context) {
   return ResponseBuilder.html(html);
 }
 
+const FEEDBACK_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
 /** @param {HandlerContext} context */
 function feedback_submit_handler(context) {
-  const req = context.request;
+  const req = context.request || FEEDBACK_EMPTY_REQUEST;
 
   // Validate required form fields
   const name = req.form && req.form.name;

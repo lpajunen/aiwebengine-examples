@@ -13,10 +13,21 @@ function init() {
   routeRegistry.registerRoute("/fetch/post", "fetchPost", "POST");
 }
 
+const FETCH_EXAMPLE_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
 // Example 1: Simple GET request
 /** @param {HandlerContext} context */
 function fetchExample(context) {
-  const req = context.request;
+  const req = context.request || FETCH_EXAMPLE_EMPTY_REQUEST;
 
   // Validate query parameters
   const url = req.query && req.query.url;
@@ -95,7 +106,7 @@ function fetchWithSecret(context) {
 // Example 3: POST request with JSON body
 /** @param {HandlerContext} context */
 function fetchPost(context) {
-  const req = context.request;
+  const req = context.request || FETCH_EXAMPLE_EMPTY_REQUEST;
   console.log("Making POST request");
 
   // Validate required form parameters

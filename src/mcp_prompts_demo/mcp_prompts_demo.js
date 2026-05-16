@@ -80,7 +80,9 @@ function init(context) {
 function create_rest_endpoint(context) {
   // Check if we're in completion mode
   if (context.mode === "completion") {
-    const { completingArgument, partialValue, arguments: args } = context;
+    const completingArgument = context.completingArgument;
+    const partialValue = context.partialValue || "";
+    const args = context.arguments || {};
 
     // Provide completions based on which argument is being completed
     if (completingArgument === "method") {
@@ -143,7 +145,7 @@ function create_rest_endpoint(context) {
   }
 
   // Prompt mode - generate the actual code
-  const { arguments: args } = context;
+  const args = context.arguments || {};
   const resourceName = args.resourceName || "resource";
   const method = args.method || "GET";
   const path = args.path || `/api/${resourceName}`;
@@ -192,7 +194,8 @@ console.log("Registered ${method} ${path}");
 function add_graphql_query(context) {
   // Check if we're in completion mode
   if (context.mode === "completion") {
-    const { completingArgument, partialValue } = context;
+    const completingArgument = context.completingArgument;
+    const partialValue = context.partialValue || "";
 
     if (completingArgument === "queryName") {
       const suggestions = [
@@ -242,7 +245,7 @@ function add_graphql_query(context) {
   }
 
   // Prompt mode - generate the actual code
-  const { arguments: args } = context;
+  const args = context.arguments || {};
   const queryName = args.queryName || "myQuery";
   const returnType = args.returnType || "String";
   const queryArgs = args.arguments || "";

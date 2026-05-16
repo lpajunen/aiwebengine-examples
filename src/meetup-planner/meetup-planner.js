@@ -18,6 +18,21 @@ const MEETUP_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   files: [],
 });
 
+/**
+ * @param {AuthContext | undefined} auth
+ * @returns {{id: string, email: string | null, name: string | null}}
+ */
+function requireAuthenticatedUser(auth) {
+  if (!auth || !auth.isAuthenticated || !auth.user || !auth.user.id) {
+    throw new Error("Authentication required");
+  }
+  return {
+    id: auth.user.id,
+    email: auth.user.email,
+    name: auth.user.name,
+  };
+}
+
 /** @returns {Array<Record<string, any>>} */
 function loadMeetups() {
   try {
@@ -157,7 +172,7 @@ function meetup_dashboard_handler(context) {
     return ResponseBuilder.redirect(loginUrl);
   }
 
-  const user = req.auth.user;
+  const user = requireAuthenticatedUser(req.auth);
 
   // Load user's meetup IDs from sharedStorage (personal data with user prefix)
   let userMeetupIds = /** @type {string[]} */ ([]);
@@ -391,14 +406,13 @@ function create_meetup_handler(context) {
   }
 
   try {
+    const user = requireAuthenticatedUser(req.auth);
     const body = JSON.parse(req.body || "{}");
     const { name, description } = body;
 
     if (!name || !description) {
       return ResponseBuilder.error(400, "Name and description required");
     }
-
-    const user = req.auth.user;
     const meetupId =
       "meetup_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
 
@@ -460,7 +474,7 @@ function join_meetup_handler(context) {
     return ResponseBuilder.redirect(loginUrl);
   }
 
-  const user = req.auth.user;
+  const user = requireAuthenticatedUser(req.auth);
 
   // Add user to members if not already
   if (!meetup.members) meetup.members = {};
@@ -725,14 +739,13 @@ function update_response_handler(context) {
   }
 
   try {
+    const user = requireAuthenticatedUser(req.auth);
     const body = JSON.parse(req.body || "{}");
     const { response } = body;
 
     if (!["agree", "disagree"].includes(response)) {
       return ResponseBuilder.error(400, "Invalid response");
     }
-
-    const user = req.auth.user;
     const meetup = getMeetupById(meetupId);
 
     if (!meetup || !meetup.members || !meetup.members[user.id]) {

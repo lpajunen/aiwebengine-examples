@@ -882,6 +882,17 @@ function hello() {
 </html>`,
 };
 
+const MARKDOWN_BLOG_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
+  path: "",
+  method: "GET",
+  headers: {},
+  query: {},
+  params: {},
+  form: {},
+  body: "",
+  files: [],
+});
+
 /** @param {HandlerContext} context */
 function init(context) {
   // Register routes for the blog
@@ -1012,7 +1023,7 @@ function fibonacci(n) {
 
 /** @param {HandlerContext} context */
 function blogRouter(context) {
-  const req = context.request;
+  const req = context.request || MARKDOWN_BLOG_EMPTY_REQUEST;
 
   // Check if this is the blog list page or a specific post
   // Path will be exactly "/blog" for list, or "/blog/something" for a post
@@ -1052,8 +1063,6 @@ function blogRouter(context) {
 
 /** @param {HandlerContext} context */
 function listPosts(context) {
-  const req = context.request;
-
   // Get all blog posts from storage using the index
   const posts = /** @type {Array<{slug: string, title: string}>} */ ([]);
 
@@ -1105,8 +1114,6 @@ function listPosts(context) {
  * @param {string} slug
  */
 function showPost(context, slug) {
-  const req = context.request;
-
   // Load markdown from storage
   const markdown = sharedStorage.getItem(`blog:${slug}`);
 
@@ -1201,8 +1208,6 @@ function showPost(context, slug) {
 
 /** @param {HandlerContext} context */
 function newPostForm(context) {
-  const req = context.request;
-
   // Load template and render
   const template = sharedStorage.getItem("blog:template:newForm");
   if (!template) {
@@ -1240,8 +1245,6 @@ function newPostForm(context) {
  * @param {string} slug
  */
 function editPostForm(context, slug) {
-  const req = context.request;
-
   // Load existing post content
   const existingContent = sharedStorage.getItem("blog:" + slug);
 
@@ -1303,7 +1306,7 @@ function editPostForm(context, slug) {
 
 /** @param {HandlerContext} context */
 function createPost(context) {
-  const req = context.request;
+  const req = context.request || MARKDOWN_BLOG_EMPTY_REQUEST;
 
   const slug = req.form.slug || "";
   const markdown = req.form.content || "";
@@ -1459,7 +1462,7 @@ function createPost(context) {
 
 /** @param {HandlerContext} context */
 function updatePost(context) {
-  const req = context.request;
+  const req = context.request || MARKDOWN_BLOG_EMPTY_REQUEST;
 
   const originalSlug = req.form.originalSlug || "";
   const newSlug = req.form.slug || "";
@@ -1678,7 +1681,7 @@ function updatePost(context) {
 
 /** @param {HandlerContext} context */
 function deletePost(context) {
-  const req = context.request;
+  const req = context.request || MARKDOWN_BLOG_EMPTY_REQUEST;
 
   const slug = req.form.slug || "";
 

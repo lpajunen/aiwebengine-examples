@@ -66,6 +66,10 @@ function saveMessage(channelId, message) {
   }
 }
 
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // ============================================
 // GraphQL Query Resolvers
 // ============================================
@@ -83,7 +87,7 @@ function channelsResolver(context) {
     return channels;
   } catch (error) {
     console.error("Error in channelsResolver: " + error);
-    throw new Error("Failed to load channels: " + error.message);
+    throw new Error("Failed to load channels: " + getErrorMessage(error));
   }
 }
 
@@ -107,7 +111,7 @@ function messagesResolver(context) {
     return messages;
   } catch (error) {
     console.error("Error in messagesResolver: " + error);
-    throw new Error("Failed to load messages: " + error.message);
+    throw new Error("Failed to load messages: " + getErrorMessage(error));
   }
 }
 
@@ -125,7 +129,7 @@ function currentUserResolver(context) {
     };
   } catch (error) {
     console.error("Error in currentUserResolver: " + error);
-    throw new Error("Authentication required: " + error.message);
+    throw new Error("Authentication required: " + getErrorMessage(error));
   }
 }
 
@@ -190,7 +194,7 @@ function createChannelResolver(context) {
     return newChannel;
   } catch (error) {
     console.error("Error in createChannelResolver: " + error);
-    throw new Error("Failed to create channel: " + error.message);
+    throw new Error("Failed to create channel: " + getErrorMessage(error));
   }
 }
 
@@ -264,7 +268,7 @@ function sendMessageResolver(context) {
     return message;
   } catch (error) {
     console.error("Error in sendMessageResolver: " + error);
-    throw new Error("Failed to send message: " + error.message);
+    throw new Error("Failed to send message: " + getErrorMessage(error));
   }
 }
 

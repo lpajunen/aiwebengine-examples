@@ -198,6 +198,15 @@ import {
   tickNPCMovement as tickNPCMovementImpl,
   tickNPCTreeActions as tickNPCTreeActionsImpl,
 } from "./server/npc-tick-helpers.ts";
+import {
+  maybeTickWorldNPCs as maybeTickWorldNPCsImpl,
+  registerRecurringNPCTick as registerRecurringNPCTickImpl,
+  runNPCTick as runNPCTickImpl,
+  tickWorldNPCs as tickWorldNPCsImpl,
+  tryAcquireNPCTickLease as tryAcquireNPCTickLeaseImpl,
+  tryTickWorldNPCs as tryTickWorldNPCsImpl,
+} from "./server/npc-orchestration.ts";
+import { registerVirtualWorldRuntime as registerVirtualWorldRuntimeImpl } from "./server/runtime-registration.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -1872,117 +1881,85 @@ function shuffleDirections(dirs) {
  * @param {number} now
  */
 function tickWorldNPCs(worldId, now) {
-  ensureWorldItems(worldId);
-  var npcs = ensureWorldNPCs(worldId);
-  var npcIds = Object.keys(npcs);
-  if (npcIds.length === 0) return;
-
-  var map = getEffectiveMap(worldId);
-  var trees = loadWorldTrees(worldId);
-  var worldItems = loadWorldItems(worldId);
-  var itemChanges = false;
-  var treeChanges = false;
-  var players = loadWorldPlayers(worldId);
-  var occupiedPlayers = buildOccupiedPlayerMapImpl(players);
-  var occupiedNPCs = buildOccupiedNPCMapImpl(npcs);
-
-  var hasChanges = false;
-  npcIds.forEach(function (npcId) {
-    var n = npcs[npcId];
-    if (!n) return;
-    normalizeNPCInventoryStateImpl(n);
-
-    if (
-      tickNPCMovementImpl({
-        worldId: worldId,
-        npcId: npcId,
-        npc: n,
-        now: now,
-        map: map,
-        occupiedPlayers: occupiedPlayers,
-        occupiedNPCs: occupiedNPCs,
-        rows: ROWS,
-        cols: COLS,
-        shuffleDirections: shuffleDirections,
-        directionToRotation: directionToRotation,
-        getNPCDisplayName: getNPCDisplayName,
-        sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
-      })
-    ) {
-      hasChanges = true;
-    }
-
-    var itemResult = tickNPCItemInteractionsImpl({
-      worldId: worldId,
-      npcId: npcId,
-      npc: n,
-      worldItems: worldItems,
-      isPickableWorldItem: isPickableWorldItem,
-      deleteWorldItems: deleteWorldItems,
-      upsertWorldItem: upsertWorldItem,
-      broadcastItemChange: broadcastItemChange,
-    });
-    if (itemResult.hasChanges) hasChanges = true;
-    if (itemResult.itemChanges) itemChanges = true;
-
-    var treeResult = tickNPCTreeActionsImpl({
-      worldId: worldId,
-      npcId: npcId,
-      npc: n,
-      now: now,
-      map: map,
-      trees: trees,
-      rows: ROWS,
-      cols: COLS,
-      shuffleDirections: shuffleDirections,
-      getInventoryTreeActions: getInventoryTreeActions,
-      isOakCenterTile: isOakCenterTile,
-      isOakClearingTile: isOakClearingTile,
-      directionToRotation: directionToRotation,
-      sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
-    });
-    if (treeResult.hasChanges) hasChanges = true;
-    if (treeResult.treeChanges) treeChanges = true;
+  tickWorldNPCsImpl(worldId, now, {
+    ensureWorldItems: ensureWorldItems,
+    ensureWorldNPCs: ensureWorldNPCs,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    loadWorldItems: loadWorldItems,
+    loadWorldPlayers: loadWorldPlayers,
+    buildOccupiedPlayerMap: buildOccupiedPlayerMapImpl,
+    buildOccupiedNPCMap: buildOccupiedNPCMapImpl,
+    normalizeNPCInventoryState: normalizeNPCInventoryStateImpl,
+    tickNPCMovement: tickNPCMovementImpl,
+    tickNPCItemInteractions: tickNPCItemInteractionsImpl,
+    tickNPCTreeActions: tickNPCTreeActionsImpl,
+    saveWorldNPCs: saveWorldNPCs,
+    saveWorldItems: saveWorldItems,
+    saveWorldTrees: saveWorldTrees,
+    vwLog: vwLog,
+    isPickableWorldItem: isPickableWorldItem,
+    deleteWorldItems: deleteWorldItems,
+    upsertWorldItem: upsertWorldItem,
+    broadcastItemChange: broadcastItemChange,
+    ROWS: ROWS,
+    COLS: COLS,
+    shuffleDirections: shuffleDirections,
+    directionToRotation: directionToRotation,
+    getNPCDisplayName: getNPCDisplayName,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    getInventoryTreeActions: getInventoryTreeActions,
+    isOakCenterTile: isOakCenterTile,
+    isOakClearingTile: isOakClearingTile,
   });
-
-  if (hasChanges) {
-    saveWorldNPCs(worldId, npcs);
-    vwLog("npc tick moved", {
-      world_id: worldId,
-      npc_count: npcIds.length,
-    });
-  }
-  if (itemChanges) {
-    saveWorldItems(worldId, worldItems);
-  }
-  if (treeChanges) {
-    saveWorldTrees(worldId, trees);
-  }
 }
 
 function runNPCTick() {
-  var worlds = loadNPCActiveWorlds();
-  var now = Date.now();
-  var changedWorldSet = false;
-
-  Object.keys(worlds).forEach(function (worldId) {
-    if (now - Number(worlds[worldId] || 0) > NPC_ACTIVE_WORLD_TTL_MS) {
-      delete worlds[worldId];
-      deleteWorldRowsWhere(
-        VWORLD_NPC_TABLE,
-        JSON.stringify({ world_id: String(worldId) }),
-      );
-      deleteWorldRowsWhere(
-        VWORLD_NPC_TICK_TABLE,
-        JSON.stringify({ world_id: String(worldId) }),
-      );
-      changedWorldSet = true;
-      return;
-    }
-    tryTickWorldNPCs(worldId, now);
+  runNPCTickImpl({
+    loadNPCActiveWorlds: loadNPCActiveWorlds,
+    saveNPCActiveWorlds: saveNPCActiveWorlds,
+    deleteWorldRowsWhere: deleteWorldRowsWhere,
+    NPC_ACTIVE_WORLD_TTL_MS: NPC_ACTIVE_WORLD_TTL_MS,
+    VWORLD_NPC_TABLE: VWORLD_NPC_TABLE,
+    VWORLD_NPC_TICK_TABLE: VWORLD_NPC_TICK_TABLE,
+    loadNPCLastTick: loadNPCLastTick,
+    saveNPCLastTick: saveNPCLastTick,
+    NPC_TICK_MS: NPC_TICK_MS,
+    parseWorldDbResult: parseWorldDbResult,
+    acquireLease: database.acquireLease,
+    VWORLD_NPC_TICK_LEASE_TABLE: VWORLD_NPC_TICK_LEASE_TABLE,
+    npcTickOwnerId: npcTickOwnerId,
+    NPC_TICK_LEASE_MS: NPC_TICK_LEASE_MS,
+    ensureWorldItems: ensureWorldItems,
+    ensureWorldNPCs: ensureWorldNPCs,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    loadWorldItems: loadWorldItems,
+    loadWorldPlayers: loadWorldPlayers,
+    buildOccupiedPlayerMap: buildOccupiedPlayerMapImpl,
+    buildOccupiedNPCMap: buildOccupiedNPCMapImpl,
+    normalizeNPCInventoryState: normalizeNPCInventoryStateImpl,
+    tickNPCMovement: tickNPCMovementImpl,
+    tickNPCItemInteractions: tickNPCItemInteractionsImpl,
+    tickNPCTreeActions: tickNPCTreeActionsImpl,
+    saveWorldNPCs: saveWorldNPCs,
+    saveWorldItems: saveWorldItems,
+    saveWorldTrees: saveWorldTrees,
+    vwLog: vwLog,
+    isPickableWorldItem: isPickableWorldItem,
+    deleteWorldItems: deleteWorldItems,
+    upsertWorldItem: upsertWorldItem,
+    broadcastItemChange: broadcastItemChange,
+    ROWS: ROWS,
+    COLS: COLS,
+    shuffleDirections: shuffleDirections,
+    directionToRotation: directionToRotation,
+    getNPCDisplayName: getNPCDisplayName,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    getInventoryTreeActions: getInventoryTreeActions,
+    isOakCenterTile: isOakCenterTile,
+    isOakClearingTile: isOakClearingTile,
   });
-
-  if (changedWorldSet) saveNPCActiveWorlds(worlds);
 }
 
 /**
@@ -1991,22 +1968,14 @@ function runNPCTick() {
  * @returns {boolean}
  */
 function tryAcquireNPCTickLease(worldId, now) {
-  var result = parseWorldDbResult(
-    database.acquireLease(
-      VWORLD_NPC_TICK_LEASE_TABLE,
-      "npc_tick:" + String(worldId),
-      npcTickOwnerId,
-      NPC_TICK_LEASE_MS,
-    ),
-  );
-  if (!result || result.error) {
-    vwLog("npc tick lease acquisition failed", {
-      world_id: worldId,
-      error: String(result && result.error ? result.error : "unknown"),
-    });
-    return false;
-  }
-  return !!(result.acquired && result.owner === npcTickOwnerId);
+  return tryAcquireNPCTickLeaseImpl(worldId, {
+    parseWorldDbResult: parseWorldDbResult,
+    acquireLease: database.acquireLease,
+    VWORLD_NPC_TICK_LEASE_TABLE: VWORLD_NPC_TICK_LEASE_TABLE,
+    npcTickOwnerId: npcTickOwnerId,
+    NPC_TICK_LEASE_MS: NPC_TICK_LEASE_MS,
+    vwLog: vwLog,
+  });
 }
 
 /**
@@ -2015,37 +1984,98 @@ function tryAcquireNPCTickLease(worldId, now) {
  * @returns {boolean}
  */
 function tryTickWorldNPCs(worldId, now) {
-  var lastTick = loadNPCLastTick(worldId);
-  if (now - lastTick < NPC_TICK_MS) return false;
-  if (!tryAcquireNPCTickLease(worldId, now)) return false;
-
-  // Recheck after lease acquisition to avoid race with another writer.
-  lastTick = loadNPCLastTick(worldId);
-  if (now - lastTick < NPC_TICK_MS) return false;
-
-  tickWorldNPCs(worldId, now);
-  saveNPCLastTick(worldId, now);
-  return true;
+  return tryTickWorldNPCsImpl(worldId, now, {
+    loadNPCLastTick: loadNPCLastTick,
+    saveNPCLastTick: saveNPCLastTick,
+    NPC_TICK_MS: NPC_TICK_MS,
+    parseWorldDbResult: parseWorldDbResult,
+    acquireLease: database.acquireLease,
+    VWORLD_NPC_TICK_LEASE_TABLE: VWORLD_NPC_TICK_LEASE_TABLE,
+    npcTickOwnerId: npcTickOwnerId,
+    NPC_TICK_LEASE_MS: NPC_TICK_LEASE_MS,
+    vwLog: vwLog,
+    ensureWorldItems: ensureWorldItems,
+    ensureWorldNPCs: ensureWorldNPCs,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    loadWorldItems: loadWorldItems,
+    loadWorldPlayers: loadWorldPlayers,
+    buildOccupiedPlayerMap: buildOccupiedPlayerMapImpl,
+    buildOccupiedNPCMap: buildOccupiedNPCMapImpl,
+    normalizeNPCInventoryState: normalizeNPCInventoryStateImpl,
+    tickNPCMovement: tickNPCMovementImpl,
+    tickNPCItemInteractions: tickNPCItemInteractionsImpl,
+    tickNPCTreeActions: tickNPCTreeActionsImpl,
+    saveWorldNPCs: saveWorldNPCs,
+    saveWorldItems: saveWorldItems,
+    saveWorldTrees: saveWorldTrees,
+    isPickableWorldItem: isPickableWorldItem,
+    deleteWorldItems: deleteWorldItems,
+    upsertWorldItem: upsertWorldItem,
+    broadcastItemChange: broadcastItemChange,
+    ROWS: ROWS,
+    COLS: COLS,
+    shuffleDirections: shuffleDirections,
+    directionToRotation: directionToRotation,
+    getNPCDisplayName: getNPCDisplayName,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    getInventoryTreeActions: getInventoryTreeActions,
+    isOakCenterTile: isOakCenterTile,
+    isOakClearingTile: isOakClearingTile,
+  });
 }
 
 /**
  * @param {string} worldId
  */
 function maybeTickWorldNPCs(worldId) {
-  var now = Date.now();
-  tryTickWorldNPCs(worldId, now);
+  maybeTickWorldNPCsImpl(worldId, {
+    loadNPCLastTick: loadNPCLastTick,
+    saveNPCLastTick: saveNPCLastTick,
+    NPC_TICK_MS: NPC_TICK_MS,
+    parseWorldDbResult: parseWorldDbResult,
+    acquireLease: database.acquireLease,
+    VWORLD_NPC_TICK_LEASE_TABLE: VWORLD_NPC_TICK_LEASE_TABLE,
+    npcTickOwnerId: npcTickOwnerId,
+    NPC_TICK_LEASE_MS: NPC_TICK_LEASE_MS,
+    vwLog: vwLog,
+    ensureWorldItems: ensureWorldItems,
+    ensureWorldNPCs: ensureWorldNPCs,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    loadWorldItems: loadWorldItems,
+    loadWorldPlayers: loadWorldPlayers,
+    buildOccupiedPlayerMap: buildOccupiedPlayerMapImpl,
+    buildOccupiedNPCMap: buildOccupiedNPCMapImpl,
+    normalizeNPCInventoryState: normalizeNPCInventoryStateImpl,
+    tickNPCMovement: tickNPCMovementImpl,
+    tickNPCItemInteractions: tickNPCItemInteractionsImpl,
+    tickNPCTreeActions: tickNPCTreeActionsImpl,
+    saveWorldNPCs: saveWorldNPCs,
+    saveWorldItems: saveWorldItems,
+    saveWorldTrees: saveWorldTrees,
+    isPickableWorldItem: isPickableWorldItem,
+    deleteWorldItems: deleteWorldItems,
+    upsertWorldItem: upsertWorldItem,
+    broadcastItemChange: broadcastItemChange,
+    ROWS: ROWS,
+    COLS: COLS,
+    shuffleDirections: shuffleDirections,
+    directionToRotation: directionToRotation,
+    getNPCDisplayName: getNPCDisplayName,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    getInventoryTreeActions: getInventoryTreeActions,
+    isOakCenterTile: isOakCenterTile,
+    isOakClearingTile: isOakClearingTile,
+  });
 }
 
 function registerRecurringNPCTick() {
-  try {
-    schedulerService.registerRecurring({
-      handler: "runNPCTickScheduledJob",
-      intervalMilliseconds: NPC_TICK_MS,
-      name: "vworld-npc-tick",
-    });
-  } catch (e) {
-    vwLog("npc scheduler registerRecurring failed", { error: String(e) });
-  }
+  registerRecurringNPCTickImpl({
+    schedulerService: schedulerService,
+    NPC_TICK_MS: NPC_TICK_MS,
+    vwLog: vwLog,
+  });
 }
 
 /**
@@ -2984,260 +3014,10 @@ function init() {
   ensureWorldDatabaseSchema();
   ensureChatDatabaseSchema();
   startNPCTicker();
-  /**
-   * @param {string} path
-   * @param {string} handler
-   * @param {string} method
-   * @param {*} [opts]
-   */
-  function safeRegisterRoute(path, handler, method, opts) {
-    try {
-      if (opts) {
-        routeRegistry.registerRoute(path, handler, method, opts);
-      } else {
-        routeRegistry.registerRoute(path, handler, method);
-      }
-    } catch (e) {
-      vwLog("route registration skipped", {
-        path: path,
-        method: method,
-        error: String(e),
-      });
-    }
-  }
-
-  /**
-   * @param {string} path
-   * @param {string} customizationFunction
-   */
-  function safeRegisterStreamRoute(path, customizationFunction) {
-    try {
-      if (customizationFunction) {
-        routeRegistry.registerStreamRoute(path, customizationFunction);
-      } else {
-        routeRegistry.registerStreamRoute(path);
-      }
-    } catch (e) {
-      vwLog("stream route registration skipped", {
-        path: path,
-        error: String(e),
-      });
-    }
-  }
-
-  /**
-   * @param {string} name
-   * @param {string} description
-   * @param {string} schema
-   * @param {string} handlerName
-   */
-  function safeRegisterTool(name, description, schema, handlerName) {
-    try {
-      mcpRegistry.registerTool(name, description, schema, handlerName);
-    } catch (e) {
-      vwLog("mcp tool registration skipped", {
-        name: name,
-        handler: handlerName,
-        error: String(e),
-      });
-    }
-  }
-
-  var virtualWorldStateSchema = JSON.stringify({
-    type: "object",
-    properties: {},
+  registerVirtualWorldRuntimeImpl({
+    routeRegistry: routeRegistry,
+    mcpRegistry: mcpRegistry,
+    vwLog: vwLog,
+    virtualWorldEventsStreamPath: VIRTUAL_WORLD_EVENTS_STREAM_PATH,
   });
-  var virtualWorldMoveSchema = JSON.stringify({
-    type: "object",
-    properties: {
-      direction: {
-        type: "string",
-        enum: ["north", "south", "east", "west", "up", "down", "left", "right"],
-        description: "Direction to move the player by one tile",
-      },
-      rotation: {
-        type: "number",
-        description:
-          "Optional facing rotation in radians; defaults to the chosen direction",
-      },
-      seq: {
-        type: "number",
-        description:
-          "Optional client sequence number; defaults to the next canonical sequence",
-      },
-      session_id: {
-        type: "string",
-        description: "Optional movement session identifier; defaults to 'mcp'",
-        default: "mcp",
-      },
-    },
-    required: ["direction"],
-  });
-  var virtualWorldManageItemsSchema = JSON.stringify({
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["list", "pick", "drop", "equip"],
-        description:
-          "List nearby items or perform an inventory/world item action",
-        default: "list",
-      },
-      from: {
-        type: "string",
-        enum: ["left_hand", "right_hand", "inventory"],
-        description: "Source slot for drop or equip",
-      },
-      to: {
-        type: "string",
-        enum: ["left_hand", "right_hand", "inventory"],
-        description: "Destination slot for equip",
-      },
-      index: {
-        type: "number",
-        description: "Inventory index used for drop or equip from inventory",
-      },
-    },
-  });
-  var virtualWorldActSchema = JSON.stringify({
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: [
-          "plant",
-          "cut",
-          "build_house",
-          "destroy_house",
-          "build_portal",
-          "remove_portal",
-          "play_tune",
-          "place_blessing",
-          "portal_travel",
-          "return_home",
-          "build_portal_forest",
-          "build_portal_island",
-          "build_portal_cave",
-          "build_portal_building",
-        ],
-        description: "World or item action to perform",
-      },
-      rotation: {
-        type: "number",
-        description:
-          "Optional player facing rotation in radians; defaults to current player rotation",
-      },
-      row: {
-        type: "number",
-        description: "Optional player row; defaults to canonical player row",
-      },
-      col: {
-        type: "number",
-        description: "Optional player col; defaults to canonical player col",
-      },
-      destination_world_type: {
-        type: "string",
-        enum: ["forest", "island", "cave", "building"],
-        description: "Optional portal destination world type for build_portal",
-      },
-    },
-    required: ["action"],
-  });
-
-  // Register new endpoints first so they are available even in hot-reload sessions
-  // where older routes may already exist.
-  safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
-  safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
-  safeRegisterTool(
-    "virtualWorldGetState",
-    "Get the authenticated player's current world, position, items, inventory, available actions, and movement options",
-    virtualWorldStateSchema,
-    "virtualWorldGetStateToolHandler",
-  );
-  safeRegisterTool(
-    "virtualWorldMove",
-    "Move the authenticated player one tile in a cardinal direction",
-    virtualWorldMoveSchema,
-    "virtualWorldMoveToolHandler",
-  );
-  safeRegisterTool(
-    "virtualWorldManageItems",
-    "List, pick up, drop, or equip items for the authenticated player",
-    virtualWorldManageItemsSchema,
-    "virtualWorldManageItemsToolHandler",
-  );
-  safeRegisterTool(
-    "virtualWorldAct",
-    "Perform authenticated player world actions such as cutting, planting, building, portal use, or blessings",
-    virtualWorldActSchema,
-    "virtualWorldActToolHandler",
-  );
-
-  try {
-    routeRegistry.registerAssetRoute("/virtual-world", "public/welcome.html");
-  } catch (e) {
-    vwLog("asset route registration skipped", {
-      path: "/virtual-world",
-      error: String(e),
-    });
-  }
-  try {
-    routeRegistry.registerAssetRoute(
-      "/virtual-world/styles.css",
-      "public/styles.css",
-    );
-  } catch (e) {
-    vwLog("asset route registration skipped", {
-      path: "/virtual-world/styles.css",
-      error: String(e),
-    });
-  }
-  try {
-    routeRegistry.registerAssetRoute(
-      "/virtual-world/client.js",
-      "public/client.js",
-    );
-  } catch (e) {
-    vwLog("asset route registration skipped", {
-      path: "/virtual-world/client.js",
-      error: String(e),
-    });
-  }
-  safeRegisterRoute("/virtual-world/play", "getVirtualWorldPage", "GET", {
-    summary: "Virtual World (Play)",
-    description:
-      "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys. Requires authentication.",
-    tags: ["Demo"],
-  });
-  safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");
-  safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");
-  safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
-  safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
-  safeRegisterRoute("/virtual-world/players", "playersHandler", "GET");
-  safeRegisterRoute(
-    "/virtual-world/current-world",
-    "currentWorldHandler",
-    "GET",
-  );
-  safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
-  safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
-  safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
-  safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");
-  safeRegisterRoute(
-    "/virtual-world/set-nickname",
-    "setNicknameHandler",
-    "POST",
-  );
-  safeRegisterRoute(
-    "/virtual-world/online-players",
-    "onlinePlayersHandler",
-    "GET",
-  );
-  safeRegisterRoute("/virtual-world/chat", "chatHandler", "POST");
-  safeRegisterRoute("/virtual-world/dm", "dmHandler", "POST");
-  safeRegisterRoute("/virtual-world/dm-history", "dmHistoryHandler", "GET");
-  safeRegisterStreamRoute(
-    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
-    "virtualWorldEventsStreamCustomizer",
-  );
 }

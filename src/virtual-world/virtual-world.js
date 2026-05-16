@@ -1,5 +1,21 @@
 /// <reference path="../../types/aiwebengine.d.ts" />
 
+import {
+  canonicalTreeAction,
+  getDefaultWorldTypeForWorldId,
+  getWorldBoundaryTileName,
+  getWorldFloorTileName,
+  getWorldTileDef,
+  getWorldWallTileName,
+  isWorldTileWalkable,
+  normalizeWorldType,
+  portalBuildActionForWorldType,
+  toStoredWorldTimestamp,
+  fromStoredWorldTimestamp,
+  worldTileValueForName,
+  worldTypeForPortalBuildAction,
+} from "server/world-domain.ts";
+
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.
 
@@ -192,97 +208,6 @@ function hashString(value) {
  */
 function getWorldFlavorText(worldId) {
   return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
-}
-
-/**
- * @param {string | undefined | null} worldType
- * @returns {string}
- */
-function normalizeWorldType(worldType) {
-  var normalized = String(worldType || "").toLowerCase();
-  return WORLD_TYPES.indexOf(normalized) !== -1
-    ? normalized
-    : WORLD_TYPE_FOREST;
-}
-
-/**
- * @param {string} worldType
- * @returns {string}
- */
-function portalBuildActionForWorldType(worldType) {
-  return (
-    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[normalizeWorldType(worldType)] ||
-    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[WORLD_TYPE_FOREST]
-  );
-}
-
-/**
- * @param {string | undefined | null} action
- * @returns {string | null}
- */
-function worldTypeForPortalBuildAction(action) {
-  var normalizedAction = String(action || "");
-  for (var i = 0; i < WORLD_TYPES.length; i++) {
-    var worldType = WORLD_TYPES[i];
-    if (portalBuildActionForWorldType(worldType) === normalizedAction) {
-      return worldType;
-    }
-  }
-  return null;
-}
-
-/**
- * @param {string} action
- * @returns {string}
- */
-function canonicalTreeAction(action) {
-  return worldTypeForPortalBuildAction(action)
-    ? "build_portal"
-    : String(action);
-}
-
-/**
- * @param {string | number} worldId
- * @returns {string}
- */
-function getDefaultWorldTypeForWorldId(worldId) {
-  return isOakWorld(worldId) ? WORLD_TYPE_FOREST : WORLD_TYPE_FOREST;
-}
-
-/**
- * @param {string} worldType
- * @returns {string}
- */
-function getWorldFloorTileName(worldType) {
-  var normalizedType = normalizeWorldType(worldType);
-  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_SAND;
-  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_CAVE_FLOOR;
-  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_WOOD_FLOOR;
-  return WORLD_TILE_GROUND;
-}
-
-/**
- * @param {string} worldType
- * @returns {string}
- */
-function getWorldWallTileName(worldType) {
-  var normalizedType = normalizeWorldType(worldType);
-  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_ROCK;
-  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
-  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
-  return WORLD_TILE_SPRUCE_THICKET;
-}
-
-/**
- * @param {string} worldType
- * @returns {string}
- */
-function getWorldBoundaryTileName(worldType) {
-  var normalizedType = normalizeWorldType(worldType);
-  if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_OCEAN;
-  if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
-  if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
-  return WORLD_TILE_SPRUCE_THICKET;
 }
 
 /**
@@ -729,40 +654,6 @@ function generateMap(worldId) {
   map[1][2] = worldTileValueForName(floorTileName);
   map[2][1] = worldTileValueForName(floorTileName);
   return map;
-}
-
-/**
- * @param {string} tileName
- * @returns {{value: number, walkable: boolean, layer: string}}
- */
-function getWorldTileDef(tileName) {
-  return (
-    WORLD_TILE_DEFS[String(tileName)] || WORLD_TILE_DEFS[WORLD_TILE_GROUND]
-  );
-}
-
-/**
- * @param {number} tileValue
- * @returns {string}
- */
-function worldTileNameForValue(tileValue) {
-  return WORLD_TILE_NAME_BY_VALUE[Number(tileValue)] || WORLD_TILE_GROUND;
-}
-
-/**
- * @param {string} tileName
- * @returns {number}
- */
-function worldTileValueForName(tileName) {
-  return getWorldTileDef(tileName).value;
-}
-
-/**
- * @param {number} tileValue
- * @returns {boolean}
- */
-function isWorldTileWalkable(tileValue) {
-  return !!getWorldTileDef(worldTileNameForValue(tileValue)).walkable;
 }
 
 /**
@@ -2079,22 +1970,6 @@ function fromStoredChatTimestamp(storedTs) {
   if (!isFinite(numeric) || numeric <= 0) return 0;
   if (numeric < 1000000000000) return numeric * 1000;
   return numeric;
-}
-
-/**
- * @param {number} tsMs
- * @returns {number}
- */
-function toStoredWorldTimestamp(tsMs) {
-  return toStoredChatTimestamp(tsMs);
-}
-
-/**
- * @param {*} storedTs
- * @returns {number}
- */
-function fromStoredWorldTimestamp(storedTs) {
-  return fromStoredChatTimestamp(storedTs);
 }
 
 /**

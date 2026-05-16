@@ -101,7 +101,12 @@ export function broadcastItemChange(
     col: col,
     items: Array.isArray(items)
       ? items.map(function (item) {
-          return { id: item.id, type: item.type };
+          return {
+            id: item.id,
+            type: item.type,
+            destination_world_id: item.destination_world_id,
+            destination_world_type: item.destination_world_type,
+          };
         })
       : [],
   });

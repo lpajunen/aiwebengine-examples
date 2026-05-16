@@ -2455,6 +2455,46 @@ function fetchItemSnapshot() {
     });
 }
 
+/** @param {any} payload */
+function applyItemDeltaFromEvent(payload) {
+  if (!payload) return;
+  var row = Number(payload.row);
+  var col = Number(payload.col);
+  if (!isFinite(row) || !isFinite(col)) return;
+
+  var tileKey = row + "_" + col;
+  var nextItems = Array.isArray(payload.items)
+    ? /** @type {any[]} */ (payload.items)
+        .filter(function (it) {
+          return it && it.id && it.type;
+        })
+        .map(function (it) {
+          return {
+            id: it.id,
+            type: it.type,
+            destination_world_id: it.destination_world_id,
+            destination_world_type: it.destination_world_type,
+          };
+        })
+    : [];
+
+  // Treat the SSE delta as newer than any in-flight repair snapshot.
+  appliedItemSnapshotSeq = Math.max(
+    appliedItemSnapshotSeq,
+    itemSnapshotRequestSeq + 1,
+  );
+
+  if (nextItems.length > 0) {
+    worldItemsByTile[tileKey] = nextItems;
+  } else {
+    delete worldItemsByTile[tileKey];
+  }
+
+  rebuildItemMeshes();
+  refreshTileDetailIfOpen();
+  updateUseButtonState();
+}
+
 /** @type {any[]} */
 var pendingMoves = []; // FIFO queue of {row,col,seq} — one entry per step
 var moveInFlight = false;
@@ -2636,34 +2676,16 @@ function fetchSnapshot() {
     });
 }
 
-function ensureCurrentWorld() {
-  if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth("/virtual-world/current-world")
-    .then(function (state) {
-      if (
-        state &&
-        state.world_id &&
-        String(state.world_id) !== String(worldId)
-      ) {
-        window.location.href = "/virtual-world/play";
-      }
-    })
-    .catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-    });
-}
-
 function initMultiplayer() {
   scheduleSessionRefresh();
   updateHeldHud();
   renderInventoryPanel();
   initCheatTrigger();
   initLogoutTrigger();
+  // Active player positions are not part of the bootstrapped page state,
+  // so keep one initial snapshot to populate remote avatars.
   fetchSnapshot();
   syncNPCSnapshot(NPCS);
-  fetchNPCSnapshot();
-  fetchItemSnapshot();
 
   var eventsSseParams = new URLSearchParams({
     world_id: String(worldId),
@@ -2823,7 +2845,15 @@ function initMultiplayer() {
         handleNpcMovedEvent(payload);
         return;
       case "item_changed":
-        fetchItemSnapshot();
+        if (
+          payload &&
+          payload.actor_type === "player" &&
+          payload.actor_id === playerId
+        ) {
+          fetchItemSnapshot();
+        } else {
+          applyItemDeltaFromEvent(payload);
+        }
         return;
       case "chat_message":
         handleChatMessageEvent(payload);
@@ -2894,7 +2924,7 @@ function initMultiplayer() {
     }
   });
 
-  // Heartbeat — keep presence alive and resync snapshot every 15 s
+  // Heartbeat — keep presence alive while SSE handles steady-state updates.
   setInterval(function () {
     if (authState !== AUTH_STATE_OK) return;
     // Use dedicated heartbeat endpoint: only refreshes the presence TTL
@@ -2907,10 +2937,6 @@ function initMultiplayer() {
       if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
         return;
     });
-    ensureCurrentWorld();
-    fetchSnapshot();
-    fetchNPCSnapshot();
-    fetchItemSnapshot();
   }, 5000);
 }
 

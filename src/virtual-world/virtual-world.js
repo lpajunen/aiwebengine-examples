@@ -1,7 +1,15 @@
 /// <reference path="../../types/aiwebengine.d.ts" />
 
 import {
+  canInventoryUseTreeAction,
+  canTileItemsUseTreeAction,
+  createWorldId,
   EXTRA_ITEM_TYPES,
+  getAllKnownItemTypes,
+  getInventoryTreeActions,
+  getNPCDisplayName,
+  getWorldFlavorText,
+  hashString,
   ITEM_TYPES,
   OAK_CENTER_COL,
   OAK_CENTER_ROW,
@@ -74,86 +82,6 @@ var npcTickOwnerId =
   "-" +
   Math.random().toString(36).slice(2);
 
-var WORLD_FLAVOR_TEXTS = [
-  "A low rune-song lingers between the spruce boughs.",
-  "Rowan charms sway softly where the pine paths meet.",
-  "The forest floor feels old here, as if someone just finished a quiet verse.",
-  "Juniper smoke and birdsong drift through this hidden clearing.",
-];
-
-var NPC_NAME_PREFIXES = [
-  "Aino",
-  "Ilma",
-  "Kylli",
-  "Lempi",
-  "Otso",
-  "Sampo",
-  "Tapio",
-  "Tuuli",
-  "Vesa",
-  "Virva",
-];
-
-var NPC_NAME_SUFFIXES = [
-  "of the Pines",
-  "the Rune-Hummer",
-  "the Rowan Keeper",
-  "of the Quiet Marsh",
-  "the Hearth Walker",
-  "of the Dawn Path",
-  "the Juniper Hand",
-  "of the Singing Moss",
-];
-
-/**
- * @returns {string[]}
- */
-function getAllKnownItemTypes() {
-  /** @type {Record<string, boolean>} */
-  var seen = {};
-  /** @type {string[]} */
-  var out = [];
-  ITEM_TYPES.forEach(function (type) {
-    if (!type || seen[type]) return;
-    seen[type] = true;
-    out.push(type);
-  });
-  EXTRA_ITEM_TYPES.forEach(function (type) {
-    if (!type || seen[type]) return;
-    seen[type] = true;
-    out.push(type);
-  });
-  return out;
-}
-
-/**
- * @param {string} value
- * @returns {number}
- */
-function hashString(value) {
-  var str = String(value || "");
-  var hash = 0;
-  for (var i = 0; i < str.length; i++) {
-    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-  }
-  return hash >>> 0;
-}
-
-/**
- * @param {string} worldId
- * @returns {string}
- */
-function getWorldFlavorText(worldId) {
-  return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
-}
-
-/**
- * @returns {string}
- */
-function createWorldId() {
-  return String(Math.floor(Math.random() * 999999) + 1);
-}
-
 /**
  * @param {string | number} worldId
  * @param {string} userId
@@ -211,21 +139,6 @@ function getDefaultSpawnPosition(worldId, userId) {
   }
 
   return { row: OAK_CENTER_ROW + 1, col: OAK_CENTER_COL, seq: 0, rotation: 0 };
-}
-
-/**
- * @param {string} worldId
- * @param {string} npcId
- * @returns {string}
- */
-function getNPCDisplayName(worldId, npcId) {
-  var seed = hashString(String(worldId) + ":" + String(npcId));
-  var prefix = NPC_NAME_PREFIXES[seed % NPC_NAME_PREFIXES.length];
-  var suffix =
-    NPC_NAME_SUFFIXES[
-      Math.floor(seed / NPC_NAME_PREFIXES.length) % NPC_NAME_SUFFIXES.length
-    ];
-  return prefix + " " + suffix;
 }
 
 /**
@@ -1131,98 +1044,6 @@ function applyWorldModsToMap(map, worldMods) {
     });
   }
   return map;
-}
-
-/**
- * @param {*} inv
- * @returns {string[]}
- */
-function getInventoryTreeActions(inv) {
-  var normalized = normalizeInventory(inv);
-  /** @type {Record<string, boolean>} */
-  var actions = {};
-  /** @type {any[]} */
-  var items = [];
-  if (normalized.left_hand) items.push(normalized.left_hand);
-  if (normalized.right_hand) items.push(normalized.right_hand);
-  if (Array.isArray(normalized.inventory)) {
-    items = items.concat(normalized.inventory);
-  }
-
-  /**
-   * @param {string} type
-   * @returns {string[]}
-   */
-  function actionsForItemType(type) {
-    if (type === "portal_builder") {
-      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
-    }
-    if (type === "hammer") return ["build_house", "destroy_house"];
-    var action = TREE_ACTION_BY_ITEM_TYPE[type];
-    return action ? [action] : [];
-  }
-
-  items.forEach(function (item) {
-    if (!item || typeof item.type !== "string") return;
-    var itemActions = actionsForItemType(item.type);
-    for (var i = 0; i < itemActions.length; i++) {
-      actions[itemActions[i]] = true;
-    }
-  });
-  return Object.keys(actions);
-}
-
-/**
- * @param {*} inv
- * @param {string} action
- * @returns {boolean}
- */
-function canInventoryUseTreeAction(inv, action) {
-  var normalizedAction = canonicalTreeAction(action);
-  if (
-    normalizedAction !== "plant" &&
-    normalizedAction !== "cut" &&
-    normalizedAction !== "build_house" &&
-    normalizedAction !== "destroy_house" &&
-    normalizedAction !== "build_portal" &&
-    normalizedAction !== "remove_portal" &&
-    normalizedAction !== "play_tune" &&
-    normalizedAction !== "place_blessing" &&
-    normalizedAction !== "portal_travel" &&
-    normalizedAction !== "return_home"
-  )
-    return false;
-  return getInventoryTreeActions(inv).indexOf(String(action)) !== -1;
-}
-
-/**
- * @param {any[]} items
- * @param {string} action
- * @returns {boolean}
- */
-function canTileItemsUseTreeAction(items, action) {
-  if (!Array.isArray(items)) return false;
-
-  /**
-   * @param {string} type
-   * @returns {string[]}
-   */
-  function actionsForItemType(type) {
-    if (type === "portal_builder") {
-      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
-    }
-    if (type === "hammer") return ["build_house", "destroy_house"];
-    var mapped = TREE_ACTION_BY_ITEM_TYPE[type];
-    return mapped ? [mapped] : [];
-  }
-
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    if (!item || typeof item.type !== "string") continue;
-    var itemActions = actionsForItemType(item.type);
-    if (itemActions.indexOf(action) !== -1) return true;
-  }
-  return false;
 }
 
 /**

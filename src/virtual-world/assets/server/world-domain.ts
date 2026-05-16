@@ -154,8 +154,78 @@ export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
   11: WORLD_TILE_WOOD_FLOOR,
 };
 
+const WORLD_FLAVOR_TEXTS = [
+  "A low rune-song lingers between the spruce boughs.",
+  "Rowan charms sway softly where the pine paths meet.",
+  "The forest floor feels old here, as if someone just finished a quiet verse.",
+  "Juniper smoke and birdsong drift through this hidden clearing.",
+];
+
+const NPC_NAME_PREFIXES = [
+  "Aino",
+  "Ilma",
+  "Kylli",
+  "Lempi",
+  "Otso",
+  "Sampo",
+  "Tapio",
+  "Tuuli",
+  "Vesa",
+  "Virva",
+];
+
+const NPC_NAME_SUFFIXES = [
+  "of the Pines",
+  "the Rune-Hummer",
+  "the Rowan Keeper",
+  "of the Quiet Marsh",
+  "the Hearth Walker",
+  "of the Dawn Path",
+  "the Juniper Hand",
+  "of the Singing Moss",
+];
+
 function isRecordLike(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
+}
+
+export function getAllKnownItemTypes(): string[] {
+  const seen: Record<string, boolean> = {};
+  const out: string[] = [];
+  ITEM_TYPES.forEach(function (type) {
+    if (!type || seen[type]) return;
+    seen[type] = true;
+    out.push(type);
+  });
+  EXTRA_ITEM_TYPES.forEach(function (type) {
+    if (!type || seen[type]) return;
+    seen[type] = true;
+    out.push(type);
+  });
+  return out;
+}
+
+export function hashString(value: string): number {
+  const str = String(value || "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
+
+export function getWorldFlavorText(worldId: string): string {
+  return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
+}
+
+export function getNPCDisplayName(worldId: string, npcId: string): string {
+  const seed = hashString(String(worldId) + ":" + String(npcId));
+  const prefix = NPC_NAME_PREFIXES[seed % NPC_NAME_PREFIXES.length];
+  const suffix =
+    NPC_NAME_SUFFIXES[
+      Math.floor(seed / NPC_NAME_PREFIXES.length) % NPC_NAME_SUFFIXES.length
+    ];
+  return prefix + " " + suffix;
 }
 
 export function normalizeWorldType(
@@ -368,6 +438,80 @@ export function normalizeInventory(inv: unknown): Inventory {
     out.inventory = inv.inventory.filter(isValidItem);
   }
   return out;
+}
+
+export function getInventoryTreeActions(inv: unknown): string[] {
+  const normalized = normalizeInventory(inv);
+  const actions: Record<string, boolean> = {};
+  let items: InventoryItem[] = [];
+  if (normalized.left_hand) items.push(normalized.left_hand);
+  if (normalized.right_hand) items.push(normalized.right_hand);
+  if (Array.isArray(normalized.inventory)) {
+    items = items.concat(normalized.inventory);
+  }
+
+  function actionsForItemType(type: string): string[] {
+    if (type === "portal_builder") {
+      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
+    }
+    if (type === "hammer") return ["build_house", "destroy_house"];
+    const action = TREE_ACTION_BY_ITEM_TYPE[type];
+    return action ? [action] : [];
+  }
+
+  items.forEach(function (item) {
+    const itemActions = actionsForItemType(item.type);
+    for (let i = 0; i < itemActions.length; i++) {
+      actions[itemActions[i]] = true;
+    }
+  });
+  return Object.keys(actions);
+}
+
+export function canInventoryUseTreeAction(
+  inv: unknown,
+  action: string,
+): boolean {
+  const normalizedAction = canonicalTreeAction(action);
+  if (
+    normalizedAction !== "plant" &&
+    normalizedAction !== "cut" &&
+    normalizedAction !== "build_house" &&
+    normalizedAction !== "destroy_house" &&
+    normalizedAction !== "build_portal" &&
+    normalizedAction !== "remove_portal" &&
+    normalizedAction !== "play_tune" &&
+    normalizedAction !== "place_blessing" &&
+    normalizedAction !== "portal_travel" &&
+    normalizedAction !== "return_home"
+  ) {
+    return false;
+  }
+  return getInventoryTreeActions(inv).indexOf(String(action)) !== -1;
+}
+
+export function canTileItemsUseTreeAction(
+  items: unknown[],
+  action: string,
+): boolean {
+  if (!Array.isArray(items)) return false;
+
+  function actionsForItemType(type: string): string[] {
+    if (type === "portal_builder") {
+      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
+    }
+    if (type === "hammer") return ["build_house", "destroy_house"];
+    const mapped = TREE_ACTION_BY_ITEM_TYPE[type];
+    return mapped ? [mapped] : [];
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!isValidItem(item)) continue;
+    const itemActions = actionsForItemType(item.type);
+    if (itemActions.indexOf(action) !== -1) return true;
+  }
+  return false;
 }
 
 export function toStoredWorldTimestamp(tsMs: number): number {

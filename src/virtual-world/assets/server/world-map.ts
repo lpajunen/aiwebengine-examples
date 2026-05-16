@@ -34,7 +34,11 @@ function paintWorldBorder(map: number[][], tileName: string): void {
   }
 }
 
-function paintWorldRing(map: number[][], tileName: string, inset: number): void {
+function paintWorldRing(
+  map: number[][],
+  tileName: string,
+  inset: number,
+): void {
   const tileValue = worldTileValueForName(tileName);
   const minRow = Math.max(0, Number(inset) || 0);
   const minCol = minRow;

@@ -1,6 +1,11 @@
 /// <reference path="../../types/aiwebengine.d.ts" />
 
 import {
+  EXTRA_ITEM_TYPES,
+  ITEM_TYPES,
+  OAK_CENTER_COL,
+  OAK_CENTER_ROW,
+  OAK_WORLD_ID,
   applyOakReservation,
   canonicalTreeAction,
   createEmptyInventory,
@@ -17,9 +22,32 @@ import {
   isWorldTileWalkable,
   normalizeInventory,
   normalizeWorldType,
+  PORTAL_BUILD_ACTIONS,
+  TREE_ACTION_BY_ITEM_TYPE,
   portalBuildActionForWorldType,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
+  WORLD_MOD_LAYER_OBJECT,
+  WORLD_MOD_LAYER_TERRAIN,
+  WORLD_TILE_CAVE_FLOOR,
+  WORLD_TILE_DEFS,
+  WORLD_TILE_GROUND,
+  WORLD_TILE_HOUSE,
+  WORLD_TILE_LAKE,
+  WORLD_TILE_MOUNTAIN,
+  WORLD_TILE_NAME_BY_VALUE,
+  WORLD_TILE_OCEAN,
+  WORLD_TILE_PINE_TREE,
+  WORLD_TILE_RIVER,
+  WORLD_TILE_ROCK,
+  WORLD_TILE_SAND,
+  WORLD_TILE_SPRUCE_THICKET,
+  WORLD_TILE_WOOD_FLOOR,
+  WORLD_TYPE_BUILDING,
+  WORLD_TYPE_CAVE,
+  WORLD_TYPE_FOREST,
+  WORLD_TYPE_ISLAND,
+  WORLD_TYPES,
   worldTileValueForName,
   worldTypeForPortalBuildAction,
 } from "./server/world-domain.ts";
@@ -37,114 +65,14 @@ var NPC_MAX_COUNT = 20;
 var NPC_TICK_MS = 500;
 var NPC_TICK_LEASE_MS = 2000;
 var NPC_ACTIVE_WORLD_TTL_MS = 120000;
-var ITEM_TYPES = [
-  "saw",
-  "knife",
-  "flower",
-  "tree_planter",
-  "portal_builder",
-  "kantele",
-  "rowan_charm",
-  "rune_stone",
-  "juniper_bundle",
-  "birch_bark_letter",
-];
 var WORLD_ITEM_SPAWN_COUNT = 30;
-var OAK_WORLD_ID = "10000";
-var OAK_CENTER_ROW = 50;
-var OAK_CENTER_COL = 50;
-var OAK_CLEAR_RADIUS = 5;
 var VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
-var WORLD_MOD_LAYER_TERRAIN = "terrain";
-var WORLD_MOD_LAYER_OBJECT = "object";
-var WORLD_TILE_GROUND = "ground";
-var WORLD_TILE_SPRUCE_THICKET = "spruce_thicket";
-var WORLD_TILE_PINE_TREE = "pine_tree";
-var WORLD_TILE_HOUSE = "house";
-var WORLD_TILE_OCEAN = "ocean";
-var WORLD_TILE_LAKE = "lake";
-var WORLD_TILE_RIVER = "river";
-var WORLD_TILE_ROCK = "rock";
-var WORLD_TILE_MOUNTAIN = "mountain";
-var WORLD_TILE_SAND = "sand";
-var WORLD_TILE_CAVE_FLOOR = "cave_floor";
-var WORLD_TILE_WOOD_FLOOR = "wood_floor";
-var WORLD_TYPE_FOREST = "forest";
-var WORLD_TYPE_ISLAND = "island";
-var WORLD_TYPE_CAVE = "cave";
-var WORLD_TYPE_BUILDING = "building";
-var WORLD_TYPES = [
-  WORLD_TYPE_FOREST,
-  WORLD_TYPE_ISLAND,
-  WORLD_TYPE_CAVE,
-  WORLD_TYPE_BUILDING,
-];
-/** @type {Record<string, string>} */
-var PORTAL_BUILD_ACTION_BY_WORLD_TYPE = {
-  forest: "build_portal_forest",
-  island: "build_portal_island",
-  cave: "build_portal_cave",
-  building: "build_portal_building",
-};
-var PORTAL_BUILD_ACTIONS = Object.keys(PORTAL_BUILD_ACTION_BY_WORLD_TYPE).map(
-  function (worldType) {
-    return PORTAL_BUILD_ACTION_BY_WORLD_TYPE[worldType];
-  },
-);
-/** @type {Record<string, {value: number, walkable: boolean, layer: string}>} */
-var WORLD_TILE_DEFS = {
-  ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  spruce_thicket: {
-    value: 1,
-    walkable: false,
-    layer: WORLD_MOD_LAYER_TERRAIN,
-  },
-  pine_tree: { value: 2, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
-  house: { value: 3, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
-  ocean: { value: 4, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  lake: { value: 5, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  river: { value: 6, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  rock: { value: 7, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  mountain: { value: 8, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  sand: { value: 9, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  cave_floor: { value: 10, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  wood_floor: { value: 11, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-};
-/** @type {Record<number, string>} */
-var WORLD_TILE_NAME_BY_VALUE = {
-  0: WORLD_TILE_GROUND,
-  1: WORLD_TILE_SPRUCE_THICKET,
-  2: WORLD_TILE_PINE_TREE,
-  3: WORLD_TILE_HOUSE,
-  4: WORLD_TILE_OCEAN,
-  5: WORLD_TILE_LAKE,
-  6: WORLD_TILE_RIVER,
-  7: WORLD_TILE_ROCK,
-  8: WORLD_TILE_MOUNTAIN,
-  9: WORLD_TILE_SAND,
-  10: WORLD_TILE_CAVE_FLOOR,
-  11: WORLD_TILE_WOOD_FLOOR,
-};
 var npcTickerStarted = false;
 var npcTickOwnerId =
   "npc-tick-" +
   Date.now().toString(36) +
   "-" +
   Math.random().toString(36).slice(2);
-/** @type {Record<string, string>} */
-var TREE_ACTION_BY_ITEM_TYPE = {
-  saw: "cut",
-  hammer: "build_house",
-  tree_planter: "plant",
-  portal_builder: "build_portal",
-  kantele: "play_tune",
-  rowan_charm: "place_blessing",
-  portal: "portal_travel",
-  starter_kit: "return_home",
-};
-
-/** @type {string[]} */
-var EXTRA_ITEM_TYPES = ["hammer", "portal", "starter_kit", "blessing_marker"];
 
 var WORLD_FLAVOR_TEXTS = [
   "A low rune-song lingers between the spruce boughs.",
@@ -6264,7 +6192,10 @@ function init() {
     });
   }
   try {
-    routeRegistry.registerAssetRoute("/virtual-world/styles.css", "public/styles.css");
+    routeRegistry.registerAssetRoute(
+      "/virtual-world/styles.css",
+      "public/styles.css",
+    );
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: "/virtual-world/styles.css",
@@ -6272,7 +6203,10 @@ function init() {
     });
   }
   try {
-    routeRegistry.registerAssetRoute("/virtual-world/client.js", "public/client.js");
+    routeRegistry.registerAssetRoute(
+      "/virtual-world/client.js",
+      "public/client.js",
+    );
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: "/virtual-world/client.js",

@@ -46,9 +46,15 @@ export function sendRecipientScopedStreamEvent(
   log: WorldDbLogFn,
 ): void {
   if (!recipientId) return;
-  sendVirtualWorldStreamEvent(streamPath, type, payload, {
-    recipient_id: String(recipientId),
-  }, log);
+  sendVirtualWorldStreamEvent(
+    streamPath,
+    type,
+    payload,
+    {
+      recipient_id: String(recipientId),
+    },
+    log,
+  );
 }
 
 export function sendWorldScopedStreamEvent(

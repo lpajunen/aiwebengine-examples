@@ -9,11 +9,7 @@ import {
   WORLD_TILE_HOUSE,
   WORLD_TILE_PINE_TREE,
 } from "./world-domain.ts";
-import {
-  deleteWorldRow,
-  queryWorldRows,
-  upsertWorldRow,
-} from "./world-db.ts";
+import { deleteWorldRow, queryWorldRows, upsertWorldRow } from "./world-db.ts";
 
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
@@ -28,7 +24,10 @@ type WorldModEntry = {
   payload: Record<string, unknown>;
 };
 
-export function createEmptyWorldMods(): Record<string, Record<string, WorldModEntry>> {
+export function createEmptyWorldMods(): Record<
+  string,
+  Record<string, WorldModEntry>
+> {
   const mods: Record<string, Record<string, WorldModEntry>> = {};
   mods[WORLD_MOD_LAYER_TERRAIN] = {};
   mods[WORLD_MOD_LAYER_OBJECT] = {};
@@ -108,7 +107,8 @@ export function saveWorldModLayer(
       row &&
       row.tile_key &&
       String(row.layer) === String(layer) &&
-      parseWorldModPayload(row.payload_json, log).source_kind === String(sourceKind)
+      parseWorldModPayload(row.payload_json, log).source_kind ===
+        String(sourceKind)
     ) {
       existingByTileKey[String(row.tile_key)] = row;
     }

@@ -115,6 +115,63 @@ import {
   savePlayerNick as savePlayerNickImpl,
   updateOnlinePresence as updateOnlinePresenceImpl,
 } from "./server/social-state.ts";
+import {
+  deleteWorldItemById as deleteWorldItemByIdImpl,
+  deleteWorldItems as deleteWorldItemsImpl,
+  flattenWorldItems as flattenWorldItemsImpl,
+  loadPlayerInventory as loadPlayerInventoryImpl,
+  loadWorldItemMeta as loadWorldItemMetaImpl,
+  loadWorldItems as loadWorldItemsImpl,
+  nextWorldItemId as nextWorldItemIdImpl,
+  savePlayerInventory as savePlayerInventoryImpl,
+  saveWorldItemMeta as saveWorldItemMetaImpl,
+  saveWorldItems as saveWorldItemsImpl,
+  upsertWorldItem as upsertWorldItemImpl,
+} from "./server/item-storage.ts";
+import {
+  grantAllItemsForUser as grantAllItemsForUserImpl,
+  handleItemActionForUser as handleItemActionForUserImpl,
+} from "./server/item-action-helpers.ts";
+import {
+  switchUserToNewWorld as switchUserToNewWorldImpl,
+  switchUserToStartWorld as switchUserToStartWorldImpl,
+  switchUserWorld as switchUserWorldImpl,
+} from "./server/world-switch.ts";
+import {
+  createWorldOfType as createWorldOfTypeImpl,
+  getOrCreatePlayerWorld as getOrCreatePlayerWorldImpl,
+  getWorldType as getWorldTypeImpl,
+  resolvePortalDestinationWorldType as resolvePortalDestinationWorldTypeImpl,
+  saveWorldType as saveWorldTypeImpl,
+} from "./server/world-bootstrap.ts";
+import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
+import {
+  addToDMIndex as addToDMIndexImpl,
+  appendDMMessage as appendDMMessageImpl,
+  appendWorldChatMessage as appendWorldChatMessageImpl,
+  dmConversationKey as dmConversationKeyImpl,
+  loadDMHistory as loadDMHistoryImpl,
+  loadDMIndex as loadDMIndexImpl,
+  loadWorldChat as loadWorldChatImpl,
+} from "./server/chat-storage.ts";
+import {
+  buildWorldNPCSnapshot as buildWorldNPCSnapshotImpl,
+  loadNPCActiveWorlds as loadNPCActiveWorldsImpl,
+  loadNPCLastTick as loadNPCLastTickImpl,
+  loadWorldNPCs as loadWorldNPCsImpl,
+  markNPCWorldActive as markNPCWorldActiveImpl,
+  saveNPCActiveWorlds as saveNPCActiveWorldsImpl,
+  saveNPCLastTick as saveNPCLastTickImpl,
+  saveWorldNPCs as saveWorldNPCsImpl,
+} from "./server/npc-storage.ts";
+import {
+  buildOccupiedNPCMap as buildOccupiedNPCMapImpl,
+  buildOccupiedPlayerMap as buildOccupiedPlayerMapImpl,
+  normalizeNPCInventoryState as normalizeNPCInventoryStateImpl,
+  tickNPCItemInteractions as tickNPCItemInteractionsImpl,
+  tickNPCMovement as tickNPCMovementImpl,
+  tickNPCTreeActions as tickNPCTreeActionsImpl,
+} from "./server/npc-tick-helpers.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -356,13 +413,12 @@ function markPlayerPositionInactive(userId) {
  * @returns {string}
  */
 function getOrCreatePlayerWorld(userId) {
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    worldId = "10000";
-    savePlayerWorld(userId, worldId);
-    saveWorldType(worldId, getDefaultWorldTypeForWorldId(worldId));
-  }
-  return worldId;
+  return getOrCreatePlayerWorldImpl(
+    userId,
+    getPlayerWorld,
+    savePlayerWorld,
+    saveWorldType,
+  );
 }
 
 /**
@@ -370,13 +426,7 @@ function getOrCreatePlayerWorld(userId) {
  * @returns {string}
  */
 function getWorldType(worldId) {
-  var normalizedWorldId = String(worldId || "");
-  var row = querySingleWorldRow(
-    VWORLD_WORLD_TYPE_TABLE,
-    JSON.stringify({ world_id: normalizedWorldId }),
-  );
-  if (row && row.world_type) return normalizeWorldType(String(row.world_type));
-  return getDefaultWorldTypeForWorldId(normalizedWorldId);
+  return getWorldTypeImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
 }
 
 /**
@@ -385,14 +435,7 @@ function getWorldType(worldId) {
  * @returns {string}
  */
 function saveWorldType(worldId, worldType) {
-  var normalizedWorldId = String(worldId || "");
-  var normalizedType = normalizeWorldType(worldType);
-  upsertWorldRow(VWORLD_WORLD_TYPE_TABLE, ["world_id"], {
-    world_id: normalizedWorldId,
-    world_type: normalizedType,
-    updated_ts: toStoredWorldTimestamp(Date.now()),
-  });
-  return normalizedType;
+  return saveWorldTypeImpl(worldId, worldType, VWORLD_WORLD_TYPE_TABLE, vwLog);
 }
 
 /**
@@ -400,14 +443,7 @@ function saveWorldType(worldId, worldType) {
  * @returns {string | undefined}
  */
 function resolvePortalDestinationWorldType(item) {
-  if (!item || typeof item !== "object") return undefined;
-  if (typeof item.destination_world_type === "string") {
-    return normalizeWorldType(item.destination_world_type);
-  }
-  if (typeof item.destination_world_id === "string") {
-    return getWorldType(item.destination_world_id);
-  }
-  return undefined;
+  return resolvePortalDestinationWorldTypeImpl(item, getWorldType);
 }
 
 /**
@@ -415,10 +451,7 @@ function resolvePortalDestinationWorldType(item) {
  * @returns {{world_id: string, world_type: string}}
  */
 function createWorldOfType(worldType) {
-  var normalizedType = normalizeWorldType(worldType);
-  var worldId = createWorldId();
-  saveWorldType(worldId, normalizedType);
-  return { world_id: worldId, world_type: normalizedType };
+  return createWorldOfTypeImpl(worldType, createWorldId, saveWorldType);
 }
 
 /**
@@ -798,24 +831,7 @@ function ensureStarterKit(userId) {
  * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
  */
 function loadPlayerInventory(userId) {
-  var row = querySingleWorldRow(
-    VWORLD_PLAYER_INVENTORY_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-  );
-  if (row) {
-    try {
-      return normalizeInventory({
-        left_hand: row.left_hand_json ? JSON.parse(row.left_hand_json) : null,
-        right_hand: row.right_hand_json
-          ? JSON.parse(row.right_hand_json)
-          : null,
-        inventory: row.inventory_json ? JSON.parse(row.inventory_json) : [],
-      });
-    } catch (e) {
-      return createEmptyInventory();
-    }
-  }
-  return createEmptyInventory();
+  return loadPlayerInventoryImpl(userId, VWORLD_PLAYER_INVENTORY_TABLE, vwLog);
 }
 
 /**
@@ -823,18 +839,12 @@ function loadPlayerInventory(userId) {
  * @param {*} inventory
  */
 function savePlayerInventory(userId, inventory) {
-  var normalized = normalizeInventory(inventory);
-  upsertWorldRow(VWORLD_PLAYER_INVENTORY_TABLE, ["user_id"], {
-    user_id: String(userId),
-    left_hand_json: normalized.left_hand
-      ? JSON.stringify(normalized.left_hand)
-      : null,
-    right_hand_json: normalized.right_hand
-      ? JSON.stringify(normalized.right_hand)
-      : null,
-    inventory_json: JSON.stringify(normalized.inventory || []),
-    updated_ts: toStoredWorldTimestamp(Date.now()),
-  });
+  savePlayerInventoryImpl(
+    userId,
+    inventory,
+    VWORLD_PLAYER_INVENTORY_TABLE,
+    vwLog,
+  );
 }
 
 // ── Player nicknames ──────────────────────────────────────────────────────────
@@ -2438,14 +2448,7 @@ function normalizeDMRows(rows) {
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
  */
 function loadWorldChat(worldId) {
-  var rows = queryChatRows(
-    VWORLD_CHAT_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    WORLD_CHAT_MAX,
-    "ts",
-    "desc",
-  );
-  return normalizeWorldChatRows(rows).reverse();
+  return loadWorldChatImpl(worldId, VWORLD_CHAT_TABLE, WORLD_CHAT_MAX, vwLog);
 }
 
 /**
@@ -2453,19 +2456,12 @@ function loadWorldChat(worldId) {
  * @param {{id:string,sender_id:string,sender_nick:string,text:string,ts:number}} msg
  */
 function appendWorldChatMessage(worldId, msg) {
-  insertChatRow(VWORLD_CHAT_TABLE, {
-    message_id: String(msg.id),
-    world_id: String(worldId),
-    sender_id: String(msg.sender_id || ""),
-    sender_nick: String(msg.sender_nick || ""),
-    text: String(msg.text || ""),
-    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
-  });
-  pruneChatRows(
+  appendWorldChatMessageImpl(
+    worldId,
+    msg,
     VWORLD_CHAT_TABLE,
-    "ts",
     WORLD_CHAT_MAX,
-    JSON.stringify({ world_id: String(worldId) }),
+    vwLog,
   );
 }
 
@@ -2481,7 +2477,7 @@ var DM_MAX = 200;
  * @returns {string}
  */
 function dmConversationKey(a, b) {
-  return [a, b].sort().join(":");
+  return dmConversationKeyImpl(a, b);
 }
 
 /**
@@ -2490,14 +2486,7 @@ function dmConversationKey(a, b) {
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
  */
 function loadDMHistory(a, b) {
-  var rows = queryChatRows(
-    VWORLD_DM_TABLE,
-    JSON.stringify({ conversation_key: dmConversationKey(a, b) }),
-    DM_MAX,
-    "ts",
-    "desc",
-  );
-  return normalizeDMRows(rows).reverse();
+  return loadDMHistoryImpl(a, b, VWORLD_DM_TABLE, DM_MAX, vwLog);
 }
 
 /**
@@ -2506,22 +2495,7 @@ function loadDMHistory(a, b) {
  * @param {{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}} msg
  */
 function appendDMMessage(a, b, msg) {
-  var conversationKey = dmConversationKey(a, b);
-  insertChatRow(VWORLD_DM_TABLE, {
-    message_id: String(msg.id),
-    conversation_key: conversationKey,
-    sender_id: String(msg.sender_id || ""),
-    sender_nick: String(msg.sender_nick || ""),
-    recipient_id: String(msg.recipient_id || ""),
-    text: String(msg.text || ""),
-    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
-  });
-  pruneChatRows(
-    VWORLD_DM_TABLE,
-    "ts",
-    DM_MAX,
-    JSON.stringify({ conversation_key: conversationKey }),
-  );
+  appendDMMessageImpl(a, b, msg, VWORLD_DM_TABLE, DM_MAX, vwLog);
 }
 
 /**
@@ -2529,24 +2503,7 @@ function appendDMMessage(a, b, msg) {
  * @returns {string[]}
  */
 function loadDMIndex(userId) {
-  var rows = queryChatRows(
-    VWORLD_DM_INDEX_TABLE,
-    JSON.stringify({ user_id: String(userId) }),
-    1000,
-    "last_ts",
-    "desc",
-  );
-  /** @type {Record<string, boolean>} */
-  var seen = {};
-  /** @type {string[]} */
-  var idx = [];
-  for (var i = 0; i < rows.length; i++) {
-    var otherUserId = rows[i] && rows[i].other_user_id;
-    if (!otherUserId || seen[otherUserId]) continue;
-    seen[otherUserId] = true;
-    idx.push(String(otherUserId));
-  }
-  return idx;
+  return loadDMIndexImpl(userId, VWORLD_DM_INDEX_TABLE, vwLog);
 }
 
 /**
@@ -2555,7 +2512,7 @@ function loadDMIndex(userId) {
  * @param {number} [ts]
  */
 function addToDMIndex(userId, otherUserId, ts) {
-  upsertDMIndexEntry(userId, otherUserId, Number(ts || Date.now()));
+  addToDMIndexImpl(userId, otherUserId, ts, VWORLD_DM_INDEX_TABLE, vwLog);
 }
 
 /**
@@ -2563,20 +2520,7 @@ function addToDMIndex(userId, otherUserId, ts) {
  * @returns {{next_item_seq: number, seeded: number, updated_ts: number}}
  */
 function loadWorldItemMeta(worldId) {
-  var row = querySingleWorldRow(
-    VWORLD_WORLD_ITEM_META_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-  );
-  if (row) {
-    return {
-      next_item_seq: isFinite(Number(row.next_item_seq))
-        ? Number(row.next_item_seq)
-        : 0,
-      seeded: isFinite(Number(row.seeded)) ? Number(row.seeded) : 0,
-      updated_ts: fromStoredWorldTimestamp(row.updated_ts),
-    };
-  }
-  return { next_item_seq: 0, seeded: 0, updated_ts: 0 };
+  return loadWorldItemMetaImpl(worldId, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
 }
 
 /**
@@ -2584,16 +2528,7 @@ function loadWorldItemMeta(worldId) {
  * @param {{next_item_seq:number, seeded:number, updated_ts?:number}} meta
  */
 function saveWorldItemMeta(worldId, meta) {
-  upsertWorldRow(VWORLD_WORLD_ITEM_META_TABLE, ["world_id"], {
-    world_id: String(worldId),
-    next_item_seq: isFinite(Number(meta.next_item_seq))
-      ? Number(meta.next_item_seq)
-      : 0,
-    seeded: isFinite(Number(meta.seeded)) ? Number(meta.seeded) : 0,
-    updated_ts: toStoredWorldTimestamp(
-      isFinite(Number(meta.updated_ts)) ? Number(meta.updated_ts) : Date.now(),
-    ),
-  });
+  saveWorldItemMetaImpl(worldId, meta, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
 }
 
 /**
@@ -2601,44 +2536,12 @@ function saveWorldItemMeta(worldId, meta) {
  * @returns {Record<string, any[]>}
  */
 function loadWorldItems(worldId) {
-  var rows = queryWorldRows(
+  return loadWorldItemsImpl(
+    worldId,
     VWORLD_WORLD_ITEM_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    5000,
-    "id",
-    "asc",
+    vwLog,
+    resolvePortalDestinationWorldType,
   );
-  if (rows.length > 0) {
-    /** @type {Record<string, any[]>} */
-    var fromRows = {};
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row || !row.item_id) continue;
-      var tileKey = String(row.row) + "_" + String(row.col);
-      if (!fromRows[tileKey]) fromRows[tileKey] = [];
-      fromRows[tileKey].push({
-        id: String(row.item_id),
-        type: String(row.type || ""),
-        created_at: fromStoredWorldTimestamp(row.created_at),
-        destination_world_id:
-          typeof row.destination_world_id === "string"
-            ? row.destination_world_id
-            : undefined,
-        destination_world_type: resolvePortalDestinationWorldType({
-          destination_world_id:
-            typeof row.destination_world_id === "string"
-              ? row.destination_world_id
-              : undefined,
-          destination_world_type:
-            typeof row.destination_world_type === "string"
-              ? row.destination_world_type
-              : undefined,
-        }),
-      });
-    }
-    return fromRows;
-  }
-  return {};
 }
 
 /**
@@ -2646,46 +2549,7 @@ function loadWorldItems(worldId) {
  * @param {Record<string, any[]>} items
  */
 function saveWorldItems(worldId, items) {
-  /** @type {Record<string, any[]>} */
-  var normalized = {};
-  if (items && typeof items === "object") {
-    Object.keys(items).forEach(function (tileKey) {
-      var arr = items[tileKey];
-      if (!Array.isArray(arr)) return;
-      var filtered = arr.filter(isValidItem);
-      if (filtered.length > 0) normalized[tileKey] = filtered;
-    });
-  }
-
-  Object.keys(normalized).forEach(function (tileKey) {
-    var parts = tileKey.split("_");
-    var row = Number(parts[0]);
-    var col = Number(parts[1]);
-    if (!isFinite(row) || !isFinite(col)) return;
-    normalized[tileKey].forEach(function (item) {
-      if (!isValidItem(item)) return;
-      upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
-        item_id: String(item.id),
-        world_id: String(worldId),
-        row: row,
-        col: col,
-        type: String(item.type),
-        created_at: toStoredWorldTimestamp(
-          isFinite(Number(item.created_at))
-            ? Number(item.created_at)
-            : Date.now(),
-        ),
-        destination_world_id:
-          typeof item.destination_world_id === "string"
-            ? item.destination_world_id
-            : null,
-        destination_world_type:
-          typeof item.destination_world_type === "string"
-            ? normalizeWorldType(item.destination_world_type)
-            : null,
-      });
-    });
-  });
+  saveWorldItemsImpl(worldId, items, VWORLD_WORLD_ITEM_TABLE, vwLog);
 }
 
 /**
@@ -2695,49 +2559,21 @@ function saveWorldItems(worldId, items) {
  * @param {*} item
  */
 function upsertWorldItem(worldId, row, col, item) {
-  if (!isValidItem(item) || !isFinite(Number(row)) || !isFinite(Number(col))) {
-    return;
-  }
-  upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
-    item_id: String(item.id),
-    world_id: String(worldId),
-    row: Number(row),
-    col: Number(col),
-    type: String(item.type),
-    created_at: toStoredWorldTimestamp(
-      isFinite(Number(item.created_at)) ? Number(item.created_at) : Date.now(),
-    ),
-    destination_world_id:
-      typeof item.destination_world_id === "string"
-        ? item.destination_world_id
-        : null,
-    destination_world_type:
-      typeof item.destination_world_type === "string"
-        ? normalizeWorldType(item.destination_world_type)
-        : null,
-  });
+  upsertWorldItemImpl(worldId, row, col, item, VWORLD_WORLD_ITEM_TABLE, vwLog);
 }
 
 /**
  * @param {string} itemId
  */
 function deleteWorldItemById(itemId) {
-  if (!itemId) return;
-  deleteWorldRowsWhere(
-    VWORLD_WORLD_ITEM_TABLE,
-    JSON.stringify({ item_id: String(itemId) }),
-  );
+  deleteWorldItemByIdImpl(itemId, VWORLD_WORLD_ITEM_TABLE, vwLog);
 }
 
 /**
  * @param {any[]} items
  */
 function deleteWorldItems(items) {
-  if (!Array.isArray(items)) return;
-  for (var i = 0; i < items.length; i++) {
-    if (!items[i] || typeof items[i].id !== "string") continue;
-    deleteWorldItemById(String(items[i].id));
-  }
+  deleteWorldItemsImpl(items, VWORLD_WORLD_ITEM_TABLE, vwLog);
 }
 
 /**
@@ -2745,14 +2581,7 @@ function deleteWorldItems(items) {
  * @returns {number}
  */
 function nextWorldItemId(worldId) {
-  var meta = loadWorldItemMeta(worldId);
-  var nextSeq = Number(meta.next_item_seq || 0) + 1;
-  saveWorldItemMeta(worldId, {
-    next_item_seq: nextSeq,
-    seeded: meta.seeded,
-    updated_ts: Date.now(),
-  });
-  return nextSeq;
+  return nextWorldItemIdImpl(worldId, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
 }
 
 /**
@@ -2794,32 +2623,7 @@ function ensureWorldItems(worldId) {
  * @returns {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string}>}
  */
 function flattenWorldItems(itemsByTile) {
-  /** @type {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string}>} */
-  var out = [];
-  if (!itemsByTile || typeof itemsByTile !== "object") return out;
-  Object.keys(itemsByTile).forEach(function (tileKey) {
-    var parts = tileKey.split("_");
-    var row = Number(parts[0]);
-    var col = Number(parts[1]);
-    if (!isFinite(row) || !isFinite(col)) return;
-    var arr = itemsByTile[tileKey];
-    if (!Array.isArray(arr)) return;
-    arr.forEach(function (item) {
-      if (!isValidItem(item)) return;
-      out.push({
-        id: item.id,
-        type: item.type,
-        row: row,
-        col: col,
-        destination_world_id:
-          typeof item.destination_world_id === "string"
-            ? item.destination_world_id
-            : undefined,
-        destination_world_type: resolvePortalDestinationWorldType(item),
-      });
-    });
-  });
-  return out;
+  return flattenWorldItemsImpl(itemsByTile, resolvePortalDestinationWorldType);
 }
 
 /**
@@ -2919,44 +2723,7 @@ function sendRecipientScopedStreamEvent(recipientId, type, payload) {
  * @returns {Record<string, any>}
  */
 function loadWorldNPCs(worldId) {
-  var rows = queryWorldRows(
-    VWORLD_NPC_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    1000,
-    "id",
-    "asc",
-  );
-  if (rows.length > 0) {
-    /** @type {Record<string, any>} */
-    var fromRows = {};
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row || !row.npc_id) continue;
-      var inventory = createEmptyInventory();
-      try {
-        inventory = normalizeInventory({
-          left_hand: row.left_hand_json ? JSON.parse(row.left_hand_json) : null,
-          right_hand: row.right_hand_json
-            ? JSON.parse(row.right_hand_json)
-            : null,
-          inventory: row.inventory_json ? JSON.parse(row.inventory_json) : [],
-        });
-      } catch (e) {}
-      fromRows[String(row.npc_id)] = {
-        row: isFinite(Number(row.row)) ? Number(row.row) : 1,
-        col: isFinite(Number(row.col)) ? Number(row.col) : 1,
-        seq: isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-        rotation: isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
-        state: typeof row.state === "string" ? row.state : "idle",
-        ts: fromStoredWorldTimestamp(row.ts),
-        left_hand: inventory.left_hand,
-        right_hand: inventory.right_hand,
-        inventory: inventory.inventory,
-      };
-    }
-    return fromRows;
-  }
-  return {};
+  return loadWorldNPCsImpl(worldId, VWORLD_NPC_TABLE, vwLog);
 }
 
 /**
@@ -2964,101 +2731,28 @@ function loadWorldNPCs(worldId) {
  * @param {Record<string, any>} npcs
  */
 function saveWorldNPCs(worldId, npcs) {
-  Object.keys(npcs && typeof npcs === "object" ? npcs : {}).forEach(
-    function (npcId) {
-      var npc = npcs[npcId];
-      if (!npc || typeof npc !== "object") return;
-      var inv = normalizeInventory(npc);
-      upsertWorldRow(VWORLD_NPC_TABLE, ["npc_id"], {
-        npc_id: String(npcId),
-        world_id: String(worldId),
-        row: isFinite(Number(npc.row)) ? Number(npc.row) : 1,
-        col: isFinite(Number(npc.col)) ? Number(npc.col) : 1,
-        seq: isFinite(Number(npc.seq)) ? Number(npc.seq) : 0,
-        rotation: isFinite(Number(npc.rotation)) ? Number(npc.rotation) : 0,
-        state: typeof npc.state === "string" ? npc.state : "idle",
-        ts: toStoredWorldTimestamp(
-          isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),
-        ),
-        left_hand_json: inv.left_hand ? JSON.stringify(inv.left_hand) : null,
-        right_hand_json: inv.right_hand ? JSON.stringify(inv.right_hand) : null,
-        inventory_json: JSON.stringify(inv.inventory || []),
-      });
-    },
-  );
+  saveWorldNPCsImpl(worldId, npcs, VWORLD_NPC_TABLE, vwLog);
 }
 
 /**
  * @returns {Record<string, number>}
  */
 function loadNPCActiveWorlds() {
-  var rows = queryWorldRows(
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    "",
-    1000,
-    "last_active_ts",
-    "desc",
-  );
-  if (rows.length > 0) {
-    /** @type {Record<string, number>} */
-    var worlds = {};
-    for (var i = 0; i < rows.length; i++) {
-      if (!rows[i] || !rows[i].world_id) continue;
-      worlds[String(rows[i].world_id)] = fromStoredWorldTimestamp(
-        rows[i].last_active_ts,
-      );
-    }
-    return worlds;
-  }
-  return {};
+  return loadNPCActiveWorldsImpl(VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
 }
 
 /**
  * @param {Record<string, number>} worlds
  */
 function saveNPCActiveWorlds(worlds) {
-  var existingRows = queryWorldRows(
-    VWORLD_NPC_ACTIVE_WORLD_TABLE,
-    "",
-    1000,
-    "id",
-    "desc",
-  );
-  /** @type {Record<string, any>} */
-  var existingByWorldId = {};
-  for (var i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].world_id) {
-      existingByWorldId[String(existingRows[i].world_id)] = existingRows[i];
-    }
-  }
-
-  Object.keys(worlds && typeof worlds === "object" ? worlds : {}).forEach(
-    function (worldId) {
-      upsertWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, ["world_id"], {
-        world_id: String(worldId),
-        last_active_ts: toStoredWorldTimestamp(
-          isFinite(Number(worlds[worldId])) ? Number(worlds[worldId]) : 0,
-        ),
-      });
-      delete existingByWorldId[worldId];
-    },
-  );
-
-  Object.keys(existingByWorldId).forEach(function (worldId) {
-    var row = existingByWorldId[worldId];
-    if (!row || !isFinite(Number(row.id))) return;
-    deleteWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, Number(row.id));
-  });
+  saveNPCActiveWorldsImpl(worlds, VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
 }
 
 /**
  * @param {string} worldId
  */
 function markNPCWorldActive(worldId) {
-  upsertWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, ["world_id"], {
-    world_id: String(worldId),
-    last_active_ts: toStoredWorldTimestamp(Date.now()),
-  });
+  markNPCWorldActiveImpl(worldId, VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
 }
 
 /**
@@ -3066,12 +2760,7 @@ function markNPCWorldActive(worldId) {
  * @returns {number}
  */
 function loadNPCLastTick(worldId) {
-  var row = querySingleWorldRow(
-    VWORLD_NPC_TICK_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-  );
-  if (!row) return 0;
-  return fromStoredWorldTimestamp(row.last_tick_ts);
+  return loadNPCLastTickImpl(worldId, VWORLD_NPC_TICK_TABLE, vwLog);
 }
 
 /**
@@ -3079,10 +2768,7 @@ function loadNPCLastTick(worldId) {
  * @param {number} lastTickTs
  */
 function saveNPCLastTick(worldId, lastTickTs) {
-  upsertWorldRow(VWORLD_NPC_TICK_TABLE, ["world_id"], {
-    world_id: String(worldId),
-    last_tick_ts: toStoredWorldTimestamp(lastTickTs),
-  });
+  saveNPCLastTickImpl(worldId, lastTickTs, VWORLD_NPC_TICK_TABLE, vwLog);
 }
 
 /**
@@ -3203,23 +2889,7 @@ function getWorldNPCSnapshot(worldId) {
   markNPCWorldActive(worldId);
   maybeTickWorldNPCs(worldId);
   var npcs = ensureWorldNPCs(worldId);
-  return Object.keys(npcs).map(function (npcId) {
-    var n = npcs[npcId] || {};
-    return {
-      npc_id: npcId,
-      display_name: getNPCDisplayName(worldId, npcId),
-      row: Number(n.row),
-      col: Number(n.col),
-      seq: Number(n.seq || 0),
-      rotation: isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
-      state: typeof n.state === "string" ? n.state : "idle",
-      left_hand:
-        n.left_hand && n.left_hand.type ? String(n.left_hand.type) : "",
-      right_hand:
-        n.right_hand && n.right_hand.type ? String(n.right_hand.type) : "",
-      inventory_count: Array.isArray(n.inventory) ? n.inventory.length : 0,
-    };
-  });
+  return buildWorldNPCSnapshotImpl(worldId, npcs, getNPCDisplayName);
 }
 
 /**
@@ -3250,229 +2920,66 @@ function tickWorldNPCs(worldId, now) {
   var itemChanges = false;
   var treeChanges = false;
   var players = loadWorldPlayers(worldId);
-  /** @type {Record<string, boolean>} */
-  var occupiedPlayers = {};
-  Object.keys(players).forEach(function (pid) {
-    var p = players[pid];
-    if (!p || !isFinite(Number(p.row)) || !isFinite(Number(p.col))) return;
-    occupiedPlayers[p.row + "_" + p.col] = true;
-  });
-
-  /** @type {Record<string, string>} */
-  var occupiedNPCs = {};
-  npcIds.forEach(function (npcId) {
-    var n = npcs[npcId];
-    if (!n) return;
-    occupiedNPCs[n.row + "_" + n.col] = npcId;
-  });
+  var occupiedPlayers = buildOccupiedPlayerMapImpl(players);
+  var occupiedNPCs = buildOccupiedNPCMapImpl(npcs);
 
   var hasChanges = false;
   npcIds.forEach(function (npcId) {
     var n = npcs[npcId];
     if (!n) return;
-    var npcInv = normalizeInventory(n);
-    n.left_hand = npcInv.left_hand;
-    n.right_hand = npcInv.right_hand;
-    n.inventory = npcInv.inventory;
-    if (Math.random() < 0.35) {
-      n.state = "idle";
-      n.ts = now;
-    } else {
-      var dirs = [
-        { dr: 1, dc: 0 },
-        { dr: -1, dc: 0 },
-        { dr: 0, dc: 1 },
-        { dr: 0, dc: -1 },
-      ];
-      shuffleDirections(dirs);
+    normalizeNPCInventoryStateImpl(n);
 
-      var moved = false;
-      var fromKey = n.row + "_" + n.col;
-      delete occupiedNPCs[fromKey];
-
-      for (var i = 0; i < dirs.length; i++) {
-        var nr = n.row + dirs[i].dr;
-        var nc = n.col + dirs[i].dc;
-        var key = nr + "_" + nc;
-        var walkable =
-          nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && map[nr][nc] === 0;
-        if (!walkable) continue;
-        if (occupiedPlayers[key]) continue;
-        if (occupiedNPCs[key]) continue;
-
-        n.row = nr;
-        n.col = nc;
-        n.rotation = directionToRotation(dirs[i].dr, dirs[i].dc);
-        n.seq = Number(n.seq || 0) + 1;
-        n.state = "walking";
-        n.ts = now;
-        moved = true;
-        occupiedNPCs[key] = npcId;
-
-        sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
-          npc_id: npcId,
-          display_name: getNPCDisplayName(worldId, npcId),
-          row: n.row,
-          col: n.col,
-          seq: n.seq,
-          rotation: n.rotation,
-          state: n.state,
-        });
-        break;
-      }
-
-      if (!moved) {
-        occupiedNPCs[fromKey] = npcId;
-        n.state = "idle";
-        n.ts = now;
-      } else {
-        hasChanges = true;
-      }
+    if (
+      tickNPCMovementImpl({
+        worldId: worldId,
+        npcId: npcId,
+        npc: n,
+        now: now,
+        map: map,
+        occupiedPlayers: occupiedPlayers,
+        occupiedNPCs: occupiedNPCs,
+        rows: ROWS,
+        cols: COLS,
+        shuffleDirections: shuffleDirections,
+        directionToRotation: directionToRotation,
+        getNPCDisplayName: getNPCDisplayName,
+        sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+      })
+    ) {
+      hasChanges = true;
     }
 
-    // NPC item behavior: pick all pickable items from current tile, and occasionally drop one.
-    var tileKey = n.row + "_" + n.col;
-    var allNpcTileItems = Array.isArray(worldItems[tileKey])
-      ? worldItems[tileKey]
-      : [];
-    var pickableItems = allNpcTileItems.filter(function (item) {
-      return isPickableWorldItem(item);
+    var itemResult = tickNPCItemInteractionsImpl({
+      worldId: worldId,
+      npcId: npcId,
+      npc: n,
+      worldItems: worldItems,
+      isPickableWorldItem: isPickableWorldItem,
+      deleteWorldItems: deleteWorldItems,
+      upsertWorldItem: upsertWorldItem,
+      broadcastItemChange: broadcastItemChange,
     });
-    var nonPickableItems = allNpcTileItems.filter(function (item) {
-      return item && !isPickableWorldItem(item);
+    if (itemResult.hasChanges) hasChanges = true;
+    if (itemResult.itemChanges) itemChanges = true;
+
+    var treeResult = tickNPCTreeActionsImpl({
+      worldId: worldId,
+      npcId: npcId,
+      npc: n,
+      now: now,
+      map: map,
+      trees: trees,
+      rows: ROWS,
+      cols: COLS,
+      shuffleDirections: shuffleDirections,
+      getInventoryTreeActions: getInventoryTreeActions,
+      isOakCenterTile: isOakCenterTile,
+      isOakClearingTile: isOakClearingTile,
+      directionToRotation: directionToRotation,
+      sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     });
-    if (pickableItems.length > 0 && Math.random() < 0.65) {
-      for (var pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
-        n.inventory.push(pickableItems[pickIdx]);
-      }
-      deleteWorldItems(pickableItems);
-      if (nonPickableItems.length > 0) {
-        worldItems[tileKey] = nonPickableItems;
-      } else {
-        delete worldItems[tileKey];
-      }
-      itemChanges = true;
-      hasChanges = true;
-      broadcastItemChange(
-        worldId,
-        "npc",
-        npcId,
-        "pick",
-        n.row,
-        n.col,
-        pickableItems,
-      );
-    }
-
-    if (!n.left_hand && n.inventory.length > 0) {
-      n.left_hand = n.inventory.shift();
-      hasChanges = true;
-    }
-    if (!n.right_hand && n.inventory.length > 0) {
-      n.right_hand = n.inventory.shift();
-      hasChanges = true;
-    }
-
-    if (Math.random() < 0.12) {
-      var dropItem = null;
-      if (n.inventory.length > 0) {
-        dropItem = n.inventory.shift();
-      } else if (n.left_hand) {
-        dropItem = n.left_hand;
-        n.left_hand = null;
-      } else if (n.right_hand) {
-        dropItem = n.right_hand;
-        n.right_hand = null;
-      }
-      if (dropItem) {
-        if (!worldItems[tileKey]) worldItems[tileKey] = [];
-        worldItems[tileKey].push(dropItem);
-        upsertWorldItem(worldId, n.row, n.col, dropItem);
-        itemChanges = true;
-        hasChanges = true;
-        broadcastItemChange(worldId, "npc", npcId, "drop", n.row, n.col, [
-          dropItem,
-        ]);
-      }
-    }
-
-    var npcTreeActions = getInventoryTreeActions(n);
-    if (npcTreeActions.length > 0 && Math.random() < 0.08) {
-      var treeDirs = [
-        { dr: 1, dc: 0 },
-        { dr: -1, dc: 0 },
-        { dr: 0, dc: 1 },
-        { dr: 0, dc: -1 },
-      ];
-      shuffleDirections(treeDirs);
-      var didTreeAction = false;
-      for (var td = 0; td < treeDirs.length && !didTreeAction; td++) {
-        var tr = n.row + treeDirs[td].dr;
-        var tc = n.col + treeDirs[td].dc;
-        if (tr < 0 || tr >= ROWS || tc < 0 || tc >= COLS) continue;
-        var treeKey = tr + "_" + tc;
-
-        if (npcTreeActions.indexOf("cut") !== -1) {
-          if (isOakCenterTile(worldId, tr, tc)) {
-            continue;
-          }
-          var hasPlantedTree =
-            trees[treeKey] && trees[treeKey].action === "plant";
-          var baseHasTree = map[tr][tc] === 2;
-          var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
-          if ((hasPlantedTree || baseHasTree) && !alreadyCut) {
-            trees[treeKey] = {
-              action: "cut",
-              cut_by: npcId,
-              timestamp: now,
-            };
-            map[tr][tc] = 0;
-            n.rotation = directionToRotation(treeDirs[td].dr, treeDirs[td].dc);
-            treeChanges = true;
-            hasChanges = true;
-            didTreeAction = true;
-            sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
-              action: "cut",
-              row: tr,
-              col: tc,
-              actor_type: "npc",
-              actor_id: npcId,
-            });
-            continue;
-          }
-        }
-
-        if (npcTreeActions.indexOf("plant") !== -1) {
-          var hasExistingTree =
-            trees[treeKey] && trees[treeKey].action === "plant";
-          var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
-          var groundWalkable = map[tr][tc] === 0;
-          if (
-            groundWalkable &&
-            !hasExistingTree &&
-            !isOakClearingTile(worldId, tr, tc)
-          ) {
-            trees[treeKey] = {
-              action: "plant",
-              planted_by: npcId,
-              timestamp: now,
-            };
-            if (wasTreeCut || map[tr][tc] === 0) map[tr][tc] = 2;
-            n.rotation = directionToRotation(treeDirs[td].dr, treeDirs[td].dc);
-            treeChanges = true;
-            hasChanges = true;
-            didTreeAction = true;
-            sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
-              action: "plant",
-              row: tr,
-              col: tc,
-              actor_type: "npc",
-              actor_id: npcId,
-            });
-          }
-        }
-      }
-    }
+    if (treeResult.hasChanges) hasChanges = true;
+    if (treeResult.treeChanges) treeChanges = true;
   });
 
   if (hasChanges) {
@@ -3995,481 +3502,43 @@ function movePlayerForUser(userId, body) {
  * @returns {{status: number, payload: any}}
  */
 function performTreeActionForUser(userId, body) {
-  var rawAction = body && body.action;
-  var action = canonicalTreeAction(rawAction);
-  var requestedPortalWorldType =
-    worldTypeForPortalBuildAction(rawAction) ||
-    normalizeWorldType(body && body.destination_world_type);
-
-  if (action === "pick" || action === "drop" || action === "equip") {
-    return handleItemActionForUser(userId, body || {});
-  }
-
-  if (action === "cheat_grant_all") {
-    return { status: 200, payload: grantAllItemsForUser(userId) };
-  }
-
-  if (
-    action !== "plant" &&
-    action !== "cut" &&
-    action !== "build_house" &&
-    action !== "destroy_house" &&
-    action !== "build_portal" &&
-    action !== "remove_portal" &&
-    action !== "play_tune" &&
-    action !== "place_blessing" &&
-    action !== "portal_travel" &&
-    action !== "return_home"
-  ) {
-    return { status: 400, payload: { ok: false, error: "Invalid action" } };
-  }
-
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    return { status: 200, payload: { ok: false, error: "No world found" } };
-  }
-  ensureWorldItems(worldId);
-
-  var inv = loadPlayerInventory(userId);
-  var canonical = getCanonicalPlayerState(worldId, userId);
-  var playerRow = isFinite(Number(body && body.row))
-    ? Number(body.row)
-    : canonical.row;
-  var playerCol = isFinite(Number(body && body.col))
-    ? Number(body.col)
-    : canonical.col;
-  var rotation = isFinite(Number(body && body.rotation))
-    ? Number(body.rotation)
-    : canonical.rotation;
-  var currentTileKey = canonical.row + "_" + canonical.col;
-  var worldItems = loadWorldItems(worldId);
-  var currentTileItems = Array.isArray(worldItems[currentTileKey])
-    ? worldItems[currentTileKey]
-    : [];
-  var canUseAction =
-    canInventoryUseTreeAction(inv, action) ||
-    canTileItemsUseTreeAction(currentTileItems, action);
-
-  if (!canUseAction) {
-    return {
-      status: 200,
-      payload: {
-        ok: false,
-        error: "Missing required item for action",
-      },
-    };
-  }
-
-  if (action === "return_home") {
-    switchUserWorld(
-      userId,
-      OAK_WORLD_ID,
-      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
-    );
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: "return_home",
-        switched_world: true,
-        world_id: OAK_WORLD_ID,
-      },
-    };
-  }
-
-  if (action === "play_tune") {
-    var tuneMsg = {
-      id:
-        "wc-" +
-        Date.now().toString(36) +
-        "-" +
-        Math.random().toString(36).slice(2),
-      sender_id: userId,
-      sender_nick: getEffectiveNick(userId),
-      text: "lets a kantele melody drift through the spruce hush.",
-      ts: Date.now(),
-    };
-    appendWorldChatMessage(worldId, tuneMsg);
-    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        inventory: inv,
-        items: flattenWorldItems(worldItems),
-        toast_message: "A kantele tune carries across the clearing.",
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  if (action === "place_blessing") {
-    var blessingTileKey = canonical.row + "_" + canonical.col;
-    var blessingItems = Array.isArray(worldItems[blessingTileKey])
-      ? worldItems[blessingTileKey]
-      : [];
-    var existingBlessing = blessingItems.some(function (item) {
-      return item && item.type === "blessing_marker";
-    });
-    if (existingBlessing) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "A blessing already rests here",
-        },
-      };
-    }
-
-    var blessingItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "blessing_marker",
-      created_at: Date.now(),
-      placed_by: userId,
-      non_droppable: true,
-    };
-    if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
-    worldItems[blessingTileKey].push(blessingItem);
-    upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
-    saveWorldItems(worldId, worldItems);
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "blessing_place",
-      canonical.row,
-      canonical.col,
-      [blessingItem],
-    );
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        row: canonical.row,
-        col: canonical.col,
-        inventory: inv,
-        items: flattenWorldItems(worldItems),
-        toast_message: "A rowan blessing now marks this place.",
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  if (action === "portal_travel") {
-    var portalEntry = currentTileItems.find(function (item) {
-      return item && item.type === "portal";
-    });
-    var newWorldId =
-      portalEntry && portalEntry.destination_world_id
-        ? String(portalEntry.destination_world_id)
-        : "10000";
-    switchUserWorld(userId, newWorldId);
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        switched_world: true,
-        world_id: newWorldId,
-      },
-    };
-  }
-
-  var targetTile = getTargetTileFromRotation(playerRow, playerCol, rotation);
-  var targetRow = targetTile.row;
-  var targetCol = targetTile.col;
-
-  if (
-    targetRow < 0 ||
-    targetRow >= ROWS ||
-    targetCol < 0 ||
-    targetCol >= COLS
-  ) {
-    return {
-      status: 200,
-      payload: { ok: false, error: "Target out of bounds" },
-    };
-  }
-
-  var map = getEffectiveMap(worldId);
-  var trees = loadWorldTrees(worldId);
-  var houses = loadWorldHouses(worldId);
-  var tileKey = targetRow + "_" + targetCol;
-
-  if (action === "build_house") {
-    if (isOakClearingTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "The oak clearing must remain open",
-        },
-      };
-    }
-    if (map[targetRow][targetCol] !== 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot build house here" },
-      };
-    }
-    if (houses[tileKey]) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "House already exists" },
-      };
-    }
-    houses[tileKey] = {
-      built_by: userId,
-      actor_type: "player",
-      timestamp: Date.now(),
-    };
-    saveWorldHouses(worldId, houses);
-    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  if (action === "destroy_house") {
-    if (!houses[tileKey]) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No house to destroy" },
-      };
-    }
-    delete houses[tileKey];
-    saveWorldHouses(worldId, houses);
-    sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  var treeKey = tileKey;
-
-  if (action === "build_portal") {
-    if (map[targetRow][targetCol] !== 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot build portal here" },
-      };
-    }
-    var targetTileKey = targetRow + "_" + targetCol;
-    var targetItems = Array.isArray(worldItems[targetTileKey])
-      ? worldItems[targetTileKey]
-      : [];
-    var hasPortal = targetItems.some(function (item) {
-      return item && item.type === "portal";
-    });
-    if (hasPortal) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Portal already exists" },
-      };
-    }
-    var createdDestinationWorld = createWorldOfType(requestedPortalWorldType);
-    var portalItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "portal",
-      created_at: Date.now(),
-      destination_world_id: createdDestinationWorld.world_id,
-      destination_world_type: createdDestinationWorld.world_type,
-    };
-    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
-    worldItems[targetTileKey].push(portalItem);
-    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
-    saveWorldItems(worldId, worldItems);
-
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_create",
-      targetRow,
-      targetCol,
-      [portalItem],
-    );
-
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        items: flattenWorldItems(worldItems),
-        inventory: inv,
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  if (action === "remove_portal") {
-    var removeTileKey = targetRow + "_" + targetCol;
-    var removeItems = Array.isArray(worldItems[removeTileKey])
-      ? worldItems[removeTileKey]
-      : [];
-    var keptItems = [];
-    var removedPortals = [];
-    for (var removeIdx = 0; removeIdx < removeItems.length; removeIdx++) {
-      var removeItem = removeItems[removeIdx];
-      if (removeItem && removeItem.type === "portal") {
-        removedPortals.push(removeItem);
-      } else {
-        keptItems.push(removeItem);
-      }
-    }
-
-    if (removedPortals.length === 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No portal to remove" },
-      };
-    }
-
-    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
-    else delete worldItems[removeTileKey];
-    deleteWorldItems(removedPortals);
-    saveWorldItems(worldId, worldItems);
-
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_remove",
-      targetRow,
-      targetCol,
-      removedPortals,
-    );
-
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        removed_count: removedPortals.length,
-        items: flattenWorldItems(worldItems),
-        inventory: inv,
-        world_id: String(worldId),
-      },
-    };
-  }
-
-  if (action === "plant") {
-    if (isOakClearingTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "The oak clearing must remain open",
-        },
-      };
-    }
-    var hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
-    var wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
-    var baseHasTree = map[targetRow][targetCol] === 2;
-
-    if (map[targetRow][targetCol] !== 0 && !wasTreeCut) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot plant here" },
-      };
-    }
-    if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Tree already exists" },
-      };
-    }
-
-    trees[treeKey] = {
-      action: "plant",
-      planted_by: userId,
-      timestamp: Date.now(),
-    };
-  } else if (action === "cut") {
-    if (isOakCenterTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "The old oak stands firm" },
-      };
-    }
-    var hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
-    var baseTreeExists = map[targetRow][targetCol] === 2;
-    var alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
-
-    if (!hasPlantedTree && !baseTreeExists) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No tree to cut" },
-      };
-    }
-    if (alreadyCut) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Tree already cut" },
-      };
-    }
-
-    trees[treeKey] = {
-      action: "cut",
-      cut_by: userId,
-      timestamp: Date.now(),
-    };
-  }
-
-  saveWorldTrees(worldId, trees);
-  sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
-    action: action,
-    row: targetRow,
-    col: targetCol,
-    actor_type: "player",
-    actor_id: userId,
-    player_id: userId,
+  return performTreeActionForUserImpl(userId, body, {
+    canonicalTreeAction: canonicalTreeAction,
+    worldTypeForPortalBuildAction: worldTypeForPortalBuildAction,
+    normalizeWorldType: normalizeWorldType,
+    handleItemActionForUser: handleItemActionForUser,
+    grantAllItemsForUser: grantAllItemsForUser,
+    getPlayerWorld: getPlayerWorld,
+    ensureWorldItems: ensureWorldItems,
+    loadPlayerInventory: loadPlayerInventory,
+    getCanonicalPlayerState: getCanonicalPlayerState,
+    loadWorldItems: loadWorldItems,
+    canInventoryUseTreeAction: canInventoryUseTreeAction,
+    canTileItemsUseTreeAction: canTileItemsUseTreeAction,
+    switchUserWorld: switchUserWorld,
+    OAK_WORLD_ID: OAK_WORLD_ID,
+    getDefaultSpawnPosition: getDefaultSpawnPosition,
+    getEffectiveNick: getEffectiveNick,
+    appendWorldChatMessage: appendWorldChatMessage,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    flattenWorldItems: flattenWorldItems,
+    nextWorldItemId: nextWorldItemId,
+    upsertWorldItem: upsertWorldItem,
+    saveWorldItems: saveWorldItems,
+    broadcastItemChange: broadcastItemChange,
+    getTargetTileFromRotation: getTargetTileFromRotation,
+    ROWS: ROWS,
+    COLS: COLS,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    loadWorldHouses: loadWorldHouses,
+    isOakClearingTile: isOakClearingTile,
+    saveWorldHouses: saveWorldHouses,
+    createWorldOfType: createWorldOfType,
+    deleteWorldItems: deleteWorldItems,
+    isOakCenterTile: isOakCenterTile,
+    saveWorldTrees: saveWorldTrees,
   });
-
-  return {
-    status: 200,
-    payload: {
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      world_id: String(worldId),
-    },
-  };
 }
 
 /**
@@ -4619,176 +3688,21 @@ function itemsHandler(context) {
  * @returns {{status: number, payload: any}}
  */
 function handleItemActionForUser(userId, body) {
-  var action = String((body && body.action) || "");
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    return { status: 200, payload: { ok: false, error: "No world found" } };
-  }
-  ensureWorldItems(worldId);
-
-  var canonical = getCanonicalPlayerState(worldId, userId);
-  var tileKey = canonical.row + "_" + canonical.col;
-  var inv = loadPlayerInventory(userId);
-  var worldItems = loadWorldItems(worldId);
-
-  if (action === "pick") {
-    var allTileItems = Array.isArray(worldItems[tileKey])
-      ? worldItems[tileKey]
-      : [];
-    var picked = allTileItems.filter(function (item) {
-      return isPickableWorldItem(item);
-    });
-    var remainingOnTile = allTileItems.filter(function (item) {
-      return item && !isPickableWorldItem(item);
-    });
-    if (picked.length > 0) {
-      for (var i = 0; i < picked.length; i++) {
-        inv.inventory.push(picked[i]);
-      }
-      deleteWorldItems(picked);
-      if (remainingOnTile.length > 0) {
-        worldItems[tileKey] = remainingOnTile;
-      } else {
-        delete worldItems[tileKey];
-      }
-      savePlayerInventory(userId, inv);
-      saveWorldItems(worldId, worldItems);
-      broadcastItemChange(
-        worldId,
-        "player",
-        userId,
-        "pick",
-        canonical.row,
-        canonical.col,
-        picked,
-      );
-    }
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: "pick",
-        picked_count: picked.length,
-        inventory: inv,
-        items: flattenWorldItems(worldItems),
-      },
-    };
-  }
-
-  if (action === "drop") {
-    var from = String(body.from || "");
-    var index = Number(body.index);
-    var dropItem = null;
-    if (from === "left_hand" && inv.left_hand) {
-      dropItem = inv.left_hand;
-      inv.left_hand = null;
-    } else if (from === "right_hand" && inv.right_hand) {
-      dropItem = inv.right_hand;
-      inv.right_hand = null;
-    } else if (
-      from === "inventory" &&
-      isFinite(index) &&
-      index >= 0 &&
-      index < inv.inventory.length
-    ) {
-      dropItem = inv.inventory.splice(index, 1)[0];
-    } else {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Invalid drop source" },
-      };
-    }
-
-    if (dropItem.non_droppable) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Item cannot be dropped" },
-      };
-    }
-
-    if (!worldItems[tileKey]) worldItems[tileKey] = [];
-    worldItems[tileKey].push(dropItem);
-
-    savePlayerInventory(userId, inv);
-    upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
-    saveWorldItems(worldId, worldItems);
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "drop",
-      canonical.row,
-      canonical.col,
-      [dropItem],
-    );
-
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: "drop",
-        inventory: inv,
-        items: flattenWorldItems(worldItems),
-      },
-    };
-  }
-
-  if (action === "equip") {
-    var fromSlot = String(body.from || "");
-    var toSlot = String(body.to || "");
-    var fromIndex = Number(body.index);
-    var movingItem = null;
-
-    if (fromSlot === "left_hand" && inv.left_hand) {
-      movingItem = inv.left_hand;
-      inv.left_hand = null;
-    } else if (fromSlot === "right_hand" && inv.right_hand) {
-      movingItem = inv.right_hand;
-      inv.right_hand = null;
-    } else if (
-      fromSlot === "inventory" &&
-      isFinite(fromIndex) &&
-      fromIndex >= 0 &&
-      fromIndex < inv.inventory.length
-    ) {
-      movingItem = inv.inventory.splice(fromIndex, 1)[0];
-    }
-
-    if (!movingItem) {
-      return { status: 200, payload: { ok: false, error: "No item to equip" } };
-    }
-
-    if (toSlot === "left_hand") {
-      if (inv.left_hand) inv.inventory.push(inv.left_hand);
-      inv.left_hand = movingItem;
-    } else if (toSlot === "right_hand") {
-      if (inv.right_hand) inv.inventory.push(inv.right_hand);
-      inv.right_hand = movingItem;
-    } else if (toSlot === "inventory") {
-      inv.inventory.push(movingItem);
-    } else {
-      if (fromSlot === "left_hand") inv.left_hand = movingItem;
-      else if (fromSlot === "right_hand") inv.right_hand = movingItem;
-      else inv.inventory.push(movingItem);
-      return {
-        status: 200,
-        payload: { ok: false, error: "Invalid destination slot" },
-      };
-    }
-
-    savePlayerInventory(userId, inv);
-    return {
-      status: 200,
-      payload: {
-        ok: true,
-        action: "equip",
-        inventory: inv,
-        items: flattenWorldItems(worldItems),
-      },
-    };
-  }
-
-  return { status: 400, payload: { ok: false, error: "Unknown action" } };
+  return handleItemActionForUserImpl(userId, body, {
+    getPlayerWorld: getPlayerWorld,
+    ensureWorldItems: ensureWorldItems,
+    getCanonicalPlayerState: getCanonicalPlayerState,
+    loadPlayerInventory: loadPlayerInventory,
+    loadWorldItems: loadWorldItems,
+    isPickableWorldItem: isPickableWorldItem,
+    deleteWorldItems: deleteWorldItems,
+    savePlayerInventory: savePlayerInventory,
+    saveWorldItems: saveWorldItems,
+    broadcastItemChange: broadcastItemChange,
+    flattenWorldItems: flattenWorldItems,
+    upsertWorldItem: upsertWorldItem,
+    getAllKnownItemTypes: getAllKnownItemTypes,
+  });
 }
 
 /**
@@ -4834,55 +3748,15 @@ function makeCheatItemId(userId, worldId, index) {
  * @returns {{ok: boolean, action: string, granted_count: number, inventory: {left_hand: any, right_hand: any, inventory: any[]}, items: Array<{id: string, type: string, row: number, col: number}>}}
  */
 function grantAllItemsForUser(userId) {
-  var worldId = getPlayerWorld(userId) || "";
-  var inv = loadPlayerInventory(userId);
-  var itemTypes = getAllKnownItemTypes().filter(function (type) {
-    return type !== "portal";
+  return grantAllItemsForUserImpl(userId, {
+    getPlayerWorld: getPlayerWorld,
+    loadPlayerInventory: loadPlayerInventory,
+    getAllKnownItemTypes: getAllKnownItemTypes,
+    savePlayerInventory: savePlayerInventory,
+    ensureWorldItems: ensureWorldItems,
+    loadWorldItems: loadWorldItems,
+    flattenWorldItems: flattenWorldItems,
   });
-  var now = Date.now();
-
-  // Collect types already owned across all inventory slots
-  /** @type {Record<string, boolean>} */
-  var ownedTypes = {};
-  if (inv.left_hand && inv.left_hand.type)
-    ownedTypes[inv.left_hand.type] = true;
-  if (inv.right_hand && inv.right_hand.type)
-    ownedTypes[inv.right_hand.type] = true;
-  if (Array.isArray(inv.inventory)) {
-    for (var j = 0; j < inv.inventory.length; j++) {
-      if (inv.inventory[j] && inv.inventory[j].type) {
-        ownedTypes[inv.inventory[j].type] = true;
-      }
-    }
-  }
-
-  var grantedCount = 0;
-  for (var i = 0; i < itemTypes.length; i++) {
-    if (ownedTypes[itemTypes[i]]) continue;
-    inv.inventory.push({
-      id: makeCheatItemId(userId, worldId, i),
-      type: itemTypes[i],
-      created_at: now,
-    });
-    grantedCount++;
-  }
-
-  savePlayerInventory(userId, inv);
-
-  /** @type {Array<{id: string, type: string, row: number, col: number}>} */
-  var itemsSnapshot = [];
-  if (worldId) {
-    ensureWorldItems(worldId);
-    itemsSnapshot = flattenWorldItems(loadWorldItems(worldId));
-  }
-
-  return {
-    ok: true,
-    action: "cheat_grant_all",
-    granted_count: grantedCount,
-    inventory: inv,
-    items: itemsSnapshot,
-  };
 }
 
 // ── Nickname handler ─────────────────────────────────────────────────────────
@@ -5184,42 +4058,17 @@ function buildActiveWorldPlayers(worldId) {
  * @param {{row: number, col: number, seq?: number, rotation?: number}=} spawnPosition
  */
 function switchUserWorld(userId, targetWorldId, spawnPosition) {
-  var oldWorldId = getPlayerWorld(userId);
-  if (oldWorldId) {
-    var oldPosition = loadPlayerPosition(userId);
-    if (oldPosition && oldPosition.world_id === String(oldWorldId)) {
-      deletePlayerPosition(userId);
-      deletePlayerHeartbeat(userId);
-      deletePlayerMoveLease(userId);
-      sendWorldScopedStreamEvent(String(oldWorldId), "player_moved", {
-        player_id: userId,
-        leaving: true,
-        switched_world: true,
-        target_world_id: String(targetWorldId),
-      });
-    }
-  }
-
-  savePlayerWorld(userId, String(targetWorldId));
-  if (
-    spawnPosition &&
-    isFinite(Number(spawnPosition.row)) &&
-    isFinite(Number(spawnPosition.col))
-  ) {
-    savePlayerPosition(userId, String(targetWorldId), {
-      row: Number(spawnPosition.row),
-      col: Number(spawnPosition.col),
-      seq: isFinite(Number(spawnPosition.seq)) ? Number(spawnPosition.seq) : 0,
-      rotation: isFinite(Number(spawnPosition.rotation))
-        ? Number(spawnPosition.rotation)
-        : 0,
-      ts: Date.now(),
-    });
-  }
-  deletePlayerMoveLease(userId);
-  // Clear presence entry so login_at resets when the player establishes
-  // presence in the new world on their next heartbeat.
-  deleteOnlinePresence(userId);
+  switchUserWorldImpl(userId, targetWorldId, spawnPosition, {
+    getPlayerWorld: getPlayerWorld,
+    loadPlayerPosition: loadPlayerPosition,
+    deletePlayerPosition: deletePlayerPosition,
+    deletePlayerHeartbeat: deletePlayerHeartbeat,
+    deletePlayerMoveLease: deletePlayerMoveLease,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    savePlayerWorld: savePlayerWorld,
+    savePlayerPosition: savePlayerPosition,
+    deleteOnlinePresence: deleteOnlinePresence,
+  });
 }
 
 /**
@@ -5230,9 +4079,12 @@ function newWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  var createdWorld = createWorldOfType(WORLD_TYPE_FOREST);
-  switchUserWorld(userId, createdWorld.world_id);
-  return ResponseBuilder.json({ ok: true });
+  return ResponseBuilder.json(
+    switchUserToNewWorldImpl(userId, WORLD_TYPE_FOREST, {
+      createWorldOfType: createWorldOfType,
+      switchUserWorld: switchUserWorld,
+    }),
+  );
 }
 
 /**
@@ -5243,13 +4095,13 @@ function startWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  saveWorldType(OAK_WORLD_ID, WORLD_TYPE_FOREST);
-  switchUserWorld(
-    userId,
-    OAK_WORLD_ID,
-    getDefaultSpawnPosition(OAK_WORLD_ID, userId),
+  return ResponseBuilder.json(
+    switchUserToStartWorldImpl(userId, OAK_WORLD_ID, WORLD_TYPE_FOREST, {
+      saveWorldType: saveWorldType,
+      switchUserWorld: switchUserWorld,
+      getDefaultSpawnPosition: getDefaultSpawnPosition,
+    }),
   );
-  return ResponseBuilder.json({ ok: true });
 }
 
 /**

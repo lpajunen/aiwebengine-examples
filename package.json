@@ -11,7 +11,12 @@
     "upload-import-example": "node scripts/upload-script.js --script-path src/import_example/import_example.ts --script-uri https://example.com/import-example --assets-dir src/import_example/assets",
     "outdated": "npm outdated || echo '✓ Checked for outdated packages'",
     "format": "prettier --write \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ JavaScript files formatted'",
+    "format-check": "prettier --check \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ Source files match Prettier formatting'",
     "lint": "markdownlint \"**/*.md\" --ignore node_modules && echo '✓ Markdown files linted'",
+    "typecheck:ts": "tsc -p tsconfig.json",
+    "typecheck:js": "tsc -p jsconfig.json",
+    "typecheck": "npm run typecheck:ts && npm run typecheck:js && echo '✓ TypeScript and JavaScript type checks passed'",
+    "verify": "npm run format-check && npm run lint && npm run typecheck",
     "all": "npm run fetch-types && npm run fetch-openapi && npm run fetch-graphql-schema && npm run format"
   },
   "devDependencies": {
@@ -19,6 +24,7 @@
     "dotenv": "^17.3.1",
     "markdownlint-cli": "^0.48.0",
     "minimatch": "^10.2.5",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.3"
   }
 }

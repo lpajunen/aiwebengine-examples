@@ -8,5 +8,5 @@
     "strict": true
   },
   "include": ["src/**/*.js", "types/**/*.d.ts"],
-  "exclude": ["node_modules", "src/virtual-world/assets/public/client.js"]
+  "exclude": ["node_modules"]
 }

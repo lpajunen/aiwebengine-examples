@@ -1,3 +1,13 @@
+/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+
+/**
+ * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef
+ * @typedef {{ id: string, type: string, destination_world_id?: string | number, destination_world_type?: string, non_droppable?: boolean }} ClientItem
+ * @typedef {{ left_hand: ClientItem | null, right_hand: ClientItem | null, inventory: ClientItem[] }} ClientInventory
+ * @typedef {{ row: number, col: number, tile_type: string, actor_id: string, actor_type: string, payload: Record<string, any> }} ClientWorldMod
+ * @typedef {{ terrain: Record<string, ClientWorldMod>, object: Record<string, ClientWorldMod> }} ClientWorldMods
+ */
+
 function createSessionId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID();
@@ -13,17 +23,24 @@ var AUTH_STATE_EXTENDING = "extending";
 var AUTH_STATE_EXPIRED = "expired";
 var AUTH_STATE_REDIRECTING = "redirecting";
 var authState = AUTH_STATE_OK;
+/** @type {number | null} */
 var authProbeRetryTimer = null;
 var authProbeAttempts = 0;
 var authProbeInFlight = false;
 var authSseCheckPending = false;
+/** @type {Promise<boolean> | null} */
 var authRefreshPromise = null;
+/** @type {number | null} */
 var authRefreshIntervalTimer = null;
 var browserFetch = window.fetch.bind(window);
 var AUTH_PROBE_MAX_ATTEMPTS = 3;
 var AUTH_LOGIN_REDIRECT_DELAY_MS = 800;
 var AUTH_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
+/**
+ * @param {string} text
+ * @param {boolean} isError
+ */
 function setAuthStatusMessage(text, isError) {
   var el = document.getElementById("hud-auth-status");
   if (!el) return;
@@ -43,6 +60,10 @@ function setAuthStatusMessage(text, isError) {
   }
 }
 
+/**
+ * @param {string} id
+ * @returns {HTMLElement}
+ */
 function requireElementById(id) {
   var el = document.getElementById(id);
   if (!el) throw new Error("Missing required DOM element: " + id);
@@ -73,6 +94,10 @@ function handleAuthRecovery() {
   flushMove();
 }
 
+/**
+ * @param {string} reason
+ * @returns {Promise<boolean>}
+ */
 function refreshSessionSilently(reason) {
   if (isAuthUnavailable()) return Promise.resolve(false);
   if (authRefreshPromise) return authRefreshPromise;
@@ -93,6 +118,7 @@ function refreshSessionSilently(reason) {
   return authRefreshPromise;
 }
 
+/** @returns {Promise<boolean>} */
 function probeAuthStatus() {
   return browserFetch("/virtual-world/current-world", {
     method: "GET",
@@ -144,6 +170,7 @@ function runAuthProbeAttempt() {
   }, delay);
 }
 
+/** @param {string} source */
 function handleAuth401(source) {
   if (authState === AUTH_STATE_REDIRECTING || authState === AUTH_STATE_EXPIRED)
     return;
@@ -196,6 +223,11 @@ document.addEventListener("visibilitychange", function () {
   });
 });
 
+/**
+ * @param {string} path
+ * @param {RequestInit} [options]
+ * @returns {Promise<Response>}
+ */
 function fetchWithAuth(path, options) {
   if (isAuthUnavailable()) {
     return Promise.reject(createAuthError("AUTH_STOPPED"));
@@ -227,12 +259,18 @@ function fetchWithAuth(path, options) {
     });
 }
 
+/**
+ * @param {string} path
+ * @param {RequestInit} [options]
+ * @returns {Promise<any>}
+ */
 function fetchJsonWithAuth(path, options) {
   return fetchWithAuth(path, options).then(function (res) {
     return res.json();
   });
 }
 
+/** @param {string} source */
 function scheduleSSEAuthCheck(source) {
   if (authState !== AUTH_STATE_OK || authSseCheckPending) return;
   authSseCheckPending = true;
@@ -244,6 +282,10 @@ function scheduleSSEAuthCheck(source) {
   }, 250);
 }
 
+/**
+ * @param {number} retryCount
+ * @returns {number}
+ */
 function getSSEReconnectDelayMs(retryCount) {
   var capped = Math.min(retryCount, 5);
   if (authState === AUTH_STATE_EXTENDING) {
@@ -253,7 +295,7 @@ function getSSEReconnectDelayMs(retryCount) {
 }
 
 // ── Lightweight i18n for UI labels ─────────────────────────────────────
-var I18N_MESSAGES = {
+var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
   en: {
     item: {
       saw: { name: "Woodsman's saw" },
@@ -366,10 +408,12 @@ var I18N_MESSAGES = {
       items_suffix: "esinettä",
     },
   },
-};
+});
 
+/** @type {string | null} */
 var activeLocale = null;
 
+/** @returns {string} */
 function resolveLocale() {
   if (activeLocale) return activeLocale;
   var raw =
@@ -386,6 +430,11 @@ function resolveLocale() {
   return activeLocale;
 }
 
+/**
+ * @param {string} locale
+ * @param {string} key
+ * @returns {string | null}
+ */
 function getMessageByKey(locale, key) {
   var dict = I18N_MESSAGES[locale];
   if (!dict) return null;
@@ -398,6 +447,11 @@ function getMessageByKey(locale, key) {
   return typeof cur === "string" ? cur : null;
 }
 
+/**
+ * @param {string} key
+ * @param {string} [fallback]
+ * @returns {string}
+ */
 function t(key, fallback) {
   var locale = resolveLocale();
   var localized = getMessageByKey(locale, key);
@@ -407,6 +461,10 @@ function t(key, fallback) {
   return fallback || key;
 }
 
+/**
+ * @param {string} type
+ * @returns {string}
+ */
 function humanizeType(type) {
   return String(type || "")
     .replace(/_/g, " ")
@@ -415,6 +473,10 @@ function humanizeType(type) {
     });
 }
 
+/**
+ * @param {string} type
+ * @returns {string}
+ */
 function itemTypeToLabelKey(type) {
   if (type === "saw") return "item.saw.name";
   if (type === "hammer") return "item.hammer.name";
@@ -434,7 +496,7 @@ function itemTypeToLabelKey(type) {
 }
 
 // ── Dynamic world-mod state (client-side) ─────────────────────────────────
-var clientTileDefs =
+var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (
   typeof WORLD_TILE_DEFS === "object" && WORLD_TILE_DEFS
     ? WORLD_TILE_DEFS
     : {
@@ -450,7 +512,8 @@ var clientTileDefs =
         sand: { value: 9, walkable: true, layer: "terrain" },
         cave_floor: { value: 10, walkable: true, layer: "terrain" },
         wood_floor: { value: 11, walkable: true, layer: "terrain" },
-      };
+      }
+);
 /** @type {Record<number, string>} */
 var clientTileNamesByValue = {};
 Object.keys(clientTileDefs).forEach(function (tileName) {
@@ -499,12 +562,13 @@ function normalizeWorldMods(raw) {
   var out = createEmptyClientWorldMods();
   if (!raw || typeof raw !== "object") return out;
   ["terrain", "object"].forEach(function (layer) {
+    var layerKey = /** @type {"terrain" | "object"} */ (layer);
     var mods = raw[layer];
     if (!mods || typeof mods !== "object") return;
     Object.keys(mods).forEach(function (tileKey) {
       var mod = mods[tileKey];
       if (!mod || typeof mod !== "object") return;
-      out[layer][tileKey] = {
+      out[layerKey][tileKey] = {
         row: Number(mod.row),
         col: Number(mod.col),
         tile_type: String(mod.tile_type || "ground"),
@@ -570,8 +634,8 @@ function hasAnyWorldMods(mods) {
   );
 }
 
-var worldMods = normalizeWorldMods(
-  typeof WORLD_MODS !== "undefined" ? WORLD_MODS : null,
+var worldMods = /** @type {ClientWorldMods} */ (
+  normalizeWorldMods(typeof WORLD_MODS !== "undefined" ? WORLD_MODS : null)
 );
 if (!hasAnyWorldMods(worldMods)) {
   worldMods = buildLegacyWorldModsFromBootstrap();
@@ -582,7 +646,8 @@ if (!hasAnyWorldMods(worldMods)) {
  */
 function applyWorldModsToClientMap() {
   ["terrain", "object"].forEach(function (layer) {
-    var mods = worldMods[layer] || {};
+    var layerKey = /** @type {"terrain" | "object"} */ (layer);
+    var mods = worldMods[layerKey] || {};
     Object.keys(mods).forEach(function (tileKey) {
       var mod = mods[tileKey];
       if (!mod) return;
@@ -620,11 +685,20 @@ function rebuildLegacyDynamicViews() {
   });
 }
 
+/** @type {Record<string, any>} */
 var dynamicTrees = {};
+/** @type {Record<string, any>} */
 var dynamicHouses = {};
 applyWorldModsToClientMap();
 rebuildLegacyDynamicViews();
 
+/**
+ * @param {string} action
+ * @param {number} row
+ * @param {number} col
+ * @param {string} actorType
+ * @param {string} actorId
+ */
 function applyHouseAction(action, row, col, actorType, actorId) {
   var tileKey = row + "_" + col;
   if (action === "build_house") {
@@ -644,6 +718,13 @@ function applyHouseAction(action, row, col, actorType, actorId) {
   rebuildLegacyDynamicViews();
 }
 
+/**
+ * @param {string} action
+ * @param {number} row
+ * @param {number} col
+ * @param {string} actorType
+ * @param {string} actorId
+ */
 function applyTreeAction(action, row, col, actorType, actorId) {
   var tileKey = row + "_" + col;
   if (action === "plant") {
@@ -670,6 +751,10 @@ function applyTreeAction(action, row, col, actorType, actorId) {
   rebuildLegacyDynamicViews();
 }
 
+/**
+ * @param {any} inv
+ * @returns {ClientInventory}
+ */
 function normalizeClientInventory(inv) {
   if (!inv || typeof inv !== "object") {
     return { left_hand: null, right_hand: null, inventory: [] };
@@ -678,20 +763,24 @@ function normalizeClientInventory(inv) {
     left_hand: inv.left_hand && inv.left_hand.id ? inv.left_hand : null,
     right_hand: inv.right_hand && inv.right_hand.id ? inv.right_hand : null,
     inventory: Array.isArray(inv.inventory)
-      ? inv.inventory.filter(function (it) {
+      ? /** @type {any[]} */ (inv.inventory).filter(function (it) {
           return it && it.id && it.type;
         })
       : [],
   };
-  return out;
+  return /** @type {ClientInventory} */ (out);
 }
 
+/**
+ * @param {any} items
+ * @returns {Record<string, ClientItem[]>}
+ */
 function normalizeClientWorldItems(items) {
-  var out = {};
+  var out = /** @type {Record<string, ClientItem[]>} */ ({});
   if (!items || typeof items !== "object") return out;
   for (var tileKey in items) {
     if (!Array.isArray(items[tileKey])) continue;
-    var filtered = items[tileKey]
+    var filtered = /** @type {any[]} */ (items[tileKey])
       .filter(function (it) {
         return it && it.id && it.type;
       })
@@ -708,6 +797,10 @@ function normalizeClientWorldItems(items) {
   return out;
 }
 
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
 function normalizeWorldType(worldType) {
   var normalized = String(worldType || "").toLowerCase();
   if (
@@ -721,6 +814,10 @@ function normalizeWorldType(worldType) {
   return "forest";
 }
 
+/**
+ * @param {string} worldType
+ * @returns {string}
+ */
 function worldTypeLabel(worldType) {
   var normalized = normalizeWorldType(worldType);
   if (normalized === "island") return "Island";
@@ -729,6 +826,10 @@ function worldTypeLabel(worldType) {
   return "Forest";
 }
 
+/**
+ * @param {ClientItem | null | undefined} item
+ * @returns {string}
+ */
 function portalDestinationLabel(item) {
   var destinationType = normalizeWorldType(
     item && item.destination_world_type
@@ -749,28 +850,40 @@ var PORTAL_BUILD_ACTIONS = [
   "build_portal_building",
 ];
 
+/** @type {Record<string, ClientItem[]>} */
 var worldItemsByTile = normalizeClientWorldItems(WORLD_ITEMS || {});
 var itemSnapshotRequestSeq = 0;
 var appliedItemSnapshotSeq = 0;
 var playerInventory = normalizeClientInventory(PLAYER_INV);
 var inventoryPanelVisible = false;
+/** @type {number | null} */
 var inventoryAutoHideTimer = null;
 var usePickerVisible = false;
 
 // ── Communication state ──────────────────────────────────────────────────
 var playerNick = PLAYER_NICK || "";
+/** @type {any[]} */
 var onlinePlayersList = ONLINE_PLAYERS || [];
 var playersPanelVisible = false;
+/** @type {number | null} */
 var playersPollTimer = null;
 
 var chatPanelVisible = false;
 var chatActiveTab = "world"; // 'world' | 'dm'
+/** @type {any[]} */
 var worldChatMessages = INITIAL_CHAT || [];
+/** @type {string[]} */
 var dmIndex = INITIAL_DM_INDEX || [];
+/** @type {Record<string, any[]>} */
 var dmThreads = {}; // { [otherUserId]: Message[] }
+/** @type {string | null} */
 var activeDmUserId = null;
 var unreadDmCount = 0;
 
+/**
+ * @param {string} type
+ * @returns {string[]}
+ */
 function treeActionsForItemType(type) {
   if (type === "portal_builder") {
     return PORTAL_BUILD_ACTIONS.concat(["remove_portal"]);
@@ -785,6 +898,10 @@ function treeActionsForItemType(type) {
   return [];
 }
 
+/**
+ * @param {string} action
+ * @returns {string}
+ */
 function treeActionLabel(action) {
   if (action === "plant") {
     return t("tree_action.plant", "Use tree planting spade (plant)");
@@ -843,10 +960,11 @@ function treeActionLabel(action) {
   return action;
 }
 
+/** @returns {string[]} */
 function getOwnedTreeActions() {
-  var actionsByType = {};
+  var actionsByType = /** @type {Record<string, boolean>} */ ({});
   var inv = normalizeClientInventory(playerInventory);
-  var all = [];
+  var all = /** @type {ClientItem[]} */ ([]);
   if (inv.left_hand) all.push(inv.left_hand);
   if (inv.right_hand) all.push(inv.right_hand);
   if (Array.isArray(inv.inventory)) {
@@ -889,6 +1007,7 @@ function updateUseButtonState() {
   if (actions.length < 2) closeUsePicker();
 }
 
+/** @param {string[]} actions */
 function openUsePicker(actions) {
   var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
@@ -908,6 +1027,10 @@ function openUsePicker(actions) {
   requireElementById("hud-use-picker").style.display = "block";
 }
 
+/**
+ * @param {ClientItem | null | undefined} item
+ * @returns {string}
+ */
 function inventoryItemLabel(item) {
   if (!item || !item.type) return t("inventory.empty", "empty");
   var type = String(item.type);
@@ -925,13 +1048,20 @@ function updateHeldHud() {
 }
 
 var cheatClickCount = 0;
+/** @type {number | null} */
 var cheatClickResetTimer = null;
 var lastCheatTapAt = 0;
+/** @type {number | null} */
 var cheatToastTimer = null;
 var logoutClickCount = 0;
+/** @type {number | null} */
 var logoutClickResetTimer = null;
 var lastLogoutTapAt = 0;
 
+/**
+ * @param {string} message
+ * @param {boolean} isError
+ */
 function showCheatToast(message, isError) {
   var toast = requireElementById("hud-cheat-toast");
   toast.textContent = message;
@@ -949,10 +1079,15 @@ function showCheatToast(message, isError) {
   );
 }
 
+/**
+ * @param {string} message
+ * @param {boolean} isError
+ */
 function showHudToast(message, isError) {
   showCheatToast(message, isError);
 }
 
+/** @param {any} result */
 function applyCheatResult(result) {
   if (!result || !result.ok) {
     console.log("Cheat failed:", result && result.error);
@@ -1256,14 +1391,21 @@ var matHouseRoof = new THREE.MeshLambertMaterial({ color: 0x81503c });
 var matHouseDoor = new THREE.MeshLambertMaterial({ color: 0x4e311f });
 var matHouseChimney = new THREE.MeshLambertMaterial({ color: 0x6a6767 });
 
+/**
+ * @param {number} row
+ * @param {number} col
+ * @returns {boolean}
+ */
 function isOldOakTile(row, col) {
   return String(worldId) === "10000" && row === 50 && col === 50;
 }
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
+/** @param {number} col */
 function tileX(col) {
   return col * TILE + TILE / 2;
 }
+/** @param {number} row */
 function tileZ(row) {
   return row * TILE + TILE / 2;
 }
@@ -1272,6 +1414,16 @@ var dummy = new THREE.Object3D();
 dummy.rotation.set(0, 0, 0);
 dummy.scale.set(1, 1, 1);
 
+/**
+ * @param {any} mesh
+ * @param {number} index
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @param {number} [scaleX]
+ * @param {number} [scaleY]
+ * @param {number} [scaleZ]
+ */
 function setInstanceTransform(mesh, index, x, y, z, scaleX, scaleY, scaleZ) {
   dummy.position.set(x, y, z);
   dummy.scale.set(scaleX || 1, scaleY || 1, scaleZ || 1);
@@ -1279,6 +1431,7 @@ function setInstanceTransform(mesh, index, x, y, z, scaleX, scaleY, scaleZ) {
   mesh.setMatrixAt(index, dummy.matrix);
 }
 
+/** @param {any} mesh */
 function finalizeInstancedMesh(mesh) {
   if (!mesh) return;
   mesh.castShadow = true;
@@ -1286,12 +1439,14 @@ function finalizeInstancedMesh(mesh) {
   mesh.instanceMatrix.needsUpdate = true;
 }
 
+/** @param {any[]} meshes */
 function disposeInstancedMeshes(meshes) {
   for (var i = 0; i < meshes.length; i++) {
     if (meshes[i]) meshes[i].dispose();
   }
 }
 
+/** @param {boolean} visible */
 function setTreeMeshVisibility(visible) {
   var display = !!visible;
   iPineTrunk.visible = display;
@@ -1344,6 +1499,7 @@ function buildOakGroup() {
   return group;
 }
 
+/** @param {number} tileValue */
 function countTilesByValue(tileValue) {
   var count = 0;
   for (var row = 0; row < ROWS; row++) {
@@ -1354,18 +1510,23 @@ function countTilesByValue(tileValue) {
   return count;
 }
 
-var iOcean = null;
-var iLake = null;
-var iRiver = null;
-var iRock = null;
-var iMountain = null;
-var iSandA = null;
-var iSandB = null;
-var iCaveFloorA = null;
-var iCaveFloorB = null;
-var iWoodFloorA = null;
-var iWoodFloorB = null;
+/** @type {any} */ var iOcean = null;
+/** @type {any} */ var iLake = null;
+/** @type {any} */ var iRiver = null;
+/** @type {any} */ var iRock = null;
+/** @type {any} */ var iMountain = null;
+/** @type {any} */ var iSandA = null;
+/** @type {any} */ var iSandB = null;
+/** @type {any} */ var iCaveFloorA = null;
+/** @type {any} */ var iCaveFloorB = null;
+/** @type {any} */ var iWoodFloorA = null;
+/** @type {any} */ var iWoodFloorB = null;
 
+/**
+ * @param {string} tileName
+ * @param {number} parity
+ * @returns {number}
+ */
 function countParityTiles(tileName, parity) {
   var tileValue = clientTileValueForName(tileName);
   var count = 0;
@@ -1562,6 +1723,11 @@ function countRenderablePines() {
   return count;
 }
 
+/**
+ * @param {number} row
+ * @param {number} col
+ * @returns {boolean}
+ */
 function hasHouseAt(row, col) {
   return (
     row >= 0 &&
@@ -1572,6 +1738,11 @@ function hasHouseAt(row, col) {
   );
 }
 
+/**
+ * @param {number} row
+ * @param {number} col
+ * @returns {any}
+ */
 function buildHouseTile(row, col) {
   var group = new THREE.Group();
   var x = tileX(col);
@@ -1600,6 +1771,13 @@ function buildHouseTile(row, col) {
   roof.receiveShadow = true;
   group.add(roof);
 
+  /**
+   * @param {any} geometry
+   * @param {any} material
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   */
   function addWall(geometry, material, px, py, pz) {
     var mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(px, py, pz);
@@ -1608,6 +1786,12 @@ function buildHouseTile(row, col) {
     group.add(mesh);
   }
 
+  /**
+   * @param {any} geometry
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   */
   function addRoofTrim(geometry, px, py, pz) {
     var mesh = new THREE.Mesh(geometry, matHouseRoof);
     mesh.position.set(px, py, pz);
@@ -1782,9 +1966,13 @@ var iSpruceCanopyTop = new THREE.InstancedMesh(
   matSpruceTop,
   cntSpruce,
 );
+/** @type {any} */
 var iPineTrunk = null;
+/** @type {any} */
 var iPineCanopyLow = null;
+/** @type {any} */
 var iPineCanopyMid = null;
+/** @type {any} */
 var iPineCanopyTop = null;
 var oakGroup = buildOakGroup();
 
@@ -1856,10 +2044,15 @@ function updateTerrainFeatureMeshes() {
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────
 var itemGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+/** @type {Record<string, any>} */
 var itemMatCache = {};
 var itemMeshGroup = new THREE.Group();
 scene.add(itemMeshGroup);
 
+/**
+ * @param {string} type
+ * @returns {number}
+ */
 function itemTypeColor(type) {
   if (type === "saw") return 0xbfc6d0;
   if (type === "hammer") return 0x8f7f6d;
@@ -1877,6 +2070,10 @@ function itemTypeColor(type) {
   return 0xf3ca40;
 }
 
+/**
+ * @param {string} type
+ * @returns {any}
+ */
 function getItemMaterial(type) {
   if (!itemMatCache[type]) {
     itemMatCache[type] = new THREE.MeshLambertMaterial({
@@ -1921,6 +2118,16 @@ rebuildItemMeshes();
 // ── Avatar ───────────────────────────────────────────────────────────────
 var avatar = new THREE.Group();
 
+/**
+ * @param {number} w
+ * @param {number} h
+ * @param {number} d
+ * @param {number | string | any} color
+ * @param {number} px
+ * @param {number} py
+ * @param {number} pz
+ * @returns {any}
+ */
 function makePart(w, h, d, color, px, py, pz) {
   var geo = new THREE.BoxGeometry(w, h, d);
   var mat = new THREE.MeshLambertMaterial({ color: color });
@@ -1958,9 +2165,15 @@ targetIndicator.position.set(targetX, 0.15, targetZ);
 scene.add(targetIndicator);
 
 // ── Remote players ───────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 var remoteAvatars = {}; // { pid: { group, targetX, targetZ, targetRot, seq } }
+/** @type {Record<string, any>} */
 var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
 
+/**
+ * @param {string} pid
+ * @returns {any}
+ */
 function avatarBodyColor(pid) {
   var h = 0;
   for (var i = 0; i < pid.length; i++)
@@ -1971,8 +2184,22 @@ function avatarBodyColor(pid) {
   return new THREE.Color("hsl(" + hue + ",70%,55%)");
 }
 
+/**
+ * @param {string} pid
+ * @returns {any}
+ */
 function makeRemoteAvatar(pid) {
   var g = new THREE.Group();
+  /**
+   * @param {number} w
+   * @param {number} h
+   * @param {number} d
+   * @param {number | string | any} color
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   * @returns {any}
+   */
   function rp(w, h, d, color, px, py, pz) {
     var mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
@@ -1992,6 +2219,13 @@ function makeRemoteAvatar(pid) {
   return g;
 }
 
+/**
+ * @param {string} pid
+ * @param {number} row
+ * @param {number} col
+ * @param {number | null | undefined} seq
+ * @param {number | null | undefined} rotation
+ */
 function upsertRemoteAvatar(pid, row, col, seq, rotation) {
   if (pid === playerId) return;
   var tx = tileX(col),
@@ -2027,6 +2261,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation) {
   }
 }
 
+/** @param {string} pid */
 function removeRemoteAvatar(pid) {
   if (remoteAvatars[pid]) {
     scene.remove(remoteAvatars[pid].group);
@@ -2035,6 +2270,10 @@ function removeRemoteAvatar(pid) {
   }
 }
 
+/**
+ * @param {string} npcId
+ * @returns {any}
+ */
 function npcBodyColor(npcId) {
   var h = 0;
   for (var i = 0; i < npcId.length; i++) {
@@ -2044,8 +2283,22 @@ function npcBodyColor(npcId) {
   return new THREE.Color("hsl(" + hue + ",65%,52%)");
 }
 
+/**
+ * @param {string} npcId
+ * @returns {any}
+ */
 function makeNPCAvatar(npcId) {
   var g = new THREE.Group();
+  /**
+   * @param {number} w
+   * @param {number} h
+   * @param {number} d
+   * @param {number | string | any} color
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   * @returns {any}
+   */
   function np(w, h, d, color, px, py, pz) {
     var mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
@@ -2065,6 +2318,10 @@ function makeNPCAvatar(npcId) {
   return g;
 }
 
+/**
+ * @param {string} npcId
+ * @returns {string}
+ */
 function npcDisplayName(npcId) {
   if (npcAvatars[npcId] && npcAvatars[npcId].displayName) {
     return npcAvatars[npcId].displayName;
@@ -2072,6 +2329,14 @@ function npcDisplayName(npcId) {
   return shortenId(npcId);
 }
 
+/**
+ * @param {string} npcId
+ * @param {number} row
+ * @param {number} col
+ * @param {number | null | undefined} seq
+ * @param {number | null | undefined} rotation
+ * @param {string | undefined} displayName
+ */
 function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
   if (!npcId || !isFinite(Number(row)) || !isFinite(Number(col))) return;
   var tx = tileX(Number(col));
@@ -2110,6 +2375,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
   }
 }
 
+/** @param {string} npcId */
 function removeNPCAvatar(npcId) {
   if (npcAvatars[npcId]) {
     scene.remove(npcAvatars[npcId].group);
@@ -2118,9 +2384,10 @@ function removeNPCAvatar(npcId) {
   }
 }
 
+/** @param {any[]} npcs */
 function syncNPCSnapshot(npcs) {
   if (!Array.isArray(npcs)) return;
-  var seen = {};
+  var seen = /** @type {Record<string, boolean>} */ ({});
   for (var i = 0; i < npcs.length; i++) {
     var n = npcs[i];
     if (!n || typeof n.npc_id !== "string") continue;
@@ -2161,7 +2428,7 @@ function fetchItemSnapshot() {
         playerInventory = normalizeClientInventory(payload.inventory);
       }
       if (Array.isArray(payload.items)) {
-        var next = {};
+        var next = /** @type {Record<string, ClientItem[]>} */ ({});
         for (var i = 0; i < payload.items.length; i++) {
           var it = payload.items[i];
           if (!it || !it.id || !it.type) continue;
@@ -2188,6 +2455,7 @@ function fetchItemSnapshot() {
     });
 }
 
+/** @type {any[]} */
 var pendingMoves = []; // FIFO queue of {row,col,seq} — one entry per step
 var moveInFlight = false;
 
@@ -2287,6 +2555,14 @@ function flushMove() {
     });
 }
 
+/**
+ * @param {number} fromRow
+ * @param {number} fromCol
+ * @param {number} toRow
+ * @param {number} toCol
+ * @param {number} rotation
+ * @returns {boolean}
+ */
 function postMove(fromRow, fromCol, toRow, toCol, rotation) {
   // Each optimistic step gets the next expected seq number.
   // Never silently drop steps: if queue is full, caller must not move locally.
@@ -2322,7 +2598,7 @@ function fetchSnapshot() {
   if (authState !== AUTH_STATE_OK) return;
   fetchJsonWithAuth("/virtual-world/players")
     .then(function (players) {
-      players.forEach(function (p) {
+      /** @type {any[]} */ (players).forEach(function (p) {
         if (p.player_id === playerId) {
           var snapSeq = Number(p.seq || 0);
           var snapshotSessionId =
@@ -2394,10 +2670,12 @@ function initMultiplayer() {
     recipient_id: String(playerId),
   });
   var eventsSseUrl = "/virtual-world/events?" + eventsSseParams.toString();
+  /** @type {number | null} */
   var eventsReconnectTimer = null;
   var eventsRetryCount = 0;
   var eventsWaitingForOnline = false;
 
+  /** @param {any} payload */
   function handlePlayerMovedEvent(payload) {
     if (!payload || !payload.player_id) return;
     if (payload.leaving) {
@@ -2440,6 +2718,7 @@ function initMultiplayer() {
     );
   }
 
+  /** @param {any} payload */
   function handleTreeChangedEvent(payload) {
     if (!payload) return;
     applyTreeAction(
@@ -2454,6 +2733,7 @@ function initMultiplayer() {
     refreshTileDetailIfOpen();
   }
 
+  /** @param {any} payload */
   function handleHouseChangedEvent(payload) {
     if (!payload) return;
     applyHouseAction(
@@ -2467,6 +2747,7 @@ function initMultiplayer() {
     refreshTileDetailIfOpen();
   }
 
+  /** @param {any} payload */
   function handleNpcMovedEvent(payload) {
     if (!payload || typeof payload.npc_id !== "string") return;
     if (payload.despawn) {
@@ -2483,6 +2764,7 @@ function initMultiplayer() {
     );
   }
 
+  /** @param {any} msg */
   function handleChatMessageEvent(msg) {
     if (!msg || !msg.id) return;
     var exists = worldChatMessages.some(function (m) {
@@ -2494,6 +2776,7 @@ function initMultiplayer() {
     }
   }
 
+  /** @param {any} msg */
   function handleDirectMessageEvent(msg) {
     if (!msg || !msg.id || !msg.sender_id) return;
     var senderId = msg.sender_id;
@@ -2517,6 +2800,7 @@ function initMultiplayer() {
     }
   }
 
+  /** @param {any} message */
   function handleUnifiedStreamMessage(message) {
     if (!message || typeof message.type !== "string") return;
     var payload = message.payload;
@@ -2631,16 +2915,30 @@ function initMultiplayer() {
 }
 
 // ── Collision & movement ─────────────────────────────────────────────────
+/**
+ * @param {number} r
+ * @param {number} c
+ * @returns {boolean}
+ */
 function isWalkable(r, c) {
   return (
     r >= 0 && r < ROWS && c >= 0 && c < COLS && isWalkableTileValue(MAP[r][c])
   );
 }
 
+/** @type {string | null} */
 var lastMoveIntentKey = null;
+/** @type {"horizontal" | "vertical" | null} */
 var lastMoveAxis = null; // 'horizontal' | 'vertical'
+/** @type {{ dr: number, dc: number } | null} */
 var lastForwardCardinal = null;
 
+/**
+ * @param {number} dr
+ * @param {number} dc
+ * @param {number} angle
+ * @returns {boolean}
+ */
 function tryMove(dr, dc, angle) {
   var nr = avatarRow + dr;
   var nc = avatarCol + dc;
@@ -2653,8 +2951,8 @@ function tryMove(dr, dc, angle) {
     targetX = tileX(nc);
     targetZ = tileZ(nr);
     avatar.rotation.y = angle;
-    requireElementById("pos-col").textContent = nc;
-    requireElementById("pos-row").textContent = nr;
+    requireElementById("pos-col").textContent = String(nc);
+    requireElementById("pos-row").textContent = String(nr);
     updateUseButtonState();
     return true;
   }
@@ -2690,6 +2988,11 @@ function getCameraForwardCardinal() {
   return { dr: lastForwardCardinal.dr, dc: lastForwardCardinal.dc };
 }
 
+/**
+ * @param {number} inputX
+ * @param {number} inputY
+ * @returns {boolean}
+ */
 function tryMoveCameraRelative(inputX, inputY) {
   if (Math.abs(inputX) < 1e-6 && Math.abs(inputY) < 1e-6) return false;
 
@@ -2728,7 +3031,7 @@ function tryMoveCameraRelative(inputX, inputY) {
   else angle = dc > 0 ? Math.PI / 2 : -Math.PI / 2;
 
   lastMoveIntentKey = intentKey;
-  lastMoveAxis = axis;
+  lastMoveAxis = /** @type {"horizontal" | "vertical"} */ (axis);
   return tryMove(dr, dc, angle);
 }
 
@@ -2742,6 +3045,7 @@ function goToNewWorld() {
     });
 }
 
+/** @param {string} action */
 function postTreeAction(action) {
   fetchWithAuth("/virtual-world/tree-action", {
     method: "POST",
@@ -2831,6 +3135,12 @@ function renderInventoryPanel() {
   var listDiv = requireElementById("inv-list");
   var countDiv = requireElementById("inv-count");
 
+  /**
+   * @param {string} title
+   * @param {string} slot
+   * @param {ClientItem | null} item
+   * @returns {string}
+   */
   function handHtml(title, slot, item) {
     var label = item ? inventoryItemLabel(item) : "empty";
     var html =
@@ -2915,11 +3225,12 @@ function renderInventoryPanel() {
   updateHeldHud();
 }
 
+/** @param {number} autoHideMs */
 function showInventoryPanel(autoHideMs) {
   inventoryPanelVisible = true;
   requireElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
-  if (inventoryAutoHideTimer) {
+  if (inventoryAutoHideTimer !== null) {
     clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
   }
@@ -2933,7 +3244,7 @@ function showInventoryPanel(autoHideMs) {
 function closeInventoryPanel() {
   inventoryPanelVisible = false;
   requireElementById("hud-inventory-panel").style.display = "none";
-  if (inventoryAutoHideTimer) {
+  if (inventoryAutoHideTimer !== null) {
     clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
   }
@@ -2946,9 +3257,10 @@ function toggleInventoryPanel() {
 
 // ── Players panel ────────────────────────────────────────────────────────
 
+/** @param {number | string | Date | null | undefined} ts */
 function formatRelTime(ts) {
   if (!ts) return "-";
-  var diff = Math.max(0, Date.now() - ts);
+  var diff = Math.max(0, Date.now() - new Date(ts).getTime());
   var secs = Math.floor(diff / 1000);
   if (secs < 60) return secs + "s ago";
   var mins = Math.floor(secs / 60);
@@ -3026,10 +3338,10 @@ function showPlayersPanel() {
       }
     })
     .catch(function () {});
-  if (playersPollTimer) clearInterval(playersPollTimer);
+  if (playersPollTimer !== null) clearInterval(playersPollTimer);
   playersPollTimer = setInterval(function () {
     if (!playersPanelVisible) {
-      clearInterval(playersPollTimer);
+      if (playersPollTimer !== null) clearInterval(playersPollTimer);
       playersPollTimer = null;
       return;
     }
@@ -3050,7 +3362,7 @@ function showPlayersPanel() {
 function closePlayersPanel() {
   playersPanelVisible = false;
   requireElementById("hud-players-panel").style.display = "none";
-  if (playersPollTimer) {
+  if (playersPollTimer !== null) {
     clearInterval(playersPollTimer);
     playersPollTimer = null;
   }
@@ -3135,6 +3447,7 @@ function commitNickEdit() {
 
 // ── Chat helpers ─────────────────────────────────────────────────────────
 
+/** @param {any} str */
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -3143,6 +3456,7 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+/** @param {number | string | Date} ts */
 function formatChatTime(ts) {
   var d = new Date(ts);
   return (
@@ -3152,6 +3466,7 @@ function formatChatTime(ts) {
   );
 }
 
+/** @param {any} msg */
 function buildMsgHtml(msg) {
   var isMe = msg.sender_id === playerId;
   // For own messages always reflect the current nick so renames apply retroactively.
@@ -3176,6 +3491,7 @@ function buildMsgHtml(msg) {
   );
 }
 
+/** @param {string} containerId */
 function scrollChatToBottom(containerId) {
   var el = document.getElementById(containerId);
   if (el) el.scrollTop = el.scrollHeight;
@@ -3244,6 +3560,7 @@ function toggleChatPanel() {
   else showChatPanel();
 }
 
+/** @param {"world" | "dm"} tab */
 function switchChatTab(tab) {
   chatActiveTab = tab;
   requireElementById("chat-tab-world").classList.toggle(
@@ -3283,6 +3600,7 @@ function updateChatUnreadBadge() {
 }
 
 // Opens chat panel on DM tab and directly starts thread with a specific user.
+/** @param {string} otherUserId */
 function openChatPanelDM(otherUserId) {
   if (!chatPanelVisible) showChatPanel();
   if (chatActiveTab !== "dm") switchChatTab("dm");
@@ -3332,6 +3650,7 @@ function showDMConvoList() {
     .join("");
 }
 
+/** @param {string} otherUserId */
 function openDMThread(otherUserId) {
   activeDmUserId = otherUserId;
   var threadView = document.getElementById("dm-thread-view");
@@ -3365,6 +3684,7 @@ function openDMThread(otherUserId) {
   }
 }
 
+/** @param {string} otherUserId */
 function renderDMThread(otherUserId) {
   var msgs = dmThreads[otherUserId] || [];
   var container = document.getElementById("dm-thread-msgs");
@@ -3409,6 +3729,7 @@ function sendDirectMessage() {
     .catch(function () {});
 }
 
+/** @param {any} result */
 function applyItemStateFromResult(result) {
   if (!result || typeof result !== "object") return;
   // Reserve the next snapshot sequence so any older in-flight /current-world
@@ -3422,7 +3743,7 @@ function applyItemStateFromResult(result) {
   }
   if (Array.isArray(result.items)) {
     // Convert flat server snapshot into tile map.
-    var next = {};
+    var next = /** @type {Record<string, ClientItem[]>} */ ({});
     for (var i = 0; i < result.items.length; i++) {
       var it = result.items[i];
       if (!it || !it.id || !it.type) continue;
@@ -3443,6 +3764,10 @@ function applyItemStateFromResult(result) {
   updateUseButtonState();
 }
 
+/**
+ * @param {Record<string, any>} payload
+ * @param {(result: any) => void} [onSuccess]
+ */
 function postItemAction(payload, onSuccess) {
   fetchWithAuth("/virtual-world/tree-action", {
     method: "POST",
@@ -3475,18 +3800,25 @@ function pickItemsOnTile() {
   });
 }
 
+/** @param {string} slot */
 function dropFromSlot(slot) {
   postItemAction({ action: "drop", from: slot });
 }
 
+/** @param {number} index */
 function dropFromInventory(index) {
   postItemAction({ action: "drop", from: "inventory", index: index });
 }
 
+/** @param {string} slot */
 function equipToInventory(slot) {
   postItemAction({ action: "equip", from: slot, to: "inventory" });
 }
 
+/**
+ * @param {number} index
+ * @param {string} slot
+ */
 function equipFromInventory(index, slot) {
   postItemAction({
     action: "equip",
@@ -3513,6 +3845,11 @@ tileCollider.rotation.x = -Math.PI / 2;
 tileCollider.position.set(mapCX, 0, mapCZ);
 scene.add(tileCollider);
 
+/**
+ * @param {number} clientX
+ * @param {number} clientY
+ * @returns {{ row: number, col: number } | null}
+ */
 function pickTileFromEvent(clientX, clientY) {
   tileRayMouse.x = (clientX / window.innerWidth) * 2 - 1;
   tileRayMouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -3526,6 +3863,7 @@ function pickTileFromEvent(clientX, clientY) {
   return { row: r, col: c };
 }
 
+/** @param {any} e */
 function isClickOnHUD(e) {
   var el = e.target;
   while (el && el !== document.body) {
@@ -3536,6 +3874,10 @@ function isClickOnHUD(e) {
   return false;
 }
 
+/**
+ * @param {number} row
+ * @param {number} col
+ */
 function selectTile(row, col) {
   selectedTileRow = row;
   selectedTileCol = col;
@@ -3553,6 +3895,7 @@ function refreshTileDetailIfOpen() {
   renderTileDetailPanel();
 }
 
+/** @param {any} str */
 function escHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -3561,11 +3904,13 @@ function escHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+/** @param {any} id */
 function shortenId(id) {
   var s = String(id || "");
   return s.length > 18 ? s.slice(0, 16) + "\u2026" : s;
 }
 
+/** @param {string} id */
 function getNickForPlayer(id) {
   if (id === playerId) return playerNick || shortenId(id);
   for (var i = 0; i < onlinePlayersList.length; i++) {
@@ -3725,6 +4070,7 @@ function renderTileDetailPanel() {
 }
 
 // ── Input ────────────────────────────────────────────────────────────────
+/** @type {Record<string, boolean>} */
 var keys = {};
 var MOVE_KEYS = [
   "ArrowUp",
@@ -3741,6 +4087,7 @@ var MOVE_KEYS = [
   "D",
 ];
 
+/** @param {any} el */
 function isTypingTarget(el) {
   if (!el) return false;
   var tag = el.tagName;
@@ -3843,6 +4190,7 @@ var joystickDirection = { x: 0, y: 0 }; // normalized direction
 // Touch controls (mobile) - for camera rotation and pinch-to-zoom
 var isTouchRotating = false;
 
+/** @param {Touch} touch */
 function isTouchOnJoystick(touch) {
   if (!joystickBase) return false;
   var joystickRect = joystickBase.getBoundingClientRect();
@@ -3854,6 +4202,7 @@ function isTouchOnJoystick(touch) {
   );
 }
 
+/** @param {Touch} touch */
 function isTouchOnButtons(touch) {
   var treeActionsDiv = document.getElementById("hud-tree-actions");
   if (treeActionsDiv) {
@@ -3990,6 +4339,10 @@ document.addEventListener(
 );
 
 // ── Joystick control functions ───────────────────────────────────────────
+/**
+ * @param {number} touchX
+ * @param {number} touchY
+ */
 function updateJoystick(touchX, touchY) {
   var rect = joystickBase.getBoundingClientRect();
   var centerX = rect.left + rect.width / 2;

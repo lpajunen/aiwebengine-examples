@@ -6,9 +6,10 @@
  */
 function helloHandler(context) {
   const req = context.request;
+  const query = req && req.query ? req.query : {};
 
   // IDE now provides autocomplete for req.query, req.method, etc.
-  const name = req.query.name || "World";
+  const name = query.name || "World";
 
   // IDE knows about Response.text() and its parameters
   return ResponseBuilder.text(`Hello, ${name}!`);

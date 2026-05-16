@@ -43,6 +43,12 @@ function setAuthStatusMessage(text, isError) {
   }
 }
 
+function requireElementById(id) {
+  var el = document.getElementById(id);
+  if (!el) throw new Error("Missing required DOM element: " + id);
+  return el;
+}
+
 function loginRedirectUrl() {
   return "/auth/login?redirect=" + encodeURIComponent("/virtual-world/play");
 }
@@ -863,8 +869,8 @@ function getOwnedTreeActions() {
 
 function closeUsePicker() {
   usePickerVisible = false;
-  document.getElementById("hud-use-picker").style.display = "none";
-  document.getElementById("use-picker-actions").innerHTML = "";
+  requireElementById("hud-use-picker").style.display = "none";
+  requireElementById("use-picker-actions").innerHTML = "";
 }
 
 function updateUseButtonState() {
@@ -884,7 +890,7 @@ function updateUseButtonState() {
 }
 
 function openUsePicker(actions) {
-  var container = document.getElementById("use-picker-actions");
+  var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
   for (var i = 0; i < actions.length; i++) {
     var action = actions[i];
@@ -899,7 +905,7 @@ function openUsePicker(actions) {
     container.appendChild(btn);
   }
   usePickerVisible = true;
-  document.getElementById("hud-use-picker").style.display = "block";
+  requireElementById("hud-use-picker").style.display = "block";
 }
 
 function inventoryItemLabel(item) {
@@ -909,10 +915,10 @@ function inventoryItemLabel(item) {
 }
 
 function updateHeldHud() {
-  document.getElementById("held-left").textContent = playerInventory.left_hand
+  requireElementById("held-left").textContent = playerInventory.left_hand
     ? inventoryItemLabel(playerInventory.left_hand)
     : "-";
-  document.getElementById("held-right").textContent = playerInventory.right_hand
+  requireElementById("held-right").textContent = playerInventory.right_hand
     ? inventoryItemLabel(playerInventory.right_hand)
     : "-";
   updateUseButtonState();
@@ -927,8 +933,7 @@ var logoutClickResetTimer = null;
 var lastLogoutTapAt = 0;
 
 function showCheatToast(message, isError) {
-  var toast = document.getElementById("hud-cheat-toast");
-  if (!toast) return;
+  var toast = requireElementById("hud-cheat-toast");
   toast.textContent = message;
   if (isError) toast.classList.add("error");
   else toast.classList.remove("error");
@@ -1015,8 +1020,7 @@ function triggerLogout() {
 }
 
 function initCheatTrigger() {
-  var nameEl = document.getElementById("legend-ground");
-  if (!nameEl) return;
+  var nameEl = requireElementById("legend-ground");
   nameEl.style.cursor = "pointer";
   nameEl.title = "Triple click for test items";
   function onNameCheatTap() {
@@ -1058,8 +1062,7 @@ function initCheatTrigger() {
 }
 
 function initLogoutTrigger() {
-  var youEl = document.getElementById("legend-you");
-  if (!youEl) return;
+  var youEl = requireElementById("legend-you");
   youEl.style.cursor = "pointer";
   youEl.title = 'Triple click "You" to log out';
   function onLogoutTap() {
@@ -2224,8 +2227,8 @@ function flushMove() {
             avatarCol = result.col;
             targetX = tileX(avatarCol);
             targetZ = tileZ(avatarRow);
-            document.getElementById("pos-col").textContent = String(avatarCol);
-            document.getElementById("pos-row").textContent = String(avatarRow);
+            requireElementById("pos-col").textContent = String(avatarCol);
+            requireElementById("pos-row").textContent = String(avatarRow);
           }
           if (typeof result.seq === "number" && isFinite(result.seq)) {
             moveSeq = result.seq;
@@ -2259,8 +2262,8 @@ function flushMove() {
           avatarCol = lastPos.col;
           targetX = tileX(avatarCol);
           targetZ = tileZ(avatarRow);
-          document.getElementById("pos-col").textContent = String(avatarCol);
-          document.getElementById("pos-row").textContent = String(avatarRow);
+          requireElementById("pos-col").textContent = String(avatarCol);
+          requireElementById("pos-row").textContent = String(avatarRow);
         }
       } else {
         // Confirmed — update the last confirmed server sequence number.
@@ -2343,8 +2346,8 @@ function fetchSnapshot() {
             }
             moveSeq = snapSeq;
             lastAssignedSeq = snapSeq;
-            document.getElementById("pos-col").textContent = String(avatarCol);
-            document.getElementById("pos-row").textContent = String(avatarRow);
+            requireElementById("pos-col").textContent = String(avatarCol);
+            requireElementById("pos-row").textContent = String(avatarRow);
           }
         } else {
           upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
@@ -2421,8 +2424,8 @@ function initMultiplayer() {
             moveSeq = incomingSeq;
             lastAssignedSeq = incomingSeq;
           }
-          document.getElementById("pos-col").textContent = String(avatarCol);
-          document.getElementById("pos-row").textContent = String(avatarRow);
+          requireElementById("pos-col").textContent = String(avatarCol);
+          requireElementById("pos-row").textContent = String(avatarRow);
           updateUseButtonState();
         }
       }
@@ -2650,8 +2653,8 @@ function tryMove(dr, dc, angle) {
     targetX = tileX(nc);
     targetZ = tileZ(nr);
     avatar.rotation.y = angle;
-    document.getElementById("pos-col").textContent = nc;
-    document.getElementById("pos-row").textContent = nr;
+    requireElementById("pos-col").textContent = nc;
+    requireElementById("pos-row").textContent = nr;
     updateUseButtonState();
     return true;
   }
@@ -2823,10 +2826,10 @@ function useItem() {
 }
 
 function renderInventoryPanel() {
-  var leftDiv = document.getElementById("inv-left-hand");
-  var rightDiv = document.getElementById("inv-right-hand");
-  var listDiv = document.getElementById("inv-list");
-  var countDiv = document.getElementById("inv-count");
+  var leftDiv = requireElementById("inv-left-hand");
+  var rightDiv = requireElementById("inv-right-hand");
+  var listDiv = requireElementById("inv-list");
+  var countDiv = requireElementById("inv-count");
 
   function handHtml(title, slot, item) {
     var label = item ? inventoryItemLabel(item) : "empty";
@@ -2914,7 +2917,7 @@ function renderInventoryPanel() {
 
 function showInventoryPanel(autoHideMs) {
   inventoryPanelVisible = true;
-  document.getElementById("hud-inventory-panel").style.display = "block";
+  requireElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
   if (inventoryAutoHideTimer) {
     clearTimeout(inventoryAutoHideTimer);
@@ -2929,7 +2932,7 @@ function showInventoryPanel(autoHideMs) {
 
 function closeInventoryPanel() {
   inventoryPanelVisible = false;
-  document.getElementById("hud-inventory-panel").style.display = "none";
+  requireElementById("hud-inventory-panel").style.display = "none";
   if (inventoryAutoHideTimer) {
     clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
@@ -3009,7 +3012,7 @@ function renderPlayersPanel() {
 
 function showPlayersPanel() {
   playersPanelVisible = true;
-  document.getElementById("hud-players-panel").style.display = "block";
+  requireElementById("hud-players-panel").style.display = "block";
   renderPlayersPanel();
   // Fetch fresh data immediately when opening, then poll every 15 s
   fetchWithAuth("/virtual-world/online-players")
@@ -3046,7 +3049,7 @@ function showPlayersPanel() {
 
 function closePlayersPanel() {
   playersPanelVisible = false;
-  document.getElementById("hud-players-panel").style.display = "none";
+  requireElementById("hud-players-panel").style.display = "none";
   if (playersPollTimer) {
     clearInterval(playersPollTimer);
     playersPollTimer = null;
@@ -3074,9 +3077,9 @@ function startNickEdit() {
       }
     };
   }
-  document.getElementById("nick-display").style.display = "none";
-  document.getElementById("nick-edit-btn").style.display = "none";
-  document.getElementById("nick-edit-row").style.display = "inline";
+  requireElementById("nick-display").style.display = "none";
+  requireElementById("nick-edit-btn").style.display = "none";
+  requireElementById("nick-edit-row").style.display = "inline";
   if (inp) {
     inp.focus();
     inp.select();
@@ -3084,9 +3087,9 @@ function startNickEdit() {
 }
 
 function cancelNickEdit() {
-  document.getElementById("nick-display").style.display = "";
-  document.getElementById("nick-edit-btn").style.display = "";
-  document.getElementById("nick-edit-row").style.display = "none";
+  requireElementById("nick-display").style.display = "";
+  requireElementById("nick-edit-btn").style.display = "";
+  requireElementById("nick-edit-row").style.display = "none";
 }
 
 function commitNickEdit() {
@@ -3243,18 +3246,19 @@ function toggleChatPanel() {
 
 function switchChatTab(tab) {
   chatActiveTab = tab;
-  document
-    .getElementById("chat-tab-world")
-    .classList.toggle("active", tab === "world");
-  document
-    .getElementById("chat-tab-dm")
-    .classList.toggle("active", tab === "dm");
-  document
-    .getElementById("chat-content-world")
-    .classList.toggle("hidden", tab !== "world");
-  document
-    .getElementById("chat-content-dm")
-    .classList.toggle("hidden", tab !== "dm");
+  requireElementById("chat-tab-world").classList.toggle(
+    "active",
+    tab === "world",
+  );
+  requireElementById("chat-tab-dm").classList.toggle("active", tab === "dm");
+  requireElementById("chat-content-world").classList.toggle(
+    "hidden",
+    tab !== "world",
+  );
+  requireElementById("chat-content-dm").classList.toggle(
+    "hidden",
+    tab !== "dm",
+  );
   if (tab === "world") renderWorldChat();
   else renderDMContent();
   if (tab === "dm") {
@@ -3541,7 +3545,7 @@ function selectTile(row, col) {
 function closeTileDetail() {
   selectedTileRow = -1;
   selectedTileCol = -1;
-  document.getElementById("hud-tile-detail").style.display = "none";
+  requireElementById("hud-tile-detail").style.display = "none";
 }
 
 function refreshTileDetailIfOpen() {
@@ -3578,7 +3582,7 @@ function renderTileDetailPanel() {
   var key = row + "_" + col;
   var isOakCenter = String(worldId) === "10000" && row === 50 && col === 50;
 
-  document.getElementById("tile-detail-title").textContent =
+  requireElementById("tile-detail-title").textContent =
     "Square (" + col + ", " + row + ")";
 
   var terrainType = MAP[row][col];
@@ -3716,8 +3720,8 @@ function renderTileDetailPanel() {
   }
   html += "</div>";
 
-  document.getElementById("tile-detail-body").innerHTML = html;
-  document.getElementById("hud-tile-detail").style.display = "block";
+  requireElementById("tile-detail-body").innerHTML = html;
+  requireElementById("hud-tile-detail").style.display = "block";
 }
 
 // ── Input ────────────────────────────────────────────────────────────────
@@ -3812,7 +3816,7 @@ document.addEventListener("mouseleave", function () {
   isDragging = false;
 });
 
-document.getElementById("hud-inventory-panel").addEventListener(
+requireElementById("hud-inventory-panel").addEventListener(
   "wheel",
   function (e) {
     e.stopPropagation();
@@ -3830,8 +3834,8 @@ document.addEventListener(
 );
 
 // ── Joystick element references (must be defined before touch handlers) ──
-var joystickBase = document.getElementById("joystick-base");
-var joystickStick = document.getElementById("joystick-stick");
+var joystickBase = requireElementById("joystick-base");
+var joystickStick = requireElementById("joystick-stick");
 var joystickActive = false;
 var joystickMouseActive = false; // separate flag for mouse vs touch
 var joystickDirection = { x: 0, y: 0 }; // normalized direction

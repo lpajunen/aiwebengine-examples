@@ -44,8 +44,10 @@ function githubHandler(context) {
     );
 
     // Get repository information from query params or use defaults
-    const owner = context.request.query.owner || "lpajunen";
-    const repo = context.request.query.repo || "aiwebengine-examples";
+    const request = context.request;
+    const query = request && request.query ? request.query : {};
+    const owner = query.owner || "lpajunen";
+    const repo = query.repo || "aiwebengine-examples";
 
     // Call the list_issues tool
     const result = client.callTool("list_issues", {

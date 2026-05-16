@@ -86,6 +86,12 @@ import {
   savePlayerPosition as savePlayerPositionImpl,
   savePlayerWorld as savePlayerWorldImpl,
 } from "./server/player-persistence.ts";
+import {
+  buildActiveWorldPlayers as buildActiveWorldPlayersImpl,
+  getCanonicalPlayerState as getCanonicalPlayerStateImpl,
+  loadWorldPlayers as loadWorldPlayersImpl,
+  saveWorldPlayers as saveWorldPlayersImpl,
+} from "./server/player-snapshots.ts";
 import { generateWorldMap } from "./server/world-map.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -281,7 +287,11 @@ function deletePlayerMoveLease(userId) {
  * @returns {number}
  */
 function loadPlayerHeartbeatTs(userId) {
-  return loadPlayerHeartbeatTsImpl(userId, VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
+  return loadPlayerHeartbeatTsImpl(
+    userId,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    vwLog,
+  );
 }
 
 /**
@@ -619,30 +629,7 @@ function getVirtualWorldPage(context) {
  * @returns {Record<string, any>}
  */
 function loadWorldPlayers(worldId) {
-  var rows = queryWorldRows(
-    VWORLD_PLAYER_POSITION_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    1000,
-    "updated_ts",
-    "desc",
-  );
-  /** @type {Record<string, any>} */
-  var players = {};
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (!row || !row.user_id) continue;
-    var playerUserId = String(row.user_id);
-    if (players[playerUserId]) continue;
-    players[playerUserId] = {
-      row: isFinite(Number(row.row)) ? Number(row.row) : 1,
-      col: isFinite(Number(row.col)) ? Number(row.col) : 1,
-      seq: isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-      rotation: isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
-      session_id: typeof row.session_id === "string" ? row.session_id : "",
-      ts: fromStoredWorldTimestamp(row.updated_ts),
-    };
-  }
-  return players;
+  return loadWorldPlayersImpl(worldId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -650,39 +637,7 @@ function loadWorldPlayers(worldId) {
  * @param {Record<string, any>} players
  */
 function saveWorldPlayers(worldId, players) {
-  var existingRows = queryWorldRows(
-    VWORLD_PLAYER_POSITION_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-    1000,
-    "id",
-    "desc",
-  );
-  /** @type {Record<string, any>} */
-  var existingByUserId = {};
-  for (var i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].user_id) {
-      existingByUserId[String(existingRows[i].user_id)] = existingRows[i];
-    }
-  }
-
-  var nextPlayers = players && typeof players === "object" ? players : {};
-  Object.keys(nextPlayers).forEach(function (userId) {
-    var player = nextPlayers[userId] || {};
-    savePlayerPosition(userId, worldId, {
-      row: isFinite(Number(player.row)) ? Number(player.row) : 1,
-      col: isFinite(Number(player.col)) ? Number(player.col) : 1,
-      seq: isFinite(Number(player.seq)) ? Number(player.seq) : 0,
-      rotation: isFinite(Number(player.rotation)) ? Number(player.rotation) : 0,
-      session_id:
-        typeof player.session_id === "string" ? player.session_id : "",
-      ts: isFinite(Number(player.ts)) ? Number(player.ts) : Date.now(),
-    });
-    delete existingByUserId[userId];
-  });
-
-  Object.keys(existingByUserId).forEach(function (userId) {
-    deletePlayerPosition(userId);
-  });
+  saveWorldPlayersImpl(worldId, players, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -1647,7 +1602,14 @@ function ensureLateWorldDatabaseSchema(collector) {
  * @returns {any[]}
  */
 function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
-  return queryWorldRowsImpl(tableName, filters, limit, orderBy, orderDir, vwLog);
+  return queryWorldRowsImpl(
+    tableName,
+    filters,
+    limit,
+    orderBy,
+    orderDir,
+    vwLog,
+  );
 }
 
 /**
@@ -3915,26 +3877,13 @@ function vwLog(msg, obj) {
  * @returns {{row: number, col: number, seq: number, rotation: number}}
  */
 function getCanonicalPlayerState(worldId, userId) {
-  var players = loadWorldPlayers(worldId);
-  var cur = players[userId];
-  if (cur && isFinite(Number(cur.row)) && isFinite(Number(cur.col))) {
-    return {
-      row: Number(cur.row),
-      col: Number(cur.col),
-      seq: Number(cur.seq || 0),
-      rotation: isFinite(Number(cur.rotation)) ? Number(cur.rotation) : 0,
-    };
-  }
-  var savedPos = loadPlayerPosition(userId);
-  if (!savedPos || savedPos.world_id !== String(worldId)) {
-    return getDefaultSpawnPosition(worldId, userId);
-  }
-  return {
-    row: savedPos.row,
-    col: savedPos.col,
-    seq: savedPos.seq,
-    rotation: savedPos.rotation,
-  };
+  return getCanonicalPlayerStateImpl(
+    worldId,
+    userId,
+    VWORLD_PLAYER_POSITION_TABLE,
+    vwLog,
+    getDefaultSpawnPosition,
+  );
 }
 
 /**
@@ -5481,36 +5430,13 @@ function heartbeatHandler(context) {
  * @returns {Array<{player_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, last_active: number}>}
  */
 function buildActiveWorldPlayers(worldId) {
-  if (!worldId) return [];
-  var players = loadWorldPlayers(worldId);
-  if (!players || typeof players !== "object") return [];
-  var now = Date.now();
-  var heartbeatByUserId = loadPlayerHeartbeatMap();
-  return Object.keys(players)
-    .filter(function (pid) {
-      if (!players[pid] || typeof players[pid] !== "object") {
-        return false;
-      }
-      var hbTs = Number(heartbeatByUserId[pid] || 0);
-      return now - Math.max(Number(players[pid].ts || 0), hbTs) < 90000;
-    })
-    .map(function (pid) {
-      var hbTs = Number(heartbeatByUserId[pid] || 0);
-      return {
-        player_id: pid,
-        row: players[pid].row,
-        col: players[pid].col,
-        seq: players[pid].seq || 0,
-        rotation: isFinite(Number(players[pid].rotation))
-          ? Number(players[pid].rotation)
-          : 0,
-        session_id:
-          typeof players[pid].session_id === "string"
-            ? players[pid].session_id
-            : "",
-        last_active: Math.max(Number(players[pid].ts || 0), hbTs),
-      };
-    });
+  return buildActiveWorldPlayersImpl(
+    worldId,
+    VWORLD_PLAYER_POSITION_TABLE,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
+    vwLog,
+    90000,
+  );
 }
 
 /**

@@ -69,9 +69,15 @@ export function savePlayerWorld(
   return String(worldId);
 }
 
-export function normalizePlayerPositionRow(row: unknown): PlayerPositionRow | null {
+export function normalizePlayerPositionRow(
+  row: unknown,
+): PlayerPositionRow | null {
   const value = row as Record<string, unknown> | null;
-  if (!value || !Number.isFinite(Number(value.row)) || !Number.isFinite(Number(value.col))) {
+  if (
+    !value ||
+    !Number.isFinite(Number(value.row)) ||
+    !Number.isFinite(Number(value.col))
+  ) {
     return null;
   }
   return {
@@ -79,7 +85,9 @@ export function normalizePlayerPositionRow(row: unknown): PlayerPositionRow | nu
     row: Number(value.row),
     col: Number(value.col),
     seq: Number.isFinite(Number(value.seq)) ? Number(value.seq) : 0,
-    rotation: Number.isFinite(Number(value.rotation)) ? Number(value.rotation) : 0,
+    rotation: Number.isFinite(Number(value.rotation))
+      ? Number(value.rotation)
+      : 0,
     session_id: typeof value.session_id === "string" ? value.session_id : "",
     ts: fromStoredWorldTimestamp(value.updated_ts),
   };
@@ -102,7 +110,14 @@ export function loadAllPlayerPositions(
   playerPositionTable: string,
   log: WorldDbLogFn,
 ): Record<string, PlayerPositionRow> {
-  const rows = queryWorldRows(playerPositionTable, "", 1000, "updated_ts", "desc", log);
+  const rows = queryWorldRows(
+    playerPositionTable,
+    "",
+    1000,
+    "updated_ts",
+    "desc",
+    log,
+  );
   const out: Record<string, PlayerPositionRow> = {};
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -131,8 +146,11 @@ export function savePlayerPosition(
       row: Number(position.row),
       col: Number(position.col),
       seq: Number.isFinite(Number(position.seq)) ? Number(position.seq) : 0,
-      rotation: Number.isFinite(Number(position.rotation)) ? Number(position.rotation) : 0,
-      session_id: typeof position.session_id === "string" ? position.session_id : "",
+      rotation: Number.isFinite(Number(position.rotation))
+        ? Number(position.rotation)
+        : 0,
+      session_id:
+        typeof position.session_id === "string" ? position.session_id : "",
       updated_ts: toStoredWorldTimestamp(
         Number.isFinite(Number(position.ts)) ? Number(position.ts) : Date.now(),
       ),
@@ -219,7 +237,14 @@ export function loadPlayerHeartbeatMap(
   playerHeartbeatTable: string,
   log: WorldDbLogFn,
 ): Record<string, number> {
-  const rows = queryWorldRows(playerHeartbeatTable, "", 1000, "heartbeat_ts", "desc", log);
+  const rows = queryWorldRows(
+    playerHeartbeatTable,
+    "",
+    1000,
+    "heartbeat_ts",
+    "desc",
+    log,
+  );
   const out: Record<string, number> = {};
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -280,7 +305,9 @@ export function markPlayerPositionInactive(
       row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
       col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
       seq: Number.isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-      rotation: Number.isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
+      rotation: Number.isFinite(Number(row.rotation))
+        ? Number(row.rotation)
+        : 0,
       session_id: typeof row.session_id === "string" ? row.session_id : "",
       updated_ts: 0,
     },

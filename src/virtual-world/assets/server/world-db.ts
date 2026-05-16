@@ -80,7 +80,10 @@ export function deleteWorldRowsWhere(
   filters: string,
   log: WorldDbLogFn,
 ): void {
-  const result = parseWorldDbResult(database.deleteWhere(tableName, filters), log);
+  const result = parseWorldDbResult(
+    database.deleteWhere(tableName, filters),
+    log,
+  );
   if (result && result.error) {
     log("world db deleteWhere failed", {
       table: tableName,
@@ -120,7 +123,11 @@ export function upsertWorldRow(
   log: WorldDbLogFn,
 ): any | null {
   const result = parseWorldDbResult(
-    database.upsert(tableName, JSON.stringify(keyColumns), JSON.stringify(data)),
+    database.upsert(
+      tableName,
+      JSON.stringify(keyColumns),
+      JSON.stringify(data),
+    ),
     log,
   );
   if (!result || result.error) {
@@ -131,7 +138,9 @@ export function upsertWorldRow(
     });
 
     const source =
-      data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+      data && typeof data === "object"
+        ? (data as Record<string, unknown>)
+        : null;
     const keyFilters: Record<string, unknown> = {};
     for (let i = 0; i < keyColumns.length; i++) {
       const key = keyColumns[i];

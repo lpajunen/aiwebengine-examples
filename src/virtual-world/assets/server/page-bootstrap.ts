@@ -277,6 +277,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-use" onclick="useItem()">Use</button>
     <button id="btn-pick" onclick="pickItemsOnTile()">📦 Pick</button>
     <button id="btn-items" onclick="toggleInventoryPanel()">🎒 Items</button>
+    <button id="btn-craft" onclick="toggleCraftingPanel()">🛠 Craft</button>
     <button id="btn-players" onclick="togglePlayersPanel()">👥 Players</button>
     <button id="btn-chat" onclick="toggleChatPanel()">💬 Chat<span class="unread-badge" id="chat-unread-badge"></span></button>
   </div>
@@ -302,6 +303,14 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <div id="inv-footer">
       <span id="inv-count">0 items</span>
     </div>
+  </div>
+
+  <div class="hud" id="hud-crafting-panel">
+    <div class="panel-header">
+      <span class="panel-title">Crafting</span>
+      <button class="panel-close" onclick="closeCraftingPanel()" title="Close">×</button>
+    </div>
+    <div id="crafting-list"></div>
   </div>
 
   <div class="hud" id="hud-tile-detail" aria-live="polite">

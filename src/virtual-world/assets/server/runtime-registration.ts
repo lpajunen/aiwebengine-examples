@@ -192,6 +192,7 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "itemActionHandler",
     "POST",
   );
+  safeRegisterRoute(deps, "/virtual-world/craft", "craftHandler", "POST");
   safeRegisterTool(
     deps,
     "virtualWorldGetState",

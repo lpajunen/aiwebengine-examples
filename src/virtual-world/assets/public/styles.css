@@ -186,6 +186,11 @@ canvas {
   border-color: rgba(130,165,255,0.55);
 }
 #btn-items:hover { background: rgba(67,100,200,1); }
+#btn-craft {
+  background: rgba(140,91,31,0.9);
+  border-color: rgba(234,189,114,0.55);
+}
+#btn-craft:hover { background: rgba(168,110,38,1); }
 
 #hud-use-picker {
   right: 14px;
@@ -227,6 +232,73 @@ canvas {
   pointer-events: auto;
   padding: 10px;
   z-index: 1001;
+}
+#hud-crafting-panel {
+  right: 14px;
+  bottom: 70px;
+  width: min(340px, calc(100vw - 28px));
+  max-height: min(52vh, 460px);
+  overflow: hidden;
+  display: none;
+  pointer-events: auto;
+  padding: 10px;
+  z-index: 1001;
+}
+.crafting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(40vh, 360px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.craft-row {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 6px;
+  padding: 8px;
+}
+.craft-row .name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e6f3ff;
+}
+.craft-meta,
+.craft-ingredients,
+.craft-result {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #cfdde7;
+  margin-top: 4px;
+}
+.craft-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+}
+.craft-actions button {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.24);
+  color: #fff;
+  background: rgba(140,91,31,0.9);
+  cursor: pointer;
+  font-family: inherit;
+}
+.craft-actions button:hover {
+  background: rgba(168,110,38,1);
+}
+.craft-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.craft-status {
+  font-size: 11px;
+  color: #9bc3da;
 }
 .inv-hands {
   display: grid;

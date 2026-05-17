@@ -61,7 +61,7 @@ export function worldTileNameForValue(
 export function getAvailableWorldActions(
   inventory: { left_hand: any; right_hand: any; inventory: any[] },
   currentTileItems: any[],
-  treeActionByItemType: Record<string, string>,
+  getActionsForItemType: (itemType: string) => string[],
 ): string[] {
   const actionMap: Record<string, boolean> = {};
 
@@ -69,9 +69,10 @@ export function getAvailableWorldActions(
     if (!item || !item.type) {
       return;
     }
-    const action = treeActionByItemType[String(item.type)];
-    if (action) {
-      actionMap[action] = true;
+    const actions = getActionsForItemType(String(item.type));
+    for (let i = 0; i < actions.length; i++) {
+      if (!actions[i]) continue;
+      actionMap[actions[i]] = true;
     }
   }
 

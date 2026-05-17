@@ -30,16 +30,22 @@ export interface ActionDefinition {
     | "facing_or_current_tile";
   sourceItemIds: string[];
   canonicalId?: string;
+  execution?: {
+    toastMessage?: string;
+    worldChatText?: string;
+  };
 }
 
 export interface RecipeDefinition {
   id: string;
   labelKey: string;
   fallbackLabel: string;
+  targetKind: "inventory" | "current_tile" | "facing_tile";
   inputItems: Array<{ itemId: string; count: number }>;
   outputs: Array<
     | { kind: "item"; itemId: string; count: number }
-    | { kind: "placeable"; placeableType: string; count: number }
+    | { kind: "place_tree"; count: number }
+    | { kind: "place_house"; count: number }
   >;
 }
 
@@ -290,6 +296,10 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Play kantele tune",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    execution: {
+      toastMessage: "A kantele tune carries across the clearing.",
+      worldChatText: "lets a kantele melody drift through the spruce hush.",
+    },
   },
   place_blessing: {
     id: "place_blessing",
@@ -297,6 +307,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Place rowan blessing",
     targetKind: "current_tile",
     sourceItemIds: ["rowan_charm"],
+    execution: {
+      toastMessage: "A rowan blessing now marks this place.",
+    },
   },
   portal_travel: {
     id: "portal_travel",
@@ -314,13 +327,40 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   },
 };
 
-export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {};
+export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
+  craft_kantele: {
+    id: "craft_kantele",
+    labelKey: "recipe.craft_kantele",
+    fallbackLabel: "Craft kantele",
+    targetKind: "inventory",
+    inputItems: [
+      { itemId: "birch_bark_letter", count: 1 },
+      { itemId: "juniper_bundle", count: 1 },
+      { itemId: "rune_stone", count: 1 },
+    ],
+    outputs: [{ kind: "item", itemId: "kantele", count: 1 }],
+  },
+  grow_pine_tree: {
+    id: "grow_pine_tree",
+    labelKey: "recipe.grow_pine_tree",
+    fallbackLabel: "Grow pine tree",
+    targetKind: "facing_tile",
+    inputItems: [
+      { itemId: "flower", count: 1 },
+      { itemId: "juniper_bundle", count: 1 },
+      { itemId: "tree_planter", count: 1 },
+    ],
+    outputs: [{ kind: "place_tree", count: 1 }],
+  },
+};
 
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
 }
 
-export function getActionDefinition(actionId: string): ActionDefinition | null {
+export function getActionDefinition(
+  actionId: string | null | undefined,
+): ActionDefinition | null {
   return ACTION_DEFINITIONS[String(actionId || "")] || null;
 }
 
@@ -373,7 +413,20 @@ export function getBootstrapRegistry(): {
       canonical_id: string;
     }
   >;
-  recipes: Record<string, { label_key: string; fallback_label: string }>;
+  recipes: Record<
+    string,
+    {
+      label_key: string;
+      fallback_label: string;
+      target_kind: string;
+      input_items: Array<{ item_id: string; count: number }>;
+      outputs: Array<
+        | { kind: "item"; item_id: string; count: number }
+        | { kind: "place_tree"; count: number }
+        | { kind: "place_house"; count: number }
+      >;
+    }
+  >;
 } {
   const items: Record<
     string,
@@ -392,8 +445,20 @@ export function getBootstrapRegistry(): {
       canonical_id: string;
     }
   > = {};
-  const recipes: Record<string, { label_key: string; fallback_label: string }> =
-    {};
+  const recipes: Record<
+    string,
+    {
+      label_key: string;
+      fallback_label: string;
+      target_kind: string;
+      input_items: Array<{ item_id: string; count: number }>;
+      outputs: Array<
+        | { kind: "item"; item_id: string; count: number }
+        | { kind: "place_tree"; count: number }
+        | { kind: "place_house"; count: number }
+      >;
+    }
+  > = {};
 
   Object.keys(ITEM_DEFINITIONS).forEach(function (itemId) {
     const item = ITEM_DEFINITIONS[itemId];
@@ -419,6 +484,20 @@ export function getBootstrapRegistry(): {
     recipes[recipeId] = {
       label_key: recipe.labelKey,
       fallback_label: recipe.fallbackLabel,
+      target_kind: recipe.targetKind,
+      input_items: recipe.inputItems.map(function (input) {
+        return { item_id: input.itemId, count: input.count };
+      }),
+      outputs: recipe.outputs.map(function (output) {
+        if (output.kind === "item") {
+          return {
+            kind: output.kind,
+            item_id: output.itemId,
+            count: output.count,
+          };
+        }
+        return { kind: output.kind, count: output.count };
+      }),
     };
   });
 

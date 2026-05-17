@@ -25,6 +25,7 @@ var appRender = virtualWorldApp.render;
 var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
+var craftingPanelVisible = false;
 var usePickerVisible = false;
 /** @type {number | null} */
 var heartbeatTimer = null;
@@ -152,6 +153,116 @@ function showCheatToast(message, isError) {
  */
 function showHudToast(message, isError) {
   showCheatToast(message, isError);
+}
+
+function getBootstrappedRecipeDefs() {
+  if (!ITEM_REGISTRY || !ITEM_REGISTRY.recipes) return {};
+  return ITEM_REGISTRY.recipes;
+}
+
+function getInventoryItemCounts() {
+  var counts = /** @type {Record<string, number>} */ ({});
+  var inv = normalizeClientInventory(playerInventory);
+  var all = [];
+  if (inv.left_hand) all.push(inv.left_hand);
+  if (inv.right_hand) all.push(inv.right_hand);
+  if (Array.isArray(inv.inventory)) {
+    for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
+  }
+  for (var j = 0; j < all.length; j++) {
+    var item = all[j];
+    var type = item && item.type ? String(item.type) : "";
+    if (!type) continue;
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
+/** @param {any} recipe */
+function recipeIsCraftable(recipe) {
+  if (!recipe || !Array.isArray(recipe.input_items)) return false;
+  var counts = getInventoryItemCounts();
+  for (var i = 0; i < recipe.input_items.length; i++) {
+    var input = recipe.input_items[i];
+    var itemId = String(input && input.item_id ? input.item_id : "");
+    var required = Number(input && input.count ? input.count : 0);
+    if (!itemId || required <= 0) return false;
+    if ((counts[itemId] || 0) < required) return false;
+  }
+  return true;
+}
+
+/** @param {any} recipe */
+function recipeLabel(recipe) {
+  if (!recipe) return "Unknown recipe";
+  return t(
+    String(recipe.label_key || ""),
+    String(recipe.fallback_label || "Unknown recipe"),
+  );
+}
+
+/** @param {string} itemId */
+function itemLabelForRecipe(itemId) {
+  return t(itemTypeToLabelKey(itemId), humanizeType(itemId));
+}
+
+/** @param {any} recipe */
+function recipeIngredientsLabel(recipe) {
+  if (
+    !recipe ||
+    !Array.isArray(recipe.input_items) ||
+    recipe.input_items.length === 0
+  ) {
+    return "No ingredients";
+  }
+  var parts = [];
+  for (var i = 0; i < recipe.input_items.length; i++) {
+    var input = recipe.input_items[i];
+    parts.push(
+      String(input.count || 0) +
+        "x " +
+        itemLabelForRecipe(String(input.item_id || "")),
+    );
+  }
+  return parts.join(", ");
+}
+
+/** @param {any} recipe */
+function recipeResultLabel(recipe) {
+  if (
+    !recipe ||
+    !Array.isArray(recipe.outputs) ||
+    recipe.outputs.length === 0
+  ) {
+    return "No outputs";
+  }
+  var parts = [];
+  for (var i = 0; i < recipe.outputs.length; i++) {
+    var output = recipe.outputs[i];
+    if (!output) continue;
+    if (output.kind === "item") {
+      parts.push(
+        String(output.count || 0) +
+          "x " +
+          itemLabelForRecipe(String(output.item_id || "")),
+      );
+    } else if (output.kind === "place_tree") {
+      parts.push("place pine tree");
+    } else if (output.kind === "place_house") {
+      parts.push("place house");
+    }
+  }
+  return parts.join(", ");
+}
+
+/** @param {any} recipe */
+function recipeTargetLabel(recipe) {
+  var targetKind = String(
+    recipe && recipe.target_kind ? recipe.target_kind : "inventory",
+  );
+  if (targetKind === "facing_tile") return "Target: facing tile";
+  if (targetKind === "current_tile") return "Target: current tile";
+  return "Target: inventory";
 }
 
 /** @param {any} result */
@@ -2368,6 +2479,7 @@ function renderInventoryPanel() {
 
 /** @param {number} autoHideMs */
 function showInventoryPanel(autoHideMs) {
+  if (craftingPanelVisible) closeCraftingPanel();
   inventoryPanelVisible = true;
   requireElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
@@ -2394,6 +2506,67 @@ function closeInventoryPanel() {
 function toggleInventoryPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
   else showInventoryPanel(0);
+}
+
+function renderCraftingPanel() {
+  var listDiv = requireElementById("crafting-list");
+  var recipes = getBootstrappedRecipeDefs();
+  var recipeIds = Object.keys(recipes).sort();
+  if (recipeIds.length === 0) {
+    listDiv.innerHTML =
+      '<div class="craft-row"><div class="craft-status">No recipes available.</div></div>';
+    return;
+  }
+  var rows = "";
+  for (var i = 0; i < recipeIds.length; i++) {
+    var recipeId = recipeIds[i];
+    var recipe = recipes[recipeId];
+    var craftable = recipeIsCraftable(recipe);
+    rows +=
+      '<div class="craft-row">' +
+      '<div class="name">' +
+      escHtml(recipeLabel(recipe)) +
+      "</div>" +
+      '<div class="craft-meta">' +
+      escHtml(recipeTargetLabel(recipe)) +
+      "</div>" +
+      '<div class="craft-ingredients">Ingredients: ' +
+      escHtml(recipeIngredientsLabel(recipe)) +
+      "</div>" +
+      '<div class="craft-result">Result: ' +
+      escHtml(recipeResultLabel(recipe)) +
+      "</div>" +
+      '<div class="craft-actions">' +
+      '<span class="craft-status">' +
+      escHtml(craftable ? "Ready" : "Missing ingredients") +
+      "</span>" +
+      "<button onclick=\"craftRecipeById('" +
+      recipeId +
+      "')\"" +
+      (craftable ? "" : " disabled") +
+      ">Craft</button>" +
+      "</div>" +
+      "</div>";
+  }
+  listDiv.className = "crafting-list";
+  listDiv.innerHTML = rows;
+}
+
+function showCraftingPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  craftingPanelVisible = true;
+  requireElementById("hud-crafting-panel").style.display = "block";
+  renderCraftingPanel();
+}
+
+function closeCraftingPanel() {
+  craftingPanelVisible = false;
+  requireElementById("hud-crafting-panel").style.display = "none";
+}
+
+function toggleCraftingPanel() {
+  if (craftingPanelVisible) closeCraftingPanel();
+  else showCraftingPanel();
 }
 
 // ── Players panel ────────────────────────────────────────────────────────
@@ -2948,7 +3121,41 @@ function applyItemStateFromResult(result) {
   refreshTileDetailIfOpen();
   updateHeldHud();
   renderInventoryPanel();
+  if (craftingPanelVisible) renderCraftingPanel();
   updateUseButtonState();
+}
+
+/** @param {string} recipeId */
+function craftRecipeById(recipeId) {
+  fetchWithAuth("/virtual-world/craft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipe_id: recipeId }),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      if (!result || !result.ok) {
+        showHudToast((result && result.error) || "Crafting failed", true);
+        return;
+      }
+      applyItemStateFromResult(result);
+      requestHeartbeatSoon();
+      if (result.recipe_id) {
+        showHudToast(
+          "Crafted: " +
+            recipeLabel(getBootstrappedRecipeDefs()[result.recipe_id]),
+          false,
+        );
+      }
+    })
+    .catch(function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
+      console.error("Craft request failed:", err);
+      showHudToast("Crafting request failed", true);
+    });
 }
 
 /**
@@ -3359,6 +3566,14 @@ requireElementById("hud-inventory-panel").addEventListener(
   { passive: true },
 );
 
+requireElementById("hud-crafting-panel").addEventListener(
+  "wheel",
+  function (e) {
+    e.stopPropagation();
+  },
+  { passive: true },
+);
+
 document.addEventListener(
   "wheel",
   function (e) {
@@ -3415,6 +3630,18 @@ function isTouchOnButtons(touch) {
       touch.clientX <= invRect.right &&
       touch.clientY >= invRect.top &&
       touch.clientY <= invRect.bottom
+    ) {
+      return true;
+    }
+  }
+  var craftingDiv = document.getElementById("hud-crafting-panel");
+  if (craftingDiv && craftingDiv.style.display !== "none") {
+    var craftingRect = craftingDiv.getBoundingClientRect();
+    if (
+      touch.clientX >= craftingRect.left &&
+      touch.clientX <= craftingRect.right &&
+      touch.clientY >= craftingRect.top &&
+      touch.clientY <= craftingRect.bottom
     ) {
       return true;
     }

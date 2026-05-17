@@ -101,15 +101,13 @@ export const PORTAL_BUILD_ACTIONS = Object.values(
   PORTAL_BUILD_ACTION_BY_WORLD_TYPE,
 );
 
-export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> =
-  Object.keys(ITEM_TYPES.concat(EXTRA_ITEM_TYPES)).reduce(function (
-    acc: Record<string, string>,
-    itemId,
-  ) {
-    const actionId = getPrimaryActionForItemType(itemId);
-    if (actionId) acc[itemId] = actionId;
-    return acc;
-  }, {});
+export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> = Object.keys(
+  ITEM_TYPES.concat(EXTRA_ITEM_TYPES),
+).reduce(function (acc: Record<string, string>, itemId) {
+  const actionId = getPrimaryActionForItemType(itemId);
+  if (actionId) acc[itemId] = actionId;
+  return acc;
+}, {});
 
 export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },

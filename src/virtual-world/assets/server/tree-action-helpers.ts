@@ -1,5 +1,6 @@
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;
+  getActionDefinition: (action: string | null | undefined) => any;
   worldTypeForPortalBuildAction: (
     action: string | null | undefined,
   ) => string | null;
@@ -100,6 +101,7 @@ export function performTreeActionForUser(
 ): { status: number; payload: any } {
   const rawAction = body && body.action;
   const action = deps.canonicalTreeAction(rawAction);
+  const actionDefinition = deps.getActionDefinition(action);
   const requestedPortalWorldType =
     deps.worldTypeForPortalBuildAction(rawAction) ||
     deps.normalizeWorldType(body && body.destination_world_type);
@@ -112,18 +114,7 @@ export function performTreeActionForUser(
     return { status: 200, payload: deps.grantAllItemsForUser(userId) };
   }
 
-  if (
-    action !== "plant" &&
-    action !== "cut" &&
-    action !== "build_house" &&
-    action !== "destroy_house" &&
-    action !== "build_portal" &&
-    action !== "remove_portal" &&
-    action !== "play_tune" &&
-    action !== "place_blessing" &&
-    action !== "portal_travel" &&
-    action !== "return_home"
-  ) {
+  if (!actionDefinition) {
     return { status: 400, payload: { ok: false, error: "Invalid action" } };
   }
 
@@ -149,10 +140,84 @@ export function performTreeActionForUser(
   const currentTileItems = Array.isArray(worldItems[currentTileKey])
     ? worldItems[currentTileKey]
     : [];
+
   function getTileItemsSnapshot(row: number, col: number): any[] {
     const key = row + "_" + col;
     return Array.isArray(worldItems[key]) ? worldItems[key] : [];
   }
+
+  function getActionExecutionConfig(): {
+    toastMessage?: string;
+    worldChatText?: string;
+  } | null {
+    return actionDefinition && actionDefinition.execution
+      ? actionDefinition.execution
+      : null;
+  }
+
+  function maybeAppendConfiguredWorldChatMessage(): void {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.worldChatText) return;
+
+    const tuneMsg = {
+      id:
+        "wc-" +
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).slice(2),
+      sender_id: userId,
+      sender_nick: deps.getEffectiveNick(userId),
+      text: execution.worldChatText,
+      ts: Date.now(),
+    };
+    deps.appendWorldChatMessage(worldId, tuneMsg);
+    deps.sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
+  }
+
+  function withConfiguredToastMessage(payload: any): any {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.toastMessage) return payload;
+    return {
+      ...payload,
+      toast_message: execution.toastMessage,
+    };
+  }
+
+  function resolveActionTarget(): {
+    row: number;
+    col: number;
+    inBounds: boolean;
+  } {
+    const targetKind =
+      actionDefinition && typeof actionDefinition.targetKind === "string"
+        ? actionDefinition.targetKind
+        : "facing_tile";
+
+    if (targetKind === "self" || targetKind === "current_tile") {
+      return {
+        row: canonical.row,
+        col: canonical.col,
+        inBounds: true,
+      };
+    }
+
+    const targetTile = deps.getTargetTileFromRotation(
+      playerRow,
+      playerCol,
+      rotation,
+    );
+    return {
+      row: targetTile.row,
+      col: targetTile.col,
+      inBounds:
+        targetTile.row >= 0 &&
+        targetTile.row < deps.ROWS &&
+        targetTile.col >= 0 &&
+        targetTile.col < deps.COLS,
+    };
+  }
+
+  const resolvedTarget = resolveActionTarget();
   const canUseAction =
     deps.canInventoryUseTreeAction(inv, action) ||
     deps.canTileItemsUseTreeAction(currentTileItems, action);
@@ -175,43 +240,30 @@ export function performTreeActionForUser(
     );
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: "return_home",
         switched_world: true,
         world_id: deps.OAK_WORLD_ID,
-      },
+      }),
     };
   }
 
   if (action === "play_tune") {
-    const tuneMsg = {
-      id:
-        "wc-" +
-        Date.now().toString(36) +
-        "-" +
-        Math.random().toString(36).slice(2),
-      sender_id: userId,
-      sender_nick: deps.getEffectiveNick(userId),
-      text: "lets a kantele melody drift through the spruce hush.",
-      ts: Date.now(),
-    };
-    deps.appendWorldChatMessage(worldId, tuneMsg);
-    deps.sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
+    maybeAppendConfiguredWorldChatMessage();
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         inventory: inv,
-        toast_message: "A kantele tune carries across the clearing.",
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
   if (action === "place_blessing") {
-    const blessingTileKey = canonical.row + "_" + canonical.col;
+    const blessingTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
     const blessingItems = Array.isArray(worldItems[blessingTileKey])
       ? worldItems[blessingTileKey]
       : [];
@@ -237,34 +289,45 @@ export function performTreeActionForUser(
     };
     if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
     worldItems[blessingTileKey].push(blessingItem);
-    deps.upsertWorldItem(worldId, canonical.row, canonical.col, blessingItem);
+    deps.upsertWorldItem(
+      worldId,
+      resolvedTarget.row,
+      resolvedTarget.col,
+      blessingItem,
+    );
     deps.saveWorldItems(worldId, worldItems);
     deps.broadcastItemChange(
       worldId,
       "player",
       userId,
       "blessing_place",
-      canonical.row,
-      canonical.col,
+      resolvedTarget.row,
+      resolvedTarget.col,
       [blessingItem],
     );
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
-        row: canonical.row,
-        col: canonical.col,
-        tile_items: getTileItemsSnapshot(canonical.row, canonical.col),
+        row: resolvedTarget.row,
+        col: resolvedTarget.col,
+        tile_items: getTileItemsSnapshot(
+          resolvedTarget.row,
+          resolvedTarget.col,
+        ),
         inventory: inv,
-        toast_message: "A rowan blessing now marks this place.",
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
   if (action === "portal_travel") {
-    const portalEntry = currentTileItems.find(function (item) {
+    const portalTileItems = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    );
+    const portalEntry = portalTileItems.find(function (item) {
       return item && item.type === "portal";
     });
     const newWorldId =
@@ -274,29 +337,19 @@ export function performTreeActionForUser(
     deps.switchUserWorld(userId, newWorldId);
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         switched_world: true,
         world_id: newWorldId,
-      },
+      }),
     };
   }
 
-  const targetTile = deps.getTargetTileFromRotation(
-    playerRow,
-    playerCol,
-    rotation,
-  );
-  const targetRow = targetTile.row;
-  const targetCol = targetTile.col;
+  const targetRow = resolvedTarget.row;
+  const targetCol = resolvedTarget.col;
 
-  if (
-    targetRow < 0 ||
-    targetRow >= deps.ROWS ||
-    targetCol < 0 ||
-    targetCol >= deps.COLS
-  ) {
+  if (!resolvedTarget.inBounds) {
     return {
       status: 200,
       payload: { ok: false, error: "Target out of bounds" },
@@ -346,13 +399,13 @@ export function performTreeActionForUser(
     });
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         row: targetRow,
         col: targetCol,
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
@@ -375,13 +428,13 @@ export function performTreeActionForUser(
     });
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         row: targetRow,
         col: targetCol,
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
@@ -434,7 +487,7 @@ export function performTreeActionForUser(
 
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         row: targetRow,
@@ -442,7 +495,7 @@ export function performTreeActionForUser(
         tile_items: getTileItemsSnapshot(targetRow, targetCol),
         inventory: inv,
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
@@ -486,7 +539,7 @@ export function performTreeActionForUser(
 
     return {
       status: 200,
-      payload: {
+      payload: withConfiguredToastMessage({
         ok: true,
         action: action,
         row: targetRow,
@@ -495,7 +548,7 @@ export function performTreeActionForUser(
         tile_items: getTileItemsSnapshot(targetRow, targetCol),
         inventory: inv,
         world_id: String(worldId),
-      },
+      }),
     };
   }
 
@@ -574,12 +627,12 @@ export function performTreeActionForUser(
 
   return {
     status: 200,
-    payload: {
+    payload: withConfiguredToastMessage({
       ok: true,
       action: action,
       row: targetRow,
       col: targetCol,
       world_id: String(worldId),
-    },
+    }),
   };
 }

@@ -5,6 +5,7 @@ import {
   canTileItemsUseTreeAction,
   createWorldId,
   getAllKnownItemTypes,
+  getActionsForItemType,
   getInventoryTreeActions,
   getNPCDisplayName,
   getWorldFlavorText,
@@ -107,6 +108,7 @@ import {
   grantAllItemsForUser as grantAllItemsForUserImpl,
   handleItemActionForUser as handleItemActionForUserImpl,
 } from "./server/item-action-helpers.ts";
+import { craftRecipeForUser as craftRecipeForUserImpl } from "./server/crafting-helpers.ts";
 import {
   switchUserToNewWorld as switchUserToNewWorldImpl,
   switchUserToStartWorld as switchUserToStartWorldImpl,
@@ -156,9 +158,10 @@ import {
   ensureStarterKit as ensureStarterKitImpl,
   escapeHtml as escapeHtmlImpl,
   getDefaultSpawnPosition as getDefaultSpawnPositionImpl,
-  getBootstrapRegistry as getBootstrapRegistryImpl,
   renderVirtualWorldPageHtml as renderVirtualWorldPageHtmlImpl,
 } from "./server/page-bootstrap.ts";
+import { getBootstrapRegistry as getBootstrapRegistryImpl } from "./server/item-registry.ts";
+import { getActionDefinition as getActionDefinitionImpl } from "./server/item-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -1888,7 +1891,7 @@ function getAvailableWorldActions(inventory, currentTileItems) {
   return getAvailableWorldActionsImpl(
     inventory,
     currentTileItems,
-    TREE_ACTION_BY_ITEM_TYPE,
+    getActionsForItemType,
   );
 }
 
@@ -2129,6 +2132,7 @@ function movePlayerForUser(userId, body) {
 function performTreeActionForUser(userId, body) {
   return performTreeActionForUserImpl(userId, body, {
     canonicalTreeAction: canonicalTreeAction,
+    getActionDefinition: getActionDefinition,
     worldTypeForPortalBuildAction: worldTypeForPortalBuildAction,
     normalizeWorldType: normalizeWorldType,
     handleItemActionForUser: handleItemActionForUser,
@@ -2164,6 +2168,14 @@ function performTreeActionForUser(userId, body) {
     isOakCenterTile: isOakCenterTile,
     saveWorldTrees: saveWorldTrees,
   });
+}
+
+/**
+ * @param {string | null | undefined} action
+ * @returns {*}
+ */
+function getActionDefinition(action) {
+  return getActionDefinitionImpl(action);
 }
 
 /**
@@ -2263,6 +2275,33 @@ function handleItemActionForUser(userId, body) {
 }
 
 /**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function craftRecipeForUser(userId, body) {
+  return craftRecipeForUserImpl(userId, body, {
+    getPlayerWorld: getPlayerWorld,
+    ensureWorldItems: ensureWorldItems,
+    loadPlayerInventory: loadPlayerInventory,
+    savePlayerInventory: savePlayerInventory,
+    getCanonicalPlayerState: getCanonicalPlayerState,
+    getTargetTileFromRotation: getTargetTileFromRotation,
+    nextWorldItemId: nextWorldItemId,
+    getEffectiveMap: getEffectiveMap,
+    loadWorldTrees: loadWorldTrees,
+    saveWorldTrees: saveWorldTrees,
+    loadWorldHouses: loadWorldHouses,
+    saveWorldHouses: saveWorldHouses,
+    isOakCenterTile: isOakCenterTile,
+    isOakClearingTile: isOakClearingTile,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    ROWS: ROWS,
+    COLS: COLS,
+  });
+}
+
+/**
  * @param {*} context
  */
 function itemActionHandler(context) {
@@ -2278,6 +2317,25 @@ function itemActionHandler(context) {
   }
 
   var handled = handleItemActionForUser(userId, body);
+  return ResponseBuilder.json(handled.payload, handled.status);
+}
+
+/**
+ * @param {*} context
+ */
+function craftHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  var handled = craftRecipeForUser(userId, body);
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 

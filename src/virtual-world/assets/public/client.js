@@ -1071,6 +1071,13 @@ scene.add(itemMeshGroup);
  * @returns {number}
  */
 function itemTypeColor(type) {
+  var registryItem =
+    ITEM_REGISTRY && ITEM_REGISTRY.items
+      ? ITEM_REGISTRY.items[String(type || "")]
+      : null;
+  if (registryItem && Number.isFinite(Number(registryItem.color))) {
+    return Number(registryItem.color);
+  }
   if (type === "saw") return 0xbfc6d0;
   if (type === "hammer") return 0x8f7f6d;
   if (type === "knife") return 0xd8dee8;

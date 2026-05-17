@@ -156,6 +156,7 @@ import {
   ensureStarterKit as ensureStarterKitImpl,
   escapeHtml as escapeHtmlImpl,
   getDefaultSpawnPosition as getDefaultSpawnPositionImpl,
+  getBootstrapRegistry as getBootstrapRegistryImpl,
   renderVirtualWorldPageHtml as renderVirtualWorldPageHtmlImpl,
 } from "./server/page-bootstrap.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
@@ -486,9 +487,14 @@ function getVirtualWorldPage(context) {
       loadDMIndex: loadDMIndex,
       getWorldFlavorText: getWorldFlavorText,
       worldTileDefs: WORLD_TILE_DEFS,
+      getBootstrapRegistry: getBootstrapRegistry,
     },
   );
   return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
+}
+
+function getBootstrapRegistry() {
+  return getBootstrapRegistryImpl();
 }
 
 /**

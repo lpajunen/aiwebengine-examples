@@ -1,3 +1,5 @@
+import { getAllActionIds } from "./item-registry.ts";
+
 type RegisterDeps = {
   routeRegistry: {
     registerRoute: (
@@ -96,6 +98,7 @@ function safeRegisterAssetRoute(
 }
 
 export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
+  const virtualWorldActionIds = getAllActionIds();
   const virtualWorldStateSchema = JSON.stringify({
     type: "object",
     properties: {},
@@ -157,22 +160,7 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     properties: {
       action: {
         type: "string",
-        enum: [
-          "plant",
-          "cut",
-          "build_house",
-          "destroy_house",
-          "build_portal",
-          "remove_portal",
-          "play_tune",
-          "place_blessing",
-          "portal_travel",
-          "return_home",
-          "build_portal_forest",
-          "build_portal_island",
-          "build_portal_cave",
-          "build_portal_building",
-        ],
+        enum: virtualWorldActionIds,
         description: "World or item action to perform",
       },
       rotation: {

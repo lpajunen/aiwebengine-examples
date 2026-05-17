@@ -44,6 +44,14 @@ export const WORLD_TYPE_ISLAND = "island";
 export const WORLD_TYPE_CAVE = "cave";
 export const WORLD_TYPE_BUILDING = "building";
 
+import {
+  getActionDefinition,
+  getActionsForItemType,
+  getExtraItemTypes,
+  getPrimaryActionForItemType,
+  getSpawnableItemTypes,
+} from "./item-registry.ts";
+
 export const WORLD_TYPES = [
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,
@@ -53,25 +61,9 @@ export const WORLD_TYPES = [
 
 export type WorldType = (typeof WORLD_TYPES)[number];
 
-export const ITEM_TYPES = [
-  "saw",
-  "knife",
-  "flower",
-  "tree_planter",
-  "portal_builder",
-  "kantele",
-  "rowan_charm",
-  "rune_stone",
-  "juniper_bundle",
-  "birch_bark_letter",
-] as const;
+export const ITEM_TYPES = getSpawnableItemTypes();
 
-export const EXTRA_ITEM_TYPES = [
-  "hammer",
-  "portal",
-  "starter_kit",
-  "blessing_marker",
-] as const;
+export const EXTRA_ITEM_TYPES = getExtraItemTypes();
 
 export interface WorldTileDef {
   value: number;
@@ -109,16 +101,15 @@ export const PORTAL_BUILD_ACTIONS = Object.values(
   PORTAL_BUILD_ACTION_BY_WORLD_TYPE,
 );
 
-export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> = {
-  saw: "cut",
-  hammer: "build_house",
-  tree_planter: "plant",
-  portal_builder: "build_portal",
-  kantele: "play_tune",
-  rowan_charm: "place_blessing",
-  portal: "portal_travel",
-  starter_kit: "return_home",
-};
+export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> =
+  Object.keys(ITEM_TYPES.concat(EXTRA_ITEM_TYPES)).reduce(function (
+    acc: Record<string, string>,
+    itemId,
+  ) {
+    const actionId = getPrimaryActionForItemType(itemId);
+    if (actionId) acc[itemId] = actionId;
+    return acc;
+  }, {});
 
 export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
@@ -450,17 +441,8 @@ export function getInventoryTreeActions(inv: unknown): string[] {
     items = items.concat(normalized.inventory);
   }
 
-  function actionsForItemType(type: string): string[] {
-    if (type === "portal_builder") {
-      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
-    }
-    if (type === "hammer") return ["build_house", "destroy_house"];
-    const action = TREE_ACTION_BY_ITEM_TYPE[type];
-    return action ? [action] : [];
-  }
-
   items.forEach(function (item) {
-    const itemActions = actionsForItemType(item.type);
+    const itemActions = getActionsForItemType(item.type);
     for (let i = 0; i < itemActions.length; i++) {
       actions[itemActions[i]] = true;
     }
@@ -473,18 +455,7 @@ export function canInventoryUseTreeAction(
   action: string,
 ): boolean {
   const normalizedAction = canonicalTreeAction(action);
-  if (
-    normalizedAction !== "plant" &&
-    normalizedAction !== "cut" &&
-    normalizedAction !== "build_house" &&
-    normalizedAction !== "destroy_house" &&
-    normalizedAction !== "build_portal" &&
-    normalizedAction !== "remove_portal" &&
-    normalizedAction !== "play_tune" &&
-    normalizedAction !== "place_blessing" &&
-    normalizedAction !== "portal_travel" &&
-    normalizedAction !== "return_home"
-  ) {
+  if (!getActionDefinition(action) && !getActionDefinition(normalizedAction)) {
     return false;
   }
   return getInventoryTreeActions(inv).indexOf(String(action)) !== -1;
@@ -496,19 +467,10 @@ export function canTileItemsUseTreeAction(
 ): boolean {
   if (!Array.isArray(items)) return false;
 
-  function actionsForItemType(type: string): string[] {
-    if (type === "portal_builder") {
-      return ["build_portal"].concat(PORTAL_BUILD_ACTIONS, ["remove_portal"]);
-    }
-    if (type === "hammer") return ["build_house", "destroy_house"];
-    const mapped = TREE_ACTION_BY_ITEM_TYPE[type];
-    return mapped ? [mapped] : [];
-  }
-
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (!isValidItem(item)) continue;
-    const itemActions = actionsForItemType(item.type);
+    const itemActions = getActionsForItemType(item.type);
     if (itemActions.indexOf(action) !== -1) return true;
   }
   return false;

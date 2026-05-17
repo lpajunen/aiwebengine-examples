@@ -355,6 +355,24 @@ var PORTAL_BUILD_ACTIONS = [
   "build_portal_building",
 ];
 
+/**
+ * @param {string} type
+ * @returns {{label_key?: string, fallback_label?: string, color?: number, action_ids?: string[]} | null}
+ */
+function getRegistryItemDef(type) {
+  if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;
+  return ITEM_REGISTRY.items[String(type || "")] || null;
+}
+
+/**
+ * @param {string} action
+ * @returns {{label_key?: string, fallback_label?: string, canonical_id?: string} | null}
+ */
+function getRegistryActionDef(action) {
+  if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
+  return ITEM_REGISTRY.actions[String(action || "")] || null;
+}
+
 /** @type {Record<string, ClientItem[]>} */
 var worldItemsByTile = normalizeClientWorldItems(WORLD_ITEMS || {});
 var itemSnapshotRequestSeq = 0;
@@ -366,6 +384,10 @@ var playerInventory = normalizeClientInventory(PLAYER_INV);
  * @returns {string[]}
  */
 function treeActionsForItemType(type) {
+  var registryItem = getRegistryItemDef(type);
+  if (registryItem && Array.isArray(registryItem.action_ids)) {
+    return registryItem.action_ids.slice();
+  }
   if (type === "portal_builder") {
     return PORTAL_BUILD_ACTIONS.concat(["remove_portal"]);
   }
@@ -384,6 +406,13 @@ function treeActionsForItemType(type) {
  * @returns {string}
  */
 function treeActionLabel(action) {
+  var registryAction = getRegistryActionDef(action);
+  if (registryAction) {
+    return t(
+      registryAction.label_key || String(action || ""),
+      registryAction.fallback_label || String(action || ""),
+    );
+  }
   if (action === "plant") {
     return t("tree_action.plant", "Use tree planting spade (plant)");
   }

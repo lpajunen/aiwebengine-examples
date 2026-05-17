@@ -1,3 +1,5 @@
+import { getBootstrapRegistry } from "./item-registry.ts";
+
 type SpawnDeps = {
   isOakWorld: (worldId: string | number) => boolean;
   getOakClearingTiles: (
@@ -46,6 +48,7 @@ type PageBootstrapDeps = {
   loadDMIndex: (userId: string) => string[];
   getWorldFlavorText: (worldId: string) => string;
   worldTileDefs: any;
+  getBootstrapRegistry: () => any;
 };
 
 type PageState = {
@@ -69,6 +72,7 @@ type PageState = {
   initRotation: number;
   worldFlavorText: string;
   worldTileDefs: any;
+  itemRegistry: any;
 };
 
 export function getDefaultSpawnPosition(
@@ -227,6 +231,7 @@ export function buildVirtualWorldPageState(
       : 0,
     worldFlavorText: deps.getWorldFlavorText(worldId),
     worldTileDefs: deps.worldTileDefs,
+    itemRegistry: deps.getBootstrapRegistry(),
   };
 }
 
@@ -377,6 +382,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var INIT_COL = ${JSON.stringify(state.initCol)};
     var INIT_SEQ = ${JSON.stringify(state.initSeq)};
     var INIT_ROTATION = ${JSON.stringify(state.initRotation)};
+    var ITEM_REGISTRY = ${JSON.stringify(state.itemRegistry)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

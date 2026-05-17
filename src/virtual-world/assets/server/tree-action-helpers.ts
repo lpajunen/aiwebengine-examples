@@ -149,6 +149,10 @@ export function performTreeActionForUser(
   const currentTileItems = Array.isArray(worldItems[currentTileKey])
     ? worldItems[currentTileKey]
     : [];
+  function getTileItemsSnapshot(row: number, col: number): any[] {
+    const key = row + "_" + col;
+    return Array.isArray(worldItems[key]) ? worldItems[key] : [];
+  }
   const canUseAction =
     deps.canInventoryUseTreeAction(inv, action) ||
     deps.canTileItemsUseTreeAction(currentTileItems, action);
@@ -200,7 +204,6 @@ export function performTreeActionForUser(
         ok: true,
         action: action,
         inventory: inv,
-        items: deps.flattenWorldItems(worldItems),
         toast_message: "A kantele tune carries across the clearing.",
         world_id: String(worldId),
       },
@@ -252,8 +255,8 @@ export function performTreeActionForUser(
         action: action,
         row: canonical.row,
         col: canonical.col,
+        tile_items: getTileItemsSnapshot(canonical.row, canonical.col),
         inventory: inv,
-        items: deps.flattenWorldItems(worldItems),
         toast_message: "A rowan blessing now marks this place.",
         world_id: String(worldId),
       },
@@ -436,7 +439,7 @@ export function performTreeActionForUser(
         action: action,
         row: targetRow,
         col: targetCol,
-        items: deps.flattenWorldItems(worldItems),
+        tile_items: getTileItemsSnapshot(targetRow, targetCol),
         inventory: inv,
         world_id: String(worldId),
       },
@@ -489,7 +492,7 @@ export function performTreeActionForUser(
         row: targetRow,
         col: targetCol,
         removed_count: removedPortals.length,
-        items: deps.flattenWorldItems(worldItems),
+        tile_items: getTileItemsSnapshot(targetRow, targetCol),
         inventory: inv,
         world_id: String(worldId),
       },

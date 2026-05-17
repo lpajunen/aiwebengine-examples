@@ -859,6 +859,11 @@ var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
 var usePickerVisible = false;
+/** @type {number | null} */
+var heartbeatTimer = null;
+var lastHeartbeatAt = 0;
+var HEARTBEAT_VISIBLE_MS = 20000;
+var HEARTBEAT_ACTIVITY_MIN_GAP_MS = 5000;
 
 // ── Communication state ──────────────────────────────────────────────────
 var playerNick = PLAYER_NICK || "";
@@ -2455,16 +2460,13 @@ function fetchItemSnapshot() {
     });
 }
 
-/** @param {any} payload */
-function applyItemDeltaFromEvent(payload) {
-  if (!payload) return;
-  var row = Number(payload.row);
-  var col = Number(payload.col);
-  if (!isFinite(row) || !isFinite(col)) return;
-
-  var tileKey = row + "_" + col;
-  var nextItems = Array.isArray(payload.items)
-    ? /** @type {any[]} */ (payload.items)
+/**
+ * @param {any[]} items
+ * @returns {ClientItem[]}
+ */
+function normalizeClientTileItems(items) {
+  return Array.isArray(items)
+    ? /** @type {any[]} */ (items)
         .filter(function (it) {
           return it && it.id && it.type;
         })
@@ -2477,6 +2479,29 @@ function applyItemDeltaFromEvent(payload) {
           };
         })
     : [];
+}
+
+/**
+ * @param {number} row
+ * @param {number} col
+ * @param {any[]} items
+ */
+function applyTileItemsState(row, col, items) {
+  var tileKey = row + "_" + col;
+  var nextItems = normalizeClientTileItems(items);
+  if (nextItems.length > 0) {
+    worldItemsByTile[tileKey] = nextItems;
+  } else {
+    delete worldItemsByTile[tileKey];
+  }
+}
+
+/** @param {any} payload */
+function applyItemDeltaFromEvent(payload) {
+  if (!payload) return;
+  var row = Number(payload.row);
+  var col = Number(payload.col);
+  if (!isFinite(row) || !isFinite(col)) return;
 
   // Treat the SSE delta as newer than any in-flight repair snapshot.
   appliedItemSnapshotSeq = Math.max(
@@ -2484,11 +2509,7 @@ function applyItemDeltaFromEvent(payload) {
     itemSnapshotRequestSeq + 1,
   );
 
-  if (nextItems.length > 0) {
-    worldItemsByTile[tileKey] = nextItems;
-  } else {
-    delete worldItemsByTile[tileKey];
-  }
+  applyTileItemsState(row, col, payload.items);
 
   rebuildItemMeshes();
   refreshTileDetailIfOpen();
@@ -2632,6 +2653,60 @@ function postLeave() {
       type: "application/json",
     }),
   );
+}
+
+/** @param {number} delayMs */
+function scheduleHeartbeat(delayMs) {
+  if (heartbeatTimer) clearTimeout(heartbeatTimer);
+  heartbeatTimer = setTimeout(
+    function () {
+      sendHeartbeat(false);
+    },
+    Math.max(0, Number(delayMs) || 0),
+  );
+}
+
+/** @param {boolean} force */
+function sendHeartbeat(force) {
+  if (authState !== AUTH_STATE_OK) return;
+  var now = Date.now();
+  if (
+    !force &&
+    lastHeartbeatAt > 0 &&
+    now - lastHeartbeatAt < HEARTBEAT_ACTIVITY_MIN_GAP_MS
+  ) {
+    scheduleHeartbeat(HEARTBEAT_ACTIVITY_MIN_GAP_MS - (now - lastHeartbeatAt));
+    return;
+  }
+  lastHeartbeatAt = now;
+  fetchWithAuth("/virtual-world/heartbeat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  }).then(
+    function () {
+      scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
+    },
+    function (err) {
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED")) {
+        return;
+      }
+      scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
+    },
+  );
+}
+
+function requestHeartbeatSoon() {
+  if (authState !== AUTH_STATE_OK) return;
+  var now = Date.now();
+  var nextDelay = 0;
+  if (lastHeartbeatAt > 0) {
+    nextDelay = Math.max(
+      0,
+      HEARTBEAT_ACTIVITY_MIN_GAP_MS - (now - lastHeartbeatAt),
+    );
+  }
+  scheduleHeartbeat(nextDelay);
 }
 
 function fetchSnapshot() {
@@ -2881,7 +2956,7 @@ function initMultiplayer() {
           payload.actor_type === "player" &&
           payload.actor_id === playerId
         ) {
-          fetchItemSnapshot();
+          applyItemDeltaFromEvent(payload);
         } else {
           applyItemDeltaFromEvent(payload);
         }
@@ -2946,32 +3021,18 @@ function initMultiplayer() {
 
   // Fire a heartbeat immediately when a backgrounded tab regains focus.
   // Browsers throttle setInterval to ≥60 s in background tabs, which can
-  // cause presence to expire (TTL = 90 s). Sending one ping on visibility
-  // restore keeps the entry fresh without needing a shorter poll interval.
+  // cause lease and presence renewal to lag. Sending one ping on visibility
+  // restore keeps the session fresh without a tight fixed interval.
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible" && authState === AUTH_STATE_OK) {
-      fetchWithAuth("/virtual-world/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId }),
-      }).catch(function () {});
+      sendHeartbeat(true);
     }
   });
 
   // Heartbeat — keep presence alive while SSE handles steady-state updates.
-  setInterval(function () {
-    if (authState !== AUTH_STATE_OK) return;
-    // Use dedicated heartbeat endpoint: only refreshes the presence TTL
-    // without sending a position, so idle tabs can't overwrite a moving tab.
-    fetchWithAuth("/virtual-world/heartbeat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId }),
-    }).catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-    });
-  }, 5000);
+  // Visible tabs renew every 20 s, which stays below the 30 s lease TTL
+  // while removing most of the old 5 s baseline traffic.
+  sendHeartbeat(true);
 }
 
 // ── Collision & movement ─────────────────────────────────────────────────
@@ -3128,6 +3189,7 @@ function postTreeAction(action) {
         return;
       }
       applyItemStateFromResult(result);
+      requestHeartbeatSoon();
       if (
         (result.action === "plant" || result.action === "cut") &&
         typeof result.row === "number" &&
@@ -3852,9 +3914,20 @@ function applyItemStateFromResult(result) {
       });
     }
     worldItemsByTile = next;
+  } else if (
+    isFinite(Number(result.row)) &&
+    isFinite(Number(result.col)) &&
+    Array.isArray(result.tile_items)
+  ) {
+    applyTileItemsState(
+      Number(result.row),
+      Number(result.col),
+      result.tile_items,
+    );
   }
   rebuildItemMeshes();
   refreshTileDetailIfOpen();
+  updateHeldHud();
   renderInventoryPanel();
   updateUseButtonState();
 }
@@ -3878,6 +3951,7 @@ function postItemAction(payload, onSuccess) {
         return;
       }
       applyItemStateFromResult(result);
+      requestHeartbeatSoon();
       if (typeof onSuccess === "function") onSuccess(result);
     })
     .catch(function (err) {

@@ -68,6 +68,11 @@ export function handleItemActionForUser(
   const inv = deps.loadPlayerInventory(userId);
   const worldItems = deps.loadWorldItems(worldId);
 
+  function getTileItemsSnapshot(row: number, col: number): any[] {
+    const key = row + "_" + col;
+    return Array.isArray(worldItems[key]) ? worldItems[key] : [];
+  }
+
   if (action === "pick") {
     const allTileItems = Array.isArray(worldItems[tileKey])
       ? worldItems[tileKey]
@@ -106,8 +111,10 @@ export function handleItemActionForUser(
         ok: true,
         action: "pick",
         picked_count: picked.length,
+        row: canonical.row,
+        col: canonical.col,
+        tile_items: getTileItemsSnapshot(canonical.row, canonical.col),
         inventory: inv,
-        items: deps.flattenWorldItems(worldItems),
       },
     };
   }
@@ -164,8 +171,10 @@ export function handleItemActionForUser(
       payload: {
         ok: true,
         action: "drop",
+        row: canonical.row,
+        col: canonical.col,
+        tile_items: getTileItemsSnapshot(canonical.row, canonical.col),
         inventory: inv,
-        items: deps.flattenWorldItems(worldItems),
       },
     };
   }
@@ -220,7 +229,6 @@ export function handleItemActionForUser(
         ok: true,
         action: "equip",
         inventory: inv,
-        items: deps.flattenWorldItems(worldItems),
       },
     };
   }

@@ -239,6 +239,13 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "/virtual-world/styles.css",
     "public/styles.css",
   );
+  safeRegisterAssetRoute(deps, "/virtual-world/auth.js", "public/auth.js");
+  safeRegisterAssetRoute(deps, "/virtual-world/i18n.js", "public/i18n.js");
+  safeRegisterAssetRoute(
+    deps,
+    "/virtual-world/tiles-and-items.js",
+    "public/tiles-and-items.js",
+  );
   safeRegisterAssetRoute(deps, "/virtual-world/client.js", "public/client.js");
 
   safeRegisterRoute(deps, "/virtual-world/play", "getVirtualWorldPage", "GET", {

@@ -378,8 +378,10 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var INIT_SEQ = ${JSON.stringify(state.initSeq)};
     var INIT_ROTATION = ${JSON.stringify(state.initRotation)};
   </script>
+  <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>
   <script src="/virtual-world/i18n.js"></script>
+  <script src="/virtual-world/scene.js"></script>
   <script src="/virtual-world/tiles-and-items.js"></script>
   <script src="/virtual-world/client.js"></script>
 </body>

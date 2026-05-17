@@ -18,6 +18,10 @@ function requireElementById(id) {
   return el;
 }
 
+var virtualWorldApp = getVirtualWorldApp();
+var appState = virtualWorldApp.state;
+var appRender = virtualWorldApp.render;
+
 var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
@@ -314,85 +318,35 @@ var targetZ = avatarRow * TILE + TILE / 2;
 var moveSeq = INIT_SEQ; // last confirmed server sequence number
 var lastAssignedSeq = INIT_SEQ; // last seq assigned to any move (queued or in-flight)
 
-// ── Renderer ─────────────────────────────────────────────────────────────
-var renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+appState.world = {
+  rows: ROWS,
+  cols: COLS,
+  tile: TILE,
+};
 
-// ── Scene ────────────────────────────────────────────────────────────────
-var scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.FogExp2(0x87ceeb, 0.018);
+appRender = initializeRenderScene({
+  rows: ROWS,
+  cols: COLS,
+  tile: TILE,
+  targetX: targetX,
+  targetZ: targetZ,
+});
 
-// ── Camera ───────────────────────────────────────────────────────────────
-var mapCX = (COLS * TILE) / 2;
-var mapCZ = (ROWS * TILE) / 2;
-var camera = new THREE.PerspectiveCamera(
-  40,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  300,
-);
-
-// Camera orbit state (spherical coordinates around map centre)
-var camR = 50; // distance
-var camTheta = Math.PI / 4; // azimuth (horizontal rotation)
-var camPhi = 0.67; // elevation above horizontal (radians)
+// ── Renderer / scene state ───────────────────────────────────────────────
+var renderer = appRender.renderer;
+var scene = appRender.scene;
+var mapCX = appRender.mapCX;
+var mapCZ = appRender.mapCZ;
+var camera = appRender.camera;
+var cameraOrbit = appRender.orbit;
+var ambient = appRender.ambient;
+var sun = appRender.sun;
+var fill = appRender.fill;
+var bgPlane = appRender.bgPlane;
 
 function updateCamera() {
-  var ax = avatar.position.x;
-  var az = avatar.position.z;
-  camera.position.set(
-    ax + camR * Math.cos(camPhi) * Math.sin(camTheta),
-    camR * Math.sin(camPhi),
-    az + camR * Math.cos(camPhi) * Math.cos(camTheta),
-  );
-  camera.lookAt(ax, 0, az);
+  appRender.updateCamera(avatar.position.x, avatar.position.z);
 }
-// Seed initial camera position using spawn coords (avatar not yet created here)
-camera.position.set(
-  targetX + camR * Math.cos(camPhi) * Math.sin(camTheta),
-  camR * Math.sin(camPhi),
-  targetZ + camR * Math.cos(camPhi) * Math.cos(camTheta),
-);
-camera.lookAt(targetX, 0, targetZ);
-
-// ── Lighting ─────────────────────────────────────────────────────────────
-var ambient = new THREE.AmbientLight(0xfff8e7, 0.55);
-scene.add(ambient);
-
-var sun = new THREE.DirectionalLight(0xffe8c0, 1.0);
-sun.position.set(-12, 22, -8);
-sun.castShadow = true;
-sun.shadow.mapSize.width = 2048;
-sun.shadow.mapSize.height = 2048;
-sun.shadow.camera.near = 0.5;
-sun.shadow.camera.far = 120;
-sun.shadow.camera.left = -50;
-sun.shadow.camera.right = 50;
-sun.shadow.camera.top = 50;
-sun.shadow.camera.bottom = -50;
-sun.shadow.bias = -0.0005;
-scene.add(sun);
-scene.add(sun.target); // must be in scene for target.position updates to take effect
-
-// Secondary fill light from the opposite side
-var fill = new THREE.DirectionalLight(0xc8e8ff, 0.3);
-fill.position.set(14, 10, 14);
-scene.add(fill);
-scene.add(fill.target);
-
-// ── Large background ground plane ─────────────────────────────────────────
-var bgGeo = new THREE.PlaneGeometry(800, 800);
-var bgMat = new THREE.MeshLambertMaterial({ color: 0x4a7028 });
-var bgPlane = new THREE.Mesh(bgGeo, bgMat);
-bgPlane.rotation.x = -Math.PI / 2;
-bgPlane.position.set(mapCX, -0.26, mapCZ);
-bgPlane.receiveShadow = true;
-scene.add(bgPlane);
 
 // ── Reusable geometries and materials ────────────────────────────────────
 var geoGround = new THREE.BoxGeometry(TILE, 0.25, TILE);
@@ -2141,8 +2095,8 @@ function tryMove(dr, dc, angle) {
 function getCameraForwardCardinal() {
   // Quantize camera forward to one grid cardinal with hysteresis so
   // near-diagonal default angles do not flip direction frame-to-frame.
-  var fx = -Math.sin(camTheta);
-  var fz = -Math.cos(camTheta);
+  var fx = -Math.sin(cameraOrbit.theta);
+  var fz = -Math.cos(cameraOrbit.theta);
   var ax = Math.abs(fx);
   var az = Math.abs(fz);
   var hysteresis = 0.08;
@@ -3372,8 +3326,8 @@ document.addEventListener("mousemove", function (e) {
   var dy = e.clientY - lastMouseY;
   lastMouseX = e.clientX;
   lastMouseY = e.clientY;
-  camTheta -= dx * 0.005;
-  camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
+  cameraOrbit.theta -= dx * 0.005;
+  cameraOrbit.phi = Math.max(0.15, Math.min(1.4, cameraOrbit.phi - dy * 0.004));
 });
 document.addEventListener("mouseup", function (e) {
   if (isDragging && e.button === 0 && !isClickOnHUD(e)) {
@@ -3402,7 +3356,10 @@ document.addEventListener(
   "wheel",
   function (e) {
     e.preventDefault();
-    camR = Math.max(10, Math.min(150, camR + e.deltaY * 0.05));
+    cameraOrbit.radius = Math.max(
+      10,
+      Math.min(150, cameraOrbit.radius + e.deltaY * 0.05),
+    );
   },
   { passive: false },
 );
@@ -3519,8 +3476,11 @@ document.addEventListener(
       var dy = e.touches[0].clientY - lastTouchY;
       lastTouchX = e.touches[0].clientX;
       lastTouchY = e.touches[0].clientY;
-      camTheta -= dx * 0.005;
-      camPhi = Math.max(0.15, Math.min(1.4, camPhi - dy * 0.004));
+      cameraOrbit.theta -= dx * 0.005;
+      cameraOrbit.phi = Math.max(
+        0.15,
+        Math.min(1.4, cameraOrbit.phi - dy * 0.004),
+      );
     } else if (e.touches.length === 2) {
       e.preventDefault();
       // Pinch to zoom
@@ -3529,7 +3489,10 @@ document.addEventListener(
       var dist = Math.sqrt(dx * dx + dy * dy);
       var delta = lastTouchDist - dist;
       lastTouchDist = dist;
-      camR = Math.max(10, Math.min(150, camR + delta * 0.2));
+      cameraOrbit.radius = Math.max(
+        10,
+        Math.min(150, cameraOrbit.radius + delta * 0.2),
+      );
     }
   },
   { passive: false },
@@ -3796,7 +3759,5 @@ initMultiplayer();
 
 // ── Resize ───────────────────────────────────────────────────────────────
 window.addEventListener("resize", function () {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  appRender.handleResize();
 });

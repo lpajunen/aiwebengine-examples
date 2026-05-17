@@ -673,6 +673,36 @@ function getEffectiveNick(userId) {
 // ── Global online presence ────────────────────────────────────────────────────
 
 /**
+ * @param {string} action
+ * @param {string} userId
+ * @param {string} worldId
+ * @param {string} nick
+ * @param {number} [loginAt]
+ * @param {number} [lastActive]
+ */
+function sendGlobalPresenceEvent(
+  action,
+  userId,
+  worldId,
+  nick,
+  loginAt,
+  lastActive,
+) {
+  sendVirtualWorldStreamEvent(
+    "presence_update",
+    {
+      action: String(action || "upsert"),
+      player_id: String(userId || ""),
+      nick: String(nick || getEffectiveNick(userId)),
+      world_id: String(worldId || ""),
+      login_at: Number(loginAt || Date.now()),
+      last_active: Number(lastActive || Date.now()),
+    },
+    {},
+  );
+}
+
+/**
  * Write the per-user online-presence entry.  Safe to call from heartbeat
  * because each user only writes their own key — no read-modify-write of a
  * shared object, so there is no concurrency hazard.
@@ -681,7 +711,7 @@ function getEffectiveNick(userId) {
  * @param {string} sessionId
  */
 function updateOnlinePresence(userId, worldId, sessionId) {
-  updateOnlinePresenceImpl(
+  var result = updateOnlinePresenceImpl(
     userId,
     worldId,
     sessionId,
@@ -689,6 +719,17 @@ function updateOnlinePresence(userId, worldId, sessionId) {
     VWORLD_PLAYER_NICK_TABLE,
     vwLog,
   );
+  if (result && result.changed) {
+    sendGlobalPresenceEvent(
+      "upsert",
+      result.player_id,
+      result.world_id,
+      result.nick,
+      result.login_at,
+      result.last_active,
+    );
+  }
+  return result;
 }
 
 /**
@@ -1384,7 +1425,13 @@ function virtualWorldEventsStreamCustomizer(context) {
     context.request.auth &&
     context.request.auth.userId;
   if (!userId) return {};
-  return { recipient_id: String(userId) };
+  var currentWorldId = getPlayerWorld(String(userId));
+  /** @type {Record<string, string>} */
+  var filter = { recipient_id: String(userId) };
+  if (currentWorldId) {
+    filter.world_id = String(currentWorldId);
+  }
+  return filter;
 }
 
 /**
@@ -1413,7 +1460,6 @@ function sendWorldScopedStreamEvent(worldId, type, payload) {
     worldId,
     type,
     payload,
-    VWORLD_PLAYER_POSITION_TABLE,
     vwLog,
   );
 }
@@ -2283,6 +2329,17 @@ function setNicknameHandler(context) {
   var handled = setNicknameForUserImpl(userId, body.nick, {
     savePlayerNick: savePlayerNick,
   });
+  if (
+    handled &&
+    handled.status === 200 &&
+    handled.payload &&
+    handled.payload.nick
+  ) {
+    var currentWorldId = getPlayerWorld(userId);
+    if (currentWorldId) {
+      updateOnlinePresence(userId, currentWorldId, "");
+    }
+  }
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
@@ -2425,6 +2482,8 @@ function leaveHandler(context) {
       deletePlayerHeartbeat: deletePlayerHeartbeat,
       deletePlayerMoveLease: deletePlayerMoveLease,
       deleteOnlinePresence: deleteOnlinePresence,
+      getEffectiveNick: getEffectiveNick,
+      sendGlobalPresenceEvent: sendGlobalPresenceEvent,
       sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     }),
   );
@@ -2480,11 +2539,13 @@ function buildActiveWorldPlayers(worldId) {
 function switchUserWorld(userId, targetWorldId, spawnPosition) {
   switchUserWorldImpl(userId, targetWorldId, spawnPosition, {
     getPlayerWorld: getPlayerWorld,
+    getEffectiveNick: getEffectiveNick,
     loadPlayerPosition: loadPlayerPosition,
     deletePlayerPosition: deletePlayerPosition,
     deletePlayerHeartbeat: deletePlayerHeartbeat,
     deletePlayerMoveLease: deletePlayerMoveLease,
     sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    sendGlobalPresenceEvent: sendGlobalPresenceEvent,
     savePlayerWorld: savePlayerWorld,
     savePlayerPosition: savePlayerPosition,
     deleteOnlinePresence: deleteOnlinePresence,

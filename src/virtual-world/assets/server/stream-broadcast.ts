@@ -1,5 +1,3 @@
-import { loadWorldPlayers } from "./player-snapshots.ts";
-
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 export function sendVirtualWorldStreamEvent(
@@ -14,11 +12,15 @@ export function sendVirtualWorldStreamEvent(
       type: String(type),
       payload: payload,
     });
-    const result = routeRegistry.sendStreamMessageFiltered(
-      streamPath,
-      message,
-      JSON.stringify(filter || {}),
-    );
+    const hasFilter = !!filter && Object.keys(filter).length > 0;
+    const result = hasFilter
+      ? routeRegistry.sendStreamMessageFiltered(
+          streamPath,
+          message,
+          JSON.stringify(filter),
+          "overlap",
+        )
+      : routeRegistry.sendStreamMessage(streamPath, message);
     if (
       typeof result === "string" &&
       (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
@@ -62,21 +64,18 @@ export function sendWorldScopedStreamEvent(
   worldId: string,
   type: string,
   payload: unknown,
-  playerPositionTable: string,
   log: WorldDbLogFn,
 ): void {
   if (!worldId) return;
-  const players = loadWorldPlayers(String(worldId), playerPositionTable, log);
-  const playerIds = Object.keys(players || {});
-  for (let i = 0; i < playerIds.length; i++) {
-    sendRecipientScopedStreamEvent(
-      streamPath,
-      playerIds[i],
-      type,
-      payload,
-      log,
-    );
-  }
+  sendVirtualWorldStreamEvent(
+    streamPath,
+    type,
+    payload,
+    {
+      world_id: String(worldId),
+    },
+    log,
+  );
 }
 
 export function broadcastItemChange(

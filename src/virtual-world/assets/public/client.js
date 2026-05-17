@@ -866,7 +866,7 @@ var playerNick = PLAYER_NICK || "";
 var onlinePlayersList = ONLINE_PLAYERS || [];
 var playersPanelVisible = false;
 /** @type {number | null} */
-var playersPollTimer = null;
+var playersPanelRefreshTimer = null;
 
 var chatPanelVisible = false;
 var chatActiveTab = "world"; // 'world' | 'dm'
@@ -2822,6 +2822,37 @@ function initMultiplayer() {
     }
   }
 
+  /** @param {any} payload */
+  function handlePresenceUpdateEvent(payload) {
+    if (!payload || !payload.player_id) return;
+    if (payload.action === "left") {
+      var targetPlayerId = String(payload.player_id);
+      var knownEntry = null;
+      for (var i = 0; i < onlinePlayersList.length; i++) {
+        if (onlinePlayersList[i].player_id === targetPlayerId) {
+          knownEntry = onlinePlayersList[i];
+          break;
+        }
+      }
+      // Ignore stale leave events from the previous world after a world switch.
+      // The player may already have a fresher upsert in a different world.
+      if (
+        !knownEntry ||
+        String(knownEntry.world_id || "") === String(payload.world_id || "")
+      ) {
+        removeOnlinePlayerEntry(targetPlayerId);
+      }
+    } else {
+      upsertOnlinePlayerEntry(payload);
+      if (payload.player_id === playerId && payload.nick) {
+        playerNick = String(payload.nick);
+        var nickDisplay = document.getElementById("nick-display");
+        if (nickDisplay) nickDisplay.textContent = playerNick;
+      }
+    }
+    if (playersPanelVisible) renderPlayersPanel();
+  }
+
   /** @param {any} message */
   function handleUnifiedStreamMessage(message) {
     if (!message || typeof message.type !== "string") return;
@@ -2860,6 +2891,9 @@ function initMultiplayer() {
         return;
       case "direct_message":
         handleDirectMessageEvent(payload);
+        return;
+      case "presence_update":
+        handlePresenceUpdateEvent(payload);
         return;
     }
   }
@@ -3296,6 +3330,57 @@ function formatRelTime(ts) {
   return Math.floor(hrs / 24) + "d ago";
 }
 
+function sortOnlinePlayersList() {
+  onlinePlayersList.sort(function (a, b) {
+    return (
+      Number(b && b.last_active ? b.last_active : 0) -
+      Number(a && a.last_active ? a.last_active : 0)
+    );
+  });
+}
+
+/** @param {any} entry */
+function upsertOnlinePlayerEntry(entry) {
+  if (!entry || !entry.player_id) return;
+  var normalized = {
+    player_id: String(entry.player_id),
+    nick: String(entry.nick || shortenId(String(entry.player_id))),
+    world_id: String(entry.world_id || ""),
+    login_at: Number(entry.login_at || Date.now()),
+    last_active: Number(entry.last_active || Date.now()),
+  };
+  var updated = false;
+  for (var i = 0; i < onlinePlayersList.length; i++) {
+    if (onlinePlayersList[i].player_id !== normalized.player_id) continue;
+    onlinePlayersList[i] = normalized;
+    updated = true;
+    break;
+  }
+  if (!updated) onlinePlayersList.push(normalized);
+  sortOnlinePlayersList();
+}
+
+/** @param {string} targetPlayerId */
+function removeOnlinePlayerEntry(targetPlayerId) {
+  onlinePlayersList = onlinePlayersList.filter(function (entry) {
+    return entry && entry.player_id !== targetPlayerId;
+  });
+}
+
+function refreshOnlinePlayersSnapshot() {
+  fetchWithAuth("/virtual-world/online-players")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!Array.isArray(data)) return;
+      onlinePlayersList = data;
+      sortOnlinePlayersList();
+      if (playersPanelVisible) renderPlayersPanel();
+    })
+    .catch(function () {});
+}
+
 function renderPlayersPanel() {
   var tbody = document.getElementById("players-table-body");
   if (!tbody) return;
@@ -3352,45 +3437,28 @@ function showPlayersPanel() {
   playersPanelVisible = true;
   requireElementById("hud-players-panel").style.display = "block";
   renderPlayersPanel();
-  // Fetch fresh data immediately when opening, then poll every 15 s
-  fetchWithAuth("/virtual-world/online-players")
-    .then(function (res) {
-      return res.json();
-    })
-    .then(function (data) {
-      if (Array.isArray(data)) {
-        onlinePlayersList = data;
-        renderPlayersPanel();
-      }
-    })
-    .catch(function () {});
-  if (playersPollTimer !== null) clearInterval(playersPollTimer);
-  playersPollTimer = setInterval(function () {
+  refreshOnlinePlayersSnapshot();
+  if (playersPanelRefreshTimer !== null) {
+    clearInterval(playersPanelRefreshTimer);
+  }
+  playersPanelRefreshTimer = setInterval(function () {
     if (!playersPanelVisible) {
-      if (playersPollTimer !== null) clearInterval(playersPollTimer);
-      playersPollTimer = null;
+      if (playersPanelRefreshTimer !== null) {
+        clearInterval(playersPanelRefreshTimer);
+      }
+      playersPanelRefreshTimer = null;
       return;
     }
-    fetchWithAuth("/virtual-world/online-players")
-      .then(function (res) {
-        return res.json();
-      })
-      .then(function (data) {
-        if (Array.isArray(data)) {
-          onlinePlayersList = data;
-          renderPlayersPanel();
-        }
-      })
-      .catch(function () {});
+    renderPlayersPanel();
   }, 15000);
 }
 
 function closePlayersPanel() {
   playersPanelVisible = false;
   requireElementById("hud-players-panel").style.display = "none";
-  if (playersPollTimer !== null) {
-    clearInterval(playersPollTimer);
-    playersPollTimer = null;
+  if (playersPanelRefreshTimer !== null) {
+    clearInterval(playersPanelRefreshTimer);
+    playersPanelRefreshTimer = null;
   }
 }
 
@@ -3453,12 +3521,13 @@ function commitNickEdit() {
         playerNick = data.nick;
         var display = document.getElementById("nick-display");
         if (display) display.textContent = data.nick;
-        for (var i = 0; i < onlinePlayersList.length; i++) {
-          if (onlinePlayersList[i].player_id === playerId) {
-            onlinePlayersList[i].nick = data.nick;
-            break;
-          }
-        }
+        upsertOnlinePlayerEntry({
+          player_id: playerId,
+          nick: data.nick,
+          world_id: worldId,
+          login_at: Date.now(),
+          last_active: Date.now(),
+        });
         if (playersPanelVisible) renderPlayersPanel();
         if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
         if (chatPanelVisible && chatActiveTab === "dm" && activeDmUserId)

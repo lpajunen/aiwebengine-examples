@@ -64,30 +64,50 @@ export function updateOnlinePresence(
   onlinePresenceTable: string,
   playerNickTable: string,
   log: WorldDbLogFn,
-): void {
+): {
+  player_id: string;
+  nick: string;
+  world_id: string;
+  login_at: number;
+  last_active: number;
+  changed: boolean;
+} {
   const now = Date.now();
   const existing = querySingleWorldRow(
     onlinePresenceTable,
     JSON.stringify({ user_id: String(userId) }),
     log,
   );
+  const nick = getEffectiveNick(userId, playerNickTable, log);
   const loginAt =
     existing && existing.session_id === sessionId && existing.login_at
       ? fromStoredWorldTimestamp(existing.login_at)
       : now;
+  const changed =
+    !existing ||
+    String(existing.world_id || "") !== String(worldId) ||
+    String(existing.nick || "") !== nick;
   upsertWorldRow(
     onlinePresenceTable,
     ["user_id"],
     {
       user_id: String(userId),
       world_id: String(worldId),
-      nick: getEffectiveNick(userId, playerNickTable, log),
+      nick: nick,
       login_at: toStoredWorldTimestamp(loginAt),
       last_active_ts: toStoredWorldTimestamp(now),
       session_id: String(sessionId || ""),
     },
     log,
   );
+  return {
+    player_id: String(userId),
+    nick: nick,
+    world_id: String(worldId),
+    login_at: loginAt,
+    last_active: now,
+    changed: changed,
+  };
 }
 
 export function deleteOnlinePresence(

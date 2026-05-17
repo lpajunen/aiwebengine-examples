@@ -36,6 +36,14 @@ type HttpHandlerDeps = {
   deletePlayerHeartbeat: (userId: string) => void;
   deletePlayerMoveLease: (userId: string) => void;
   deleteOnlinePresence: (userId: string) => void;
+  sendGlobalPresenceEvent: (
+    action: string,
+    userId: string,
+    worldId: string,
+    nick: string,
+    loginAt?: number,
+    lastActive?: number,
+  ) => void;
   vwLog: (msg: string, obj?: unknown) => void;
   markNPCWorldActive: (worldId: string) => void;
   maybeTickWorldNPCs: (worldId: string) => void;
@@ -267,6 +275,8 @@ export function leaveWorldForUser(
     | "deletePlayerHeartbeat"
     | "deletePlayerMoveLease"
     | "deleteOnlinePresence"
+    | "getEffectiveNick"
+    | "sendGlobalPresenceEvent"
     | "sendWorldScopedStreamEvent"
   >,
 ): any {
@@ -302,6 +312,14 @@ export function leaveWorldForUser(
     player_id: userId,
     leaving: true,
   });
+  deps.sendGlobalPresenceEvent(
+    "left",
+    userId,
+    String(worldId),
+    deps.getEffectiveNick(userId),
+    Number(position.ts || 0) || Date.now(),
+    Date.now(),
+  );
   return { ok: true };
 }
 

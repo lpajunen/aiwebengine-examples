@@ -7,6 +7,7 @@ type SpawnPosition = {
 
 type SwitchUserWorldDeps = {
   getPlayerWorld: (userId: string) => string;
+  getEffectiveNick: (userId: string) => string;
   loadPlayerPosition: (userId: string) => any;
   deletePlayerPosition: (userId: string) => void;
   deletePlayerHeartbeat: (userId: string) => void;
@@ -15,6 +16,14 @@ type SwitchUserWorldDeps = {
     worldId: string,
     eventType: string,
     payload: any,
+  ) => void;
+  sendGlobalPresenceEvent: (
+    action: string,
+    userId: string,
+    worldId: string,
+    nick: string,
+    loginAt?: number,
+    lastActive?: number,
   ) => void;
   savePlayerWorld: (userId: string, worldId: string) => void;
   savePlayerPosition: (userId: string, worldId: string, position: any) => void;
@@ -62,6 +71,14 @@ export function switchUserWorld(
         switched_world: true,
         target_world_id: String(targetWorldId),
       });
+      deps.sendGlobalPresenceEvent(
+        "left",
+        userId,
+        String(oldWorldId),
+        deps.getEffectiveNick(userId),
+        Number(oldPosition.ts || 0) || Date.now(),
+        Date.now(),
+      );
     }
   }
 

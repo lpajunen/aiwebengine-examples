@@ -1,3 +1,5 @@
+import { getItemChangeDefinition } from "./item-registry.ts";
+
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;
   getActionDefinition: (action: string | null | undefined) => any;
@@ -168,7 +170,7 @@ export function performTreeActionForUser(
       actionId?: string;
     };
     itemChange?: {
-      actionId: string;
+      eventId: string;
     };
   } | null {
     return actionDefinition && actionDefinition.execution
@@ -270,12 +272,14 @@ export function performTreeActionForUser(
   ): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.itemChange) return;
+    const itemChange = getItemChangeDefinition(execution.itemChange.eventId);
+    if (!itemChange) return;
 
     deps.broadcastItemChange(
       worldId,
       "player",
       userId,
-      execution.itemChange.actionId,
+      itemChange.id,
       row,
       col,
       items,

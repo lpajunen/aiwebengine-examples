@@ -1611,6 +1611,12 @@ function normalizeClientTileItems(items) {
     : [];
 }
 
+/** @param {string} action */
+function getRegistryItemEventDef(action) {
+  if (!ITEM_REGISTRY || !ITEM_REGISTRY.item_events) return null;
+  return ITEM_REGISTRY.item_events[String(action || "")] || null;
+}
+
 /**
  * @param {number} row
  * @param {number} col
@@ -1633,6 +1639,7 @@ function applyItemDeltaFromEvent(payload) {
   var col = Number(payload.col);
   if (!isFinite(row) || !isFinite(col)) return;
   var action = String(payload.action || "");
+  var itemEventDef = getRegistryItemEventDef(action);
   var tileKey = row + "_" + col;
   var changedItems = normalizeClientTileItems(payload.items);
   var currentItems = Array.isArray(worldItemsByTile[tileKey])
@@ -1653,11 +1660,7 @@ function applyItemDeltaFromEvent(payload) {
     itemSnapshotRequestSeq + 1,
   );
 
-  if (
-    action === "drop" ||
-    action === "portal_create" ||
-    action === "blessing_place"
-  ) {
+  if (itemEventDef && itemEventDef.delta_kind === "add") {
     var merged = currentItems.slice();
     var seenIds = changedItemIdSet();
     for (var curIdx = 0; curIdx < merged.length; curIdx++) {
@@ -1670,12 +1673,14 @@ function applyItemDeltaFromEvent(payload) {
       if (changedItem && seenIds[changedItem.id]) merged.push(changedItem);
     }
     applyTileItemsState(row, col, merged);
-  } else if (action === "pick" || action === "portal_remove") {
+  } else if (itemEventDef && itemEventDef.delta_kind === "remove") {
     var removedIds = changedItemIdSet();
     var kept = currentItems.filter(function (item) {
       return item && !removedIds[item.id];
     });
     applyTileItemsState(row, col, kept);
+  } else if (itemEventDef && itemEventDef.delta_kind === "snapshot") {
+    applyTileItemsState(row, col, changedItems);
   } else {
     fetchItemSnapshot();
     return;

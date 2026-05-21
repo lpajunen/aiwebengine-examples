@@ -1,3 +1,5 @@
+import { getItemChangeDefinition } from "./item-registry.ts";
+
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;
   ensureWorldItems: (worldId: string) => void;
@@ -68,6 +70,11 @@ export function handleItemActionForUser(
   const inv = deps.loadPlayerInventory(userId);
   const worldItems = deps.loadWorldItems(worldId);
 
+  function getItemChangeActionId(itemChangeId: string): string {
+    const itemChange = getItemChangeDefinition(itemChangeId);
+    return itemChange ? itemChange.id : String(itemChangeId || "");
+  }
+
   function getTileItemsSnapshot(row: number, col: number): any[] {
     const key = row + "_" + col;
     return Array.isArray(worldItems[key]) ? worldItems[key] : [];
@@ -99,7 +106,7 @@ export function handleItemActionForUser(
         worldId,
         "player",
         userId,
-        "pick",
+        getItemChangeActionId("pick"),
         canonical.row,
         canonical.col,
         picked,
@@ -160,7 +167,7 @@ export function handleItemActionForUser(
       worldId,
       "player",
       userId,
-      "drop",
+      getItemChangeActionId("drop"),
       canonical.row,
       canonical.col,
       [dropItem],

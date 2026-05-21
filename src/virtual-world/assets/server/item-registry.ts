@@ -5,6 +5,8 @@ export type ItemKind =
   | "placeable"
   | "consumable";
 
+export type ItemChangeDeltaKind = "add" | "remove" | "snapshot";
+
 export interface ItemDefinition {
   id: string;
   kind: ItemKind;
@@ -52,7 +54,7 @@ export interface ActionDefinition {
       actionId?: string;
     };
     itemChange?: {
-      actionId: string;
+      eventId: string;
     };
   };
   validation?: {
@@ -90,6 +92,11 @@ export interface RecipeDefinition {
     | { kind: "place_tree"; count: number }
     | { kind: "place_house"; count: number }
   >;
+}
+
+export interface ItemChangeDefinition {
+  id: string;
+  deltaKind: ItemChangeDeltaKind;
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -399,7 +406,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         saveWorldItems: true,
       },
       itemChange: {
-        actionId: "portal_create",
+        eventId: "portal_create",
       },
     },
     validation: {
@@ -462,7 +469,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         saveWorldItems: true,
       },
       itemChange: {
-        actionId: "portal_remove",
+        eventId: "portal_remove",
       },
     },
     validation: {
@@ -504,7 +511,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         saveWorldItems: true,
       },
       itemChange: {
-        actionId: "blessing_place",
+        eventId: "blessing_place",
       },
       toastMessage: "A rowan blessing now marks this place.",
     },
@@ -564,6 +571,29 @@ export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
   },
 };
 
+export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
+  pick: {
+    id: "pick",
+    deltaKind: "remove",
+  },
+  drop: {
+    id: "drop",
+    deltaKind: "add",
+  },
+  portal_create: {
+    id: "portal_create",
+    deltaKind: "add",
+  },
+  portal_remove: {
+    id: "portal_remove",
+    deltaKind: "remove",
+  },
+  blessing_place: {
+    id: "blessing_place",
+    deltaKind: "add",
+  },
+};
+
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
 }
@@ -576,6 +606,12 @@ export function getActionDefinition(
 
 export function getRecipeDefinition(recipeId: string): RecipeDefinition | null {
   return RECIPE_DEFINITIONS[String(recipeId || "")] || null;
+}
+
+export function getItemChangeDefinition(
+  itemChangeId: string | null | undefined,
+): ItemChangeDefinition | null {
+  return ITEM_CHANGE_DEFINITIONS[String(itemChangeId || "")] || null;
 }
 
 export function getActionsForItemType(itemId: string): string[] {
@@ -623,6 +659,12 @@ export function getBootstrapRegistry(): {
       canonical_id: string;
     }
   >;
+  item_events: Record<
+    string,
+    {
+      delta_kind: ItemChangeDeltaKind;
+    }
+  >;
   recipes: Record<
     string,
     {
@@ -653,6 +695,12 @@ export function getBootstrapRegistry(): {
       label_key: string;
       fallback_label: string;
       canonical_id: string;
+    }
+  > = {};
+  const itemEvents: Record<
+    string,
+    {
+      delta_kind: ItemChangeDeltaKind;
     }
   > = {};
   const recipes: Record<
@@ -689,6 +737,13 @@ export function getBootstrapRegistry(): {
     };
   });
 
+  Object.keys(ITEM_CHANGE_DEFINITIONS).forEach(function (itemChangeId) {
+    const itemChange = ITEM_CHANGE_DEFINITIONS[itemChangeId];
+    itemEvents[itemChangeId] = {
+      delta_kind: itemChange.deltaKind,
+    };
+  });
+
   Object.keys(RECIPE_DEFINITIONS).forEach(function (recipeId) {
     const recipe = RECIPE_DEFINITIONS[recipeId];
     recipes[recipeId] = {
@@ -711,5 +766,10 @@ export function getBootstrapRegistry(): {
     };
   });
 
-  return { items: items, actions: actions, recipes: recipes };
+  return {
+    items: items,
+    actions: actions,
+    item_events: itemEvents,
+    recipes: recipes,
+  };
 }

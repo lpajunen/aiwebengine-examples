@@ -34,6 +34,28 @@ export interface ActionDefinition {
     toastMessage?: string;
     worldChatText?: string;
   };
+  validation?: {
+    requireWalkableTile?: {
+      errorMessage: string;
+    };
+    requireTreeState?: {
+      kind: "plantable" | "cuttable";
+      missingErrorMessage?: string;
+      conflictErrorMessage?: string;
+    };
+    requireHouseState?: {
+      kind: "present" | "absent";
+      errorMessage: string;
+    };
+    requirePortalState?: {
+      kind: "present" | "absent";
+      errorMessage: string;
+    };
+    blockedZones?: Array<{
+      kind: "oak_clearing" | "oak_center";
+      errorMessage: string;
+    }>;
+  };
 }
 
 export interface RecipeDefinition {
@@ -222,6 +244,19 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Plant pine sapling",
     targetKind: "facing_tile",
     sourceItemIds: ["tree_planter"],
+    validation: {
+      requireTreeState: {
+        kind: "plantable",
+        missingErrorMessage: "Cannot plant here",
+        conflictErrorMessage: "Tree already exists",
+      },
+      blockedZones: [
+        {
+          kind: "oak_clearing",
+          errorMessage: "The oak clearing must remain open",
+        },
+      ],
+    },
   },
   cut: {
     id: "cut",
@@ -229,6 +264,19 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use woodsman's saw",
     targetKind: "facing_tile",
     sourceItemIds: ["saw"],
+    validation: {
+      requireTreeState: {
+        kind: "cuttable",
+        missingErrorMessage: "No tree to cut",
+        conflictErrorMessage: "Tree already cut",
+      },
+      blockedZones: [
+        {
+          kind: "oak_center",
+          errorMessage: "The old oak stands firm",
+        },
+      ],
+    },
   },
   build_house: {
     id: "build_house",
@@ -236,6 +284,21 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use hammer (build house)",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    validation: {
+      requireWalkableTile: {
+        errorMessage: "Cannot build house here",
+      },
+      requireHouseState: {
+        kind: "absent",
+        errorMessage: "House already exists",
+      },
+      blockedZones: [
+        {
+          kind: "oak_clearing",
+          errorMessage: "The oak clearing must remain open",
+        },
+      ],
+    },
   },
   destroy_house: {
     id: "destroy_house",
@@ -243,6 +306,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use hammer (destroy house)",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    validation: {
+      requireHouseState: {
+        kind: "present",
+        errorMessage: "No house to destroy",
+      },
+    },
   },
   build_portal: {
     id: "build_portal",
@@ -250,6 +319,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Raise rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    validation: {
+      requireWalkableTile: {
+        errorMessage: "Cannot build portal here",
+      },
+      requirePortalState: {
+        kind: "absent",
+        errorMessage: "Portal already exists",
+      },
+    },
   },
   build_portal_forest: {
     id: "build_portal_forest",
@@ -289,6 +367,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Close rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    validation: {
+      requirePortalState: {
+        kind: "present",
+        errorMessage: "No portal to remove",
+      },
+    },
   },
   play_tune: {
     id: "play_tune",

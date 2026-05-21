@@ -183,6 +183,106 @@ export function performTreeActionForUser(
     };
   }
 
+  function getBlockedZoneError(row: number, col: number): string | null {
+    const validation = actionDefinition && actionDefinition.validation;
+    const blockedZones = validation && Array.isArray(validation.blockedZones)
+      ? validation.blockedZones
+      : [];
+
+    for (let i = 0; i < blockedZones.length; i++) {
+      const blockedZone = blockedZones[i];
+      if (!blockedZone || typeof blockedZone.kind !== "string") continue;
+
+      if (
+        blockedZone.kind === "oak_clearing" &&
+        deps.isOakClearingTile(worldId, row, col)
+      ) {
+        return blockedZone.errorMessage || "Action not allowed here";
+      }
+
+      if (
+        blockedZone.kind === "oak_center" &&
+        deps.isOakCenterTile(worldId, row, col)
+      ) {
+        return blockedZone.errorMessage || "Action not allowed here";
+      }
+    }
+
+    return null;
+  }
+
+  function getActionValidationError(
+    row: number,
+    col: number,
+    map: number[][],
+    houses: Record<string, any>,
+    trees: Record<string, any>,
+  ): string | null {
+    const validation = actionDefinition && actionDefinition.validation;
+    if (!validation) return null;
+
+    if (
+      validation.requireWalkableTile &&
+      map[row] &&
+      map[row][col] !== 0
+    ) {
+      return validation.requireWalkableTile.errorMessage;
+    }
+
+    const tileKey = row + "_" + col;
+
+    if (validation.requireHouseState) {
+      const hasHouse = !!houses[tileKey];
+      if (validation.requireHouseState.kind === "present" && !hasHouse) {
+        return validation.requireHouseState.errorMessage;
+      }
+      if (validation.requireHouseState.kind === "absent" && hasHouse) {
+        return validation.requireHouseState.errorMessage;
+      }
+    }
+
+    if (validation.requirePortalState) {
+      const tileItems = getTileItemsSnapshot(row, col);
+      const hasPortal = tileItems.some(function (item) {
+        return item && item.type === "portal";
+      });
+      if (validation.requirePortalState.kind === "present" && !hasPortal) {
+        return validation.requirePortalState.errorMessage;
+      }
+      if (validation.requirePortalState.kind === "absent" && hasPortal) {
+        return validation.requirePortalState.errorMessage;
+      }
+    }
+
+    if (validation.requireTreeState) {
+      const treeKey = row + "_" + col;
+      const treeState = trees[treeKey];
+      const hasExistingTree = treeState && treeState.action === "plant";
+      const wasTreeCut = treeState && treeState.action === "cut";
+      const baseHasTree = map[row] && map[row][col] === 2;
+
+      if (validation.requireTreeState.kind === "plantable") {
+        if (map[row] && map[row][col] !== 0 && !wasTreeCut) {
+          return validation.requireTreeState.missingErrorMessage || "Cannot use here";
+        }
+        if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
+          return validation.requireTreeState.conflictErrorMessage || "Already exists";
+        }
+      }
+
+      if (validation.requireTreeState.kind === "cuttable") {
+        if (!hasExistingTree && !baseHasTree) {
+          return validation.requireTreeState.missingErrorMessage || "Nothing to cut";
+        }
+        if (wasTreeCut) {
+          return validation.requireTreeState.conflictErrorMessage || "Already removed";
+        }
+      }
+    }
+
+    return null;
+  }
+
   function resolveActionTarget(): {
     row: number;
     col: number;
@@ -356,33 +456,34 @@ export function performTreeActionForUser(
     };
   }
 
+  const blockedZoneError = getBlockedZoneError(targetRow, targetCol);
+  if (blockedZoneError) {
+    return {
+      status: 200,
+      payload: { ok: false, error: blockedZoneError },
+    };
+  }
+
   const map = deps.getEffectiveMap(worldId);
   const trees = deps.loadWorldTrees(worldId);
   const houses = deps.loadWorldHouses(worldId);
   const tileKey = targetRow + "_" + targetCol;
+  const actionValidationError = getActionValidationError(
+    targetRow,
+    targetCol,
+    map,
+    houses,
+    trees,
+  );
+
+  if (actionValidationError) {
+    return {
+      status: 200,
+      payload: { ok: false, error: actionValidationError },
+    };
+  }
 
   if (action === "build_house") {
-    if (deps.isOakClearingTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "The oak clearing must remain open",
-        },
-      };
-    }
-    if (map[targetRow][targetCol] !== 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot build house here" },
-      };
-    }
-    if (houses[tileKey]) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "House already exists" },
-      };
-    }
     houses[tileKey] = {
       built_by: userId,
       actor_type: "player",
@@ -410,12 +511,6 @@ export function performTreeActionForUser(
   }
 
   if (action === "destroy_house") {
-    if (!houses[tileKey]) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No house to destroy" },
-      };
-    }
     delete houses[tileKey];
     deps.saveWorldHouses(worldId, houses);
     deps.sendWorldScopedStreamEvent(String(worldId), "house_changed", {
@@ -441,25 +536,7 @@ export function performTreeActionForUser(
   const treeKey = tileKey;
 
   if (action === "build_portal") {
-    if (map[targetRow][targetCol] !== 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot build portal here" },
-      };
-    }
     const targetTileKey = targetRow + "_" + targetCol;
-    const targetItems = Array.isArray(worldItems[targetTileKey])
-      ? worldItems[targetTileKey]
-      : [];
-    const hasPortal = targetItems.some(function (item) {
-      return item && item.type === "portal";
-    });
-    if (hasPortal) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Portal already exists" },
-      };
-    }
     const createdDestinationWorld = deps.createWorldOfType(
       requestedPortalWorldType,
     );
@@ -515,13 +592,6 @@ export function performTreeActionForUser(
       }
     }
 
-    if (removedPortals.length === 0) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No portal to remove" },
-      };
-    }
-
     if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
     else delete worldItems[removeTileKey];
     deps.deleteWorldItems(removedPortals);
@@ -553,61 +623,12 @@ export function performTreeActionForUser(
   }
 
   if (action === "plant") {
-    if (deps.isOakClearingTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "The oak clearing must remain open",
-        },
-      };
-    }
-    const hasExistingTree = trees[treeKey] && trees[treeKey].action === "plant";
-    const wasTreeCut = trees[treeKey] && trees[treeKey].action === "cut";
-    const baseHasTree = map[targetRow][targetCol] === 2;
-
-    if (map[targetRow][targetCol] !== 0 && !wasTreeCut) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Cannot plant here" },
-      };
-    }
-    if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Tree already exists" },
-      };
-    }
-
     trees[treeKey] = {
       action: "plant",
       planted_by: userId,
       timestamp: Date.now(),
     };
   } else if (action === "cut") {
-    if (deps.isOakCenterTile(worldId, targetRow, targetCol)) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "The old oak stands firm" },
-      };
-    }
-    const hasPlantedTree = trees[treeKey] && trees[treeKey].action === "plant";
-    const baseTreeExists = map[targetRow][targetCol] === 2;
-    const alreadyCut = trees[treeKey] && trees[treeKey].action === "cut";
-
-    if (!hasPlantedTree && !baseTreeExists) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "No tree to cut" },
-      };
-    }
-    if (alreadyCut) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "Tree already cut" },
-      };
-    }
-
     trees[treeKey] = {
       action: "cut",
       cut_by: userId,

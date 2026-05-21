@@ -149,6 +149,21 @@ export function performTreeActionForUser(
   function getActionExecutionConfig(): {
     toastMessage?: string;
     worldChatText?: string;
+    successPayload?: {
+      includeTargetPosition?: boolean;
+      includeWorldId?: boolean;
+      includeInventory?: boolean;
+      includeTileItems?: boolean;
+      includeRemovedCount?: boolean;
+      includeSwitchedWorld?: boolean;
+    };
+    worldEvent?: {
+      eventType: string;
+      actionId?: string;
+    };
+    itemChange?: {
+      actionId: string;
+    };
   } | null {
     return actionDefinition && actionDefinition.execution
       ? actionDefinition.execution
@@ -183,11 +198,90 @@ export function performTreeActionForUser(
     };
   }
 
+  function buildConfiguredSuccessPayload(overrides?: any): any {
+    const execution = getActionExecutionConfig();
+    const payload = {
+      ok: true,
+      action: action,
+      ...(overrides || {}),
+    };
+
+    if (!execution || !execution.successPayload) {
+      return withConfiguredToastMessage(payload);
+    }
+
+    const successPayload = execution.successPayload;
+
+    if (successPayload.includeTargetPosition) {
+      payload.row = resolvedTarget.row;
+      payload.col = resolvedTarget.col;
+    }
+
+    if (successPayload.includeWorldId && payload.world_id == null) {
+      payload.world_id = String(worldId);
+    }
+
+    if (successPayload.includeInventory && payload.inventory == null) {
+      payload.inventory = inv;
+    }
+
+    if (successPayload.includeTileItems && payload.tile_items == null) {
+      payload.tile_items = getTileItemsSnapshot(
+        resolvedTarget.row,
+        resolvedTarget.col,
+      );
+    }
+
+    if (successPayload.includeSwitchedWorld && payload.switched_world == null) {
+      payload.switched_world = true;
+    }
+
+    return withConfiguredToastMessage(payload);
+  }
+
+  function maybeSendConfiguredWorldEvent(row: number, col: number): void {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.worldEvent) return;
+
+    deps.sendWorldScopedStreamEvent(
+      String(worldId),
+      execution.worldEvent.eventType,
+      {
+        action: execution.worldEvent.actionId || action,
+        row: row,
+        col: col,
+        actor_type: "player",
+        actor_id: userId,
+        player_id: userId,
+      },
+    );
+  }
+
+  function maybeBroadcastConfiguredItemChange(
+    row: number,
+    col: number,
+    items: any[],
+  ): void {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.itemChange) return;
+
+    deps.broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      execution.itemChange.actionId,
+      row,
+      col,
+      items,
+    );
+  }
+
   function getBlockedZoneError(row: number, col: number): string | null {
     const validation = actionDefinition && actionDefinition.validation;
-    const blockedZones = validation && Array.isArray(validation.blockedZones)
-      ? validation.blockedZones
-      : [];
+    const blockedZones =
+      validation && Array.isArray(validation.blockedZones)
+        ? validation.blockedZones
+        : [];
 
     for (let i = 0; i < blockedZones.length; i++) {
       const blockedZone = blockedZones[i];
@@ -221,11 +315,7 @@ export function performTreeActionForUser(
     const validation = actionDefinition && actionDefinition.validation;
     if (!validation) return null;
 
-    if (
-      validation.requireWalkableTile &&
-      map[row] &&
-      map[row][col] !== 0
-    ) {
+    if (validation.requireWalkableTile && map[row] && map[row][col] !== 0) {
       return validation.requireWalkableTile.errorMessage;
     }
 
@@ -263,19 +353,28 @@ export function performTreeActionForUser(
 
       if (validation.requireTreeState.kind === "plantable") {
         if (map[row] && map[row][col] !== 0 && !wasTreeCut) {
-          return validation.requireTreeState.missingErrorMessage || "Cannot use here";
+          return (
+            validation.requireTreeState.missingErrorMessage || "Cannot use here"
+          );
         }
         if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-          return validation.requireTreeState.conflictErrorMessage || "Already exists";
+          return (
+            validation.requireTreeState.conflictErrorMessage || "Already exists"
+          );
         }
       }
 
       if (validation.requireTreeState.kind === "cuttable") {
         if (!hasExistingTree && !baseHasTree) {
-          return validation.requireTreeState.missingErrorMessage || "Nothing to cut";
+          return (
+            validation.requireTreeState.missingErrorMessage || "Nothing to cut"
+          );
         }
         if (wasTreeCut) {
-          return validation.requireTreeState.conflictErrorMessage || "Already removed";
+          return (
+            validation.requireTreeState.conflictErrorMessage ||
+            "Already removed"
+          );
         }
       }
     }
@@ -340,10 +439,8 @@ export function performTreeActionForUser(
     );
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
+      payload: buildConfiguredSuccessPayload({
         action: "return_home",
-        switched_world: true,
         world_id: deps.OAK_WORLD_ID,
       }),
     };
@@ -353,12 +450,7 @@ export function performTreeActionForUser(
     maybeAppendConfiguredWorldChatMessage();
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        inventory: inv,
-        world_id: String(worldId),
-      }),
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
@@ -396,29 +488,12 @@ export function performTreeActionForUser(
       blessingItem,
     );
     deps.saveWorldItems(worldId, worldItems);
-    deps.broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "blessing_place",
-      resolvedTarget.row,
-      resolvedTarget.col,
-      [blessingItem],
-    );
+    maybeBroadcastConfiguredItemChange(resolvedTarget.row, resolvedTarget.col, [
+      blessingItem,
+    ]);
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        row: resolvedTarget.row,
-        col: resolvedTarget.col,
-        tile_items: getTileItemsSnapshot(
-          resolvedTarget.row,
-          resolvedTarget.col,
-        ),
-        inventory: inv,
-        world_id: String(worldId),
-      }),
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
@@ -437,10 +512,7 @@ export function performTreeActionForUser(
     deps.switchUserWorld(userId, newWorldId);
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        switched_world: true,
+      payload: buildConfiguredSuccessPayload({
         world_id: newWorldId,
       }),
     };
@@ -490,46 +562,20 @@ export function performTreeActionForUser(
       timestamp: Date.now(),
     };
     deps.saveWorldHouses(worldId, houses);
-    deps.sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
+    maybeSendConfiguredWorldEvent(targetRow, targetCol);
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        world_id: String(worldId),
-      }),
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
   if (action === "destroy_house") {
     delete houses[tileKey];
     deps.saveWorldHouses(worldId, houses);
-    deps.sendWorldScopedStreamEvent(String(worldId), "house_changed", {
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      actor_type: "player",
-      actor_id: userId,
-      player_id: userId,
-    });
+    maybeSendConfiguredWorldEvent(targetRow, targetCol);
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        world_id: String(worldId),
-      }),
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
@@ -551,28 +597,11 @@ export function performTreeActionForUser(
     worldItems[targetTileKey].push(portalItem);
     deps.upsertWorldItem(worldId, targetRow, targetCol, portalItem);
     deps.saveWorldItems(worldId, worldItems);
-
-    deps.broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_create",
-      targetRow,
-      targetCol,
-      [portalItem],
-    );
+    maybeBroadcastConfiguredItemChange(targetRow, targetCol, [portalItem]);
 
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
-        tile_items: getTileItemsSnapshot(targetRow, targetCol),
-        inventory: inv,
-        world_id: String(worldId),
-      }),
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
@@ -596,28 +625,12 @@ export function performTreeActionForUser(
     else delete worldItems[removeTileKey];
     deps.deleteWorldItems(removedPortals);
     deps.saveWorldItems(worldId, worldItems);
-
-    deps.broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "portal_remove",
-      targetRow,
-      targetCol,
-      removedPortals,
-    );
+    maybeBroadcastConfiguredItemChange(targetRow, targetCol, removedPortals);
 
     return {
       status: 200,
-      payload: withConfiguredToastMessage({
-        ok: true,
-        action: action,
-        row: targetRow,
-        col: targetCol,
+      payload: buildConfiguredSuccessPayload({
         removed_count: removedPortals.length,
-        tile_items: getTileItemsSnapshot(targetRow, targetCol),
-        inventory: inv,
-        world_id: String(worldId),
       }),
     };
   }
@@ -637,23 +650,10 @@ export function performTreeActionForUser(
   }
 
   deps.saveWorldTrees(worldId, trees);
-  deps.sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
-    action: action,
-    row: targetRow,
-    col: targetCol,
-    actor_type: "player",
-    actor_id: userId,
-    player_id: userId,
-  });
+  maybeSendConfiguredWorldEvent(targetRow, targetCol);
 
   return {
     status: 200,
-    payload: withConfiguredToastMessage({
-      ok: true,
-      action: action,
-      row: targetRow,
-      col: targetCol,
-      world_id: String(worldId),
-    }),
+    payload: buildConfiguredSuccessPayload(),
   };
 }

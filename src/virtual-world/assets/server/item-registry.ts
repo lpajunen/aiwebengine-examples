@@ -33,6 +33,21 @@ export interface ActionDefinition {
   execution?: {
     toastMessage?: string;
     worldChatText?: string;
+    successPayload?: {
+      includeTargetPosition?: boolean;
+      includeWorldId?: boolean;
+      includeInventory?: boolean;
+      includeTileItems?: boolean;
+      includeRemovedCount?: boolean;
+      includeSwitchedWorld?: boolean;
+    };
+    worldEvent?: {
+      eventType: string;
+      actionId?: string;
+    };
+    itemChange?: {
+      actionId: string;
+    };
   };
   validation?: {
     requireWalkableTile?: {
@@ -244,6 +259,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Plant pine sapling",
     targetKind: "facing_tile",
     sourceItemIds: ["tree_planter"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      worldEvent: {
+        eventType: "tree_changed",
+      },
+    },
     validation: {
       requireTreeState: {
         kind: "plantable",
@@ -264,6 +288,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use woodsman's saw",
     targetKind: "facing_tile",
     sourceItemIds: ["saw"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      worldEvent: {
+        eventType: "tree_changed",
+      },
+    },
     validation: {
       requireTreeState: {
         kind: "cuttable",
@@ -284,6 +317,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use hammer (build house)",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      worldEvent: {
+        eventType: "house_changed",
+      },
+    },
     validation: {
       requireWalkableTile: {
         errorMessage: "Cannot build house here",
@@ -306,6 +348,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use hammer (destroy house)",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      worldEvent: {
+        eventType: "house_changed",
+      },
+    },
     validation: {
       requireHouseState: {
         kind: "present",
@@ -319,6 +370,17 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Raise rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+      },
+      itemChange: {
+        actionId: "portal_create",
+      },
+    },
     validation: {
       requireWalkableTile: {
         errorMessage: "Cannot build portal here",
@@ -367,6 +429,18 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Close rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+        includeRemovedCount: true,
+      },
+      itemChange: {
+        actionId: "portal_remove",
+      },
+    },
     validation: {
       requirePortalState: {
         kind: "present",
@@ -381,6 +455,10 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "self",
     sourceItemIds: ["kantele"],
     execution: {
+      successPayload: {
+        includeInventory: true,
+        includeWorldId: true,
+      },
       toastMessage: "A kantele tune carries across the clearing.",
       worldChatText: "lets a kantele melody drift through the spruce hush.",
     },
@@ -392,6 +470,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "current_tile",
     sourceItemIds: ["rowan_charm"],
     execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+      },
+      itemChange: {
+        actionId: "blessing_place",
+      },
       toastMessage: "A rowan blessing now marks this place.",
     },
   },
@@ -401,6 +488,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Enter rune gate",
     targetKind: "current_tile",
     sourceItemIds: ["portal"],
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
   },
   return_home: {
     id: "return_home",
@@ -408,6 +501,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Travel to the old oak",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
   },
 };
 

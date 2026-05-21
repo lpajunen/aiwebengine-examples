@@ -1,4 +1,7 @@
-import { getItemChangeDefinition } from "./item-registry.ts";
+import {
+  getItemChangeDefinition,
+  getWorldEventDefinition,
+} from "./item-registry.ts";
 
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;
@@ -166,7 +169,7 @@ export function performTreeActionForUser(
       storage: "trees" | "houses";
     };
     worldEvent?: {
-      eventType: string;
+      eventId: string;
       actionId?: string;
     };
     itemChange?: {
@@ -250,19 +253,17 @@ export function performTreeActionForUser(
   function maybeSendConfiguredWorldEvent(row: number, col: number): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.worldEvent) return;
+    const worldEvent = getWorldEventDefinition(execution.worldEvent.eventId);
+    if (!worldEvent) return;
 
-    deps.sendWorldScopedStreamEvent(
-      String(worldId),
-      execution.worldEvent.eventType,
-      {
-        action: execution.worldEvent.actionId || action,
-        row: row,
-        col: col,
-        actor_type: "player",
-        actor_id: userId,
-        player_id: userId,
-      },
-    );
+    deps.sendWorldScopedStreamEvent(String(worldId), worldEvent.eventType, {
+      action: execution.worldEvent.actionId || action,
+      row: row,
+      col: col,
+      actor_type: "player",
+      actor_id: userId,
+      player_id: userId,
+    });
   }
 
   function maybeBroadcastConfiguredItemChange(

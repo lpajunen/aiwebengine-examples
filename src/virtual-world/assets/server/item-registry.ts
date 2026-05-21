@@ -50,7 +50,7 @@ export interface ActionDefinition {
       storage: "trees" | "houses";
     };
     worldEvent?: {
-      eventType: string;
+      eventId: string;
       actionId?: string;
     };
     itemChange?: {
@@ -97,6 +97,11 @@ export interface RecipeDefinition {
 export interface ItemChangeDefinition {
   id: string;
   deltaKind: ItemChangeDeltaKind;
+}
+
+export interface WorldEventDefinition {
+  id: string;
+  eventType: string;
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -281,7 +286,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         storage: "trees",
       },
       worldEvent: {
-        eventType: "tree_changed",
+        eventId: "tree_changed",
       },
     },
     validation: {
@@ -313,7 +318,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         storage: "trees",
       },
       worldEvent: {
-        eventType: "tree_changed",
+        eventId: "tree_changed",
       },
     },
     validation: {
@@ -345,7 +350,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         storage: "houses",
       },
       worldEvent: {
-        eventType: "house_changed",
+        eventId: "house_changed",
       },
     },
     validation: {
@@ -379,7 +384,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         storage: "houses",
       },
       worldEvent: {
-        eventType: "house_changed",
+        eventId: "house_changed",
       },
     },
     validation: {
@@ -594,6 +599,17 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
   },
 };
 
+export const WORLD_EVENT_DEFINITIONS: Record<string, WorldEventDefinition> = {
+  tree_changed: {
+    id: "tree_changed",
+    eventType: "tree_changed",
+  },
+  house_changed: {
+    id: "house_changed",
+    eventType: "house_changed",
+  },
+};
+
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
 }
@@ -612,6 +628,12 @@ export function getItemChangeDefinition(
   itemChangeId: string | null | undefined,
 ): ItemChangeDefinition | null {
   return ITEM_CHANGE_DEFINITIONS[String(itemChangeId || "")] || null;
+}
+
+export function getWorldEventDefinition(
+  worldEventId: string | null | undefined,
+): WorldEventDefinition | null {
+  return WORLD_EVENT_DEFINITIONS[String(worldEventId || "")] || null;
 }
 
 export function getActionsForItemType(itemId: string): string[] {

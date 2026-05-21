@@ -41,6 +41,12 @@ export interface ActionDefinition {
       includeRemovedCount?: boolean;
       includeSwitchedWorld?: boolean;
     };
+    itemMutation?: {
+      saveWorldItems?: boolean;
+    };
+    worldMutation?: {
+      storage: "trees" | "houses";
+    };
     worldEvent?: {
       eventType: string;
       actionId?: string;
@@ -264,6 +270,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeTargetPosition: true,
         includeWorldId: true,
       },
+      worldMutation: {
+        storage: "trees",
+      },
       worldEvent: {
         eventType: "tree_changed",
       },
@@ -293,6 +302,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeTargetPosition: true,
         includeWorldId: true,
       },
+      worldMutation: {
+        storage: "trees",
+      },
       worldEvent: {
         eventType: "tree_changed",
       },
@@ -321,6 +333,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       successPayload: {
         includeTargetPosition: true,
         includeWorldId: true,
+      },
+      worldMutation: {
+        storage: "houses",
       },
       worldEvent: {
         eventType: "house_changed",
@@ -353,6 +368,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeTargetPosition: true,
         includeWorldId: true,
       },
+      worldMutation: {
+        storage: "houses",
+      },
       worldEvent: {
         eventType: "house_changed",
       },
@@ -376,6 +394,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
         includeInventory: true,
         includeTileItems: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
       },
       itemChange: {
         actionId: "portal_create",
@@ -437,6 +458,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeTileItems: true,
         includeRemovedCount: true,
       },
+      itemMutation: {
+        saveWorldItems: true,
+      },
       itemChange: {
         actionId: "portal_remove",
       },
@@ -475,6 +499,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
         includeInventory: true,
         includeTileItems: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
       },
       itemChange: {
         actionId: "blessing_place",

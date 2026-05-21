@@ -1632,6 +1632,20 @@ function applyItemDeltaFromEvent(payload) {
   var row = Number(payload.row);
   var col = Number(payload.col);
   if (!isFinite(row) || !isFinite(col)) return;
+  var action = String(payload.action || "");
+  var tileKey = row + "_" + col;
+  var changedItems = normalizeClientTileItems(payload.items);
+  var currentItems = Array.isArray(worldItemsByTile[tileKey])
+    ? worldItemsByTile[tileKey].slice()
+    : [];
+
+  function changedItemIdSet() {
+    var ids = /** @type {Record<string, boolean>} */ ({});
+    for (var i = 0; i < changedItems.length; i++) {
+      if (changedItems[i] && changedItems[i].id) ids[changedItems[i].id] = true;
+    }
+    return ids;
+  }
 
   // Treat the SSE delta as newer than any in-flight repair snapshot.
   appliedItemSnapshotSeq = Math.max(
@@ -1639,7 +1653,33 @@ function applyItemDeltaFromEvent(payload) {
     itemSnapshotRequestSeq + 1,
   );
 
-  applyTileItemsState(row, col, payload.items);
+  if (
+    action === "drop" ||
+    action === "portal_create" ||
+    action === "blessing_place"
+  ) {
+    var merged = currentItems.slice();
+    var seenIds = changedItemIdSet();
+    for (var curIdx = 0; curIdx < merged.length; curIdx++) {
+      if (merged[curIdx] && seenIds[merged[curIdx].id]) {
+        delete seenIds[merged[curIdx].id];
+      }
+    }
+    for (var addIdx = 0; addIdx < changedItems.length; addIdx++) {
+      var changedItem = changedItems[addIdx];
+      if (changedItem && seenIds[changedItem.id]) merged.push(changedItem);
+    }
+    applyTileItemsState(row, col, merged);
+  } else if (action === "pick" || action === "portal_remove") {
+    var removedIds = changedItemIdSet();
+    var kept = currentItems.filter(function (item) {
+      return item && !removedIds[item.id];
+    });
+    applyTileItemsState(row, col, kept);
+  } else {
+    fetchItemSnapshot();
+    return;
+  }
 
   rebuildItemMeshes();
   refreshTileDetailIfOpen();
@@ -2081,15 +2121,7 @@ function initMultiplayer() {
         handleNpcMovedEvent(payload);
         return;
       case "item_changed":
-        if (
-          payload &&
-          payload.actor_type === "player" &&
-          payload.actor_id === playerId
-        ) {
-          applyItemDeltaFromEvent(payload);
-        } else {
-          applyItemDeltaFromEvent(payload);
-        }
+        applyItemDeltaFromEvent(payload);
         return;
       case "chat_message":
         handleChatMessageEvent(payload);
@@ -3304,7 +3336,6 @@ function shortenId(id) {
   var s = String(id || "");
   return s.length > 18 ? s.slice(0, 16) + "\u2026" : s;
 }
-
 /** @param {string} id */
 function getNickForPlayer(id) {
   if (id === playerId) return playerNick || shortenId(id);

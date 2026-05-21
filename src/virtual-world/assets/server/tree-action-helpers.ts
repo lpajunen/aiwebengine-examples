@@ -157,6 +157,12 @@ export function performTreeActionForUser(
       includeRemovedCount?: boolean;
       includeSwitchedWorld?: boolean;
     };
+    itemMutation?: {
+      saveWorldItems?: boolean;
+    };
+    worldMutation?: {
+      storage: "trees" | "houses";
+    };
     worldEvent?: {
       eventType: string;
       actionId?: string;
@@ -274,6 +280,50 @@ export function performTreeActionForUser(
       col,
       items,
     );
+  }
+
+  function maybePersistConfiguredWorldMutation(
+    row: number,
+    col: number,
+    state: {
+      trees: Record<string, any>;
+      houses: Record<string, any>;
+    },
+  ): boolean {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.worldMutation) return false;
+
+    if (execution.worldMutation.storage === "trees") {
+      deps.saveWorldTrees(worldId, state.trees);
+      maybeSendConfiguredWorldEvent(row, col);
+      return true;
+    }
+
+    if (execution.worldMutation.storage === "houses") {
+      deps.saveWorldHouses(worldId, state.houses);
+      maybeSendConfiguredWorldEvent(row, col);
+      return true;
+    }
+
+    return false;
+  }
+
+  function maybePersistConfiguredItemMutation(
+    row: number,
+    col: number,
+    itemsState: Record<string, any[]>,
+    changedItems: any[],
+  ): boolean {
+    const execution = getActionExecutionConfig();
+    if (!execution || !execution.itemMutation) return false;
+
+    if (execution.itemMutation.saveWorldItems) {
+      deps.saveWorldItems(worldId, itemsState);
+      maybeBroadcastConfiguredItemChange(row, col, changedItems);
+      return true;
+    }
+
+    return false;
   }
 
   function getBlockedZoneError(row: number, col: number): string | null {
@@ -487,10 +537,12 @@ export function performTreeActionForUser(
       resolvedTarget.col,
       blessingItem,
     );
-    deps.saveWorldItems(worldId, worldItems);
-    maybeBroadcastConfiguredItemChange(resolvedTarget.row, resolvedTarget.col, [
-      blessingItem,
-    ]);
+    maybePersistConfiguredItemMutation(
+      resolvedTarget.row,
+      resolvedTarget.col,
+      worldItems,
+      [blessingItem],
+    );
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
@@ -561,8 +613,10 @@ export function performTreeActionForUser(
       actor_type: "player",
       timestamp: Date.now(),
     };
-    deps.saveWorldHouses(worldId, houses);
-    maybeSendConfiguredWorldEvent(targetRow, targetCol);
+    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
+      trees: trees,
+      houses: houses,
+    });
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
@@ -571,8 +625,10 @@ export function performTreeActionForUser(
 
   if (action === "destroy_house") {
     delete houses[tileKey];
-    deps.saveWorldHouses(worldId, houses);
-    maybeSendConfiguredWorldEvent(targetRow, targetCol);
+    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
+      trees: trees,
+      houses: houses,
+    });
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
@@ -596,8 +652,9 @@ export function performTreeActionForUser(
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);
     deps.upsertWorldItem(worldId, targetRow, targetCol, portalItem);
-    deps.saveWorldItems(worldId, worldItems);
-    maybeBroadcastConfiguredItemChange(targetRow, targetCol, [portalItem]);
+    maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
+      portalItem,
+    ]);
 
     return {
       status: 200,
@@ -624,8 +681,12 @@ export function performTreeActionForUser(
     if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
     else delete worldItems[removeTileKey];
     deps.deleteWorldItems(removedPortals);
-    deps.saveWorldItems(worldId, worldItems);
-    maybeBroadcastConfiguredItemChange(targetRow, targetCol, removedPortals);
+    maybePersistConfiguredItemMutation(
+      targetRow,
+      targetCol,
+      worldItems,
+      removedPortals,
+    );
 
     return {
       status: 200,
@@ -649,8 +710,10 @@ export function performTreeActionForUser(
     };
   }
 
-  deps.saveWorldTrees(worldId, trees);
-  maybeSendConfiguredWorldEvent(targetRow, targetCol);
+  maybePersistConfiguredWorldMutation(targetRow, targetCol, {
+    trees: trees,
+    houses: houses,
+  });
 
   return {
     status: 200,

@@ -1,11 +1,18 @@
+import { ITEM_CHANGE_DEFINITIONS } from "./item-events.ts";
+import {
+  ACTION_DEFINITIONS,
+  getActionDefinition as getActionDefinitionImpl,
+  getAllActionIds as getAllActionIdsImpl,
+} from "./action-registry.ts";
+
+type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
+
 export type ItemKind =
   | "tool"
   | "artifact"
   | "world_item"
   | "placeable"
   | "consumable";
-
-export type ItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
 export interface ItemDefinition {
   id: string;
@@ -21,66 +28,6 @@ export interface ItemDefinition {
   actionIds: string[];
 }
 
-export interface ActionDefinition {
-  id: string;
-  labelKey: string;
-  fallbackLabel: string;
-  targetKind:
-    | "self"
-    | "current_tile"
-    | "facing_tile"
-    | "facing_or_current_tile";
-  sourceItemIds: string[];
-  canonicalId?: string;
-  execution?: {
-    toastMessage?: string;
-    worldChatText?: string;
-    successPayload?: {
-      includeTargetPosition?: boolean;
-      includeWorldId?: boolean;
-      includeInventory?: boolean;
-      includeTileItems?: boolean;
-      includeRemovedCount?: boolean;
-      includeSwitchedWorld?: boolean;
-    };
-    itemMutation?: {
-      saveWorldItems?: boolean;
-    };
-    worldMutation?: {
-      storage: "trees" | "houses";
-    };
-    worldEvent?: {
-      eventId: string;
-      actionId?: string;
-    };
-    itemChange?: {
-      eventId: string;
-    };
-  };
-  validation?: {
-    requireWalkableTile?: {
-      errorMessage: string;
-    };
-    requireTreeState?: {
-      kind: "plantable" | "cuttable";
-      missingErrorMessage?: string;
-      conflictErrorMessage?: string;
-    };
-    requireHouseState?: {
-      kind: "present" | "absent";
-      errorMessage: string;
-    };
-    requirePortalState?: {
-      kind: "present" | "absent";
-      errorMessage: string;
-    };
-    blockedZones?: Array<{
-      kind: "oak_clearing" | "oak_center";
-      errorMessage: string;
-    }>;
-  };
-}
-
 export interface RecipeDefinition {
   id: string;
   labelKey: string;
@@ -92,16 +39,6 @@ export interface RecipeDefinition {
     | { kind: "place_tree"; count: number }
     | { kind: "place_house"; count: number }
   >;
-}
-
-export interface ItemChangeDefinition {
-  id: string;
-  deltaKind: ItemChangeDeltaKind;
-}
-
-export interface WorldEventDefinition {
-  id: string;
-  eventType: string;
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -270,285 +207,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   },
 };
 
-export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
-  plant: {
-    id: "plant",
-    labelKey: "tree_action.plant",
-    fallbackLabel: "Plant pine sapling",
-    targetKind: "facing_tile",
-    sourceItemIds: ["tree_planter"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-      },
-      worldMutation: {
-        storage: "trees",
-      },
-      worldEvent: {
-        eventId: "tree_changed",
-      },
-    },
-    validation: {
-      requireTreeState: {
-        kind: "plantable",
-        missingErrorMessage: "Cannot plant here",
-        conflictErrorMessage: "Tree already exists",
-      },
-      blockedZones: [
-        {
-          kind: "oak_clearing",
-          errorMessage: "The oak clearing must remain open",
-        },
-      ],
-    },
-  },
-  cut: {
-    id: "cut",
-    labelKey: "tree_action.cut",
-    fallbackLabel: "Use woodsman's saw",
-    targetKind: "facing_tile",
-    sourceItemIds: ["saw"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-      },
-      worldMutation: {
-        storage: "trees",
-      },
-      worldEvent: {
-        eventId: "tree_changed",
-      },
-    },
-    validation: {
-      requireTreeState: {
-        kind: "cuttable",
-        missingErrorMessage: "No tree to cut",
-        conflictErrorMessage: "Tree already cut",
-      },
-      blockedZones: [
-        {
-          kind: "oak_center",
-          errorMessage: "The old oak stands firm",
-        },
-      ],
-    },
-  },
-  build_house: {
-    id: "build_house",
-    labelKey: "tree_action.build_house",
-    fallbackLabel: "Use hammer (build house)",
-    targetKind: "facing_tile",
-    sourceItemIds: ["hammer"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-      },
-      worldMutation: {
-        storage: "houses",
-      },
-      worldEvent: {
-        eventId: "house_changed",
-      },
-    },
-    validation: {
-      requireWalkableTile: {
-        errorMessage: "Cannot build house here",
-      },
-      requireHouseState: {
-        kind: "absent",
-        errorMessage: "House already exists",
-      },
-      blockedZones: [
-        {
-          kind: "oak_clearing",
-          errorMessage: "The oak clearing must remain open",
-        },
-      ],
-    },
-  },
-  destroy_house: {
-    id: "destroy_house",
-    labelKey: "tree_action.destroy_house",
-    fallbackLabel: "Use hammer (destroy house)",
-    targetKind: "facing_tile",
-    sourceItemIds: ["hammer"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-      },
-      worldMutation: {
-        storage: "houses",
-      },
-      worldEvent: {
-        eventId: "house_changed",
-      },
-    },
-    validation: {
-      requireHouseState: {
-        kind: "present",
-        errorMessage: "No house to destroy",
-      },
-    },
-  },
-  build_portal: {
-    id: "build_portal",
-    labelKey: "tree_action.build_portal",
-    fallbackLabel: "Raise rune gate",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-        includeInventory: true,
-        includeTileItems: true,
-      },
-      itemMutation: {
-        saveWorldItems: true,
-      },
-      itemChange: {
-        eventId: "portal_create",
-      },
-    },
-    validation: {
-      requireWalkableTile: {
-        errorMessage: "Cannot build portal here",
-      },
-      requirePortalState: {
-        kind: "absent",
-        errorMessage: "Portal already exists",
-      },
-    },
-  },
-  build_portal_forest: {
-    id: "build_portal_forest",
-    labelKey: "tree_action.build_portal_forest",
-    fallbackLabel: "Raise rune gate to forest world",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    canonicalId: "build_portal",
-  },
-  build_portal_island: {
-    id: "build_portal_island",
-    labelKey: "tree_action.build_portal_island",
-    fallbackLabel: "Raise rune gate to island world",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    canonicalId: "build_portal",
-  },
-  build_portal_cave: {
-    id: "build_portal_cave",
-    labelKey: "tree_action.build_portal_cave",
-    fallbackLabel: "Raise rune gate to cave world",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    canonicalId: "build_portal",
-  },
-  build_portal_building: {
-    id: "build_portal_building",
-    labelKey: "tree_action.build_portal_building",
-    fallbackLabel: "Raise rune gate to house world",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    canonicalId: "build_portal",
-  },
-  remove_portal: {
-    id: "remove_portal",
-    labelKey: "tree_action.remove_portal",
-    fallbackLabel: "Close rune gate",
-    targetKind: "facing_tile",
-    sourceItemIds: ["portal_builder"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-        includeInventory: true,
-        includeTileItems: true,
-        includeRemovedCount: true,
-      },
-      itemMutation: {
-        saveWorldItems: true,
-      },
-      itemChange: {
-        eventId: "portal_remove",
-      },
-    },
-    validation: {
-      requirePortalState: {
-        kind: "present",
-        errorMessage: "No portal to remove",
-      },
-    },
-  },
-  play_tune: {
-    id: "play_tune",
-    labelKey: "tree_action.play_tune",
-    fallbackLabel: "Play kantele tune",
-    targetKind: "self",
-    sourceItemIds: ["kantele"],
-    execution: {
-      successPayload: {
-        includeInventory: true,
-        includeWorldId: true,
-      },
-      toastMessage: "A kantele tune carries across the clearing.",
-      worldChatText: "lets a kantele melody drift through the spruce hush.",
-    },
-  },
-  place_blessing: {
-    id: "place_blessing",
-    labelKey: "tree_action.place_blessing",
-    fallbackLabel: "Place rowan blessing",
-    targetKind: "current_tile",
-    sourceItemIds: ["rowan_charm"],
-    execution: {
-      successPayload: {
-        includeTargetPosition: true,
-        includeWorldId: true,
-        includeInventory: true,
-        includeTileItems: true,
-      },
-      itemMutation: {
-        saveWorldItems: true,
-      },
-      itemChange: {
-        eventId: "blessing_place",
-      },
-      toastMessage: "A rowan blessing now marks this place.",
-    },
-  },
-  portal_travel: {
-    id: "portal_travel",
-    labelKey: "tree_action.portal_travel",
-    fallbackLabel: "Enter rune gate",
-    targetKind: "current_tile",
-    sourceItemIds: ["portal"],
-    execution: {
-      successPayload: {
-        includeSwitchedWorld: true,
-        includeWorldId: true,
-      },
-    },
-  },
-  return_home: {
-    id: "return_home",
-    labelKey: "tree_action.return_home",
-    fallbackLabel: "Travel to the old oak",
-    targetKind: "self",
-    sourceItemIds: ["starter_kit"],
-    execution: {
-      successPayload: {
-        includeSwitchedWorld: true,
-        includeWorldId: true,
-      },
-    },
-  },
-};
-
 export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
   craft_kantele: {
     id: "craft_kantele",
@@ -576,64 +234,20 @@ export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
   },
 };
 
-export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
-  pick: {
-    id: "pick",
-    deltaKind: "remove",
-  },
-  drop: {
-    id: "drop",
-    deltaKind: "add",
-  },
-  portal_create: {
-    id: "portal_create",
-    deltaKind: "add",
-  },
-  portal_remove: {
-    id: "portal_remove",
-    deltaKind: "remove",
-  },
-  blessing_place: {
-    id: "blessing_place",
-    deltaKind: "add",
-  },
-};
-
-export const WORLD_EVENT_DEFINITIONS: Record<string, WorldEventDefinition> = {
-  tree_changed: {
-    id: "tree_changed",
-    eventType: "tree_changed",
-  },
-  house_changed: {
-    id: "house_changed",
-    eventType: "house_changed",
-  },
-};
-
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
-}
-
-export function getActionDefinition(
-  actionId: string | null | undefined,
-): ActionDefinition | null {
-  return ACTION_DEFINITIONS[String(actionId || "")] || null;
 }
 
 export function getRecipeDefinition(recipeId: string): RecipeDefinition | null {
   return RECIPE_DEFINITIONS[String(recipeId || "")] || null;
 }
 
-export function getItemChangeDefinition(
-  itemChangeId: string | null | undefined,
-): ItemChangeDefinition | null {
-  return ITEM_CHANGE_DEFINITIONS[String(itemChangeId || "")] || null;
+export function getActionDefinition(actionId: string | null | undefined) {
+  return getActionDefinitionImpl(actionId);
 }
 
-export function getWorldEventDefinition(
-  worldEventId: string | null | undefined,
-): WorldEventDefinition | null {
-  return WORLD_EVENT_DEFINITIONS[String(worldEventId || "")] || null;
+export function getAllActionIds(): string[] {
+  return getAllActionIdsImpl();
 }
 
 export function getActionsForItemType(itemId: string): string[] {
@@ -645,10 +259,6 @@ export function getActionsForItemType(itemId: string): string[] {
 export function getPrimaryActionForItemType(itemId: string): string | null {
   const actions = getActionsForItemType(itemId);
   return actions.length > 0 ? actions[0] : null;
-}
-
-export function getAllActionIds(): string[] {
-  return Object.keys(ACTION_DEFINITIONS);
 }
 
 export function getSpawnableItemTypes(): string[] {
@@ -684,7 +294,7 @@ export function getBootstrapRegistry(): {
   item_events: Record<
     string,
     {
-      delta_kind: ItemChangeDeltaKind;
+      delta_kind: BootstrapItemChangeDeltaKind;
     }
   >;
   recipes: Record<
@@ -722,7 +332,7 @@ export function getBootstrapRegistry(): {
   const itemEvents: Record<
     string,
     {
-      delta_kind: ItemChangeDeltaKind;
+      delta_kind: BootstrapItemChangeDeltaKind;
     }
   > = {};
   const recipes: Record<

@@ -1,7 +1,5 @@
-import {
-  getItemChangeDefinition,
-  getWorldEventDefinition,
-} from "./item-registry.ts";
+import { getItemChangeDefinition } from "./item-events.ts";
+import { getWorldEventDefinition } from "./world-events.ts";
 
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;

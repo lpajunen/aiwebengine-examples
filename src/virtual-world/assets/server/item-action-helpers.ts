@@ -1,4 +1,4 @@
-import { getItemChangeDefinition } from "./item-registry.ts";
+import { getItemChangeDefinition } from "./item-events.ts";
 
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;

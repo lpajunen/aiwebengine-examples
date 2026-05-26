@@ -168,6 +168,7 @@ import {
   virtualWorldGetStateToolHandler as virtualWorldGetStateToolHandlerImpl,
   virtualWorldManageItemsToolHandler as virtualWorldManageItemsToolHandlerImpl,
   virtualWorldMoveToolHandler as virtualWorldMoveToolHandlerImpl,
+  virtualWorldSetNicknameToolHandler as virtualWorldSetNicknameToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
   addToDMIndex as addToDMIndexImpl,
@@ -2228,6 +2229,19 @@ function virtualWorldActToolHandler(context) {
     getOrCreatePlayerWorld: getOrCreatePlayerWorld,
     getCanonicalPlayerState: getCanonicalPlayerState,
     performTreeActionForUser: performTreeActionForUser,
+  });
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldSetNicknameToolHandler(context) {
+  return virtualWorldSetNicknameToolHandlerImpl(context, {
+    getAuthenticatedUserId: getAuthenticatedUserId,
+    savePlayerNick: savePlayerNick,
+    getPlayerWorld: getPlayerWorld,
+    updateOnlinePresence: updateOnlinePresence,
   });
 }
 

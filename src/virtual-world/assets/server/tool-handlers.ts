@@ -26,6 +26,12 @@ type ToolHandlerDeps = {
     body: any,
   ) => { status: number; payload: any };
   getPlayerWorld: (userId: string) => string;
+  savePlayerNick: (userId: string, nick: string) => void;
+  updateOnlinePresence: (
+    userId: string,
+    worldId: string,
+    sessionId: string,
+  ) => any;
   performTreeActionForUser: (
     userId: string,
     body: any,
@@ -169,4 +175,45 @@ export function virtualWorldActToolHandler(
   });
   result.payload.status = result.status;
   return JSON.stringify(result.payload);
+}
+
+export function virtualWorldSetNicknameToolHandler(
+  context: any,
+  deps: Pick<
+    ToolHandlerDeps,
+    | "getAuthenticatedUserId"
+    | "savePlayerNick"
+    | "getPlayerWorld"
+    | "updateOnlinePresence"
+  >,
+): string {
+  const userId = deps.getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  const args = context.args || {};
+  const nick = args.nick;
+
+  if (!nick || String(nick).trim() === "") {
+    return JSON.stringify({ status: 400, error: "Nickname cannot be empty" });
+  }
+
+  const sanitized = String(nick).trim().slice(0, 24);
+  try {
+    deps.savePlayerNick(userId, sanitized);
+  } catch (e) {
+    return JSON.stringify({ status: 500, error: "Failed to save nickname" });
+  }
+
+  try {
+    const currentWorldId = deps.getPlayerWorld(userId);
+    if (currentWorldId) {
+      deps.updateOnlinePresence(userId, String(currentWorldId), "");
+    }
+  } catch (e) {
+    // ignore presence update errors
+  }
+
+  return JSON.stringify({ status: 200, ok: true, nick: sanitized });
 }

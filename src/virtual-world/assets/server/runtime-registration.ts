@@ -222,6 +222,24 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "virtualWorldActToolHandler",
   );
 
+  const virtualWorldSetNicknameSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      nick: {
+        type: "string",
+        description: "New nickname for the authenticated player",
+      },
+    },
+    required: ["nick"],
+  });
+  safeRegisterTool(
+    deps,
+    "virtualWorldSetNickname",
+    "Set the authenticated player's nickname",
+    virtualWorldSetNicknameSchema,
+    "virtualWorldSetNicknameToolHandler",
+  );
+
   safeRegisterAssetRoute(deps, "/virtual-world", "public/welcome.html");
   safeRegisterAssetRoute(
     deps,

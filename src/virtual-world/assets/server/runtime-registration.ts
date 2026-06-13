@@ -356,4 +356,28 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "deleteItemClassHandler",
     "DELETE",
   );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/action-classes",
+    "actionClassesHandler",
+    "GET",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/action-classes",
+    "createActionClassHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/action-classes/:id",
+    "updateActionClassHandler",
+    "PUT",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/action-classes/:id",
+    "deleteActionClassHandler",
+    "DELETE",
+  );
 }

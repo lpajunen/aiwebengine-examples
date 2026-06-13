@@ -170,6 +170,12 @@ import {
   upsertItemClass as upsertItemClassImpl,
   deleteItemClass as deleteItemClassImpl,
   getItemStateTemplate as getItemStateTemplateImpl,
+  bootstrapActionClasses as bootstrapActionClassesImpl,
+  refreshActionClassCache as refreshActionClassCacheImpl,
+  getAllActionClasses as getAllActionClassesImpl,
+  getActionClass as getActionClassImpl,
+  upsertActionClass as upsertActionClassImpl,
+  deleteActionClass as deleteActionClassImpl,
 } from "./server/item-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
@@ -798,6 +804,7 @@ var VWORLD_NPC_ACTIVE_WORLD_TABLE = "vworld_npc_active_worlds";
 var VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
 var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
+var VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 
 /**
  * @param {string} raw
@@ -1070,6 +1077,7 @@ function ensureWorldDatabaseSchema() {
       worldItem: VWORLD_WORLD_ITEM_TABLE,
       worldItemMeta: VWORLD_WORLD_ITEM_META_TABLE,
       itemClass: VWORLD_ITEM_CLASS_TABLE,
+      actionClass: VWORLD_ACTION_CLASS_TABLE,
     },
     parseWorldDbResult,
     vwLog,
@@ -2899,10 +2907,137 @@ function deleteItemClassHandler(context) {
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
+// ── Action class CRUD handlers ───────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function actionClassesHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classes = getAllActionClassesImpl();
+  return ResponseBuilder.json({ ok: true, action_classes: classes });
+}
+
+/**
+ * @param {*} context
+ */
+function createActionClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var id = String((body && body.id) || "").trim();
+  if (!id) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var record = {
+    id: id,
+    labelKey: String((body && body.labelKey) || ""),
+    fallbackLabel: String((body && body.fallbackLabel) || id),
+    targetKind: String((body && body.targetKind) || "self"),
+    sourceItemIds: Array.isArray(body && body.sourceItemIds)
+      ? body.sourceItemIds
+      : [],
+    canonicalId:
+      body && body.canonicalId ? String(body.canonicalId) : undefined,
+    execution: body && body.execution ? body.execution : undefined,
+    validation: body && body.validation ? body.validation : undefined,
+    logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
+  };
+  upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, action_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function updateActionClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var actionId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!actionId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var existing = getActionClassImpl(actionId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "Action class not found" },
+      404,
+    );
+  }
+  var record = {
+    id: actionId,
+    labelKey: String(body && body.labelKey ? body.labelKey : existing.labelKey),
+    fallbackLabel: String(
+      body && body.fallbackLabel ? body.fallbackLabel : existing.fallbackLabel,
+    ),
+    targetKind: String(
+      body && body.targetKind ? body.targetKind : existing.targetKind,
+    ),
+    sourceItemIds: Array.isArray(body && body.sourceItemIds)
+      ? body.sourceItemIds
+      : existing.sourceItemIds,
+    canonicalId:
+      body && body.canonicalId !== undefined
+        ? body.canonicalId
+          ? String(body.canonicalId)
+          : undefined
+        : existing.canonicalId,
+    execution:
+      body && body.execution !== undefined
+        ? body.execution
+        : existing.execution,
+    validation:
+      body && body.validation !== undefined
+        ? body.validation
+        : existing.validation,
+    logicSpec:
+      body && body.logicSpec !== undefined
+        ? body.logicSpec
+        : existing.logicSpec,
+  };
+  upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, action_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function deleteActionClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var actionId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!actionId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  deleteActionClassImpl(actionId, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, deleted_id: actionId });
+}
+
 function init() {
   ensureWorldDatabaseSchema();
   ensureChatDatabaseSchema();
   bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
+  bootstrapActionClassesImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   startNPCTicker();
   registerVirtualWorldRuntimeImpl({
     routeRegistry: routeRegistry,

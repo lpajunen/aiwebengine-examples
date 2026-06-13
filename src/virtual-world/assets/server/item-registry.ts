@@ -4,11 +4,17 @@ import {
   getActionDefinition as getActionDefinitionImpl,
   getAllActionIds as getAllActionIdsImpl,
 } from "./action-registry.ts";
+import { ActionDefinition } from "./action-registry.ts";
 import {
   loadAllItemClassRows,
   upsertItemClassRow,
   deleteItemClassRow,
 } from "./item-class-storage.ts";
+import {
+  loadAllActionClassRows,
+  upsertActionClassRow,
+  deleteActionClassRow,
+} from "./action-class-storage.ts";
 
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
@@ -265,10 +271,15 @@ export function getRecipeDefinition(recipeId: string): RecipeDefinition | null {
 }
 
 export function getActionDefinition(actionId: string | null | undefined) {
+  const cached = _actionClassCache
+    ? _actionClassCache[String(actionId || "")] || null
+    : null;
+  if (cached) return cached;
   return getActionDefinitionImpl(actionId);
 }
 
 export function getAllActionIds(): string[] {
+  if (_actionClassCache) return Object.keys(_actionClassCache);
   return getAllActionIdsImpl();
 }
 
@@ -382,8 +393,11 @@ export function getBootstrapRegistry(): {
     };
   });
 
-  Object.keys(ACTION_DEFINITIONS).forEach(function (actionId) {
-    const action = ACTION_DEFINITIONS[actionId];
+  const actionSource = _actionClassCache
+    ? _actionClassCache
+    : ACTION_DEFINITIONS;
+  Object.keys(actionSource).forEach(function (actionId) {
+    const action = actionSource[actionId];
     actions[actionId] = {
       label_key: action.labelKey,
       fallback_label: action.fallbackLabel,
@@ -597,4 +611,155 @@ export function getItemStateTemplate(itemId: string): Record<string, unknown> {
     return Object.assign({}, cls.stateTemplate);
   }
   return {};
+}
+
+// ── Action class repository (dynamic, DB-backed) ─────────────────────────────
+
+export interface ActionClassRecord extends Omit<
+  ActionDefinition,
+  "targetKind"
+> {
+  targetKind: string;
+}
+
+let _actionClassCache: Record<string, ActionClassRecord> | null = null;
+
+function actionClassFromDbRow(row: any): ActionClassRecord {
+  function parseJson(str: string, fallback: unknown): unknown {
+    if (!str) return fallback;
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      return fallback;
+    }
+  }
+  return {
+    id: String(row.action_id || ""),
+    labelKey: String(row.label_key || ""),
+    fallbackLabel: String(row.fallback_label || ""),
+    targetKind: String(
+      row.target_kind || "self",
+    ) as ActionDefinition["targetKind"],
+    sourceItemIds: parseJson(row.source_item_ids_json, []) as string[],
+    canonicalId: row.canonical_id ? String(row.canonical_id) : undefined,
+    execution: parseJson(row.execution_json, undefined) as
+      | ActionDefinition["execution"]
+      | undefined,
+    validation: parseJson(row.validation_json, undefined) as
+      | ActionDefinition["validation"]
+      | undefined,
+    logicSpec: parseJson(row.logic_spec_json, undefined) as
+      | ActionDefinition["logicSpec"]
+      | undefined,
+  };
+}
+
+function actionClassToDbRow(
+  record: ActionClassRecord,
+  now: number,
+): {
+  action_id: string;
+  label_key: string;
+  fallback_label: string;
+  target_kind: string;
+  source_item_ids_json: string;
+  canonical_id: string;
+  execution_json: string;
+  validation_json: string;
+  logic_spec_json: string;
+  created_at: number;
+  updated_at: number;
+} {
+  return {
+    action_id: record.id,
+    label_key: record.labelKey,
+    fallback_label: record.fallbackLabel,
+    target_kind: record.targetKind,
+    source_item_ids_json: JSON.stringify(record.sourceItemIds || []),
+    canonical_id: record.canonicalId || "",
+    execution_json: record.execution ? JSON.stringify(record.execution) : "",
+    validation_json: record.validation ? JSON.stringify(record.validation) : "",
+    logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export function bootstrapActionClasses(
+  actionClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const rows = loadAllActionClassRows(actionClassTable, log);
+  const cache: Record<string, ActionClassRecord> = {};
+
+  if (rows.length > 0) {
+    for (let i = 0; i < rows.length; i++) {
+      const record = actionClassFromDbRow(rows[i]);
+      if (record.id) cache[record.id] = record;
+    }
+  } else {
+    const now = Date.now();
+    const defKeys = Object.keys(ACTION_DEFINITIONS);
+    for (let i = 0; i < defKeys.length; i++) {
+      const def = ACTION_DEFINITIONS[defKeys[i]];
+      const record: ActionClassRecord = Object.assign({}, def);
+      upsertActionClassRow(
+        actionClassToDbRow(record, now),
+        actionClassTable,
+        log,
+      );
+      cache[record.id] = record;
+    }
+    log("action class repository seeded", { count: defKeys.length });
+  }
+
+  _actionClassCache = cache;
+}
+
+export function refreshActionClassCache(
+  actionClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const rows = loadAllActionClassRows(actionClassTable, log);
+  const cache: Record<string, ActionClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = actionClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  _actionClassCache = cache;
+}
+
+export function getAllActionClasses(): ActionClassRecord[] {
+  if (!_actionClassCache) return [];
+  return Object.keys(_actionClassCache).map(function (id) {
+    return (_actionClassCache as Record<string, ActionClassRecord>)[id];
+  });
+}
+
+export function getActionClass(actionId: string): ActionClassRecord | null {
+  if (!_actionClassCache) return null;
+  return _actionClassCache[String(actionId || "")] || null;
+}
+
+export function upsertActionClass(
+  record: ActionClassRecord,
+  actionClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const now = Date.now();
+  upsertActionClassRow(actionClassToDbRow(record, now), actionClassTable, log);
+  if (_actionClassCache) {
+    _actionClassCache[record.id] = record;
+  }
+}
+
+export function deleteActionClass(
+  actionId: string,
+  actionClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  deleteActionClassRow(actionId, actionClassTable, log);
+  if (_actionClassCache) {
+    delete _actionClassCache[actionId];
+  }
 }

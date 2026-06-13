@@ -8,6 +8,12 @@ import {
   upsertItemClass,
   deleteItemClass,
   getItemStateTemplate,
+  bootstrapActionClasses,
+  refreshActionClassCache,
+  getAllActionClasses,
+  getActionClass,
+  upsertActionClass,
+  deleteActionClass,
 } from "../assets/server/item-registry.ts";
 
 export {
@@ -20,4 +26,10 @@ export {
   upsertItemClass,
   deleteItemClass,
   getItemStateTemplate,
+  bootstrapActionClasses,
+  refreshActionClassCache,
+  getAllActionClasses,
+  getActionClass,
+  upsertActionClass,
+  deleteActionClass,
 };

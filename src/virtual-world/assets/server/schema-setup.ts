@@ -19,6 +19,7 @@ type WorldSchemaTables = {
   worldItem: string;
   worldItemMeta: string;
   itemClass: string;
+  actionClass: string;
 };
 
 type ChatSchemaTables = {
@@ -799,6 +800,48 @@ export function ensureWorldDatabaseSchema(
     return database.addUniqueIndex(
       tables.itemClass,
       JSON.stringify(["class_id"]),
+    );
+  });
+
+  step("createTable", tables.actionClass, function () {
+    return database.createTable(tables.actionClass);
+  });
+  [
+    ["addTextColumn", "action_id", false],
+    ["addTextColumn", "label_key", false],
+    ["addTextColumn", "fallback_label", false],
+    ["addTextColumn", "target_kind", false],
+    ["addTextColumn", "source_item_ids_json", false],
+    ["addTextColumn", "canonical_id", true],
+    ["addTextColumn", "execution_json", true],
+    ["addTextColumn", "validation_json", true],
+    ["addTextColumn", "logic_spec_json", true],
+    ["addIntegerColumn", "created_at", false],
+    ["addIntegerColumn", "updated_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      tables.actionClass,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              tables.actionClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              tables.actionClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", tables.actionClass, function () {
+    return database.addUniqueIndex(
+      tables.actionClass,
+      JSON.stringify(["action_id"]),
     );
   });
 

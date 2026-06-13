@@ -570,6 +570,14 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "tune") {
+    maybeApplyLogicEffects();
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload(),
+    };
+  }
+
   if (action === "play_tune") {
     maybeAppendConfiguredWorldChatMessage();
     maybeApplyLogicEffects();

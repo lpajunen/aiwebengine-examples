@@ -135,7 +135,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.kantele.name",
       fallbackLabel: "Kantele",
     },
-    actionIds: ["play_tune"],
+    actionIds: ["tune", "play_tune"],
   },
   rowan_charm: {
     id: "rowan_charm",
@@ -451,7 +451,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
 
 // Default stateTemplates for built-in items that use the logic spec
 const DEFAULT_STATE_TEMPLATES: Record<string, Record<string, unknown>> = {
-  kantele: { tuned: true, playsLeft: 3 },
+  kantele: { tuned: false, playsLeft: 0 },
 };
 
 function itemClassFromDbRow(row: any): ItemClassRecord {

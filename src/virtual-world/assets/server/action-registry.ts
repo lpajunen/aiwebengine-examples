@@ -275,6 +275,25 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
   },
+  tune: {
+    id: "tune",
+    labelKey: "tree_action.tune",
+    fallbackLabel: "Tune kantele",
+    targetKind: "self",
+    sourceItemIds: ["kantele"],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      toastMessage: "The kantele strings ring clear and ready.",
+    },
+    logicSpec: {
+      effects: [
+        { field: "state.tuned", op: "set", value: true },
+        { field: "state.playsLeft", op: "set", value: 3 },
+      ],
+    },
+  },
   play_tune: {
     id: "play_tune",
     labelKey: "tree_action.play_tune",

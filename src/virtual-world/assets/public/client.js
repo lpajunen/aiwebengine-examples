@@ -115,44 +115,32 @@ function updateHeldHud() {
   updateUseButtonState();
 }
 
-var cheatClickCount = 0;
-/** @type {number | null} */
-var cheatClickResetTimer = null;
-var lastCheatTapAt = 0;
-/** @type {number | null} */
-var cheatToastTimer = null;
 var logoutClickCount = 0;
 /** @type {number | null} */
 var logoutClickResetTimer = null;
 var lastLogoutTapAt = 0;
-
-/**
- * @param {string} message
- * @param {boolean} isError
- */
-function showCheatToast(message, isError) {
-  var toast = requireElementById("hud-cheat-toast");
-  toast.textContent = message;
-  if (isError) toast.classList.add("error");
-  else toast.classList.remove("error");
-  toast.style.display = "block";
-  if (cheatToastTimer) clearTimeout(cheatToastTimer);
-  cheatToastTimer = setTimeout(
-    function () {
-      toast.style.display = "none";
-      toast.classList.remove("error");
-      cheatToastTimer = null;
-    },
-    isError ? 2600 : 1800,
-  );
-}
+/** @type {number | null} */
+var hudToastTimer = null;
 
 /**
  * @param {string} message
  * @param {boolean} isError
  */
 function showHudToast(message, isError) {
-  showCheatToast(message, isError);
+  var toast = requireElementById("hud-toast");
+  toast.textContent = message;
+  if (isError) toast.classList.add("error");
+  else toast.classList.remove("error");
+  toast.style.display = "block";
+  if (hudToastTimer) clearTimeout(hudToastTimer);
+  hudToastTimer = setTimeout(
+    function () {
+      toast.style.display = "none";
+      toast.classList.remove("error");
+      hudToastTimer = null;
+    },
+    isError ? 2600 : 1800,
+  );
 }
 
 function getBootstrappedRecipeDefs() {
@@ -265,113 +253,11 @@ function recipeTargetLabel(recipe) {
   return "Target: inventory";
 }
 
-/** @param {any} result */
-function applyCheatResult(result) {
-  if (!result || !result.ok) {
-    console.log("Cheat failed:", result && result.error);
-    showCheatToast("Item cheat failed", true);
-    return false;
-  }
-  applyItemStateFromResult(result);
-  showInventoryPanel(2500);
-  console.log("Cheat granted items:", result.granted_count || 0);
-  showCheatToast(
-    "Item cheat activated: +" + String(result.granted_count || 0) + " items",
-    false,
-  );
-  return true;
-}
-
-function postCheatViaTreeAction() {
-  return fetchWithAuth("/virtual-world/tree-action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "cheat_grant_all" }),
-  })
-    .then(function (res) {
-      return res.json();
-    })
-    .then(function (result) {
-      applyCheatResult(result);
-    });
-}
-
-function postCheatGrantAllItems() {
-  fetchWithAuth("/virtual-world/cheat-items", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  })
-    .then(function (res) {
-      return res.json();
-    })
-    .then(function (result) {
-      if (!applyCheatResult(result)) {
-        return postCheatViaTreeAction();
-      }
-    })
-    .catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-      postCheatViaTreeAction().catch(function (innerErr) {
-        if (
-          innerErr &&
-          (innerErr.code === "AUTH_401" || innerErr.code === "AUTH_STOPPED")
-        )
-          return;
-        console.error("Cheat request failed:", innerErr);
-        showCheatToast("Item cheat request failed", true);
-      });
-    });
-}
-
 function triggerLogout() {
-  showCheatToast("Redirecting to logout...", false);
+  showHudToast("Redirecting to logout...", false);
   setTimeout(function () {
     window.location.href = "/auth/logout";
   }, 150);
-}
-
-function initCheatTrigger() {
-  var nameEl = requireElementById("legend-ground");
-  nameEl.style.cursor = "pointer";
-  nameEl.title = "Triple click for test items";
-  function onNameCheatTap() {
-    var now = Date.now();
-    if (now - lastCheatTapAt < 180) return;
-    lastCheatTapAt = now;
-    cheatClickCount += 1;
-    nameEl.style.opacity = "0.8";
-    nameEl.title = "Triple click for test items (" + cheatClickCount + "/3)";
-    if (cheatClickResetTimer) clearTimeout(cheatClickResetTimer);
-    cheatClickResetTimer = setTimeout(function () {
-      cheatClickCount = 0;
-      nameEl.style.opacity = "1";
-      nameEl.title = "Triple click for test items";
-      cheatClickResetTimer = null;
-    }, 2000);
-    if (cheatClickCount >= 3) {
-      cheatClickCount = 0;
-      if (cheatClickResetTimer) {
-        clearTimeout(cheatClickResetTimer);
-        cheatClickResetTimer = null;
-      }
-      nameEl.style.opacity = "1";
-      nameEl.title = "Triple click for test items";
-      showCheatToast("Activating item cheat...", false);
-      postCheatGrantAllItems();
-    }
-  }
-  nameEl.addEventListener("click", onNameCheatTap);
-  nameEl.addEventListener("pointerup", onNameCheatTap);
-  nameEl.addEventListener(
-    "touchend",
-    function (e) {
-      e.preventDefault();
-      onNameCheatTap();
-    },
-    { passive: false },
-  );
 }
 
 function initLogoutTrigger() {
@@ -1930,7 +1816,6 @@ function initMultiplayer() {
   scheduleSessionRefresh();
   updateHeldHud();
   renderInventoryPanel();
-  initCheatTrigger();
   initLogoutTrigger();
   // Active player positions are not part of the bootstrapped page state,
   // so keep one initial snapshot to populate remote avatars.
@@ -2093,11 +1978,28 @@ function initMultiplayer() {
         removeOnlinePlayerEntry(targetPlayerId);
       }
     } else {
+      var oldNick = playerNick;
       upsertOnlinePlayerEntry(payload);
-      if (payload.player_id === playerId && payload.nick) {
-        playerNick = String(payload.nick);
-        var nickDisplay = document.getElementById("nick-display");
-        if (nickDisplay) nickDisplay.textContent = playerNick;
+      if (payload.player_id === playerId) {
+        if (payload.nick) {
+          playerNick = String(payload.nick);
+          var nickDisplay = document.getElementById("nick-display");
+          if (nickDisplay) nickDisplay.textContent = playerNick;
+          if (oldNick && oldNick !== playerNick) {
+            showHudToast("Changed name to " + playerNick, false);
+          }
+        }
+        if (payload.inventory) {
+          playerInventory = normalizeClientInventory(payload.inventory);
+          renderInventoryPanel();
+          updateUseButtonState();
+        }
+        if (payload.items) {
+          applyItemStateFromResult(payload);
+        }
+        if (payload.message) {
+          showHudToast(payload.message, false);
+        }
       }
     }
     if (playersPanelVisible) renderPlayersPanel();
@@ -2809,20 +2711,32 @@ function commitNickEdit() {
     })
     .then(function (data) {
       if (data && data.ok) {
-        playerNick = data.nick;
-        var display = document.getElementById("nick-display");
-        if (display) display.textContent = data.nick;
-        upsertOnlinePlayerEntry({
-          player_id: playerId,
-          nick: data.nick,
-          world_id: worldId,
-          login_at: Date.now(),
-          last_active: Date.now(),
-        });
-        if (playersPanelVisible) renderPlayersPanel();
-        if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
-        if (chatPanelVisible && chatActiveTab === "dm" && activeDmUserId)
-          renderDMThread(activeDmUserId);
+        if (data.inventory) {
+          applyItemStateFromResult(data);
+        }
+        if (data.message) {
+          showHudToast(data.message, false);
+        }
+        if (data.nick) {
+          var oldNick = playerNick;
+          playerNick = data.nick;
+          var display = document.getElementById("nick-display");
+          if (display) display.textContent = data.nick;
+          upsertOnlinePlayerEntry({
+            player_id: playerId,
+            nick: data.nick,
+            world_id: worldId,
+            login_at: Date.now(),
+            last_active: Date.now(),
+          });
+          if (playersPanelVisible) renderPlayersPanel();
+          if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+          if (chatPanelVisible && chatActiveTab === "dm" && activeDmUserId)
+            renderDMThread(activeDmUserId);
+          if (oldNick && oldNick !== playerNick) {
+            showHudToast("Changed name to " + playerNick, false);
+          }
+        }
       }
       cancelNickEdit();
     })

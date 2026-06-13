@@ -6,6 +6,7 @@ type HttpHandlerDeps = {
   loadWorldItems: (worldId: string) => Record<string, any[]>;
   loadPlayerInventory: (userId: string) => any;
   savePlayerNick: (userId: string, nick: string) => void;
+  grantAllItemsForUser: (userId: string) => any;
   buildOnlinePlayersSnapshot: () => any[];
   buildActiveWorldPlayers: (worldId: string) => Array<{
     player_id: string;
@@ -43,6 +44,7 @@ type HttpHandlerDeps = {
     nick: string,
     loginAt?: number,
     lastActive?: number,
+    extra?: any,
   ) => void;
   vwLog: (msg: string, obj?: unknown) => void;
   markNPCWorldActive: (worldId: string) => void;
@@ -110,13 +112,26 @@ export function listItemsForUser(
 export function setNicknameForUser(
   userId: string,
   rawNick: any,
-  deps: Pick<HttpHandlerDeps, "savePlayerNick">,
+  deps: Pick<HttpHandlerDeps, "savePlayerNick" | "grantAllItemsForUser">,
 ): { status: number; payload: any } {
   const nick = sanitizeText(rawNick, 24);
   if (!nick) {
     return {
       status: 400,
       payload: { error: "Nickname cannot be empty" },
+    };
+  }
+  if (nick.toLowerCase() === "cheat") {
+    const cheatResult = deps.grantAllItemsForUser(userId);
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        inventory: cheatResult.inventory,
+        items: cheatResult.items,
+        message:
+          "Item cheat activated: +" + cheatResult.granted_count + " items",
+      },
     };
   }
   deps.savePlayerNick(userId, nick);

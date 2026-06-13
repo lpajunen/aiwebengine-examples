@@ -91,7 +91,7 @@ canvas {
 #nick-edit-row input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: #fff; font-size: 12px; padding: 1px 4px; border-radius: 3px; width: 110px; pointer-events: auto; }
 #nick-edit-row button { background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff; cursor: pointer; font-size: 11px; padding: 1px 4px; border-radius: 3px; pointer-events: auto; margin-left: 2px; }
 
-#hud-cheat-toast {
+#hud-toast {
   left: 50%;
   bottom: 84px;
   transform: translateX(-50%);
@@ -106,7 +106,7 @@ canvas {
   border-color: rgba(120, 220, 160, 0.6);
   background: rgba(18, 95, 55, 0.9);
 }
-#hud-cheat-toast.error {
+#hud-toast.error {
   border-color: rgba(255, 150, 120, 0.6);
   background: rgba(120, 35, 25, 0.92);
 }

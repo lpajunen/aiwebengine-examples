@@ -24,6 +24,7 @@ type SwitchUserWorldDeps = {
     nick: string,
     loginAt?: number,
     lastActive?: number,
+    extra?: any,
   ) => void;
   savePlayerWorld: (userId: string, worldId: string) => void;
   savePlayerPosition: (userId: string, worldId: string, position: any) => void;

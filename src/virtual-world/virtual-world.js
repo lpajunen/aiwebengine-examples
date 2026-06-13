@@ -689,6 +689,7 @@ function getEffectiveNick(userId) {
  * @param {string} nick
  * @param {number} [loginAt]
  * @param {number} [lastActive]
+ * @param {any} [extra]
  */
 function sendGlobalPresenceEvent(
   action,
@@ -697,19 +698,20 @@ function sendGlobalPresenceEvent(
   nick,
   loginAt,
   lastActive,
+  extra = undefined,
 ) {
-  sendVirtualWorldStreamEvent(
-    "presence_update",
-    {
-      action: String(action || "upsert"),
-      player_id: String(userId || ""),
-      nick: String(nick || getEffectiveNick(userId)),
-      world_id: String(worldId || ""),
-      login_at: Number(loginAt || Date.now()),
-      last_active: Number(lastActive || Date.now()),
-    },
-    {},
-  );
+  var payload = {
+    action: String(action || "upsert"),
+    player_id: String(userId || ""),
+    nick: String(nick || getEffectiveNick(userId)),
+    world_id: String(worldId || ""),
+    login_at: Number(loginAt || Date.now()),
+    last_active: Number(lastActive || Date.now()),
+  };
+  if (extra && typeof extra === "object") {
+    Object.assign(payload, extra);
+  }
+  sendVirtualWorldStreamEvent("presence_update", payload, {});
 }
 
 /**
@@ -2242,6 +2244,9 @@ function virtualWorldSetNicknameToolHandler(context) {
     savePlayerNick: savePlayerNick,
     getPlayerWorld: getPlayerWorld,
     updateOnlinePresence: updateOnlinePresence,
+    grantAllItemsForUser: grantAllItemsForUser,
+    sendGlobalPresenceEvent: sendGlobalPresenceEvent,
+    getEffectiveNick: getEffectiveNick,
   });
 }
 
@@ -2406,16 +2411,32 @@ function setNicknameHandler(context) {
   }
   var handled = setNicknameForUserImpl(userId, body.nick, {
     savePlayerNick: savePlayerNick,
+    grantAllItemsForUser: grantAllItemsForUser,
   });
-  if (
-    handled &&
-    handled.status === 200 &&
-    handled.payload &&
-    handled.payload.nick
-  ) {
-    var currentWorldId = getPlayerWorld(userId);
-    if (currentWorldId) {
-      updateOnlinePresence(userId, currentWorldId, "");
+  if (handled && handled.status === 200 && handled.payload) {
+    if (handled.payload.nick) {
+      var currentWorldId = getPlayerWorld(userId);
+      if (currentWorldId) {
+        updateOnlinePresence(userId, currentWorldId, "");
+      }
+    } else if (handled.payload.inventory && handled.payload.message) {
+      var currentWorldId = getPlayerWorld(userId);
+      if (currentWorldId) {
+        var existingNick = getEffectiveNick(userId);
+        sendGlobalPresenceEvent(
+          "upsert",
+          userId,
+          currentWorldId,
+          existingNick,
+          Date.now(),
+          Date.now(),
+          {
+            inventory: handled.payload.inventory,
+            items: handled.payload.items,
+            message: handled.payload.message,
+          },
+        );
+      }
     }
   }
   return ResponseBuilder.json(handled.payload, handled.status);

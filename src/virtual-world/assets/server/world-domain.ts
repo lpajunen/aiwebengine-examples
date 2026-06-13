@@ -52,6 +52,14 @@ import {
   getSpawnableItemTypes,
 } from "./item-registry.ts";
 
+export {
+  getActionDefinition,
+  getActionsForItemType,
+  getExtraItemTypes,
+  getPrimaryActionForItemType,
+  getSpawnableItemTypes,
+};
+
 export const WORLD_TYPES = [
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,

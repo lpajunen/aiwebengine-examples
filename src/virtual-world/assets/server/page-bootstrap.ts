@@ -271,7 +271,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 
   <div class="hud" id="hud-auth-status" aria-live="polite"></div>
 
-  <div class="hud" id="hud-cheat-toast" aria-live="polite"></div>
+  <div class="hud" id="hud-toast" aria-live="polite"></div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()">Use</button>

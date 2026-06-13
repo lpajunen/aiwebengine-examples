@@ -36,6 +36,17 @@ type ToolHandlerDeps = {
     userId: string,
     body: any,
   ) => { status: number; payload: any };
+  grantAllItemsForUser: (userId: string) => any;
+  sendGlobalPresenceEvent: (
+    action: string,
+    userId: string,
+    worldId: string,
+    nick: string,
+    loginAt?: number,
+    lastActive?: number,
+    extra?: any,
+  ) => void;
+  getEffectiveNick: (userId: string) => string;
 };
 
 export function virtualWorldGetStateToolHandler(
@@ -185,6 +196,9 @@ export function virtualWorldSetNicknameToolHandler(
     | "savePlayerNick"
     | "getPlayerWorld"
     | "updateOnlinePresence"
+    | "grantAllItemsForUser"
+    | "sendGlobalPresenceEvent"
+    | "getEffectiveNick"
   >,
 ): string {
   const userId = deps.getAuthenticatedUserId(context);
@@ -200,6 +214,35 @@ export function virtualWorldSetNicknameToolHandler(
   }
 
   const sanitized = String(nick).trim().slice(0, 24);
+  if (sanitized.toLowerCase() === "cheat") {
+    const cheatResult = deps.grantAllItemsForUser(userId);
+    const currentWorldId = deps.getPlayerWorld(userId);
+    if (currentWorldId) {
+      const existingNick = deps.getEffectiveNick(userId);
+      deps.sendGlobalPresenceEvent(
+        "upsert",
+        userId,
+        String(currentWorldId),
+        existingNick,
+        Date.now(),
+        Date.now(),
+        {
+          inventory: cheatResult.inventory,
+          items: cheatResult.items,
+          message:
+            "Item cheat activated: +" + cheatResult.granted_count + " items",
+        },
+      );
+    }
+    return JSON.stringify({
+      status: 200,
+      ok: true,
+      inventory: cheatResult.inventory,
+      items: cheatResult.items,
+      message: "Item cheat activated: +" + cheatResult.granted_count + " items",
+    });
+  }
+
   try {
     deps.savePlayerNick(userId, sanitized);
   } catch (e) {

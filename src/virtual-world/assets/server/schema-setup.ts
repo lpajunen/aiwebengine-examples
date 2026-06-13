@@ -18,6 +18,7 @@ type WorldSchemaTables = {
   worldMod: string;
   worldItem: string;
   worldItemMeta: string;
+  itemClass: string;
 };
 
 type ChatSchemaTables = {
@@ -674,6 +675,7 @@ export function ensureWorldDatabaseSchema(
     ["addIntegerColumn", "created_at", false],
     ["addTextColumn", "destination_world_id", true],
     ["addTextColumn", "destination_world_type", true],
+    ["addTextColumn", "state_json", true],
   ].forEach(function (entry) {
     step(
       String(entry[0]),
@@ -754,6 +756,49 @@ export function ensureWorldDatabaseSchema(
     return database.addUniqueIndex(
       tables.worldItemMeta,
       JSON.stringify(["world_id"]),
+    );
+  });
+
+  step("createTable", tables.itemClass, function () {
+    return database.createTable(tables.itemClass);
+  });
+  [
+    ["addTextColumn", "class_id", false],
+    ["addTextColumn", "kind", false],
+    ["addIntegerColumn", "spawnable", false],
+    ["addIntegerColumn", "extra", false],
+    ["addIntegerColumn", "non_droppable", false],
+    ["addIntegerColumn", "color", false],
+    ["addTextColumn", "label_key", false],
+    ["addTextColumn", "fallback_label", false],
+    ["addTextColumn", "action_ids_json", false],
+    ["addTextColumn", "state_template_json", false],
+    ["addIntegerColumn", "created_at", false],
+    ["addIntegerColumn", "updated_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      tables.itemClass,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              tables.itemClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              tables.itemClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", tables.itemClass, function () {
+    return database.addUniqueIndex(
+      tables.itemClass,
+      JSON.stringify(["class_id"]),
     );
   });
 

@@ -332,4 +332,28 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     deps.virtualWorldEventsStreamPath,
     "virtualWorldEventsStreamCustomizer",
   );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/item-classes",
+    "itemClassesHandler",
+    "GET",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/item-classes",
+    "createItemClassHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/item-classes/:id",
+    "updateItemClassHandler",
+    "PUT",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/item-classes/:id",
+    "deleteItemClassHandler",
+    "DELETE",
+  );
 }

@@ -1,5 +1,9 @@
 import { getItemChangeDefinition } from "./item-events.ts";
 import { getWorldEventDefinition } from "./world-events.ts";
+import {
+  evaluateConditions,
+  applyEffects,
+} from "./action-logic-interpreter.ts";
 
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;
@@ -95,6 +99,7 @@ type TreeActionDeps = {
   deleteWorldItems: (items: any[]) => void;
   isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
   saveWorldTrees: (worldId: string, trees: Record<string, any>) => void;
+  savePlayerInventory: (userId: string, inventory: any) => void;
 };
 
 export function performTreeActionForUser(
@@ -474,6 +479,33 @@ export function performTreeActionForUser(
     deps.canInventoryUseTreeAction(inv, action) ||
     deps.canTileItemsUseTreeAction(currentTileItems, action);
 
+  function maybeApplyLogicEffects(): void {
+    if (
+      !logicSourceItem ||
+      !actionDefinition ||
+      !actionDefinition.logicSpec ||
+      !actionDefinition.logicSpec.effects ||
+      actionDefinition.logicSpec.effects.length === 0
+    ) {
+      return;
+    }
+    const updated = applyEffects(actionDefinition.logicSpec, logicSourceItem);
+    // Replace item in inventory
+    if (inv.left_hand && inv.left_hand.id === logicSourceItem.id) {
+      inv.left_hand = updated;
+    } else if (inv.right_hand && inv.right_hand.id === logicSourceItem.id) {
+      inv.right_hand = updated;
+    } else if (Array.isArray(inv.inventory)) {
+      for (let _j = 0; _j < inv.inventory.length; _j++) {
+        if (inv.inventory[_j] && inv.inventory[_j].id === logicSourceItem.id) {
+          inv.inventory[_j] = updated;
+          break;
+        }
+      }
+    }
+    deps.savePlayerInventory(userId, inv);
+  }
+
   if (!canUseAction) {
     return {
       status: 200,
@@ -482,6 +514,45 @@ export function performTreeActionForUser(
         error: "Missing required item for action",
       },
     };
+  }
+
+  // Evaluate item-state conditions (logicSpec) and collect the source item
+  let logicSourceItem: any | null = null;
+  if (actionDefinition && actionDefinition.logicSpec) {
+    const logicSpec = actionDefinition.logicSpec;
+    const sourceItemIds = Array.isArray(actionDefinition.sourceItemIds)
+      ? actionDefinition.sourceItemIds
+      : [];
+    const invCandidates: any[] = [];
+    if (inv.left_hand) invCandidates.push(inv.left_hand);
+    if (inv.right_hand) invCandidates.push(inv.right_hand);
+    if (Array.isArray(inv.inventory)) {
+      for (let _i = 0; _i < inv.inventory.length; _i++) {
+        invCandidates.push(inv.inventory[_i]);
+      }
+    }
+    for (let _i = 0; _i < invCandidates.length; _i++) {
+      const candidate = invCandidates[_i];
+      if (
+        candidate &&
+        sourceItemIds.indexOf(String(candidate.type || "")) !== -1
+      ) {
+        logicSourceItem = candidate;
+        break;
+      }
+    }
+    if (logicSourceItem) {
+      const condResult = evaluateConditions(logicSpec, logicSourceItem);
+      if (!condResult.ok) {
+        return {
+          status: 200,
+          payload: {
+            ok: false,
+            error: condResult.errorMessage || "Action condition not met",
+          },
+        };
+      }
+    }
   }
 
   if (action === "return_home") {
@@ -501,6 +572,7 @@ export function performTreeActionForUser(
 
   if (action === "play_tune") {
     maybeAppendConfiguredWorldChatMessage();
+    maybeApplyLogicEffects();
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),

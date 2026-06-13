@@ -31,6 +31,7 @@ type RecipeDeps = {
     eventType: string,
     payload: any,
   ) => void;
+  getItemStateTemplate?: (type: string) => Record<string, unknown>;
   ROWS: number;
   COLS: number;
 };
@@ -228,6 +229,9 @@ export function craftRecipeForUser(
           created_at: Date.now(),
           crafted_by: userId,
           recipe_id: recipe.id,
+          state: deps.getItemStateTemplate
+            ? deps.getItemStateTemplate(output.itemId)
+            : undefined,
         };
         inventory.inventory.push(craftedItem);
         craftedItems.push(craftedItem);

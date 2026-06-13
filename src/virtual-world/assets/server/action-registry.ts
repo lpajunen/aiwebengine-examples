@@ -1,3 +1,5 @@
+import { ActionLogicSpec } from "./action-logic-interpreter.ts";
+
 export interface ActionDefinition {
   id: string;
   labelKey: string;
@@ -56,6 +58,7 @@ export interface ActionDefinition {
       errorMessage: string;
     }>;
   };
+  logicSpec?: ActionLogicSpec;
 }
 
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
@@ -285,6 +288,29 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
       toastMessage: "A kantele tune carries across the clearing.",
       worldChatText: "lets a kantele melody drift through the spruce hush.",
+    },
+    logicSpec: {
+      conditions: [
+        {
+          field: "state.tuned",
+          op: "eq",
+          value: true,
+          errorMessage: "The kantele needs tuning first",
+        },
+        {
+          field: "state.playsLeft",
+          op: "gt",
+          value: 0,
+          errorMessage: "The kantele needs tuning first",
+        },
+      ],
+      effects: [
+        {
+          field: "state.playsLeft",
+          op: "sub",
+          value: 1,
+        },
+      ],
     },
   },
   place_blessing: {

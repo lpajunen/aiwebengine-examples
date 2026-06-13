@@ -162,6 +162,15 @@ import {
 } from "./server/page-bootstrap.ts";
 import { getBootstrapRegistry as getBootstrapRegistryImpl } from "./server/item-registry.ts";
 import { getActionDefinition as getActionDefinitionImpl } from "./server/item-registry.ts";
+import {
+  bootstrapItemClasses as bootstrapItemClassesImpl,
+  refreshItemClassCache as refreshItemClassCacheImpl,
+  getAllItemClasses as getAllItemClassesImpl,
+  getItemClass as getItemClassImpl,
+  upsertItemClass as upsertItemClassImpl,
+  deleteItemClass as deleteItemClassImpl,
+  getItemStateTemplate as getItemStateTemplateImpl,
+} from "./server/item-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -788,6 +797,7 @@ var VWORLD_NPC_TABLE = "vworld_npcs";
 var VWORLD_NPC_ACTIVE_WORLD_TABLE = "vworld_npc_active_worlds";
 var VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
 var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
+var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 
 /**
  * @param {string} raw
@@ -1059,6 +1069,7 @@ function ensureWorldDatabaseSchema() {
       worldMod: VWORLD_WORLD_MOD_TABLE,
       worldItem: VWORLD_WORLD_ITEM_TABLE,
       worldItemMeta: VWORLD_WORLD_ITEM_META_TABLE,
+      itemClass: VWORLD_ITEM_CLASS_TABLE,
     },
     parseWorldDbResult,
     vwLog,
@@ -1385,6 +1396,7 @@ function ensureWorldItems(worldId) {
     ROWS: ROWS,
     COLS: COLS,
     ITEM_TYPES: ITEM_TYPES,
+    getItemStateTemplate: getItemStateTemplateImpl,
   });
 }
 
@@ -2170,6 +2182,7 @@ function performTreeActionForUser(userId, body) {
     deleteWorldItems: deleteWorldItems,
     isOakCenterTile: isOakCenterTile,
     saveWorldTrees: saveWorldTrees,
+    savePlayerInventory: savePlayerInventory,
   });
 }
 
@@ -2315,6 +2328,7 @@ function craftRecipeForUser(userId, body) {
     isOakCenterTile: isOakCenterTile,
     isOakClearingTile: isOakClearingTile,
     sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    getItemStateTemplate: getItemStateTemplateImpl,
     ROWS: ROWS,
     COLS: COLS,
   });
@@ -2750,9 +2764,145 @@ function treeActionHandler(context) {
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
+// ── Item class CRUD handlers ───────────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function itemClassesHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classes = getAllItemClassesImpl();
+  return ResponseBuilder.json({ ok: true, item_classes: classes });
+}
+
+/**
+ * @param {*} context
+ */
+function createItemClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var id = String((body && body.id) || "").trim();
+  if (!id) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var record = {
+    id: id,
+    kind: String((body && body.kind) || "tool"),
+    spawnable: !!(body && body.spawnable),
+    extra: !!(body && body.extra),
+    nonDroppable: !!(body && body.nonDroppable),
+    visuals: {
+      color: Number((body && body.visuals && body.visuals.color) || 0),
+      labelKey: String((body && body.visuals && body.visuals.labelKey) || ""),
+      fallbackLabel: String(
+        (body && body.visuals && body.visuals.fallbackLabel) || id,
+      ),
+    },
+    actionIds: Array.isArray(body && body.actionIds) ? body.actionIds : [],
+    stateTemplate:
+      body && body.stateTemplate && typeof body.stateTemplate === "object"
+        ? body.stateTemplate
+        : {},
+  };
+  upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, item_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function updateItemClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var existing = getItemClassImpl(classId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "Item class not found" },
+      404,
+    );
+  }
+  var record = {
+    id: classId,
+    kind: String((body && body.kind) || existing.kind),
+    spawnable:
+      body && body.spawnable !== undefined
+        ? !!body.spawnable
+        : existing.spawnable,
+    extra: body && body.extra !== undefined ? !!body.extra : existing.extra,
+    nonDroppable:
+      body && body.nonDroppable !== undefined
+        ? !!body.nonDroppable
+        : existing.nonDroppable,
+    visuals: {
+      color: Number(
+        body && body.visuals && body.visuals.color !== undefined
+          ? body.visuals.color
+          : existing.visuals.color,
+      ),
+      labelKey: String(
+        (body && body.visuals && body.visuals.labelKey) ||
+          existing.visuals.labelKey,
+      ),
+      fallbackLabel: String(
+        (body && body.visuals && body.visuals.fallbackLabel) ||
+          existing.visuals.fallbackLabel,
+      ),
+    },
+    actionIds: Array.isArray(body && body.actionIds)
+      ? body.actionIds
+      : existing.actionIds,
+    stateTemplate:
+      body && body.stateTemplate && typeof body.stateTemplate === "object"
+        ? body.stateTemplate
+        : existing.stateTemplate,
+  };
+  upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, item_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function deleteItemClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  deleteItemClassImpl(classId, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, deleted_id: classId });
+}
+
 function init() {
   ensureWorldDatabaseSchema();
   ensureChatDatabaseSchema();
+  bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   startNPCTicker();
   registerVirtualWorldRuntimeImpl({
     routeRegistry: routeRegistry,

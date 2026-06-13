@@ -4,6 +4,13 @@ import {
   getActionDefinition as getActionDefinitionImpl,
   getAllActionIds as getAllActionIdsImpl,
 } from "./action-registry.ts";
+import {
+  loadAllItemClassRows,
+  upsertItemClassRow,
+  deleteItemClassRow,
+} from "./item-class-storage.ts";
+
+type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
@@ -26,6 +33,21 @@ export interface ItemDefinition {
     fallbackLabel: string;
   };
   actionIds: string[];
+}
+
+export interface ItemClassRecord {
+  id: string;
+  kind: string;
+  spawnable: boolean;
+  extra: boolean;
+  nonDroppable: boolean;
+  visuals: {
+    color: number;
+    labelKey: string;
+    fallbackLabel: string;
+  };
+  actionIds: string[];
+  stateTemplate: Record<string, unknown>;
 }
 
 export interface RecipeDefinition {
@@ -404,4 +426,175 @@ export function getBootstrapRegistry(): {
     item_events: itemEvents,
     recipes: recipes,
   };
+}
+
+// ── Item class repository (dynamic, DB-backed) ────────────────────────────────
+
+let _itemClassCache: Record<string, ItemClassRecord> | null = null;
+
+function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
+  return {
+    id: def.id,
+    kind: def.kind,
+    spawnable: !!def.spawnable,
+    extra: !!def.extra,
+    nonDroppable: !!def.nonDroppable,
+    visuals: {
+      color: def.visuals.color,
+      labelKey: def.visuals.labelKey,
+      fallbackLabel: def.visuals.fallbackLabel,
+    },
+    actionIds: def.actionIds.slice(),
+    stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
+  };
+}
+
+// Default stateTemplates for built-in items that use the logic spec
+const DEFAULT_STATE_TEMPLATES: Record<string, Record<string, unknown>> = {
+  kantele: { tuned: true, playsLeft: 3 },
+};
+
+function itemClassFromDbRow(row: any): ItemClassRecord {
+  return {
+    id: String(row.class_id || ""),
+    kind: String(row.kind || "tool") as ItemKind,
+    spawnable: row.spawnable === 1 || row.spawnable === true,
+    extra: row.extra === 1 || row.extra === true,
+    nonDroppable: row.non_droppable === 1 || row.non_droppable === true,
+    visuals: {
+      color: Number(row.color || 0),
+      labelKey: String(row.label_key || ""),
+      fallbackLabel: String(row.fallback_label || ""),
+    },
+    actionIds: (function () {
+      try {
+        return JSON.parse(row.action_ids_json || "[]");
+      } catch (e) {
+        return [];
+      }
+    })(),
+    stateTemplate: (function () {
+      try {
+        return JSON.parse(row.state_template_json || "{}");
+      } catch (e) {
+        return {};
+      }
+    })(),
+  };
+}
+
+function itemClassToDbRow(
+  record: ItemClassRecord,
+  now: number,
+): {
+  class_id: string;
+  kind: string;
+  spawnable: number;
+  extra: number;
+  non_droppable: number;
+  color: number;
+  label_key: string;
+  fallback_label: string;
+  action_ids_json: string;
+  state_template_json: string;
+  created_at: number;
+  updated_at: number;
+} {
+  return {
+    class_id: record.id,
+    kind: record.kind,
+    spawnable: record.spawnable ? 1 : 0,
+    extra: record.extra ? 1 : 0,
+    non_droppable: record.nonDroppable ? 1 : 0,
+    color: record.visuals.color,
+    label_key: record.visuals.labelKey,
+    fallback_label: record.visuals.fallbackLabel,
+    action_ids_json: JSON.stringify(record.actionIds),
+    state_template_json: JSON.stringify(record.stateTemplate || {}),
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export function bootstrapItemClasses(
+  itemClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const rows = loadAllItemClassRows(itemClassTable, log);
+  const cache: Record<string, ItemClassRecord> = {};
+
+  if (rows.length > 0) {
+    for (let i = 0; i < rows.length; i++) {
+      const record = itemClassFromDbRow(rows[i]);
+      if (record.id) cache[record.id] = record;
+    }
+  } else {
+    // Seed from static definitions
+    const now = Date.now();
+    const defKeys = Object.keys(ITEM_DEFINITIONS);
+    for (let i = 0; i < defKeys.length; i++) {
+      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defKeys[i]]);
+      upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
+      cache[record.id] = record;
+    }
+    log("item class repository seeded", { count: defKeys.length });
+  }
+
+  _itemClassCache = cache;
+}
+
+export function refreshItemClassCache(
+  itemClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const rows = loadAllItemClassRows(itemClassTable, log);
+  const cache: Record<string, ItemClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = itemClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  _itemClassCache = cache;
+}
+
+export function getAllItemClasses(): ItemClassRecord[] {
+  if (!_itemClassCache) return [];
+  return Object.keys(_itemClassCache).map(function (id) {
+    return (_itemClassCache as Record<string, ItemClassRecord>)[id];
+  });
+}
+
+export function getItemClass(itemId: string): ItemClassRecord | null {
+  if (!_itemClassCache) return null;
+  return _itemClassCache[String(itemId || "")] || null;
+}
+
+export function upsertItemClass(
+  record: ItemClassRecord,
+  itemClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  const now = Date.now();
+  upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
+  if (_itemClassCache) {
+    _itemClassCache[record.id] = record;
+  }
+}
+
+export function deleteItemClass(
+  classId: string,
+  itemClassTable: string,
+  log: WorldDbLogFn,
+): void {
+  deleteItemClassRow(classId, itemClassTable, log);
+  if (_itemClassCache) {
+    delete _itemClassCache[classId];
+  }
+}
+
+export function getItemStateTemplate(itemId: string): Record<string, unknown> {
+  const cls = getItemClass(itemId);
+  if (cls && cls.stateTemplate && Object.keys(cls.stateTemplate).length > 0) {
+    return Object.assign({}, cls.stateTemplate);
+  }
+  return {};
 }

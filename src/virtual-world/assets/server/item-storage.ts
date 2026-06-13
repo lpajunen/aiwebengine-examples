@@ -36,6 +36,7 @@ type EnsureWorldItemsDeps = {
   ROWS: number;
   COLS: number;
   ITEM_TYPES: readonly string[];
+  getItemStateTemplate?: (type: string) => Record<string, unknown>;
 };
 
 export function loadPlayerInventory(
@@ -175,6 +176,15 @@ export function loadWorldItems(
               ? row.destination_world_type
               : undefined,
         }),
+        state: (function () {
+          if (typeof row.state_json !== "string" || !row.state_json)
+            return undefined;
+          try {
+            return JSON.parse(row.state_json);
+          } catch (e) {
+            return undefined;
+          }
+        })(),
       });
     }
     return fromRows;
@@ -227,6 +237,10 @@ export function saveWorldItems(
             typeof item.destination_world_type === "string"
               ? normalizeWorldType(item.destination_world_type)
               : null,
+          state_json:
+            item.state && typeof item.state === "object"
+              ? JSON.stringify(item.state)
+              : null,
         },
         log,
       );
@@ -270,6 +284,10 @@ export function upsertWorldItem(
       destination_world_type:
         typeof item.destination_world_type === "string"
           ? normalizeWorldType(item.destination_world_type)
+          : null,
+      state_json:
+        item.state && typeof item.state === "object"
+          ? JSON.stringify(item.state)
           : null,
     },
     log,
@@ -339,12 +357,15 @@ export function ensureWorldItems(
       if (map[row][col] !== 0) continue;
       const tileKey = row + "_" + col;
       if (!items[tileKey]) items[tileKey] = [];
+      const spawnType =
+        deps.ITEM_TYPES[Math.floor(Math.random() * deps.ITEM_TYPES.length)];
       items[tileKey].push({
         id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
-        type: deps.ITEM_TYPES[
-          Math.floor(Math.random() * deps.ITEM_TYPES.length)
-        ],
+        type: spawnType,
         created_at: Date.now(),
+        state: deps.getItemStateTemplate
+          ? deps.getItemStateTemplate(spawnType)
+          : undefined,
       });
       break;
     }

@@ -284,6 +284,12 @@ export function getAllActionIds(): string[] {
 }
 
 export function getActionsForItemType(itemId: string): string[] {
+  if (_itemClassCache) {
+    const cls = _itemClassCache[String(itemId || "")];
+    if (cls && Array.isArray(cls.actionIds)) return cls.actionIds.slice();
+    // item not in cache (e.g. no class defined) → no actions
+    return [];
+  }
   const item = getItemDefinition(itemId);
   if (!item || !Array.isArray(item.actionIds)) return [];
   return item.actionIds.slice();
@@ -295,12 +301,23 @@ export function getPrimaryActionForItemType(itemId: string): string | null {
 }
 
 export function getSpawnableItemTypes(): string[] {
+  if (_itemClassCache) {
+    return Object.keys(_itemClassCache).filter(function (id) {
+      return !!(_itemClassCache as Record<string, ItemClassRecord>)[id]
+        .spawnable;
+    });
+  }
   return Object.keys(ITEM_DEFINITIONS).filter(function (itemId) {
     return !!ITEM_DEFINITIONS[itemId].spawnable;
   });
 }
 
 export function getExtraItemTypes(): string[] {
+  if (_itemClassCache) {
+    return Object.keys(_itemClassCache).filter(function (id) {
+      return !!(_itemClassCache as Record<string, ItemClassRecord>)[id].extra;
+    });
+  }
   return Object.keys(ITEM_DEFINITIONS).filter(function (itemId) {
     return !!ITEM_DEFINITIONS[itemId].extra;
   });
@@ -383,15 +400,28 @@ export function getBootstrapRegistry(): {
     }
   > = {};
 
-  Object.keys(ITEM_DEFINITIONS).forEach(function (itemId) {
-    const item = ITEM_DEFINITIONS[itemId];
-    items[itemId] = {
-      label_key: item.visuals.labelKey,
-      fallback_label: item.visuals.fallbackLabel,
-      color: item.visuals.color,
-      action_ids: item.actionIds.slice(),
-    };
-  });
+  const itemSource = _itemClassCache ? _itemClassCache : null;
+  if (itemSource) {
+    Object.keys(itemSource).forEach(function (itemId) {
+      const cls = itemSource[itemId];
+      items[itemId] = {
+        label_key: cls.visuals.labelKey,
+        fallback_label: cls.visuals.fallbackLabel,
+        color: cls.visuals.color,
+        action_ids: cls.actionIds.slice(),
+      };
+    });
+  } else {
+    Object.keys(ITEM_DEFINITIONS).forEach(function (itemId) {
+      const item = ITEM_DEFINITIONS[itemId];
+      items[itemId] = {
+        label_key: item.visuals.labelKey,
+        fallback_label: item.visuals.fallbackLabel,
+        color: item.visuals.color,
+        action_ids: item.actionIds.slice(),
+      };
+    });
+  }
 
   const actionSource = _actionClassCache
     ? _actionClassCache

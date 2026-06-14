@@ -2819,6 +2819,7 @@ function itemClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   var classes = getAllItemClassesImpl();
   return ResponseBuilder.json({ ok: true, item_classes: classes });
 }
@@ -2954,6 +2955,7 @@ function actionClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   var classes = getAllActionClassesImpl();
   return ResponseBuilder.json({ ok: true, action_classes: classes });
 }

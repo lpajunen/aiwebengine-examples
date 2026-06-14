@@ -240,6 +240,137 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "virtualWorldSetNicknameToolHandler",
   );
 
+  const virtualWorldManageItemClassesSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "get", "create", "update", "delete"],
+        description: "Operation to perform on item class definitions",
+        default: "list",
+      },
+      id: {
+        type: "string",
+        description: "Item class ID (required for get, create, update, delete)",
+      },
+      kind: {
+        type: "string",
+        description:
+          "Item kind, e.g. tool, material, resource, structure, furniture",
+      },
+      fallbackLabel: {
+        type: "string",
+        description: "Human-readable label for the item type",
+      },
+      labelKey: {
+        type: "string",
+        description: "i18n label key for the item type",
+      },
+      spawnable: {
+        type: "boolean",
+        description: "Whether the item spawns in the world",
+      },
+      extra: {
+        type: "boolean",
+        description: "Whether the item is in the extra item pool",
+      },
+      nonDroppable: {
+        type: "boolean",
+        description: "Whether the item cannot be dropped",
+      },
+      color: {
+        type: "number",
+        description: "Hex color integer for the item (e.g. 0xffa500)",
+      },
+      actionIds: {
+        type: "array",
+        items: { type: "string" },
+        description: "List of action IDs available for this item type",
+      },
+      stateTemplate: {
+        type: "object",
+        description:
+          "Default per-instance state for newly spawned or crafted items",
+      },
+    },
+  });
+  safeRegisterTool(
+    deps,
+    "virtualWorldManageItemClasses",
+    "List, get, create, update, or delete item class definitions in the virtual world",
+    virtualWorldManageItemClassesSchema,
+    "virtualWorldManageItemClassesToolHandler",
+  );
+
+  const virtualWorldManageActionClassesSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "get", "create", "update", "delete"],
+        description: "Operation to perform on action class definitions",
+        default: "list",
+      },
+      id: {
+        type: "string",
+        description:
+          "Action class ID (required for get, create, update, delete)",
+      },
+      fallbackLabel: {
+        type: "string",
+        description: "Human-readable label for the action",
+      },
+      labelKey: {
+        type: "string",
+        description: "i18n label key for the action",
+      },
+      targetKind: {
+        type: "string",
+        enum: ["self", "facing_tile", "current_tile", "inventory"],
+        description: "What the action targets",
+      },
+      sourceItemIds: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Item IDs that the player must hold to perform this action",
+      },
+      canonicalId: {
+        type: "string",
+        description: "Optional canonical action ID this maps to",
+      },
+      logicSpec: {
+        type: "object",
+        description:
+          "JSON logic spec with conditions and effects that operate on item state",
+        properties: {
+          conditions: {
+            type: "array",
+            items: { type: "object" },
+            description:
+              "Array of condition objects; all must pass for the action to succeed",
+          },
+          effects: {
+            type: "array",
+            items: { type: "object" },
+            description: "Array of effect objects applied when action succeeds",
+          },
+          toastMessage: {
+            type: "string",
+            description: "Optional message shown to the player on success",
+          },
+        },
+      },
+    },
+  });
+  safeRegisterTool(
+    deps,
+    "virtualWorldManageActionClasses",
+    "List, get, create, update, or delete action class definitions in the virtual world",
+    virtualWorldManageActionClassesSchema,
+    "virtualWorldManageActionClassesToolHandler",
+  );
+
   safeRegisterAssetRoute(deps, "/virtual-world", "public/welcome.html");
   safeRegisterAssetRoute(
     deps,

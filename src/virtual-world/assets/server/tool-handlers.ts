@@ -1,3 +1,19 @@
+type ItemClassHandlerDeps = {
+  getAuthenticatedUserId: (context: any) => string | null;
+  getAllItemClasses: () => any[];
+  getItemClass: (id: string) => any | undefined;
+  upsertItemClass: (record: any) => void;
+  deleteItemClass: (id: string) => void;
+};
+
+type ActionClassHandlerDeps = {
+  getAuthenticatedUserId: (context: any) => string | null;
+  getAllActionClasses: () => any[];
+  getActionClass: (id: string) => any | undefined;
+  upsertActionClass: (record: any) => void;
+  deleteActionClass: (id: string) => void;
+};
+
 type ToolHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
   getCurrentWorldStateForUser: (userId: string) => any;
@@ -259,4 +275,131 @@ export function virtualWorldSetNicknameToolHandler(
   }
 
   return JSON.stringify({ status: 200, ok: true, nick: sanitized });
+}
+
+export function virtualWorldManageItemClassesToolHandler(
+  context: any,
+  deps: ItemClassHandlerDeps,
+): string {
+  const userId = deps.getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  const args = context.args || {};
+  const action = String(args.action || "list");
+
+  if (action === "list") {
+    return JSON.stringify({ ok: true, item_classes: deps.getAllItemClasses() });
+  }
+
+  if (action === "get") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const cls = deps.getItemClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "Item class not found" });
+    return JSON.stringify({ ok: true, item_class: cls });
+  }
+
+  if (action === "create" || action === "update") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (action === "update") {
+      const existing = deps.getItemClass(id);
+      if (!existing)
+        return JSON.stringify({ ok: false, error: "Item class not found" });
+    }
+    const record = {
+      id,
+      kind: String(args.kind || "tool"),
+      spawnable: !!args.spawnable,
+      extra: !!args.extra,
+      nonDroppable: !!args.nonDroppable,
+      visuals: {
+        color: Number(args.color || 0),
+        labelKey: String(args.labelKey || ""),
+        fallbackLabel: String(args.fallbackLabel || id),
+      },
+      actionIds: Array.isArray(args.actionIds) ? args.actionIds : [],
+      stateTemplate:
+        args.stateTemplate && typeof args.stateTemplate === "object"
+          ? args.stateTemplate
+          : {},
+    };
+    deps.upsertItemClass(record);
+    return JSON.stringify({ ok: true, item_class: record });
+  }
+
+  if (action === "delete") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.deleteItemClass(id);
+    return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+}
+
+export function virtualWorldManageActionClassesToolHandler(
+  context: any,
+  deps: ActionClassHandlerDeps,
+): string {
+  const userId = deps.getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  const args = context.args || {};
+  const action = String(args.action || "list");
+
+  if (action === "list") {
+    return JSON.stringify({
+      ok: true,
+      action_classes: deps.getAllActionClasses(),
+    });
+  }
+
+  if (action === "get") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const cls = deps.getActionClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "Action class not found" });
+    return JSON.stringify({ ok: true, action_class: cls });
+  }
+
+  if (action === "create" || action === "update") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (action === "update") {
+      const existing = deps.getActionClass(id);
+      if (!existing)
+        return JSON.stringify({ ok: false, error: "Action class not found" });
+    }
+    const record = {
+      id,
+      labelKey: String(args.labelKey || ""),
+      fallbackLabel: String(args.fallbackLabel || id),
+      targetKind: String(args.targetKind || "self"),
+      sourceItemIds: Array.isArray(args.sourceItemIds)
+        ? args.sourceItemIds
+        : [],
+      canonicalId: args.canonicalId ? String(args.canonicalId) : undefined,
+      execution: args.execution ?? undefined,
+      validation: args.validation ?? undefined,
+      logicSpec: args.logicSpec ?? undefined,
+    };
+    deps.upsertActionClass(record);
+    return JSON.stringify({ ok: true, action_class: record });
+  }
+
+  if (action === "delete") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.deleteActionClass(id);
+    return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
 }

@@ -184,6 +184,8 @@ import {
   virtualWorldManageItemsToolHandler as virtualWorldManageItemsToolHandlerImpl,
   virtualWorldMoveToolHandler as virtualWorldMoveToolHandlerImpl,
   virtualWorldSetNicknameToolHandler as virtualWorldSetNicknameToolHandlerImpl,
+  virtualWorldManageItemClassesToolHandler as virtualWorldManageItemClassesToolHandlerImpl,
+  virtualWorldManageActionClassesToolHandler as virtualWorldManageActionClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
   addToDMIndex as addToDMIndexImpl,
@@ -2268,6 +2270,42 @@ function virtualWorldSetNicknameToolHandler(context) {
     grantAllItemsForUser: grantAllItemsForUser,
     sendGlobalPresenceEvent: sendGlobalPresenceEvent,
     getEffectiveNick: getEffectiveNick,
+  });
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldManageItemClassesToolHandler(context) {
+  return virtualWorldManageItemClassesToolHandlerImpl(context, {
+    getAuthenticatedUserId: getAuthenticatedUserId,
+    getAllItemClasses: getAllItemClassesImpl,
+    getItemClass: getItemClassImpl,
+    upsertItemClass: function (record) {
+      upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
+    deleteItemClass: function (id) {
+      deleteItemClassImpl(id, VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
+  });
+}
+
+/**
+ * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldManageActionClassesToolHandler(context) {
+  return virtualWorldManageActionClassesToolHandlerImpl(context, {
+    getAuthenticatedUserId: getAuthenticatedUserId,
+    getAllActionClasses: getAllActionClassesImpl,
+    getActionClass: getActionClassImpl,
+    upsertActionClass: function (record) {
+      upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
+    deleteActionClass: function (id) {
+      deleteActionClassImpl(id, VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
   });
 }
 

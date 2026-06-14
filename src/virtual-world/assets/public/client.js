@@ -43,6 +43,12 @@ var playersPanelRefreshTimer = null;
 
 var chatPanelVisible = false;
 var chatActiveTab = "world"; // 'world' | 'dm'
+var itemClassPanelVisible = false;
+var actionClassPanelVisible = false;
+/** @type {string | null} */
+var itemClassEditId = null;
+/** @type {string | null} */
+var actionClassEditId = null;
 /** @type {any[]} */
 var worldChatMessages = INITIAL_CHAT || [];
 /** @type {string[]} */
@@ -3821,6 +3827,470 @@ document.addEventListener("mouseup", function (e) {
     resetJoystick();
   }
 });
+
+// ── Item class panel ─────────────────────────────────────────────────────
+
+function renderItemClassList() {
+  var listDiv = requireElementById("item-class-list");
+  fetchWithAuth("/virtual-world/item-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.item_classes) ? data.item_classes : [];
+      if (!classes.length) {
+        listDiv.innerHTML =
+          '<div class="class-row"><em style="opacity:0.55">No custom item types yet.</em></div>';
+        return;
+      }
+      var rows = "";
+      for (var i = 0; i < classes.length; i++) {
+        var ic = classes[i];
+        var label = escHtml(
+          String((ic.visuals && ic.visuals.fallbackLabel) || ic.id || "?"),
+        );
+        var id = escHtml(String(ic.id || ""));
+        rows +=
+          '<div class="class-row">' +
+          '<span class="class-row-id">' +
+          id +
+          "</span> " +
+          '<span class="class-row-label">' +
+          label +
+          "</span>" +
+          '<span class="class-row-btns">' +
+          '<button onclick="editItemClass(' +
+          JSON.stringify(ic.id) +
+          ')">Edit</button>' +
+          '<button onclick="deleteItemClassUI(' +
+          JSON.stringify(ic.id) +
+          ')">Del</button>' +
+          "</span></div>";
+      }
+      listDiv.innerHTML = rows;
+    })
+    .catch(function () {
+      listDiv.innerHTML =
+        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+    });
+}
+
+/** @param {string} id */
+function editItemClass(id) {
+  fetchWithAuth("/virtual-world/item-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.item_classes) ? data.item_classes : [];
+      var ic = null;
+      for (var i = 0; i < classes.length; i++) {
+        if (String(classes[i].id) === String(id)) {
+          ic = classes[i];
+          break;
+        }
+      }
+      if (!ic) {
+        showHudToast("Item type not found", true);
+        return;
+      }
+      itemClassEditId = String(id);
+      var idEl = /** @type {HTMLInputElement} */ (requireElementById("ic-id"));
+      idEl.value = String(ic.id || "");
+      idEl.disabled = true;
+      /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value =
+        String((ic.visuals && ic.visuals.fallbackLabel) || "");
+      /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
+        String(ic.kind || "tool");
+      /** @type {HTMLInputElement} */ (
+        requireElementById("ic-spawnable")
+      ).checked = !!ic.spawnable;
+      /** @type {HTMLInputElement} */ (requireElementById("ic-extra")).checked =
+        !!ic.extra;
+      /** @type {HTMLInputElement} */ (
+        requireElementById("ic-non-droppable")
+      ).checked = !!ic.nonDroppable;
+      /** @type {HTMLInputElement} */ (
+        requireElementById("ic-action-ids")
+      ).value = Array.isArray(ic.actionIds) ? ic.actionIds.join(",") : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ic-state-template")
+      ).value =
+        ic.stateTemplate && Object.keys(ic.stateTemplate).length
+          ? JSON.stringify(ic.stateTemplate, null, 2)
+          : "";
+      requireElementById("item-class-form-title").textContent =
+        "Edit: " + String(id);
+    })
+    .catch(function () {
+      showHudToast("Failed to load item type", true);
+    });
+}
+
+function cancelItemClassEdit() {
+  itemClassEditId = null;
+  var idEl = /** @type {HTMLInputElement} */ (requireElementById("ic-id"));
+  idEl.disabled = false;
+  idEl.value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value = "";
+  /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
+    "tool";
+  /** @type {HTMLInputElement} */ (requireElementById("ic-spawnable")).checked =
+    false;
+  /** @type {HTMLInputElement} */ (requireElementById("ic-extra")).checked =
+    false;
+  /** @type {HTMLInputElement} */ (
+    requireElementById("ic-non-droppable")
+  ).checked = false;
+  /** @type {HTMLInputElement} */ (requireElementById("ic-action-ids")).value =
+    "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ic-state-template")
+  ).value = "";
+  requireElementById("item-class-form-title").textContent = "New item type";
+}
+
+function submitItemClassForm() {
+  var idVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-id")
+  ).value.trim();
+  if (!idVal) {
+    showHudToast("Item type ID is required", true);
+    return;
+  }
+  var labelVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-label")
+  ).value.trim();
+  var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-kind"))
+    .value;
+  var spawnableVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-spawnable")
+  ).checked;
+  var extraVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-extra")
+  ).checked;
+  var nonDroppableVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-non-droppable")
+  ).checked;
+  var actionIdsRaw = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-action-ids")
+  ).value;
+  var stateTemplateRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ic-state-template")
+  ).value.trim();
+  var actionIds = actionIdsRaw
+    .split(",")
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+  var stateTemplate = {};
+  if (stateTemplateRaw) {
+    try {
+      stateTemplate = JSON.parse(stateTemplateRaw);
+    } catch (e) {
+      showHudToast("Invalid state template JSON", true);
+      return;
+    }
+  }
+  var record = {
+    id: idVal,
+    kind: kindVal,
+    spawnable: spawnableVal,
+    extra: extraVal,
+    nonDroppable: nonDroppableVal,
+    visuals: { fallbackLabel: labelVal || idVal },
+    actionIds: actionIds,
+    stateTemplate: stateTemplate,
+  };
+  var url = itemClassEditId
+    ? "/virtual-world/item-classes/" + encodeURIComponent(itemClassEditId)
+    : "/virtual-world/item-classes";
+  var method = itemClassEditId ? "PUT" : "POST";
+  fetchWithAuth(url, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Save failed"), true);
+        return;
+      }
+      showHudToast("Saved!", false);
+      cancelItemClassEdit();
+      renderItemClassList();
+    })
+    .catch(function () {
+      showHudToast("Save failed", true);
+    });
+}
+
+/** @param {string} id */
+function deleteItemClassUI(id) {
+  fetchWithAuth(
+    "/virtual-world/item-classes/" + encodeURIComponent(String(id)),
+    { method: "DELETE" },
+  )
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Delete failed"), true);
+        return;
+      }
+      showHudToast("Deleted " + String(id), false);
+      if (itemClassEditId === String(id)) cancelItemClassEdit();
+      renderItemClassList();
+    })
+    .catch(function () {
+      showHudToast("Delete failed", true);
+    });
+}
+
+function showItemClassPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  if (craftingPanelVisible) closeCraftingPanel();
+  if (actionClassPanelVisible) closeActionClassPanel();
+  itemClassPanelVisible = true;
+  requireElementById("hud-item-class-panel").style.display = "block";
+  renderItemClassList();
+}
+
+function closeItemClassPanel() {
+  itemClassPanelVisible = false;
+  requireElementById("hud-item-class-panel").style.display = "none";
+}
+
+function toggleItemClassPanel() {
+  if (itemClassPanelVisible) closeItemClassPanel();
+  else showItemClassPanel();
+}
+
+// ── Action class panel ────────────────────────────────────────────────────
+
+function renderActionClassList() {
+  var listDiv = requireElementById("action-class-list");
+  fetchWithAuth("/virtual-world/action-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.action_classes) ? data.action_classes : [];
+      if (!classes.length) {
+        listDiv.innerHTML =
+          '<div class="class-row"><em style="opacity:0.55">No custom action types yet.</em></div>';
+        return;
+      }
+      var rows = "";
+      for (var i = 0; i < classes.length; i++) {
+        var ac = classes[i];
+        var label = escHtml(String(ac.fallbackLabel || ac.id || "?"));
+        var id = escHtml(String(ac.id || ""));
+        rows +=
+          '<div class="class-row">' +
+          '<span class="class-row-id">' +
+          id +
+          "</span> " +
+          '<span class="class-row-label">' +
+          label +
+          "</span>" +
+          '<span class="class-row-btns">' +
+          '<button onclick="editActionClass(' +
+          JSON.stringify(ac.id) +
+          ')">Edit</button>' +
+          '<button onclick="deleteActionClassUI(' +
+          JSON.stringify(ac.id) +
+          ')">Del</button>' +
+          "</span></div>";
+      }
+      listDiv.innerHTML = rows;
+    })
+    .catch(function () {
+      listDiv.innerHTML =
+        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+    });
+}
+
+/** @param {string} id */
+function editActionClass(id) {
+  fetchWithAuth("/virtual-world/action-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.action_classes) ? data.action_classes : [];
+      var ac = null;
+      for (var i = 0; i < classes.length; i++) {
+        if (String(classes[i].id) === String(id)) {
+          ac = classes[i];
+          break;
+        }
+      }
+      if (!ac) {
+        showHudToast("Action type not found", true);
+        return;
+      }
+      actionClassEditId = String(id);
+      var idEl = /** @type {HTMLInputElement} */ (requireElementById("ac-id"));
+      idEl.value = String(ac.id || "");
+      idEl.disabled = true;
+      /** @type {HTMLInputElement} */ (requireElementById("ac-label")).value =
+        String(ac.fallbackLabel || "");
+      /** @type {HTMLSelectElement} */ (
+        requireElementById("ac-target-kind")
+      ).value = String(ac.targetKind || "self");
+      /** @type {HTMLInputElement} */ (
+        requireElementById("ac-source-items")
+      ).value = Array.isArray(ac.sourceItemIds)
+        ? ac.sourceItemIds.join(",")
+        : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-logic-spec")
+      ).value = ac.logicSpec ? JSON.stringify(ac.logicSpec, null, 2) : "";
+      requireElementById("action-class-form-title").textContent =
+        "Edit: " + String(id);
+    })
+    .catch(function () {
+      showHudToast("Failed to load action type", true);
+    });
+}
+
+function cancelActionClassEdit() {
+  actionClassEditId = null;
+  var idEl = /** @type {HTMLInputElement} */ (requireElementById("ac-id"));
+  idEl.disabled = false;
+  idEl.value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("ac-label")).value = "";
+  /** @type {HTMLSelectElement} */ (
+    requireElementById("ac-target-kind")
+  ).value = "self";
+  /** @type {HTMLInputElement} */ (
+    requireElementById("ac-source-items")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-logic-spec")
+  ).value = "";
+  requireElementById("action-class-form-title").textContent = "New action type";
+}
+
+function submitActionClassForm() {
+  var idVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ac-id")
+  ).value.trim();
+  if (!idVal) {
+    showHudToast("Action type ID is required", true);
+    return;
+  }
+  var labelVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ac-label")
+  ).value.trim();
+  var targetKindVal = /** @type {HTMLSelectElement} */ (
+    requireElementById("ac-target-kind")
+  ).value;
+  var sourceItemsRaw = /** @type {HTMLInputElement} */ (
+    requireElementById("ac-source-items")
+  ).value;
+  var logicSpecRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-logic-spec")
+  ).value.trim();
+  var sourceItemIds = sourceItemsRaw
+    .split(",")
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+  var logicSpec;
+  if (logicSpecRaw) {
+    try {
+      logicSpec = JSON.parse(logicSpecRaw);
+    } catch (e) {
+      showHudToast("Invalid logic spec JSON", true);
+      return;
+    }
+  }
+  var record = {
+    id: idVal,
+    fallbackLabel: labelVal || idVal,
+    targetKind: targetKindVal,
+    sourceItemIds: sourceItemIds,
+    logicSpec: logicSpec,
+  };
+  var url = actionClassEditId
+    ? "/virtual-world/action-classes/" + encodeURIComponent(actionClassEditId)
+    : "/virtual-world/action-classes";
+  var method = actionClassEditId ? "PUT" : "POST";
+  fetchWithAuth(url, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Save failed"), true);
+        return;
+      }
+      showHudToast("Saved!", false);
+      cancelActionClassEdit();
+      renderActionClassList();
+    })
+    .catch(function () {
+      showHudToast("Save failed", true);
+    });
+}
+
+/** @param {string} id */
+function deleteActionClassUI(id) {
+  fetchWithAuth(
+    "/virtual-world/action-classes/" + encodeURIComponent(String(id)),
+    { method: "DELETE" },
+  )
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Delete failed"), true);
+        return;
+      }
+      showHudToast("Deleted " + String(id), false);
+      if (actionClassEditId === String(id)) cancelActionClassEdit();
+      renderActionClassList();
+    })
+    .catch(function () {
+      showHudToast("Delete failed", true);
+    });
+}
+
+function showActionClassPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  if (craftingPanelVisible) closeCraftingPanel();
+  if (itemClassPanelVisible) closeItemClassPanel();
+  actionClassPanelVisible = true;
+  requireElementById("hud-action-class-panel").style.display = "block";
+  renderActionClassList();
+}
+
+function closeActionClassPanel() {
+  actionClassPanelVisible = false;
+  requireElementById("hud-action-class-panel").style.display = "none";
+}
+
+function toggleActionClassPanel() {
+  if (actionClassPanelVisible) closeActionClassPanel();
+  else showActionClassPanel();
+}
 
 // ── Game loop ────────────────────────────────────────────────────────────
 var moveTimer = 0;

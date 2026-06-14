@@ -280,6 +280,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-craft" onclick="toggleCraftingPanel()">🛠 Craft</button>
     <button id="btn-players" onclick="togglePlayersPanel()">👥 Players</button>
     <button id="btn-chat" onclick="toggleChatPanel()">💬 Chat<span class="unread-badge" id="chat-unread-badge"></span></button>
+    <button id="btn-item-classes" onclick="toggleItemClassPanel()">📦 Item types</button>
+    <button id="btn-action-classes" onclick="toggleActionClassPanel()">⚡ Action types</button>
   </div>
 
   <div class="hud" id="hud-use-picker">
@@ -362,6 +364,68 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         </div>
       </div>
       <div id="dm-convo-list" class="dm-convos" style="overflow-y:auto;flex:1;min-height:0;"></div>
+    </div>
+  </div>
+
+  <div class="hud" id="hud-item-class-panel">
+    <div class="panel-header">
+      <span class="panel-title">Item Types</span>
+      <button class="panel-close" onclick="closeItemClassPanel()" title="Close">×</button>
+    </div>
+    <div id="item-class-list" class="class-list"></div>
+    <div class="class-form">
+      <div class="class-form-title" id="item-class-form-title">New item type</div>
+      <div class="class-form-fields">
+        <label>ID <input id="ic-id" type="text" placeholder="my_item" autocomplete="off"></label>
+        <label>Label <input id="ic-label" type="text" placeholder="My Item" autocomplete="off"></label>
+        <label>Kind
+          <select id="ic-kind">
+            <option value="tool">tool</option>
+            <option value="material">material</option>
+            <option value="resource">resource</option>
+            <option value="structure">structure</option>
+            <option value="furniture">furniture</option>
+          </select>
+        </label>
+        <label><input id="ic-spawnable" type="checkbox"> Spawnable</label>
+        <label><input id="ic-extra" type="checkbox"> Extra</label>
+        <label><input id="ic-non-droppable" type="checkbox"> Non-droppable</label>
+        <label>Action IDs (comma-sep) <input id="ic-action-ids" type="text" placeholder="tune,play_tune" autocomplete="off"></label>
+        <label>State template (JSON) <textarea id="ic-state-template" rows="3" placeholder='{"key": 0}'></textarea></label>
+      </div>
+      <div class="class-form-actions">
+        <button onclick="submitItemClassForm()">Save</button>
+        <button onclick="cancelItemClassEdit()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud" id="hud-action-class-panel">
+    <div class="panel-header">
+      <span class="panel-title">Action Types</span>
+      <button class="panel-close" onclick="closeActionClassPanel()" title="Close">×</button>
+    </div>
+    <div id="action-class-list" class="class-list"></div>
+    <div class="class-form">
+      <div class="class-form-title" id="action-class-form-title">New action type</div>
+      <div class="class-form-fields">
+        <label>ID <input id="ac-id" type="text" placeholder="my_action" autocomplete="off"></label>
+        <label>Label <input id="ac-label" type="text" placeholder="My Action" autocomplete="off"></label>
+        <label>Target kind
+          <select id="ac-target-kind">
+            <option value="self">self</option>
+            <option value="facing_tile">facing_tile</option>
+            <option value="current_tile">current_tile</option>
+            <option value="inventory">inventory</option>
+          </select>
+        </label>
+        <label>Source items (comma-sep) <input id="ac-source-items" type="text" placeholder="kantele" autocomplete="off"></label>
+        <label>Logic spec (JSON) <textarea id="ac-logic-spec" rows="3" placeholder='{"conditions":[],"effects":[]}'></textarea></label>
+      </div>
+      <div class="class-form-actions">
+        <button onclick="submitActionClassForm()">Save</button>
+        <button onclick="cancelActionClassEdit()">Cancel</button>
+      </div>
     </div>
   </div>
 

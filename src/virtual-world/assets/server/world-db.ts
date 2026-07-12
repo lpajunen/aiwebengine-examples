@@ -49,7 +49,7 @@ export function insertWorldRow(
       table: tableName,
       error: String(result.error),
     });
-    return null;
+    return { error: String(result.error) };
   }
   return result;
 }
@@ -70,7 +70,7 @@ export function updateWorldRow(
       id: id,
       error: String(result.error),
     });
-    return null;
+    return { error: String(result.error) };
   }
   return result;
 }
@@ -145,20 +145,48 @@ export function upsertWorldRow(
     for (let i = 0; i < keyColumns.length; i++) {
       const key = keyColumns[i];
       if (!source || !Object.prototype.hasOwnProperty.call(source, key)) {
-        return null;
+        return { error: "missing upsert key column: " + key };
       }
       keyFilters[key] = source[key];
     }
 
+    const initialError = String(
+      result && result.error ? result.error : "unknown",
+    );
     const existingRow = querySingleWorldRow(
       tableName,
       JSON.stringify(keyFilters),
       log,
     );
     if (existingRow && Number.isFinite(Number(existingRow.id))) {
-      return updateWorldRow(tableName, Number(existingRow.id), data, log);
+      const updateResult = updateWorldRow(
+        tableName,
+        Number(existingRow.id),
+        data,
+        log,
+      );
+      if (updateResult && !updateResult.error) return updateResult;
+      return {
+        error:
+          "upsert failed; update fallback failed: " +
+          String(
+            updateResult && updateResult.error
+              ? updateResult.error
+              : initialError,
+          ),
+      };
     }
-    return insertWorldRow(tableName, data, log);
+    const insertResult = insertWorldRow(tableName, data, log);
+    if (insertResult && !insertResult.error) return insertResult;
+    return {
+      error:
+        "upsert failed; insert fallback failed: " +
+        String(
+          insertResult && insertResult.error
+            ? insertResult.error
+            : initialError,
+        ),
+    };
   }
   return result;
 }

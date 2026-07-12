@@ -544,6 +544,7 @@ function itemClassToDbRow(
   created_at: number;
   updated_at: number;
 } {
+  const storedTs = Math.floor(now / 1000);
   return {
     class_id: record.id,
     kind: record.kind,
@@ -555,8 +556,8 @@ function itemClassToDbRow(
     fallback_label: record.visuals.fallbackLabel,
     action_ids_json: JSON.stringify(record.actionIds),
     state_template_json: JSON.stringify(record.stateTemplate || {}),
-    created_at: now,
-    updated_at: now,
+    created_at: storedTs,
+    updated_at: storedTs,
   };
 }
 
@@ -616,12 +617,25 @@ export function upsertItemClass(
   record: ItemClassRecord,
   itemClassTable: string,
   log: WorldDbLogFn,
-): void {
+): { ok: boolean; error?: string } {
   const now = Date.now();
-  upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
-  if (_itemClassCache) {
+  const writeResult = upsertItemClassRow(
+    itemClassToDbRow(record, now),
+    itemClassTable,
+    log,
+  );
+  const ok = !!writeResult && !writeResult.error;
+  if (ok && _itemClassCache) {
     _itemClassCache[record.id] = record;
   }
+  return ok
+    ? { ok: true }
+    : {
+        ok: false,
+        error: String(
+          writeResult && writeResult.error ? writeResult.error : "unknown",
+        ),
+      };
 }
 
 export function deleteItemClass(
@@ -700,6 +714,7 @@ function actionClassToDbRow(
   created_at: number;
   updated_at: number;
 } {
+  const storedTs = Math.floor(now / 1000);
   return {
     action_id: record.id,
     label_key: record.labelKey,
@@ -710,8 +725,8 @@ function actionClassToDbRow(
     execution_json: record.execution ? JSON.stringify(record.execution) : "",
     validation_json: record.validation ? JSON.stringify(record.validation) : "",
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
-    created_at: now,
-    updated_at: now,
+    created_at: storedTs,
+    updated_at: storedTs,
   };
 }
 
@@ -775,12 +790,25 @@ export function upsertActionClass(
   record: ActionClassRecord,
   actionClassTable: string,
   log: WorldDbLogFn,
-): void {
+): { ok: boolean; error?: string } {
   const now = Date.now();
-  upsertActionClassRow(actionClassToDbRow(record, now), actionClassTable, log);
-  if (_actionClassCache) {
+  const writeResult = upsertActionClassRow(
+    actionClassToDbRow(record, now),
+    actionClassTable,
+    log,
+  );
+  const ok = !!writeResult && !writeResult.error;
+  if (ok && _actionClassCache) {
     _actionClassCache[record.id] = record;
   }
+  return ok
+    ? { ok: true }
+    : {
+        ok: false,
+        error: String(
+          writeResult && writeResult.error ? writeResult.error : "unknown",
+        ),
+      };
 }
 
 export function deleteActionClass(

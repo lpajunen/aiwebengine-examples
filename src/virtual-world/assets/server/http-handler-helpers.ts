@@ -83,6 +83,168 @@ function buildMessageId(prefix: string): string {
   );
 }
 
+type ClassStorageProbeDeps = {
+  upsertItemClass: (record: any) => { ok: boolean; error?: string };
+  getItemClass: (id: string) => any;
+  deleteItemClass: (id: string) => void;
+  refreshItemClasses: () => void;
+  upsertActionClass: (record: any) => { ok: boolean; error?: string };
+  getActionClass: (id: string) => any;
+  deleteActionClass: (id: string) => void;
+  refreshActionClasses: () => void;
+  vwLog?: (msg: string, obj?: unknown) => void;
+};
+
+function sanitizeProbeToken(value: string): string {
+  const token = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "_");
+  return token || "anon";
+}
+
+export function runClassStorageProbeForUser(
+  userId: string,
+  deps: ClassStorageProbeDeps,
+): { status: number; payload: any } {
+  const now = Date.now();
+  const nonce = now.toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  const actorToken = sanitizeProbeToken(String(userId || ""));
+  const itemClassId = "probe_item_" + actorToken + "_" + nonce;
+  const actionClassId = "probe_action_" + actorToken + "_" + nonce;
+
+  const itemRecord = {
+    id: itemClassId,
+    kind: "tool",
+    spawnable: false,
+    extra: true,
+    nonDroppable: false,
+    visuals: {
+      color: 0x335577,
+      labelKey: "item.probe_class.name",
+      fallbackLabel: "Probe Item Class",
+    },
+    actionIds: [actionClassId],
+    stateTemplate: {
+      probe: true,
+      createdBy: actorToken,
+      createdAt: now,
+    },
+  };
+
+  const actionRecord = {
+    id: actionClassId,
+    labelKey: "action.probe_class.name",
+    fallbackLabel: "Probe Action Class",
+    targetKind: "self",
+    sourceItemIds: [itemClassId],
+    logicSpec: {
+      conditions: [{ kind: "eq", path: "probe", value: true }],
+      effects: [{ kind: "set", path: "lastProbeAt", value: now }],
+      toastMessage: "Probe action executed",
+    },
+  };
+
+  const errors: string[] = [];
+  let readItemRecord = null;
+  let readActionRecord = null;
+  let itemWriteOk = false;
+  let actionWriteOk = false;
+  let itemWriteError = "";
+  let actionWriteError = "";
+
+  try {
+    const actionWrite = deps.upsertActionClass(actionRecord);
+    const itemWrite = deps.upsertItemClass(itemRecord);
+    actionWriteOk = !!(actionWrite && actionWrite.ok);
+    itemWriteOk = !!(itemWrite && itemWrite.ok);
+    actionWriteError =
+      actionWrite && actionWrite.error ? String(actionWrite.error) : "";
+    itemWriteError =
+      itemWrite && itemWrite.error ? String(itemWrite.error) : "";
+    if (!actionWriteOk) {
+      errors.push(
+        "action class upsert failed" +
+          (actionWriteError ? ": " + actionWriteError : ""),
+      );
+    }
+    if (!itemWriteOk) {
+      errors.push(
+        "item class upsert failed" +
+          (itemWriteError ? ": " + itemWriteError : ""),
+      );
+    }
+    deps.refreshActionClasses();
+    deps.refreshItemClasses();
+    readActionRecord = deps.getActionClass(actionClassId);
+    readItemRecord = deps.getItemClass(itemClassId);
+  } catch (e) {
+    const errorText = "probe upsert/read failed: " + String(e);
+    errors.push(errorText);
+    if (deps.vwLog) {
+      deps.vwLog("class storage probe failed", { error: errorText });
+    }
+  }
+
+  const itemStored = !!readItemRecord;
+  const actionStored = !!readActionRecord;
+  let itemDeleted = false;
+  let actionDeleted = false;
+
+  try {
+    deps.deleteItemClass(itemClassId);
+    deps.deleteActionClass(actionClassId);
+    deps.refreshItemClasses();
+    deps.refreshActionClasses();
+    itemDeleted = !deps.getItemClass(itemClassId);
+    actionDeleted = !deps.getActionClass(actionClassId);
+  } catch (e) {
+    const errorText = "probe cleanup failed: " + String(e);
+    errors.push(errorText);
+    if (deps.vwLog) {
+      deps.vwLog("class storage probe cleanup failed", {
+        error: errorText,
+        item_class_id: itemClassId,
+        action_class_id: actionClassId,
+      });
+    }
+  }
+
+  return {
+    status: errors.length > 0 ? 500 : 200,
+    payload: {
+      ok: errors.length === 0 && itemStored && actionStored,
+      probe_nonce: nonce,
+      runtime_diagnostics: {
+        deps_ready:
+          typeof deps.upsertItemClass === "function" &&
+          typeof deps.getItemClass === "function" &&
+          typeof deps.upsertActionClass === "function" &&
+          typeof deps.getActionClass === "function",
+        timestamp: now,
+      },
+      item_class: {
+        id: itemClassId,
+        wrote: itemWriteOk,
+        write_error: itemWriteError || null,
+        found_after_write: itemStored,
+        deleted_after_probe: itemDeleted,
+        written: itemRecord,
+        read_back: readItemRecord,
+      },
+      action_class: {
+        id: actionClassId,
+        wrote: actionWriteOk,
+        write_error: actionWriteError || null,
+        found_after_write: actionStored,
+        deleted_after_probe: actionDeleted,
+        written: actionRecord,
+        read_back: readActionRecord,
+      },
+      errors: errors,
+    },
+  };
+}
+
 export function listItemsForUser(
   userId: string,
   deps: Pick<

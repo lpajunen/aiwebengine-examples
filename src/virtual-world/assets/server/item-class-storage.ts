@@ -37,8 +37,8 @@ export function upsertItemClassRow(
   },
   itemClassTable: string,
   log: WorldDbLogFn,
-): void {
-  upsertWorldRow(itemClassTable, ["class_id"], row, log);
+): any | null {
+  return upsertWorldRow(itemClassTable, ["class_id"], row, log);
 }
 
 export function deleteItemClassRow(

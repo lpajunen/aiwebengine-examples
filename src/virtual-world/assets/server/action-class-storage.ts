@@ -36,8 +36,8 @@ export function upsertActionClassRow(
   },
   actionClassTable: string,
   log: WorldDbLogFn,
-): void {
-  upsertWorldRow(actionClassTable, ["action_id"], row, log);
+): any | null {
+  return upsertWorldRow(actionClassTable, ["action_id"], row, log);
 }
 
 export function deleteActionClassRow(

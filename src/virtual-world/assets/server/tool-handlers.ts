@@ -1,16 +1,18 @@
 type ItemClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
+  refreshItemClasses: () => void;
   getAllItemClasses: () => any[];
   getItemClass: (id: string) => any | undefined;
-  upsertItemClass: (record: any) => void;
+  upsertItemClass: (record: any) => { ok: boolean; error?: string };
   deleteItemClass: (id: string) => void;
 };
 
 type ActionClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
+  refreshActionClasses: () => void;
   getAllActionClasses: () => any[];
   getActionClass: (id: string) => any | undefined;
-  upsertActionClass: (record: any) => void;
+  upsertActionClass: (record: any) => { ok: boolean; error?: string };
   deleteActionClass: (id: string) => void;
 };
 
@@ -290,10 +292,12 @@ export function virtualWorldManageItemClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
+    deps.refreshItemClasses();
     return JSON.stringify({ ok: true, item_classes: deps.getAllItemClasses() });
   }
 
   if (action === "get") {
+    deps.refreshItemClasses();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     const cls = deps.getItemClass(id);
@@ -305,6 +309,7 @@ export function virtualWorldManageItemClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.refreshItemClasses();
     if (action === "update") {
       const existing = deps.getItemClass(id);
       if (!existing)
@@ -327,7 +332,18 @@ export function virtualWorldManageItemClassesToolHandler(
           ? args.stateTemplate
           : {},
     };
-    deps.upsertItemClass(record);
+    const writeResult = deps.upsertItemClass(record);
+    if (!writeResult || !writeResult.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "Item class upsert failed" +
+          (writeResult && writeResult.error
+            ? ": " + String(writeResult.error)
+            : ""),
+      });
+    }
+    deps.refreshItemClasses();
     return JSON.stringify({ ok: true, item_class: record });
   }
 
@@ -354,6 +370,7 @@ export function virtualWorldManageActionClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
+    deps.refreshActionClasses();
     return JSON.stringify({
       ok: true,
       action_classes: deps.getAllActionClasses(),
@@ -361,6 +378,7 @@ export function virtualWorldManageActionClassesToolHandler(
   }
 
   if (action === "get") {
+    deps.refreshActionClasses();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     const cls = deps.getActionClass(id);
@@ -372,6 +390,7 @@ export function virtualWorldManageActionClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.refreshActionClasses();
     if (action === "update") {
       const existing = deps.getActionClass(id);
       if (!existing)
@@ -390,7 +409,18 @@ export function virtualWorldManageActionClassesToolHandler(
       validation: args.validation ?? undefined,
       logicSpec: args.logicSpec ?? undefined,
     };
-    deps.upsertActionClass(record);
+    const writeResult = deps.upsertActionClass(record);
+    if (!writeResult || !writeResult.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "Action class upsert failed" +
+          (writeResult && writeResult.error
+            ? ": " + String(writeResult.error)
+            : ""),
+      });
+    }
+    deps.refreshActionClasses();
     return JSON.stringify({ ok: true, action_class: record });
   }
 

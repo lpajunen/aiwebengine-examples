@@ -141,6 +141,7 @@ import {
   listPlayersForUser as listPlayersForUserImpl,
   postDirectMessageForUser as postDirectMessageForUserImpl,
   postWorldChatForUser as postWorldChatForUserImpl,
+  runClassStorageProbeForUser as runClassStorageProbeForUserImpl,
   setNicknameForUser as setNicknameForUserImpl,
 } from "./server/http-handler-helpers.ts";
 import {
@@ -2280,10 +2281,13 @@ function virtualWorldSetNicknameToolHandler(context) {
 function virtualWorldManageItemClassesToolHandler(context) {
   return virtualWorldManageItemClassesToolHandlerImpl(context, {
     getAuthenticatedUserId: getAuthenticatedUserId,
+    refreshItemClasses: function () {
+      refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
     getAllItemClasses: getAllItemClassesImpl,
     getItemClass: getItemClassImpl,
     upsertItemClass: function (record) {
-      upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+      return upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
     },
     deleteItemClass: function (id) {
       deleteItemClassImpl(id, VWORLD_ITEM_CLASS_TABLE, vwLog);
@@ -2298,10 +2302,13 @@ function virtualWorldManageItemClassesToolHandler(context) {
 function virtualWorldManageActionClassesToolHandler(context) {
   return virtualWorldManageActionClassesToolHandlerImpl(context, {
     getAuthenticatedUserId: getAuthenticatedUserId,
+    refreshActionClasses: function () {
+      refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
     getAllActionClasses: getAllActionClassesImpl,
     getActionClass: getActionClassImpl,
     upsertActionClass: function (record) {
-      upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+      return upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
     },
     deleteActionClass: function (id) {
       deleteActionClassImpl(id, VWORLD_ACTION_CLASS_TABLE, vwLog);
@@ -2810,6 +2817,44 @@ function treeActionHandler(context) {
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
+/**
+ * @param {*} context
+ */
+function testClassStorageHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var handled = runClassStorageProbeForUserImpl(userId, {
+    upsertItemClass: function (record) {
+      return upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
+    getItemClass: function (id) {
+      return getItemClassImpl(id);
+    },
+    deleteItemClass: function (id) {
+      deleteItemClassImpl(id, VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
+    refreshItemClasses: function () {
+      refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
+    },
+    upsertActionClass: function (record) {
+      return upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
+    getActionClass: function (id) {
+      return getActionClassImpl(id);
+    },
+    deleteActionClass: function (id) {
+      deleteActionClassImpl(id, VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
+    refreshActionClasses: function () {
+      refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
+    },
+    vwLog: vwLog,
+  });
+  return ResponseBuilder.json(handled.payload, handled.status);
+}
+
 // ── Item class CRUD handlers ───────────────────────────────────────────────────
 
 /**
@@ -2860,7 +2905,24 @@ function createItemClassHandler(context) {
         ? body.stateTemplate
         : {},
   };
-  upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  var itemCreateWrite = upsertItemClassImpl(
+    record,
+    VWORLD_ITEM_CLASS_TABLE,
+    vwLog,
+  );
+  if (!itemCreateWrite || !itemCreateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Item class upsert failed" +
+          (itemCreateWrite && itemCreateWrite.error
+            ? ": " + String(itemCreateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
   return ResponseBuilder.json({ ok: true, item_class: record });
 }
 
@@ -2925,7 +2987,24 @@ function updateItemClassHandler(context) {
         ? body.stateTemplate
         : existing.stateTemplate,
   };
-  upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  var itemUpdateWrite = upsertItemClassImpl(
+    record,
+    VWORLD_ITEM_CLASS_TABLE,
+    vwLog,
+  );
+  if (!itemUpdateWrite || !itemUpdateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Item class upsert failed" +
+          (itemUpdateWrite && itemUpdateWrite.error
+            ? ": " + String(itemUpdateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
   return ResponseBuilder.json({ ok: true, item_class: record });
 }
 
@@ -2991,7 +3070,24 @@ function createActionClassHandler(context) {
     validation: body && body.validation ? body.validation : undefined,
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
   };
-  upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  var actionCreateWrite = upsertActionClassImpl(
+    record,
+    VWORLD_ACTION_CLASS_TABLE,
+    vwLog,
+  );
+  if (!actionCreateWrite || !actionCreateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Action class upsert failed" +
+          (actionCreateWrite && actionCreateWrite.error
+            ? ": " + String(actionCreateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
   return ResponseBuilder.json({ ok: true, action_class: record });
 }
 
@@ -3052,7 +3148,24 @@ function updateActionClassHandler(context) {
         ? body.logicSpec
         : existing.logicSpec,
   };
-  upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  var actionUpdateWrite = upsertActionClassImpl(
+    record,
+    VWORLD_ACTION_CLASS_TABLE,
+    vwLog,
+  );
+  if (!actionUpdateWrite || !actionUpdateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Action class upsert failed" +
+          (actionUpdateWrite && actionUpdateWrite.error
+            ? ": " + String(actionUpdateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
   return ResponseBuilder.json({ ok: true, action_class: record });
 }
 
@@ -3085,4 +3198,17 @@ function init() {
     vwLog: vwLog,
     virtualWorldEventsStreamPath: VIRTUAL_WORLD_EVENTS_STREAM_PATH,
   });
+  try {
+    routeRegistry.registerRoute(
+      "/virtual-world/test-class-storage",
+      "testClassStorageHandler",
+      "POST",
+    );
+  } catch (e) {
+    vwLog("route registration skipped", {
+      path: "/virtual-world/test-class-storage",
+      method: "POST",
+      error: String(e),
+    });
+  }
 }

@@ -141,7 +141,6 @@ import {
   listPlayersForUser as listPlayersForUserImpl,
   postDirectMessageForUser as postDirectMessageForUserImpl,
   postWorldChatForUser as postWorldChatForUserImpl,
-  runClassStorageProbeForUser as runClassStorageProbeForUserImpl,
   setNicknameForUser as setNicknameForUserImpl,
 } from "./server/http-handler-helpers.ts";
 import {
@@ -2817,44 +2816,6 @@ function treeActionHandler(context) {
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
-/**
- * @param {*} context
- */
-function testClassStorageHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var handled = runClassStorageProbeForUserImpl(userId, {
-    upsertItemClass: function (record) {
-      return upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
-    },
-    getItemClass: function (id) {
-      return getItemClassImpl(id);
-    },
-    deleteItemClass: function (id) {
-      deleteItemClassImpl(id, VWORLD_ITEM_CLASS_TABLE, vwLog);
-    },
-    refreshItemClasses: function () {
-      refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
-    },
-    upsertActionClass: function (record) {
-      return upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
-    },
-    getActionClass: function (id) {
-      return getActionClassImpl(id);
-    },
-    deleteActionClass: function (id) {
-      deleteActionClassImpl(id, VWORLD_ACTION_CLASS_TABLE, vwLog);
-    },
-    refreshActionClasses: function () {
-      refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
-    },
-    vwLog: vwLog,
-  });
-  return ResponseBuilder.json(handled.payload, handled.status);
-}
-
 // ── Item class CRUD handlers ───────────────────────────────────────────────────
 
 /**
@@ -3198,17 +3159,4 @@ function init() {
     vwLog: vwLog,
     virtualWorldEventsStreamPath: VIRTUAL_WORLD_EVENTS_STREAM_PATH,
   });
-  try {
-    routeRegistry.registerRoute(
-      "/virtual-world/test-class-storage",
-      "testClassStorageHandler",
-      "POST",
-    );
-  } catch (e) {
-    vwLog("route registration skipped", {
-      path: "/virtual-world/test-class-storage",
-      method: "POST",
-      error: String(e),
-    });
-  }
 }

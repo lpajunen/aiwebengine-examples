@@ -511,10 +511,4 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "deleteActionClassHandler",
     "DELETE",
   );
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/test-class-storage",
-    "testClassStorageHandler",
-    "POST",
-  );
 }

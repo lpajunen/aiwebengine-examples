@@ -1,3 +1,17 @@
 {
-  "js/ts.implicitProjectConfig.checkJs": true
+  "js/ts.implicitProjectConfig.checkJs": true,
+  "chat.tools.terminal.autoApprove": {
+    "/^make format lint typecheck$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^make upload-virtual-world$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^make oauth-login$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
 }

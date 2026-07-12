@@ -567,22 +567,34 @@ export function bootstrapItemClasses(
 ): void {
   const rows = loadAllItemClassRows(itemClassTable, log);
   const cache: Record<string, ItemClassRecord> = {};
+  let insertedDefaults = 0;
+  const now = Date.now();
 
   if (rows.length > 0) {
     for (let i = 0; i < rows.length; i++) {
       const record = itemClassFromDbRow(rows[i]);
       if (record.id) cache[record.id] = record;
     }
-  } else {
-    // Seed from static definitions
-    const now = Date.now();
-    const defKeys = Object.keys(ITEM_DEFINITIONS);
-    for (let i = 0; i < defKeys.length; i++) {
-      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defKeys[i]]);
+  }
+
+  // Backfill missing built-ins without overwriting existing dynamic/custom rows.
+  const defKeys = Object.keys(ITEM_DEFINITIONS);
+  for (let i = 0; i < defKeys.length; i++) {
+    const defId = defKeys[i];
+    if (!cache[defId]) {
+      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
       upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
       cache[record.id] = record;
+      insertedDefaults++;
     }
-    log("item class repository seeded", { count: defKeys.length });
+  }
+  if (rows.length === 0) {
+    log("item class repository seeded", { count: insertedDefaults });
+  } else if (insertedDefaults > 0) {
+    log("item class repository backfilled", {
+      inserted_count: insertedDefaults,
+      existing_count: rows.length,
+    });
   }
 
   _itemClassCache = cache;
@@ -594,10 +606,29 @@ export function refreshItemClassCache(
 ): void {
   const rows = loadAllItemClassRows(itemClassTable, log);
   const cache: Record<string, ItemClassRecord> = {};
+  let insertedDefaults = 0;
+  const now = Date.now();
   for (let i = 0; i < rows.length; i++) {
     const record = itemClassFromDbRow(rows[i]);
     if (record.id) cache[record.id] = record;
   }
+
+  const defKeys = Object.keys(ITEM_DEFINITIONS);
+  for (let i = 0; i < defKeys.length; i++) {
+    const defId = defKeys[i];
+    if (!cache[defId]) {
+      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
+      upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
+      cache[record.id] = record;
+      insertedDefaults++;
+    }
+  }
+  if (insertedDefaults > 0) {
+    log("item class repository backfilled during refresh", {
+      inserted_count: insertedDefaults,
+    });
+  }
+
   _itemClassCache = cache;
 }
 
@@ -736,17 +767,22 @@ export function bootstrapActionClasses(
 ): void {
   const rows = loadAllActionClassRows(actionClassTable, log);
   const cache: Record<string, ActionClassRecord> = {};
+  let insertedDefaults = 0;
+  const now = Date.now();
 
   if (rows.length > 0) {
     for (let i = 0; i < rows.length; i++) {
       const record = actionClassFromDbRow(rows[i]);
       if (record.id) cache[record.id] = record;
     }
-  } else {
-    const now = Date.now();
-    const defKeys = Object.keys(ACTION_DEFINITIONS);
-    for (let i = 0; i < defKeys.length; i++) {
-      const def = ACTION_DEFINITIONS[defKeys[i]];
+  }
+
+  // Backfill missing built-ins without overwriting existing dynamic/custom rows.
+  const defKeys = Object.keys(ACTION_DEFINITIONS);
+  for (let i = 0; i < defKeys.length; i++) {
+    const defId = defKeys[i];
+    if (!cache[defId]) {
+      const def = ACTION_DEFINITIONS[defId];
       const record: ActionClassRecord = Object.assign({}, def);
       upsertActionClassRow(
         actionClassToDbRow(record, now),
@@ -754,8 +790,16 @@ export function bootstrapActionClasses(
         log,
       );
       cache[record.id] = record;
+      insertedDefaults++;
     }
-    log("action class repository seeded", { count: defKeys.length });
+  }
+  if (rows.length === 0) {
+    log("action class repository seeded", { count: insertedDefaults });
+  } else if (insertedDefaults > 0) {
+    log("action class repository backfilled", {
+      inserted_count: insertedDefaults,
+      existing_count: rows.length,
+    });
   }
 
   _actionClassCache = cache;
@@ -767,10 +811,34 @@ export function refreshActionClassCache(
 ): void {
   const rows = loadAllActionClassRows(actionClassTable, log);
   const cache: Record<string, ActionClassRecord> = {};
+  let insertedDefaults = 0;
+  const now = Date.now();
   for (let i = 0; i < rows.length; i++) {
     const record = actionClassFromDbRow(rows[i]);
     if (record.id) cache[record.id] = record;
   }
+
+  const defKeys = Object.keys(ACTION_DEFINITIONS);
+  for (let i = 0; i < defKeys.length; i++) {
+    const defId = defKeys[i];
+    if (!cache[defId]) {
+      const def = ACTION_DEFINITIONS[defId];
+      const record: ActionClassRecord = Object.assign({}, def);
+      upsertActionClassRow(
+        actionClassToDbRow(record, now),
+        actionClassTable,
+        log,
+      );
+      cache[record.id] = record;
+      insertedDefaults++;
+    }
+  }
+  if (insertedDefaults > 0) {
+    log("action class repository backfilled during refresh", {
+      inserted_count: insertedDefaults,
+    });
+  }
+
   _actionClassCache = cache;
 }
 

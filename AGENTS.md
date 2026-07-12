@@ -47,6 +47,8 @@ make oauth-login
 make upload-virtual-world
 ```
 
+After deployment, use `https://softagen.com/` for testing.
+
 ## Deployment/Operations via MCP
 
 As an alternative to CLI deployment, you can use the `aiwebengine-mcp` server tools.

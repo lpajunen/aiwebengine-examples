@@ -7,13 +7,12 @@ These instructions apply when developing the Virtual World example in this repos
 Primary code areas:
 
 - `src/virtual-world/`
-- `types/virtual-world-browser-globals.d.ts`
 
 ## Development Guidelines
 
 - Keep changes focused on the Virtual World example unless the task explicitly requires broader edits.
 - Preserve existing architecture and naming conventions in `src/virtual-world/`.
-- Keep browser-global type definitions in `types/virtual-world-browser-globals.d.ts` in sync with runtime usage.
+- Keep browser-global type definitions in `src/virtual-world/assets/public/virtual-world-browser-globals.d.ts` in sync with runtime usage.
 - Prefer small, incremental edits that are easy to validate and review.
 
 ## Required Validation After Changes

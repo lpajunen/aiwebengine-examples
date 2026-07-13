@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 // ── Lightweight i18n for UI labels ─────────────────────────────────────
 var I18N_MESSAGES = /** @type {Record<string, any>} */ ({

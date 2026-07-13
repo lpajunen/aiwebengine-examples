@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 function createSessionId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {

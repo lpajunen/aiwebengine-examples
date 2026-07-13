@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 /**
  * @param {{ rows: number, cols: number, tile: number, targetX: number, targetZ: number }} config

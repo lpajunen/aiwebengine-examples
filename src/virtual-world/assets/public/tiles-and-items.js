@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 // ── Dynamic world-mod state (client-side) ─────────────────────────────────
 var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (

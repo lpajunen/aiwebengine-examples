@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 /**
  * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef

@@ -7,6 +7,6 @@
     "allowImportingTsExtensions": true,
     "strict": true
   },
-  "include": ["src/**/*.js", "types/**/*.d.ts"],
+  "include": ["src/**/*.js", "src/**/*.d.ts", "types/**/*.d.ts"],
   "exclude": ["node_modules"]
 }

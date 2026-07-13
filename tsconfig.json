@@ -14,6 +14,12 @@
     "moduleResolution": "nodenext",
     "types": []
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.jsx", "types/**/*.d.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.jsx",
+    "src/**/*.d.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": ["node_modules"]
 }

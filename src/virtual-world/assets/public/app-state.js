@@ -1,4 +1,4 @@
-/// <reference path="../../../../types/virtual-world-browser-globals.d.ts" />
+/// <reference path="virtual-world-browser-globals.d.ts" />
 
 /** @returns {{ state: Record<string, any>, render: Record<string, any> }} */
 function getVirtualWorldApp() {

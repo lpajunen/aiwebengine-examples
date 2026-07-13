@@ -1,5 +1,4 @@
 types/*.d.ts
-!types/virtual-world-browser-globals.d.ts
 apis/openapi.json
 schemas/schema.json
 schemas/token.json

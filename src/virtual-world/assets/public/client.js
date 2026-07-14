@@ -138,8 +138,8 @@ function showHudToast(message, isError) {
   if (isError) toast.classList.add("error");
   else toast.classList.remove("error");
   toast.style.display = "block";
-  if (hudToastTimer) clearTimeout(hudToastTimer);
-  hudToastTimer = setTimeout(
+  if (hudToastTimer) window.clearTimeout(hudToastTimer);
+  hudToastTimer = window.setTimeout(
     function () {
       toast.style.display = "none";
       toast.classList.remove("error");
@@ -277,8 +277,8 @@ function initLogoutTrigger() {
     logoutClickCount += 1;
     youEl.style.opacity = "0.8";
     youEl.title = 'Triple click "You" to log out (' + logoutClickCount + "/3)";
-    if (logoutClickResetTimer) clearTimeout(logoutClickResetTimer);
-    logoutClickResetTimer = setTimeout(function () {
+    if (logoutClickResetTimer) window.clearTimeout(logoutClickResetTimer);
+    logoutClickResetTimer = window.setTimeout(function () {
       logoutClickCount = 0;
       youEl.style.opacity = "1";
       youEl.title = 'Triple click "You" to log out';
@@ -287,7 +287,7 @@ function initLogoutTrigger() {
     if (logoutClickCount >= 3) {
       logoutClickCount = 0;
       if (logoutClickResetTimer) {
-        clearTimeout(logoutClickResetTimer);
+        window.clearTimeout(logoutClickResetTimer);
         logoutClickResetTimer = null;
       }
       youEl.style.opacity = "1";
@@ -1724,8 +1724,8 @@ function postLeave() {
 
 /** @param {number} delayMs */
 function scheduleHeartbeat(delayMs) {
-  if (heartbeatTimer) clearTimeout(heartbeatTimer);
-  heartbeatTimer = setTimeout(
+  if (heartbeatTimer) window.clearTimeout(heartbeatTimer);
+  heartbeatTimer = window.setTimeout(
     function () {
       sendHeartbeat(false);
     },
@@ -2076,12 +2076,12 @@ function initMultiplayer() {
         }
         return;
       }
-      if (eventsReconnectTimer) clearTimeout(eventsReconnectTimer);
+      if (eventsReconnectTimer) window.clearTimeout(eventsReconnectTimer);
       fetchSnapshot();
       fetchNPCSnapshot();
       fetchItemSnapshot();
       eventsRetryCount += 1;
-      eventsReconnectTimer = setTimeout(
+      eventsReconnectTimer = window.setTimeout(
         openUnifiedSSE,
         getSSEReconnectDelayMs(eventsRetryCount),
       );
@@ -2429,11 +2429,11 @@ function showInventoryPanel(autoHideMs) {
   requireElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
   if (inventoryAutoHideTimer !== null) {
-    clearTimeout(inventoryAutoHideTimer);
+    window.clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
   }
   if (autoHideMs && autoHideMs > 0) {
-    inventoryAutoHideTimer = setTimeout(function () {
+    inventoryAutoHideTimer = window.setTimeout(function () {
       closeInventoryPanel();
     }, autoHideMs);
   }
@@ -2443,7 +2443,7 @@ function closeInventoryPanel() {
   inventoryPanelVisible = false;
   requireElementById("hud-inventory-panel").style.display = "none";
   if (inventoryAutoHideTimer !== null) {
-    clearTimeout(inventoryAutoHideTimer);
+    window.clearTimeout(inventoryAutoHideTimer);
     inventoryAutoHideTimer = null;
   }
 }
@@ -2638,12 +2638,12 @@ function showPlayersPanel() {
   renderPlayersPanel();
   refreshOnlinePlayersSnapshot();
   if (playersPanelRefreshTimer !== null) {
-    clearInterval(playersPanelRefreshTimer);
+    window.clearInterval(playersPanelRefreshTimer);
   }
-  playersPanelRefreshTimer = setInterval(function () {
+  playersPanelRefreshTimer = window.setInterval(function () {
     if (!playersPanelVisible) {
       if (playersPanelRefreshTimer !== null) {
-        clearInterval(playersPanelRefreshTimer);
+        window.clearInterval(playersPanelRefreshTimer);
       }
       playersPanelRefreshTimer = null;
       return;
@@ -2656,7 +2656,7 @@ function closePlayersPanel() {
   playersPanelVisible = false;
   requireElementById("hud-players-panel").style.display = "none";
   if (playersPanelRefreshTimer !== null) {
-    clearInterval(playersPanelRefreshTimer);
+    window.clearInterval(playersPanelRefreshTimer);
     playersPanelRefreshTimer = null;
   }
 }

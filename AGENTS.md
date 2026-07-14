@@ -2,59 +2,53 @@
 
 ## Scope
 
-These instructions apply when developing the Virtual World example in this repository.
+This repository contains example scripts for aiwebengine. The primary development focus is the **Virtual World** example.
 
-Primary code areas:
+Primary code area: `src/virtual-world/`
 
-- `src/virtual-world/`
+Other directories under `src/` are standalone examples. Keep changes scoped to the relevant example unless explicitly asked to work across them.
 
-## Development Guidelines
+## Validation After Changes
 
-- Keep changes focused on the Virtual World example unless the task explicitly requires broader edits.
-- Preserve existing architecture and naming conventions in `src/virtual-world/`.
-- Keep browser-global type definitions in `src/virtual-world/assets/public/virtual-world-browser-globals.d.ts` in sync with runtime usage.
-- Prefer small, incremental edits that are easy to validate and review.
-
-## Required Validation After Changes
-
-After making code changes, run:
+Run after every code change — no exceptions:
 
 ```bash
 make format lint typecheck
 ```
 
-Do not skip this step.
+This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` for TS and `jsconfig.json` for JS). There is no test suite.
 
-## Deployment to Test Server (CLI)
-
-Primary deployment command:
+## Deployment (CLI)
 
 ```bash
 make upload-virtual-world
 ```
 
-If deployment fails with:
+Deploys `src/virtual-world/virtual-world.js` and assets from `src/virtual-world/assets/` to `https://softagen.com/`.
 
-```text
-Error: Token has expired. Please run 'make oauth-login' again.
-```
-
-Then run:
+If you get `Token has expired`, re-authenticate first:
 
 ```bash
 make oauth-login
 make upload-virtual-world
 ```
 
-After deployment, use `https://softagen.com/` for testing.
+A dry-run is available: `make upload-virtual-world-dry-run`.
 
-## Deployment/Operations via MCP
+Alternatively, use `aiwebengine-mcp` server tools for deployment and log retrieval when available.
 
-As an alternative to CLI deployment, you can use the `aiwebengine-mcp` server tools.
+## Repo Structure
 
-Use MCP tools for tasks such as:
+- `src/` — example scripts, each in its own directory
+- `scripts/` — tooling: OAuth login, upload, GraphQL schema fetch
+- `types/` — fetched aiwebengine type definitions (gitignored; run `make fetch-types`)
+- `apis/` — fetched OpenAPI spec (gitignored; run `make fetch-openapi`)
+- `schemas/` — fetched GraphQL schema (gitignored; run `make fetch-graphql-schema`)
+- `schemas/token.json` — OAuth tokens (gitignored, never commit)
 
-- Deploying updated code/scripts
-- Fetching runtime logs for debugging
+## Virtual World Conventions
 
-When available, MCP-based deployment and log retrieval can be used instead of shell commands.
+- `src/virtual-world/virtual-world.js` is the entrypoint, deployed as a single script.
+- `src/virtual-world/server/` contains TypeScript server-side modules.
+- `src/virtual-world/assets/public/virtual-world-browser-globals.d.ts` defines browser-global types; keep in sync with runtime usage.
+- JSX uses `h`/`Fragment` (configured in `tsconfig.json`).

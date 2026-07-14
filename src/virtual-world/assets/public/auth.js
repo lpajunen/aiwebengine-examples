@@ -60,7 +60,7 @@ function redirectToLogin() {
   if (authState === AUTH_STATE_REDIRECTING) return;
   authState = AUTH_STATE_REDIRECTING;
   setAuthStatusMessage("Session expired. Redirecting to login...", true);
-  setTimeout(function () {
+  window.setTimeout(function () {
     window.location.href = loginRedirectUrl();
   }, AUTH_LOGIN_REDIRECT_DELAY_MS);
 }
@@ -69,7 +69,7 @@ function handleAuthRecovery() {
   authState = AUTH_STATE_OK;
   authProbeAttempts = 0;
   if (authProbeRetryTimer) {
-    clearTimeout(authProbeRetryTimer);
+    window.clearTimeout(authProbeRetryTimer);
     authProbeRetryTimer = null;
   }
   setAuthStatusMessage("", false);
@@ -127,7 +127,7 @@ function runAuthProbeAttempt() {
     authProbeAttempts === 0
       ? 0
       : Math.min(4000, Math.pow(2, authProbeAttempts - 1) * 1000);
-  authProbeRetryTimer = setTimeout(function () {
+  authProbeRetryTimer = window.setTimeout(function () {
     if (authState !== AUTH_STATE_EXTENDING) return;
     authProbeInFlight = true;
     refreshSessionSilently("recovery")
@@ -182,10 +182,10 @@ function createAuthError(code) {
 
 function scheduleSessionRefresh() {
   if (authRefreshIntervalTimer) {
-    clearInterval(authRefreshIntervalTimer);
+    window.clearInterval(authRefreshIntervalTimer);
     authRefreshIntervalTimer = null;
   }
-  authRefreshIntervalTimer = setInterval(function () {
+  authRefreshIntervalTimer = window.setInterval(function () {
     if (authState !== AUTH_STATE_OK) return;
     refreshSessionSilently("interval").then(function (ok) {
       if (!ok) handleAuth401("refresh_interval");
@@ -252,7 +252,7 @@ function fetchJsonWithAuth(path, options) {
 function scheduleSSEAuthCheck(source) {
   if (authState !== AUTH_STATE_OK || authSseCheckPending) return;
   authSseCheckPending = true;
-  setTimeout(function () {
+  window.setTimeout(function () {
     authSseCheckPending = false;
     probeAuthStatus().then(function (ok) {
       if (!ok) handleAuth401(source);

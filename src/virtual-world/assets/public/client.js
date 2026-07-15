@@ -3860,12 +3860,12 @@ function renderItemClassList() {
           label +
           "</span>" +
           '<span class="class-row-btns">' +
-          '<button onclick="editItemClass(' +
-          JSON.stringify(ic.id) +
-          ')">Edit</button>' +
-          '<button onclick="deleteItemClassUI(' +
-          JSON.stringify(ic.id) +
-          ')">Del</button>' +
+          '<button data-item-class-id="' +
+          id +
+          '" onclick="editItemClass(this.dataset.itemClassId)">Edit</button>' +
+          '<button data-item-class-id="' +
+          id +
+          '" onclick="deleteItemClassUI(this.dataset.itemClassId)">Del</button>' +
           "</span></div>";
       }
       listDiv.innerHTML = rows;
@@ -4103,12 +4103,12 @@ function renderActionClassList() {
           label +
           "</span>" +
           '<span class="class-row-btns">' +
-          '<button onclick="editActionClass(' +
-          JSON.stringify(ac.id) +
-          ')">Edit</button>' +
-          '<button onclick="deleteActionClassUI(' +
-          JSON.stringify(ac.id) +
-          ')">Del</button>' +
+          '<button data-action-class-id="' +
+          id +
+          '" onclick="editActionClass(this.dataset.actionClassId)">Edit</button>' +
+          '<button data-action-class-id="' +
+          id +
+          '" onclick="deleteActionClassUI(this.dataset.actionClassId)">Del</button>' +
           "</span></div>";
       }
       listDiv.innerHTML = rows;

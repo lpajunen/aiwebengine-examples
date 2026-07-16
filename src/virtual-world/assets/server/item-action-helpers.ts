@@ -178,7 +178,6 @@ export function handleItemActionForUser(
         delete worldItems[tileKey];
       }
       deps.savePlayerInventory(userId, inv);
-      deps.saveWorldItems(worldId, worldItems);
       deps.broadcastItemChange(
         worldId,
         "player",
@@ -226,7 +225,6 @@ export function handleItemActionForUser(
 
     deps.savePlayerInventory(userId, inv);
     deps.upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
-    deps.saveWorldItems(worldId, worldItems);
     deps.broadcastItemChange(
       worldId,
       "player",

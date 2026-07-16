@@ -193,7 +193,9 @@ export function tickWorldNPCs(
     });
   }
   if (itemChanges) {
-    deps.saveWorldItems(worldId, worldItems);
+    // Item interactions persist through per-item delete/upsert operations.
+    // Avoid full snapshot writes here to prevent stale-state resurrection
+    // across multi-instance runtimes.
   }
   if (treeChanges) {
     deps.saveWorldTrees(worldId, trees);

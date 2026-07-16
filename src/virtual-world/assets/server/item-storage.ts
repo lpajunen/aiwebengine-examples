@@ -3,7 +3,6 @@ import {
   createEmptyInventory,
   isValidItem,
   normalizeLivingState,
-  normalizeInventory,
   normalizeWorldType,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
@@ -150,11 +149,6 @@ export function savePlayerInventory(
         livingClass,
       )
     : createEmptyLivingState(classId);
-
-  const normalizedLegacy = normalizeInventory({
-    slots: normalized.slots,
-    bag: normalized.bag,
-  });
 
   upsertWorldRow(
     playerInventoryTable,

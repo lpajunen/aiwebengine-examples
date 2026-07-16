@@ -1851,7 +1851,7 @@ function startNPCTicker() {
   registerRecurringNPCTick();
 }
 
-var VW_DEBUG = true;
+var VW_DEBUG = false;
 var VW_INSTANCE_ID =
   "inst_" +
   Date.now().toString(36) +
@@ -2523,12 +2523,6 @@ function itemActionHandler(context) {
     inventory_after: summarizeInventory(invAfter),
     tile_items_after: summarizeItems(tileItemsAfter),
   });
-  if (handled && handled.payload && typeof handled.payload === "object") {
-    handled.payload._diag = {
-      rid: itemRid,
-      instance_id: VW_INSTANCE_ID,
-    };
-  }
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
@@ -2778,12 +2772,6 @@ function moveHandler(context) {
     position_after: moveAfter,
     payload: handled.payload,
   });
-  if (handled && handled.payload && typeof handled.payload === "object") {
-    handled.payload._diag = {
-      rid: moveRid,
-      instance_id: VW_INSTANCE_ID,
-    };
-  }
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
@@ -2953,12 +2941,6 @@ function currentWorldHandler(context) {
       ? snapshot.items.length
       : 0,
   });
-  if (snapshot && typeof snapshot === "object") {
-    snapshot._diag = {
-      rid: worldRid,
-      instance_id: VW_INSTANCE_ID,
-    };
-  }
   return ResponseBuilder.json(snapshot);
 }
 

@@ -59,7 +59,7 @@ export function worldTileNameForValue(
 }
 
 export function getAvailableWorldActions(
-  inventory: { left_hand: any; right_hand: any; inventory: any[] },
+  inventory: any,
   currentTileItems: any[],
   getActionsForItemType: (itemType: string) => string[],
 ): string[] {
@@ -76,11 +76,22 @@ export function getAvailableWorldActions(
     }
   }
 
-  addItemAction(inventory && inventory.left_hand);
-  addItemAction(inventory && inventory.right_hand);
+  if (inventory && inventory.slots && typeof inventory.slots === "object") {
+    const slotIds = Object.keys(inventory.slots);
+    for (let i = 0; i < slotIds.length; i++) {
+      addItemAction(inventory.slots[slotIds[i]]);
+    }
+  } else {
+    addItemAction(inventory && inventory.left_hand);
+    addItemAction(inventory && inventory.right_hand);
+  }
 
   const invItems =
-    inventory && Array.isArray(inventory.inventory) ? inventory.inventory : [];
+    inventory && Array.isArray(inventory.bag)
+      ? inventory.bag
+      : inventory && Array.isArray(inventory.inventory)
+        ? inventory.inventory
+        : [];
   for (let i = 0; i < invItems.length; i++) {
     addItemAction(invItems[i]);
   }

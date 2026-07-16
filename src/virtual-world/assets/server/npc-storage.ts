@@ -296,12 +296,26 @@ export function buildWorldNPCSnapshot(
   seq: number;
   rotation: number;
   state: string;
+  class_id: string;
+  slots: Record<string, any>;
+  bag: any[];
+  values: Record<string, unknown>;
   left_hand: string;
   right_hand: string;
   inventory_count: number;
 }> {
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
+    const slots = n && n.slots && typeof n.slots === "object" ? n.slots : {};
+    const bag = Array.isArray(n && n.bag)
+      ? n.bag
+      : Array.isArray(n && n.inventory)
+        ? n.inventory
+        : [];
+    const values =
+      n && n.values && typeof n.values === "object" ? n.values : {};
+    const leftHandItem = slots.left_hand || n.left_hand || null;
+    const rightHandItem = slots.right_hand || n.right_hand || null;
     return {
       npc_id: npcId,
       display_name: getNPCDisplayName(worldId, npcId),
@@ -310,11 +324,18 @@ export function buildWorldNPCSnapshot(
       seq: Number(n.seq || 0),
       rotation: Number.isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
       state: typeof n.state === "string" ? n.state : "idle",
+      class_id:
+        typeof n.class_id === "string" && n.class_id
+          ? String(n.class_id)
+          : getDefaultNPCLivingClassId(),
+      slots: slots,
+      bag: bag,
+      values: values,
       left_hand:
-        n.left_hand && n.left_hand.type ? String(n.left_hand.type) : "",
+        leftHandItem && leftHandItem.type ? String(leftHandItem.type) : "",
       right_hand:
-        n.right_hand && n.right_hand.type ? String(n.right_hand.type) : "",
-      inventory_count: Array.isArray(n.inventory) ? n.inventory.length : 0,
+        rightHandItem && rightHandItem.type ? String(rightHandItem.type) : "",
+      inventory_count: bag.length,
     };
   });
 }

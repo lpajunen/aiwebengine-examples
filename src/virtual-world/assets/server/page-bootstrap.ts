@@ -140,21 +140,35 @@ export function getDefaultSpawnPosition(
 export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
   const inv = deps.loadPlayerInventory(userId);
   let allItems: any[] = [];
-  if (inv.left_hand) allItems.push(inv.left_hand);
-  if (inv.right_hand) allItems.push(inv.right_hand);
-  if (Array.isArray(inv.inventory)) {
+  if (inv && inv.slots && typeof inv.slots === "object") {
+    const slotIds = Object.keys(inv.slots);
+    for (let i = 0; i < slotIds.length; i++) {
+      const held = inv.slots[slotIds[i]];
+      if (held) allItems.push(held);
+    }
+  } else {
+    if (inv.left_hand) allItems.push(inv.left_hand);
+    if (inv.right_hand) allItems.push(inv.right_hand);
+  }
+  if (Array.isArray(inv.bag)) {
+    allItems = allItems.concat(inv.bag);
+  } else if (Array.isArray(inv.inventory)) {
     allItems = allItems.concat(inv.inventory);
   }
   const hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
   });
   if (!hasKit) {
-    inv.inventory.push({
+    if (!Array.isArray(inv.bag)) {
+      inv.bag = Array.isArray(inv.inventory) ? inv.inventory : [];
+    }
+    inv.bag.push({
       id: "starter_kit_" + userId,
       type: "starter_kit",
       created_at: Date.now(),
       non_droppable: true,
     });
+    inv.inventory = inv.bag;
     deps.savePlayerInventory(userId, inv);
   }
 }

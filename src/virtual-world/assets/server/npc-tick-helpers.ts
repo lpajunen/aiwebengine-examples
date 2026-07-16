@@ -1,5 +1,60 @@
 import { normalizeInventory } from "./world-domain.ts";
 
+function ensureNPCSlotsAndBag(npc: any): {
+  slots: Record<string, any>;
+  bag: any[];
+} {
+  if (!npc.slots || typeof npc.slots !== "object") {
+    npc.slots = {
+      left_hand: npc.left_hand || null,
+      right_hand: npc.right_hand || null,
+    };
+  }
+  if (!Array.isArray(npc.bag)) {
+    npc.bag = Array.isArray(npc.inventory) ? npc.inventory : [];
+  }
+  return { slots: npc.slots, bag: npc.bag };
+}
+
+function syncLegacyAliases(npc: any): void {
+  npc.left_hand = npc.slots && npc.slots.left_hand ? npc.slots.left_hand : null;
+  npc.right_hand =
+    npc.slots && npc.slots.right_hand ? npc.slots.right_hand : null;
+  npc.inventory = Array.isArray(npc.bag) ? npc.bag : [];
+}
+
+function getOrderedSlotIds(slots: Record<string, any>): string[] {
+  const ids = Object.keys(slots || {});
+  ids.sort();
+  const leftIndex = ids.indexOf("left_hand");
+  const rightIndex = ids.indexOf("right_hand");
+  if (leftIndex > 0) {
+    ids.splice(leftIndex, 1);
+    ids.unshift("left_hand");
+  }
+  const targetRightIndex = ids.indexOf("right_hand");
+  if (targetRightIndex > 1) {
+    ids.splice(targetRightIndex, 1);
+    ids.splice(1, 0, "right_hand");
+  }
+  return ids;
+}
+
+function takeFirstOccupiedSlotItem(slots: Record<string, any>): {
+  item: any;
+  slotId: string;
+} | null {
+  const slotIds = getOrderedSlotIds(slots);
+  for (let i = 0; i < slotIds.length; i++) {
+    const slotId = slotIds[i];
+    if (!slots[slotId]) continue;
+    const item = slots[slotId];
+    slots[slotId] = null;
+    return { item: item, slotId: slotId };
+  }
+  return null;
+}
+
 export function buildOccupiedPlayerMap(
   players: Record<string, any>,
 ): Record<string, boolean> {
@@ -30,10 +85,14 @@ export function buildOccupiedNPCMap(
 }
 
 export function normalizeNPCInventoryState(npc: any): void {
+  ensureNPCSlotsAndBag(npc);
   const npcInv = normalizeInventory(npc);
-  npc.left_hand = npcInv.left_hand;
-  npc.right_hand = npcInv.right_hand;
-  npc.inventory = npcInv.inventory;
+  if (!("left_hand" in npc.slots)) npc.slots.left_hand = null;
+  if (!("right_hand" in npc.slots)) npc.slots.right_hand = null;
+  npc.slots.left_hand = npcInv.left_hand;
+  npc.slots.right_hand = npcInv.right_hand;
+  npc.bag = npcInv.inventory;
+  syncLegacyAliases(npc);
 }
 
 export function tickNPCMovement(params: {
@@ -155,10 +214,11 @@ export function tickNPCItemInteractions(params: {
 
   let hasChanges = false;
   let itemChanges = false;
+  const living = ensureNPCSlotsAndBag(n);
 
   if (pickableItems.length > 0 && Math.random() < 0.65) {
     for (let pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
-      n.inventory.push(pickableItems[pickIdx]);
+      living.bag.push(pickableItems[pickIdx]);
     }
     params.deleteWorldItems(pickableItems);
     if (nonPickableItems.length > 0) {
@@ -179,25 +239,22 @@ export function tickNPCItemInteractions(params: {
     );
   }
 
-  if (!n.left_hand && n.inventory.length > 0) {
-    n.left_hand = n.inventory.shift();
-    hasChanges = true;
-  }
-  if (!n.right_hand && n.inventory.length > 0) {
-    n.right_hand = n.inventory.shift();
+  const slotIds = getOrderedSlotIds(living.slots);
+  for (let i = 0; i < slotIds.length; i++) {
+    const slotId = slotIds[i];
+    if (living.slots[slotId]) continue;
+    if (living.bag.length <= 0) break;
+    living.slots[slotId] = living.bag.shift();
     hasChanges = true;
   }
 
   if (Math.random() < 0.12) {
     let dropItem = null;
-    if (n.inventory.length > 0) {
-      dropItem = n.inventory.shift();
-    } else if (n.left_hand) {
-      dropItem = n.left_hand;
-      n.left_hand = null;
-    } else if (n.right_hand) {
-      dropItem = n.right_hand;
-      n.right_hand = null;
+    if (living.bag.length > 0) {
+      dropItem = living.bag.shift();
+    } else {
+      const slotDrop = takeFirstOccupiedSlotItem(living.slots);
+      if (slotDrop) dropItem = slotDrop.item;
     }
     if (dropItem) {
       if (!params.worldItems[tileKey]) params.worldItems[tileKey] = [];
@@ -216,6 +273,8 @@ export function tickNPCItemInteractions(params: {
       );
     }
   }
+
+  syncLegacyAliases(n);
 
   return { hasChanges, itemChanges };
 }

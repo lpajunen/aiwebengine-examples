@@ -546,13 +546,24 @@ export function normalizeInventory(inv: unknown): Inventory {
 }
 
 export function getInventoryTreeActions(inv: unknown): string[] {
-  const normalized = normalizeInventory(inv);
   const actions: Record<string, boolean> = {};
   let items: InventoryItem[] = [];
-  if (normalized.left_hand) items.push(normalized.left_hand);
-  if (normalized.right_hand) items.push(normalized.right_hand);
-  if (Array.isArray(normalized.inventory)) {
-    items = items.concat(normalized.inventory);
+  if (isRecordLike(inv) && isRecordLike(inv.slots)) {
+    const slots = inv.slots as Record<string, unknown>;
+    Object.keys(slots).forEach(function (slotId) {
+      const item = slots[slotId];
+      if (isValidItem(item)) items.push(item);
+    });
+    if (Array.isArray(inv.bag)) {
+      items = items.concat(inv.bag.filter(isValidItem));
+    }
+  } else {
+    const normalized = normalizeInventory(inv);
+    if (normalized.left_hand) items.push(normalized.left_hand);
+    if (normalized.right_hand) items.push(normalized.right_hand);
+    if (Array.isArray(normalized.inventory)) {
+      items = items.concat(normalized.inventory);
+    }
   }
 
   items.forEach(function (item) {

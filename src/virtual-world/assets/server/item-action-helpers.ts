@@ -7,11 +7,7 @@ type ItemActionDeps = {
     worldId: string,
     userId: string,
   ) => { row: number; col: number; seq: number; rotation: number };
-  loadPlayerInventory: (userId: string) => {
-    left_hand: any;
-    right_hand: any;
-    inventory: any[];
-  };
+  loadPlayerInventory: (userId: string) => any;
   loadWorldItems: (worldId: string) => Record<string, any[]>;
   isPickableWorldItem: (item: any) => boolean;
   deleteWorldItems: (items: any[]) => void;
@@ -35,6 +31,87 @@ type ItemActionDeps = {
   ) => void;
   getAllKnownItemTypes: () => string[];
 };
+
+function normalizeLivingInventoryShape(inv: any): {
+  class_id: string;
+  slots: Record<string, any>;
+  bag: any[];
+  values: Record<string, unknown>;
+  left_hand: any;
+  right_hand: any;
+  inventory: any[];
+} {
+  const slots =
+    inv && inv.slots && typeof inv.slots === "object"
+      ? (inv.slots as Record<string, any>)
+      : {
+          left_hand: inv && inv.left_hand ? inv.left_hand : null,
+          right_hand: inv && inv.right_hand ? inv.right_hand : null,
+        };
+  const bag = Array.isArray(inv && inv.bag)
+    ? inv.bag
+    : Array.isArray(inv && inv.inventory)
+      ? inv.inventory
+      : [];
+  return {
+    class_id:
+      inv && typeof inv.class_id === "string" ? String(inv.class_id) : "",
+    slots: slots,
+    bag: bag,
+    values:
+      inv && inv.values && typeof inv.values === "object" ? inv.values : {},
+    left_hand: slots.left_hand || null,
+    right_hand: slots.right_hand || null,
+    inventory: bag,
+  };
+}
+
+function isBagSelector(selector: string): boolean {
+  const key = String(selector || "");
+  return key === "inventory" || key === "bag";
+}
+
+function takeItemFromSelector(
+  inv: {
+    slots: Record<string, any>;
+    bag: any[];
+  },
+  selector: string,
+  index: number,
+): any {
+  if (isBagSelector(selector)) {
+    if (!Number.isFinite(index) || index < 0 || index >= inv.bag.length) {
+      return null;
+    }
+    return inv.bag.splice(index, 1)[0];
+  }
+  if (!inv.slots || typeof inv.slots !== "object") return null;
+  const current = inv.slots[selector];
+  if (!current) return null;
+  inv.slots[selector] = null;
+  return current;
+}
+
+function placeItemToSelector(
+  inv: {
+    slots: Record<string, any>;
+    bag: any[];
+  },
+  selector: string,
+  item: any,
+): boolean {
+  if (isBagSelector(selector)) {
+    inv.bag.push(item);
+    return true;
+  }
+  if (!inv.slots || typeof inv.slots !== "object") return false;
+  if (!(selector in inv.slots)) return false;
+  if (inv.slots[selector]) {
+    inv.bag.push(inv.slots[selector]);
+  }
+  inv.slots[selector] = item;
+  return true;
+}
 
 function makeCheatItemId(
   userId: string,
@@ -67,7 +144,7 @@ export function handleItemActionForUser(
 
   const canonical = deps.getCanonicalPlayerState(worldId, userId);
   const tileKey = canonical.row + "_" + canonical.col;
-  const inv = deps.loadPlayerInventory(userId);
+  const inv = normalizeLivingInventoryShape(deps.loadPlayerInventory(userId));
   const worldItems = deps.loadWorldItems(worldId);
 
   function getItemChangeActionId(itemChangeId: string): string {
@@ -92,7 +169,7 @@ export function handleItemActionForUser(
     });
     if (picked.length > 0) {
       for (let i = 0; i < picked.length; i++) {
-        inv.inventory.push(picked[i]);
+        inv.bag.push(picked[i]);
       }
       deps.deleteWorldItems(picked);
       if (remainingOnTile.length > 0) {
@@ -129,21 +206,8 @@ export function handleItemActionForUser(
   if (action === "drop") {
     const from = String(body.from || "");
     const index = Number(body.index);
-    let dropItem = null;
-    if (from === "left_hand" && inv.left_hand) {
-      dropItem = inv.left_hand;
-      inv.left_hand = null;
-    } else if (from === "right_hand" && inv.right_hand) {
-      dropItem = inv.right_hand;
-      inv.right_hand = null;
-    } else if (
-      from === "inventory" &&
-      Number.isFinite(index) &&
-      index >= 0 &&
-      index < inv.inventory.length
-    ) {
-      dropItem = inv.inventory.splice(index, 1)[0];
-    } else {
+    const dropItem = takeItemFromSelector(inv, from, index);
+    if (!dropItem) {
       return {
         status: 200,
         payload: { ok: false, error: "Invalid drop source" },
@@ -190,39 +254,14 @@ export function handleItemActionForUser(
     const fromSlot = String(body.from || "");
     const toSlot = String(body.to || "");
     const fromIndex = Number(body.index);
-    let movingItem = null;
-
-    if (fromSlot === "left_hand" && inv.left_hand) {
-      movingItem = inv.left_hand;
-      inv.left_hand = null;
-    } else if (fromSlot === "right_hand" && inv.right_hand) {
-      movingItem = inv.right_hand;
-      inv.right_hand = null;
-    } else if (
-      fromSlot === "inventory" &&
-      Number.isFinite(fromIndex) &&
-      fromIndex >= 0 &&
-      fromIndex < inv.inventory.length
-    ) {
-      movingItem = inv.inventory.splice(fromIndex, 1)[0];
-    }
+    const movingItem = takeItemFromSelector(inv, fromSlot, fromIndex);
 
     if (!movingItem) {
       return { status: 200, payload: { ok: false, error: "No item to equip" } };
     }
 
-    if (toSlot === "left_hand") {
-      if (inv.left_hand) inv.inventory.push(inv.left_hand);
-      inv.left_hand = movingItem;
-    } else if (toSlot === "right_hand") {
-      if (inv.right_hand) inv.inventory.push(inv.right_hand);
-      inv.right_hand = movingItem;
-    } else if (toSlot === "inventory") {
-      inv.inventory.push(movingItem);
-    } else {
-      if (fromSlot === "left_hand") inv.left_hand = movingItem;
-      else if (fromSlot === "right_hand") inv.right_hand = movingItem;
-      else inv.inventory.push(movingItem);
+    if (!placeItemToSelector(inv, toSlot, movingItem)) {
+      placeItemToSelector(inv, fromSlot, movingItem);
       return {
         status: 200,
         payload: { ok: false, error: "Invalid destination slot" },
@@ -259,25 +298,30 @@ export function grantAllItemsForUser(
   ok: boolean;
   action: string;
   granted_count: number;
-  inventory: { left_hand: any; right_hand: any; inventory: any[] };
+  inventory: any;
   items: Array<any>;
 } {
   const worldId = deps.getPlayerWorld(userId) || "";
-  const inv = deps.loadPlayerInventory(userId);
+  const inv = normalizeLivingInventoryShape(deps.loadPlayerInventory(userId));
   const itemTypes = deps.getAllKnownItemTypes().filter(function (type) {
     return type !== "portal";
   });
   const now = Date.now();
 
   const ownedTypes: Record<string, boolean> = {};
-  if (inv.left_hand && inv.left_hand.type)
-    ownedTypes[inv.left_hand.type] = true;
-  if (inv.right_hand && inv.right_hand.type)
-    ownedTypes[inv.right_hand.type] = true;
-  if (Array.isArray(inv.inventory)) {
-    for (let j = 0; j < inv.inventory.length; j++) {
-      if (inv.inventory[j] && inv.inventory[j].type) {
-        ownedTypes[inv.inventory[j].type] = true;
+  if (inv && inv.slots && typeof inv.slots === "object") {
+    const slotIds = Object.keys(inv.slots);
+    for (let i = 0; i < slotIds.length; i++) {
+      const held = inv.slots[slotIds[i]];
+      if (held && held.type) {
+        ownedTypes[held.type] = true;
+      }
+    }
+  }
+  if (Array.isArray(inv.bag)) {
+    for (let j = 0; j < inv.bag.length; j++) {
+      if (inv.bag[j] && inv.bag[j].type) {
+        ownedTypes[inv.bag[j].type] = true;
       }
     }
   }
@@ -285,7 +329,7 @@ export function grantAllItemsForUser(
   let grantedCount = 0;
   for (let i = 0; i < itemTypes.length; i++) {
     if (ownedTypes[itemTypes[i]]) continue;
-    inv.inventory.push({
+    inv.bag.push({
       id: makeCheatItemId(userId, worldId, i),
       type: itemTypes[i],
       created_at: now,

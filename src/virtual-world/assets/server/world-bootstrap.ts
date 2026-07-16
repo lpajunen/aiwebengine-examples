@@ -1,8 +1,13 @@
 import {
+  createLivingSlotsFromDefinitions,
   getDefaultWorldTypeForWorldId,
   normalizeWorldType,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
+import {
+  getDefaultNPCLivingClassId,
+  getLivingClass,
+} from "./living-registry.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
@@ -144,6 +149,10 @@ export function ensureWorldNPCs(
           rotation: 0,
           state: "idle",
           ts: Date.now(),
+          class_id: getDefaultNPCLivingClassId(),
+          slots: {},
+          bag: [],
+          values: {},
           left_hand: null,
           right_hand: null,
           inventory: [],
@@ -154,13 +163,37 @@ export function ensureWorldNPCs(
 
       const inventory = deps.normalizeInventory(npc);
       if (
+        typeof npc.class_id !== "string" ||
+        !npc.class_id ||
+        !npc.slots ||
+        typeof npc.slots !== "object" ||
+        !Array.isArray(npc.bag) ||
         npc.left_hand !== inventory.left_hand ||
         npc.right_hand !== inventory.right_hand ||
         !Array.isArray(npc.inventory)
       ) {
+        if (typeof npc.class_id !== "string" || !npc.class_id) {
+          npc.class_id = getDefaultNPCLivingClassId();
+        }
+        if (!npc.slots || typeof npc.slots !== "object") {
+          const cls = getLivingClass(String(npc.class_id));
+          npc.slots = cls
+            ? createLivingSlotsFromDefinitions(cls.slotDefinitions)
+            : {
+                left_hand: null,
+                right_hand: null,
+              };
+        }
+        if (!Array.isArray(npc.bag)) npc.bag = [];
+        if (!npc.values || typeof npc.values !== "object") npc.values = {};
         npc.left_hand = inventory.left_hand;
         npc.right_hand = inventory.right_hand;
         npc.inventory = inventory.inventory;
+        if (npc.slots && typeof npc.slots === "object") {
+          npc.slots.left_hand = inventory.left_hand;
+          npc.slots.right_hand = inventory.right_hand;
+        }
+        npc.bag = inventory.inventory;
         hasNormalizationChanges = true;
       }
     });
@@ -204,6 +237,11 @@ export function ensureWorldNPCs(
     occupied[tileKey] = true;
     const index = Object.keys(npcs).length + 1;
     const npcId = "npc_" + worldId + "_" + index;
+    const classId = getDefaultNPCLivingClassId();
+    const livingClass = getLivingClass(classId);
+    const slots = livingClass
+      ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
+      : { left_hand: null, right_hand: null };
     npcs[npcId] = {
       row,
       col,
@@ -211,6 +249,12 @@ export function ensureWorldNPCs(
       rotation: 0,
       state: "idle",
       ts: Date.now(),
+      class_id: classId,
+      slots: slots,
+      bag: [],
+      values: livingClass
+        ? Object.assign({}, livingClass.valueTemplate || {})
+        : {},
       left_hand: null,
       right_hand: null,
       inventory: [],

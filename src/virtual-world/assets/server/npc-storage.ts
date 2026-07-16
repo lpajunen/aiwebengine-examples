@@ -1,9 +1,15 @@
 import {
+  createEmptyLivingState,
   createEmptyInventory,
   fromStoredWorldTimestamp,
+  normalizeLivingState,
   normalizeInventory,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
+import {
+  getDefaultNPCLivingClassId,
+  getLivingClass,
+} from "./living-registry.ts";
 import {
   deleteWorldRow,
   querySingleWorldRow,
@@ -20,6 +26,10 @@ type NPCState = {
   rotation?: unknown;
   state?: unknown;
   ts?: unknown;
+  class_id?: unknown;
+  slots?: unknown;
+  bag?: unknown;
+  values?: unknown;
   left_hand?: unknown;
   right_hand?: unknown;
   inventory?: unknown;
@@ -45,16 +55,29 @@ export function loadWorldNPCs(
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row || !row.npc_id) continue;
-      let inventory = createEmptyInventory();
+      const classId =
+        typeof row.living_class_id === "string" && row.living_class_id
+          ? String(row.living_class_id)
+          : getDefaultNPCLivingClassId();
+      const livingClass = getLivingClass(classId);
+      let living = createEmptyLivingState(classId);
       try {
-        inventory = normalizeInventory({
-          left_hand: row.left_hand_json ? JSON.parse(row.left_hand_json) : null,
-          right_hand: row.right_hand_json
-            ? JSON.parse(row.right_hand_json)
-            : null,
-          inventory: row.inventory_json ? JSON.parse(row.inventory_json) : [],
-        });
+        if (livingClass) {
+          living = normalizeLivingState(
+            {
+              class_id: classId,
+              slots: row.slots_json ? JSON.parse(row.slots_json) : {},
+              bag: row.bag_json ? JSON.parse(row.bag_json) : [],
+              values: row.values_json ? JSON.parse(row.values_json) : {},
+            },
+            livingClass,
+          );
+        }
       } catch (e) {}
+      const inventory = normalizeInventory({
+        slots: living.slots,
+        bag: living.bag,
+      });
       fromRows[String(row.npc_id)] = {
         row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
         col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
@@ -64,6 +87,10 @@ export function loadWorldNPCs(
           : 0,
         state: typeof row.state === "string" ? row.state : "idle",
         ts: fromStoredWorldTimestamp(row.ts),
+        class_id: living.class_id || classId,
+        slots: living.slots,
+        bag: living.bag,
+        values: living.values,
         left_hand: inventory.left_hand,
         right_hand: inventory.right_hand,
         inventory: inventory.inventory,
@@ -84,7 +111,34 @@ export function saveWorldNPCs(
     function (npcId) {
       const npc = npcs[npcId] as NPCState;
       if (!npc || typeof npc !== "object") return;
-      const inv = normalizeInventory(npc);
+      const classId =
+        typeof npc.class_id === "string" && npc.class_id
+          ? String(npc.class_id)
+          : getDefaultNPCLivingClassId();
+      const livingClass = getLivingClass(classId);
+      const living = livingClass
+        ? normalizeLivingState(
+            {
+              class_id: classId,
+              slots:
+                npc.slots && typeof npc.slots === "object"
+                  ? npc.slots
+                  : {
+                      left_hand: npc.left_hand || null,
+                      right_hand: npc.right_hand || null,
+                    },
+              bag: Array.isArray(npc.bag)
+                ? npc.bag
+                : Array.isArray(npc.inventory)
+                  ? npc.inventory
+                  : [],
+              values:
+                npc.values && typeof npc.values === "object" ? npc.values : {},
+            },
+            livingClass,
+          )
+        : createEmptyLivingState(classId);
+
       upsertWorldRow(
         npcTable,
         ["npc_id"],
@@ -101,11 +155,10 @@ export function saveWorldNPCs(
           ts: toStoredWorldTimestamp(
             Number.isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),
           ),
-          left_hand_json: inv.left_hand ? JSON.stringify(inv.left_hand) : null,
-          right_hand_json: inv.right_hand
-            ? JSON.stringify(inv.right_hand)
-            : null,
-          inventory_json: JSON.stringify(inv.inventory || []),
+          living_class_id: living.class_id || classId,
+          slots_json: JSON.stringify(living.slots || {}),
+          bag_json: JSON.stringify(living.bag || []),
+          values_json: JSON.stringify(living.values || {}),
         },
         log,
       );

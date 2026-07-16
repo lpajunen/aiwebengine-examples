@@ -200,9 +200,10 @@ export function ensureLateWorldDatabaseSchema(
     ["addIntegerColumn", "rotation", false],
     ["addTextColumn", "state", true],
     ["addIntegerColumn", "ts", false],
-    ["addTextColumn", "left_hand_json", true],
-    ["addTextColumn", "right_hand_json", true],
-    ["addTextColumn", "inventory_json", false],
+    ["addTextColumn", "living_class_id", false],
+    ["addTextColumn", "slots_json", false],
+    ["addTextColumn", "bag_json", false],
+    ["addTextColumn", "values_json", false],
   ].forEach(function (entry) {
     runWorldSchemaStep(
       String(entry[0]),
@@ -593,9 +594,10 @@ export function ensureWorldDatabaseSchema(
   });
   [
     ["addTextColumn", "user_id", false],
-    ["addTextColumn", "left_hand_json", true],
-    ["addTextColumn", "right_hand_json", true],
-    ["addTextColumn", "inventory_json", false],
+    ["addTextColumn", "living_class_id", false],
+    ["addTextColumn", "slots_json", false],
+    ["addTextColumn", "bag_json", false],
+    ["addTextColumn", "values_json", false],
     ["addIntegerColumn", "updated_ts", false],
   ].forEach(function (entry) {
     step(

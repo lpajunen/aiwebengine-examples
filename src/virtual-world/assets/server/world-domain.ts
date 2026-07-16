@@ -528,6 +528,15 @@ export function isValidItem(item: unknown): item is InventoryItem {
 export function normalizeInventory(inv: unknown): Inventory {
   const out = createEmptyInventory();
   if (!isRecordLike(inv)) return out;
+  if (isRecordLike(inv.slots)) {
+    const slots = inv.slots as Record<string, unknown>;
+    if (isValidItem(slots.left_hand)) out.left_hand = slots.left_hand;
+    if (isValidItem(slots.right_hand)) out.right_hand = slots.right_hand;
+    if (Array.isArray(inv.bag)) {
+      out.inventory = inv.bag.filter(isValidItem);
+    }
+    return out;
+  }
   if (isValidItem(inv.left_hand)) out.left_hand = inv.left_hand;
   if (isValidItem(inv.right_hand)) out.right_hand = inv.right_hand;
   if (Array.isArray(inv.inventory)) {

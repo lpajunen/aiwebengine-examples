@@ -1,11 +1,17 @@
 import {
+  createEmptyLivingState,
   createEmptyInventory,
   isValidItem,
+  normalizeLivingState,
   normalizeInventory,
   normalizeWorldType,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
 } from "./world-domain.ts";
+import {
+  getDefaultPlayerLivingClassId,
+  getLivingClass,
+} from "./living-registry.ts";
 import {
   deleteWorldRowsWhere,
   querySingleWorldRow,
@@ -43,26 +49,66 @@ export function loadPlayerInventory(
   userId: string,
   playerInventoryTable: string,
   log: WorldDbLogFn,
-): { left_hand: any; right_hand: any; inventory: any[] } {
+): {
+  class_id: string;
+  slots: Record<string, any>;
+  bag: any[];
+  values: Record<string, unknown>;
+  left_hand: any;
+  right_hand: any;
+  inventory: any[];
+} {
+  const toLegacyAliases = function (living: {
+    class_id: string;
+    slots: Record<string, any>;
+    bag: any[];
+    values: Record<string, unknown>;
+  }) {
+    return {
+      class_id: living.class_id,
+      slots: living.slots,
+      bag: living.bag,
+      values: living.values,
+      left_hand: living.slots.left_hand || null,
+      right_hand: living.slots.right_hand || null,
+      inventory: living.bag,
+    };
+  };
+
+  const normalizeRawToLiving = function (raw: unknown, classId: string) {
+    const livingClass = getLivingClass(classId);
+    if (!livingClass) {
+      const empty = createEmptyLivingState(classId);
+      return toLegacyAliases(empty);
+    }
+    return toLegacyAliases(normalizeLivingState(raw, livingClass));
+  };
+
   const row = querySingleWorldRow(
     playerInventoryTable,
     JSON.stringify({ user_id: String(userId) }),
     log,
   );
   if (row) {
+    const classId =
+      typeof row.living_class_id === "string" && row.living_class_id
+        ? String(row.living_class_id)
+        : getDefaultPlayerLivingClassId();
     try {
-      return normalizeInventory({
-        left_hand: row.left_hand_json ? JSON.parse(row.left_hand_json) : null,
-        right_hand: row.right_hand_json
-          ? JSON.parse(row.right_hand_json)
-          : null,
-        inventory: row.inventory_json ? JSON.parse(row.inventory_json) : [],
-      });
+      return normalizeRawToLiving(
+        {
+          class_id: classId,
+          slots: row.slots_json ? JSON.parse(row.slots_json) : {},
+          bag: row.bag_json ? JSON.parse(row.bag_json) : [],
+          values: row.values_json ? JSON.parse(row.values_json) : {},
+        },
+        classId,
+      );
     } catch (e) {
-      return createEmptyInventory();
+      return normalizeRawToLiving({}, classId);
     }
   }
-  return createEmptyInventory();
+  return normalizeRawToLiving({}, getDefaultPlayerLivingClassId());
 }
 
 export function savePlayerInventory(
@@ -71,19 +117,54 @@ export function savePlayerInventory(
   playerInventoryTable: string,
   log: WorldDbLogFn,
 ): void {
-  const normalized = normalizeInventory(inventory);
+  const incoming =
+    inventory && typeof inventory === "object"
+      ? (inventory as Record<string, unknown>)
+      : {};
+  const classId =
+    typeof incoming.class_id === "string" && incoming.class_id
+      ? incoming.class_id
+      : getDefaultPlayerLivingClassId();
+  const livingClass = getLivingClass(classId);
+  const normalized = livingClass
+    ? normalizeLivingState(
+        {
+          class_id: classId,
+          slots:
+            incoming.slots && typeof incoming.slots === "object"
+              ? incoming.slots
+              : {
+                  left_hand: incoming.left_hand || null,
+                  right_hand: incoming.right_hand || null,
+                },
+          bag: Array.isArray(incoming.bag)
+            ? incoming.bag
+            : Array.isArray(incoming.inventory)
+              ? incoming.inventory
+              : [],
+          values:
+            incoming.values && typeof incoming.values === "object"
+              ? incoming.values
+              : {},
+        },
+        livingClass,
+      )
+    : createEmptyLivingState(classId);
+
+  const normalizedLegacy = normalizeInventory({
+    slots: normalized.slots,
+    bag: normalized.bag,
+  });
+
   upsertWorldRow(
     playerInventoryTable,
     ["user_id"],
     {
       user_id: String(userId),
-      left_hand_json: normalized.left_hand
-        ? JSON.stringify(normalized.left_hand)
-        : null,
-      right_hand_json: normalized.right_hand
-        ? JSON.stringify(normalized.right_hand)
-        : null,
-      inventory_json: JSON.stringify(normalized.inventory || []),
+      living_class_id: String(normalized.class_id || classId),
+      slots_json: JSON.stringify(normalized.slots || {}),
+      bag_json: JSON.stringify(normalized.bag || []),
+      values_json: JSON.stringify(normalized.values || {}),
       updated_ts: toStoredWorldTimestamp(Date.now()),
     },
     log,

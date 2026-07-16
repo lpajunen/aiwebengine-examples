@@ -4,6 +4,11 @@ import {
   evaluateConditions,
   applyEffects,
 } from "./action-logic-interpreter.ts";
+import {
+  findFirstLivingItemByTypes,
+  isValidItem,
+  replaceLivingItemById,
+} from "./world-domain.ts";
 
 type TreeActionDeps = {
   canonicalTreeAction: (action: string | null | undefined) => string;
@@ -490,18 +495,8 @@ export function performTreeActionForUser(
       return;
     }
     const updated = applyEffects(actionDefinition.logicSpec, logicSourceItem);
-    // Replace item in inventory
-    if (inv.left_hand && inv.left_hand.id === logicSourceItem.id) {
-      inv.left_hand = updated;
-    } else if (inv.right_hand && inv.right_hand.id === logicSourceItem.id) {
-      inv.right_hand = updated;
-    } else if (Array.isArray(inv.inventory)) {
-      for (let _j = 0; _j < inv.inventory.length; _j++) {
-        if (inv.inventory[_j] && inv.inventory[_j].id === logicSourceItem.id) {
-          inv.inventory[_j] = updated;
-          break;
-        }
-      }
+    if (isValidItem(updated)) {
+      replaceLivingItemById(inv, String(logicSourceItem.id || ""), updated);
     }
     deps.savePlayerInventory(userId, inv);
   }
@@ -523,24 +518,7 @@ export function performTreeActionForUser(
     const sourceItemIds = Array.isArray(actionDefinition.sourceItemIds)
       ? actionDefinition.sourceItemIds
       : [];
-    const invCandidates: any[] = [];
-    if (inv.left_hand) invCandidates.push(inv.left_hand);
-    if (inv.right_hand) invCandidates.push(inv.right_hand);
-    if (Array.isArray(inv.inventory)) {
-      for (let _i = 0; _i < inv.inventory.length; _i++) {
-        invCandidates.push(inv.inventory[_i]);
-      }
-    }
-    for (let _i = 0; _i < invCandidates.length; _i++) {
-      const candidate = invCandidates[_i];
-      if (
-        candidate &&
-        sourceItemIds.indexOf(String(candidate.type || "")) !== -1
-      ) {
-        logicSourceItem = candidate;
-        break;
-      }
-    }
+    logicSourceItem = findFirstLivingItemByTypes(inv, sourceItemIds);
     if (logicSourceItem) {
       const condResult = evaluateConditions(logicSpec, logicSourceItem);
       if (!condResult.ok) {

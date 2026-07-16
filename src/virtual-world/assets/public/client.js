@@ -3,7 +3,7 @@
 /**
  * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef
  * @typedef {{ id: string, type: string, destination_world_id?: string | number, destination_world_type?: string, non_droppable?: boolean }} ClientItem
- * @typedef {{ left_hand: ClientItem | null, right_hand: ClientItem | null, inventory: ClientItem[] }} ClientInventory
+ * @typedef {{ class_id: string, slots: Record<string, ClientItem | null>, bag: ClientItem[], values: Record<string, unknown>, left_hand: ClientItem | null, right_hand: ClientItem | null, inventory: ClientItem[] }} ClientInventory
  * @typedef {{ row: number, col: number, tile_type: string, actor_id: string, actor_type: string, payload: Record<string, any> }} ClientWorldMod
  * @typedef {{ terrain: Record<string, ClientWorldMod>, object: Record<string, ClientWorldMod> }} ClientWorldMods
  */
@@ -111,12 +111,35 @@ function inventoryItemLabel(item) {
   return t(itemTypeToLabelKey(type), humanizeType(type));
 }
 
+/** @param {ClientInventory | any} inv */
+function getPrimaryHeldSlotIds(inv) {
+  var slotIds = getInventorySlotIds(inv);
+  if (slotIds.length === 0) return ["left_hand", "right_hand"];
+  if (
+    slotIds.indexOf("left_hand") !== -1 ||
+    slotIds.indexOf("right_hand") !== -1
+  ) {
+    return ["left_hand", "right_hand"];
+  }
+  if (slotIds.length === 1) return [slotIds[0], "right_hand"];
+  return [slotIds[0], slotIds[1]];
+}
+
 function updateHeldHud() {
-  requireElementById("held-left").textContent = playerInventory.left_hand
-    ? inventoryItemLabel(playerInventory.left_hand)
+  var heldSlotIds = getPrimaryHeldSlotIds(playerInventory);
+  var leftItem =
+    playerInventory && playerInventory.slots
+      ? playerInventory.slots[heldSlotIds[0]]
+      : playerInventory.left_hand;
+  var rightItem =
+    playerInventory && playerInventory.slots
+      ? playerInventory.slots[heldSlotIds[1]]
+      : playerInventory.right_hand;
+  requireElementById("held-left").textContent = leftItem
+    ? inventoryItemLabel(leftItem)
     : "-";
-  requireElementById("held-right").textContent = playerInventory.right_hand
-    ? inventoryItemLabel(playerInventory.right_hand)
+  requireElementById("held-right").textContent = rightItem
+    ? inventoryItemLabel(rightItem)
     : "-";
   updateUseButtonState();
 }
@@ -158,10 +181,13 @@ function getInventoryItemCounts() {
   var counts = /** @type {Record<string, number>} */ ({});
   var inv = normalizeClientInventory(playerInventory);
   var all = [];
-  if (inv.left_hand) all.push(inv.left_hand);
-  if (inv.right_hand) all.push(inv.right_hand);
-  if (Array.isArray(inv.inventory)) {
-    for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
+  var slotIds = getInventorySlotIds(inv);
+  for (var i = 0; i < slotIds.length; i++) {
+    var slotItem = inv.slots && inv.slots[slotIds[i]];
+    if (slotItem) all.push(slotItem);
+  }
+  if (Array.isArray(inv.bag)) {
+    for (var b = 0; b < inv.bag.length; b++) all.push(inv.bag[b]);
   }
   for (var j = 0; j < all.length; j++) {
     var item = all[j];
@@ -1363,8 +1389,9 @@ function npcDisplayName(npcId) {
  * @param {number | null | undefined} seq
  * @param {number | null | undefined} rotation
  * @param {string | undefined} displayName
+ * @param {any} [npcData]
  */
-function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
+function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
   if (!npcId || !isFinite(Number(row)) || !isFinite(Number(col))) return;
   var tx = tileX(Number(col));
   var tz = tileZ(Number(row));
@@ -1387,6 +1414,17 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
       row: Number(row),
       col: Number(col),
       displayName: displayName || shortenId(npcId),
+      class_id:
+        npcData && typeof npcData.class_id === "string" ? npcData.class_id : "",
+      slots:
+        npcData && npcData.slots && typeof npcData.slots === "object"
+          ? npcData.slots
+          : {},
+      bag: npcData && Array.isArray(npcData.bag) ? npcData.bag : [],
+      values:
+        npcData && npcData.values && typeof npcData.values === "object"
+          ? npcData.values
+          : {},
     };
   } else {
     var knownSeq = Number(npcAvatars[npcId].seq || 0);
@@ -1398,6 +1436,18 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName) {
     npcAvatars[npcId].row = Number(row);
     npcAvatars[npcId].col = Number(col);
     if (displayName) npcAvatars[npcId].displayName = displayName;
+    if (npcData && npcData.slots && typeof npcData.slots === "object") {
+      npcAvatars[npcId].slots = npcData.slots;
+    }
+    if (npcData && Array.isArray(npcData.bag)) {
+      npcAvatars[npcId].bag = npcData.bag;
+    }
+    if (npcData && npcData.values && typeof npcData.values === "object") {
+      npcAvatars[npcId].values = npcData.values;
+    }
+    if (npcData && typeof npcData.class_id === "string") {
+      npcAvatars[npcId].class_id = npcData.class_id;
+    }
     refreshTileDetailIfOpen();
   }
 }
@@ -1419,7 +1469,15 @@ function syncNPCSnapshot(npcs) {
     var n = npcs[i];
     if (!n || typeof n.npc_id !== "string") continue;
     seen[n.npc_id] = true;
-    upsertNPCAvatar(n.npc_id, n.row, n.col, n.seq, n.rotation, n.display_name);
+    upsertNPCAvatar(
+      n.npc_id,
+      n.row,
+      n.col,
+      n.seq,
+      n.rotation,
+      n.display_name,
+      n,
+    );
   }
   for (var npcId in npcAvatars) {
     if (!seen[npcId]) removeNPCAvatar(npcId);
@@ -1924,6 +1982,7 @@ function initMultiplayer() {
       payload.seq,
       payload.rotation,
       payload.display_name,
+      payload,
     );
   }
 
@@ -2331,6 +2390,9 @@ function renderInventoryPanel() {
   var rightDiv = requireElementById("inv-right-hand");
   var listDiv = requireElementById("inv-list");
   var countDiv = requireElementById("inv-count");
+  var inv = normalizeClientInventory(playerInventory);
+  var slotIds = getInventorySlotIds(inv);
+  var handSlotIds = getPrimaryHeldSlotIds(inv);
 
   /**
    * @param {string} title
@@ -2361,28 +2423,55 @@ function renderInventoryPanel() {
   }
 
   leftDiv.innerHTML = handHtml(
-    t("inventory.left_hand", "Left Hand"),
-    "left_hand",
-    playerInventory.left_hand,
+    inventorySlotLabel(inv, handSlotIds[0]),
+    handSlotIds[0],
+    inv.slots[handSlotIds[0]] || null,
   );
   rightDiv.innerHTML = handHtml(
-    t("inventory.right_hand", "Right Hand"),
-    "right_hand",
-    playerInventory.right_hand,
+    inventorySlotLabel(inv, handSlotIds[1]),
+    handSlotIds[1],
+    inv.slots[handSlotIds[1]] || null,
   );
 
-  if (
-    !Array.isArray(playerInventory.inventory) ||
-    playerInventory.inventory.length === 0
-  ) {
-    listDiv.innerHTML =
+  var remainingSlotIds = slotIds.filter(function (slotId) {
+    return slotId !== handSlotIds[0] && slotId !== handSlotIds[1];
+  });
+  var rows = "";
+  for (var s = 0; s < remainingSlotIds.length; s++) {
+    var slotId = remainingSlotIds[s];
+    var slotItem = inv.slots[slotId] || null;
+    rows +=
+      '<div class="inv-row">' +
+      '<span class="label">' +
+      escHtml(inventorySlotLabel(inv, slotId)) +
+      ": " +
+      escHtml(
+        slotItem ? inventoryItemLabel(slotItem) : t("inventory.empty", "empty"),
+      ) +
+      "</span>" +
+      '<span class="inv-row-actions">' +
+      (slotItem
+        ? (slotItem.non_droppable
+            ? ""
+            : "<button onclick=\"dropFromSlot('" +
+              slotId +
+              "')\">Drop</button> ") +
+          "<button onclick=\"equipToInventory('" +
+          slotId +
+          "')\">Store</button>"
+        : "") +
+      "</span>" +
+      "</div>";
+  }
+
+  if (!Array.isArray(inv.bag) || inv.bag.length === 0) {
+    rows +=
       '<div class="inv-row"><span class="label" style="grid-column:1/-1">' +
       t("inventory.backpack_empty", "Backpack empty") +
       "</span></div>";
   } else {
-    var rows = "";
-    for (var i = 0; i < playerInventory.inventory.length; i++) {
-      var item = playerInventory.inventory[i];
+    for (var i = 0; i < inv.bag.length; i++) {
+      var item = inv.bag[i];
       var itemActions = treeActionsForItemType(item.type);
       var actionBtns = "";
       for (var ai = 0; ai < itemActions.length; ai++) {
@@ -2393,18 +2482,24 @@ function renderInventoryPanel() {
           treeActionLabel(itemActions[ai]) +
           "</button> ";
       }
+      var equipBtns = "";
+      for (var si = 0; si < slotIds.length; si++) {
+        equipBtns +=
+          '<button onclick="equipFromInventory(' +
+          i +
+          ",\'" +
+          slotIds[si] +
+          "\')\">" +
+          escHtml(inventorySlotLabel(inv, slotIds[si])) +
+          "</button> ";
+      }
       rows +=
         '<div class="inv-row">' +
         '<span class="label">' +
-        inventoryItemLabel(item) +
+        escHtml(inventoryItemLabel(item)) +
         "</span>" +
         '<span class="inv-row-actions">' +
-        '<button onclick="equipFromInventory(' +
-        i +
-        ",'left_hand')\">L</button> " +
-        '<button onclick="equipFromInventory(' +
-        i +
-        ",'right_hand')\">R</button> " +
+        equipBtns +
         (item.non_droppable
           ? ""
           : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
@@ -2412,13 +2507,12 @@ function renderInventoryPanel() {
         "</span>" +
         "</div>";
     }
-    listDiv.innerHTML = rows;
   }
 
+  listDiv.innerHTML = rows;
+
   countDiv.textContent =
-    playerInventory.inventory.length +
-    " " +
-    t("inventory.items_suffix", "items");
+    inv.bag.length + " " + t("inventory.items_suffix", "items");
   updateHeldHud();
 }
 
@@ -3337,7 +3431,7 @@ function renderTileDetailPanel() {
   for (var nid in npcAvatars) {
     var na = npcAvatars[nid];
     if (na.row === row && na.col === col) {
-      npcsHere.push(nid);
+      npcsHere.push({ id: nid, data: na });
     }
   }
 
@@ -3408,10 +3502,41 @@ function renderTileDetailPanel() {
     html += '<div class="tile-empty">None</div>';
   } else {
     for (var k = 0; k < npcsHere.length; k++) {
+      var npcEntry = npcsHere[k];
+      var npcData = npcEntry.data || {};
+      var npcSlots =
+        npcData.slots && typeof npcData.slots === "object" ? npcData.slots : {};
+      var npcBag = Array.isArray(npcData.bag) ? npcData.bag : [];
       html +=
         '<div class="tile-row">' +
-        escHtml(npcDisplayName(npcsHere[k])) +
+        escHtml(npcDisplayName(npcEntry.id)) +
         "</div>";
+      if (npcData.class_id) {
+        html +=
+          '<div class="tile-row">Class: ' +
+          escHtml(String(npcData.class_id)) +
+          "</div>";
+      }
+      var npcSlotIds = Object.keys(npcSlots);
+      for (var ns = 0; ns < npcSlotIds.length; ns++) {
+        var npcSlotId = npcSlotIds[ns];
+        html +=
+          '<div class="tile-row">' +
+          escHtml(inventorySlotLabel(npcData, npcSlotId)) +
+          ": " +
+          escHtml(
+            npcSlots[npcSlotId]
+              ? inventoryItemLabel(npcSlots[npcSlotId])
+              : t("inventory.empty", "empty"),
+          ) +
+          "</div>";
+      }
+      if (npcBag.length > 0) {
+        html +=
+          '<div class="tile-row">Bag items: ' +
+          escHtml(String(npcBag.length)) +
+          "</div>";
+      }
     }
   }
   html += "</div>";

@@ -177,7 +177,10 @@ import {
   upsertActionClass as upsertActionClassImpl,
   deleteActionClass as deleteActionClassImpl,
 } from "./server/item-registry.ts";
-import { bootstrapLivingClasses as bootstrapLivingClassesImpl } from "./server/living-registry.ts";
+import {
+  bootstrapLivingClasses as bootstrapLivingClassesImpl,
+  getAllLivingClasses as getAllLivingClassesImpl,
+} from "./server/living-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -510,6 +513,7 @@ function getVirtualWorldPage(context) {
       getWorldFlavorText: getWorldFlavorText,
       worldTileDefs: WORLD_TILE_DEFS,
       getBootstrapRegistry: getBootstrapRegistry,
+      getAllLivingClasses: getAllLivingClasses,
     },
   );
   return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
@@ -517,6 +521,10 @@ function getVirtualWorldPage(context) {
 
 function getBootstrapRegistry() {
   return getBootstrapRegistryImpl();
+}
+
+function getAllLivingClasses() {
+  return getAllLivingClassesImpl();
 }
 
 /**

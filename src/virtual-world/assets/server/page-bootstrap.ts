@@ -49,6 +49,7 @@ type PageBootstrapDeps = {
   getWorldFlavorText: (worldId: string) => string;
   worldTileDefs: any;
   getBootstrapRegistry: () => any;
+  getAllLivingClasses: () => any[];
 };
 
 type PageState = {
@@ -73,6 +74,7 @@ type PageState = {
   worldFlavorText: string;
   worldTileDefs: any;
   itemRegistry: any;
+  livingRegistry: any;
 };
 
 export function getDefaultSpawnPosition(
@@ -222,6 +224,17 @@ export function buildVirtualWorldPageState(
 
   deps.updateOnlinePresence(userId, worldId, "");
 
+  const livingClasses = deps.getAllLivingClasses();
+  const livingRegistry = {
+    classes: Array.isArray(livingClasses)
+      ? livingClasses.reduce(function (acc: Record<string, any>, cls: any) {
+          if (!cls || typeof cls.id !== "string") return acc;
+          acc[String(cls.id)] = cls;
+          return acc;
+        }, {})
+      : {},
+  };
+
   return {
     map: map,
     worldMods: worldMods,
@@ -246,6 +259,7 @@ export function buildVirtualWorldPageState(
     worldFlavorText: deps.getWorldFlavorText(worldId),
     worldTileDefs: deps.worldTileDefs,
     itemRegistry: deps.getBootstrapRegistry(),
+    livingRegistry: livingRegistry,
   };
 }
 
@@ -470,6 +484,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var INIT_SEQ = ${JSON.stringify(state.initSeq)};
     var INIT_ROTATION = ${JSON.stringify(state.initRotation)};
     var ITEM_REGISTRY = ${JSON.stringify(state.itemRegistry)};
+    var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

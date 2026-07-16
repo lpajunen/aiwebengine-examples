@@ -19,3 +19,4 @@ declare var INIT_COL: number;
 declare var INIT_SEQ: number;
 declare var INIT_ROTATION: number;
 declare var ITEM_REGISTRY: any;
+declare var LIVING_REGISTRY: any;

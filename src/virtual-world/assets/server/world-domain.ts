@@ -545,6 +545,106 @@ export function normalizeInventory(inv: unknown): Inventory {
   return out;
 }
 
+export function getEquippedItems(inv: unknown): InventoryItem[] {
+  const out: InventoryItem[] = [];
+  if (isRecordLike(inv) && isRecordLike(inv.slots)) {
+    const slots = inv.slots as Record<string, unknown>;
+    Object.keys(slots).forEach(function (slotId) {
+      const item = slots[slotId];
+      if (isValidItem(item)) out.push(item);
+    });
+    return out;
+  }
+
+  const normalized = normalizeInventory(inv);
+  if (normalized.left_hand) out.push(normalized.left_hand);
+  if (normalized.right_hand) out.push(normalized.right_hand);
+  return out;
+}
+
+export function getBagItems(inv: unknown): InventoryItem[] {
+  if (isRecordLike(inv) && Array.isArray(inv.bag)) {
+    return inv.bag.filter(isValidItem);
+  }
+  const normalized = normalizeInventory(inv);
+  return Array.isArray(normalized.inventory)
+    ? normalized.inventory.slice()
+    : [];
+}
+
+export function getAllLivingItems(inv: unknown): InventoryItem[] {
+  return getEquippedItems(inv).concat(getBagItems(inv));
+}
+
+export function findFirstLivingItemByTypes(
+  inv: unknown,
+  sourceItemIds: string[],
+): InventoryItem | null {
+  if (!Array.isArray(sourceItemIds) || sourceItemIds.length === 0) {
+    return null;
+  }
+  const allowed: Record<string, boolean> = {};
+  sourceItemIds.forEach(function (id) {
+    allowed[String(id || "")] = true;
+  });
+  const candidates = getAllLivingItems(inv);
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (allowed[String(candidate.type || "")]) return candidate;
+  }
+  return null;
+}
+
+export function replaceLivingItemById(
+  inv: unknown,
+  itemId: string,
+  replacement: InventoryItem,
+): boolean {
+  if (!isRecordLike(inv) || !itemId || !isValidItem(replacement)) return false;
+
+  if (isRecordLike(inv.slots)) {
+    const slots = inv.slots as Record<string, unknown>;
+    const slotIds = Object.keys(slots);
+    for (let i = 0; i < slotIds.length; i++) {
+      const slotId = slotIds[i];
+      const current = slots[slotId];
+      if (isValidItem(current) && current.id === itemId) {
+        slots[slotId] = replacement;
+        return true;
+      }
+    }
+  }
+
+  if (Array.isArray(inv.bag)) {
+    for (let i = 0; i < inv.bag.length; i++) {
+      const current = inv.bag[i];
+      if (isValidItem(current) && current.id === itemId) {
+        inv.bag[i] = replacement;
+        return true;
+      }
+    }
+  }
+
+  if (isValidItem(inv.left_hand) && inv.left_hand.id === itemId) {
+    inv.left_hand = replacement;
+    return true;
+  }
+  if (isValidItem(inv.right_hand) && inv.right_hand.id === itemId) {
+    inv.right_hand = replacement;
+    return true;
+  }
+  if (Array.isArray(inv.inventory)) {
+    for (let i = 0; i < inv.inventory.length; i++) {
+      const current = inv.inventory[i];
+      if (isValidItem(current) && current.id === itemId) {
+        inv.inventory[i] = replacement;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function getInventoryTreeActions(inv: unknown): string[] {
   const actions: Record<string, boolean> = {};
   let items: InventoryItem[] = [];

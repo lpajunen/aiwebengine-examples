@@ -262,18 +262,140 @@ function applyTreeAction(action, row, col, actorType, actorId) {
  */
 function normalizeClientInventory(inv) {
   if (!inv || typeof inv !== "object") {
-    return { left_hand: null, right_hand: null, inventory: [] };
+    return {
+      class_id: "",
+      slots: {},
+      bag: [],
+      values: {},
+      left_hand: null,
+      right_hand: null,
+      inventory: [],
+    };
   }
+
+  /** @param {any} item */
+  function asClientItem(item) {
+    if (!item || !item.id || !item.type) return null;
+    return {
+      id: item.id,
+      type: item.type,
+      destination_world_id: item.destination_world_id,
+      destination_world_type: item.destination_world_type,
+      non_droppable: item.non_droppable,
+      state: item.state,
+    };
+  }
+
+  var slots = /** @type {Record<string, any>} */ ({});
+  if (inv.slots && typeof inv.slots === "object") {
+    Object.keys(inv.slots).forEach(function (slotId) {
+      slots[String(slotId)] = asClientItem(inv.slots[slotId]);
+    });
+  } else {
+    slots.left_hand = asClientItem(inv.left_hand);
+    slots.right_hand = asClientItem(inv.right_hand);
+  }
+
+  var bagSource = Array.isArray(inv.bag)
+    ? inv.bag
+    : Array.isArray(inv.inventory)
+      ? inv.inventory
+      : [];
+  var bag = /** @type {any[]} */ (bagSource)
+    .map(function (it) {
+      return asClientItem(it);
+    })
+    .filter(function (it) {
+      return !!it;
+    });
+
   var out = {
-    left_hand: inv.left_hand && inv.left_hand.id ? inv.left_hand : null,
-    right_hand: inv.right_hand && inv.right_hand.id ? inv.right_hand : null,
-    inventory: Array.isArray(inv.inventory)
-      ? /** @type {any[]} */ (inv.inventory).filter(function (it) {
-          return it && it.id && it.type;
-        })
-      : [],
+    class_id: inv.class_id ? String(inv.class_id) : "",
+    slots: slots,
+    bag: bag,
+    values: inv.values && typeof inv.values === "object" ? inv.values : {},
+    left_hand: slots.left_hand || null,
+    right_hand: slots.right_hand || null,
+    inventory: bag,
   };
   return /** @type {ClientInventory} */ (out);
+}
+
+/**
+ * @returns {Record<string, any>}
+ */
+function getLivingRegistryClasses() {
+  if (!LIVING_REGISTRY || typeof LIVING_REGISTRY !== "object") {
+    return {};
+  }
+  if (!LIVING_REGISTRY.classes || typeof LIVING_REGISTRY.classes !== "object") {
+    return {};
+  }
+  return LIVING_REGISTRY.classes;
+}
+
+/**
+ * @param {ClientInventory | any} inv
+ * @returns {any | null}
+ */
+function getLivingClassForInventory(inv) {
+  var classes = getLivingRegistryClasses();
+  var classId = inv && inv.class_id ? String(inv.class_id) : "";
+  return classId && classes[classId] ? classes[classId] : null;
+}
+
+/**
+ * @param {ClientInventory | any} inv
+ * @returns {string[]}
+ */
+function getInventorySlotIds(inv) {
+  var slots =
+    inv && inv.slots && typeof inv.slots === "object"
+      ? inv.slots
+      : {
+          left_hand: inv.left_hand || null,
+          right_hand: inv.right_hand || null,
+        };
+  var seen = /** @type {Record<string, boolean>} */ ({});
+  var ordered = [];
+  var livingClass = getLivingClassForInventory(inv);
+  if (livingClass && Array.isArray(livingClass.slotDefinitions)) {
+    for (var i = 0; i < livingClass.slotDefinitions.length; i++) {
+      var slotDef = livingClass.slotDefinitions[i];
+      var slotId = slotDef && slotDef.id ? String(slotDef.id) : "";
+      if (!slotId || seen[slotId]) continue;
+      seen[slotId] = true;
+      ordered.push(slotId);
+    }
+  }
+  Object.keys(slots)
+    .sort()
+    .forEach(function (slotId) {
+      if (seen[slotId]) return;
+      seen[slotId] = true;
+      ordered.push(slotId);
+    });
+  return ordered;
+}
+
+/**
+ * @param {ClientInventory | any} inv
+ * @param {string} slotId
+ * @returns {string}
+ */
+function inventorySlotLabel(inv, slotId) {
+  var livingClass = getLivingClassForInventory(inv);
+  if (livingClass && Array.isArray(livingClass.slotDefinitions)) {
+    for (var i = 0; i < livingClass.slotDefinitions.length; i++) {
+      var slotDef = livingClass.slotDefinitions[i];
+      if (!slotDef || String(slotDef.id) !== String(slotId)) continue;
+      return t(
+        slotDef.labelKey || String(slotId || ""),
+        slotDef.fallbackLabel || humanizeType(String(slotId || "")),
+      );
+    }
+  }
+  return humanizeType(String(slotId || ""));
 }
 
 /**
@@ -475,11 +597,16 @@ function getOwnedTreeActions() {
   var actionsByType = /** @type {Record<string, boolean>} */ ({});
   var inv = normalizeClientInventory(playerInventory);
   var all = /** @type {ClientItem[]} */ ([]);
-  if (inv.left_hand) all.push(inv.left_hand);
-  if (inv.right_hand) all.push(inv.right_hand);
-  if (Array.isArray(inv.inventory)) {
-    for (var i = 0; i < inv.inventory.length; i++) all.push(inv.inventory[i]);
+
+  var slotIds = getInventorySlotIds(inv);
+  for (var i = 0; i < slotIds.length; i++) {
+    var slotItem = inv.slots && inv.slots[slotIds[i]];
+    if (slotItem) all.push(slotItem);
   }
+  if (Array.isArray(inv.bag)) {
+    for (var b = 0; b < inv.bag.length; b++) all.push(inv.bag[b]);
+  }
+
   var tileItems = worldItemsByTile[avatarRow + "_" + avatarCol];
   if (Array.isArray(tileItems)) {
     for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);

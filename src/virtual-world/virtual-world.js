@@ -1851,7 +1851,13 @@ function startNPCTicker() {
   registerRecurringNPCTick();
 }
 
-var VW_DEBUG = false;
+var VW_DEBUG = true;
+var VW_INSTANCE_ID =
+  "inst_" +
+  Date.now().toString(36) +
+  "_" +
+  Math.random().toString(36).slice(2, 8);
+var VW_DIAG_COUNTER = 0;
 
 /**
  * @param {string} msg
@@ -1868,6 +1874,75 @@ function vwLog(msg, obj) {
   } catch (e) {
     console.log("[vworld] " + msg);
   }
+}
+
+/**
+ * @returns {string}
+ */
+function nextDiagRequestId() {
+  VW_DIAG_COUNTER += 1;
+  return VW_INSTANCE_ID + "_" + String(VW_DIAG_COUNTER);
+}
+
+/**
+ * @param {*} inventory
+ * @returns {{class_id: string, slot_count: number, occupied_slots: string[], bag_count: number, bag_types: Record<string, number>}}
+ */
+function summarizeInventory(inventory) {
+  var inv = inventory && typeof inventory === "object" ? inventory : {};
+  var slots = inv.slots && typeof inv.slots === "object" ? inv.slots : {};
+  var slotIds = Object.keys(slots);
+  var occupiedSlots = [];
+  for (var i = 0; i < slotIds.length; i++) {
+    var slotId = slotIds[i];
+    var item = slots[slotId];
+    if (item && item.type) occupiedSlots.push(slotId + ":" + String(item.type));
+  }
+  var bag = Array.isArray(inv.bag)
+    ? inv.bag
+    : Array.isArray(inv.inventory)
+      ? inv.inventory
+      : [];
+  /** @type {Record<string, number>} */
+  var bagTypes = {};
+  for (var j = 0; j < bag.length; j++) {
+    var t = bag[j] && bag[j].type ? String(bag[j].type) : "unknown";
+    bagTypes[t] = Number(bagTypes[t] || 0) + 1;
+  }
+  return {
+    class_id: inv.class_id ? String(inv.class_id) : "",
+    slot_count: slotIds.length,
+    occupied_slots: occupiedSlots,
+    bag_count: bag.length,
+    bag_types: bagTypes,
+  };
+}
+
+/**
+ * @param {*} items
+ * @returns {{count: number, by_type: Record<string, number>}}
+ */
+function summarizeItems(items) {
+  var arr = Array.isArray(items) ? items : [];
+  /** @type {Record<string, number>} */
+  var byType = {};
+  for (var i = 0; i < arr.length; i++) {
+    var type = arr[i] && arr[i].type ? String(arr[i].type) : "unknown";
+    byType[type] = Number(byType[type] || 0) + 1;
+  }
+  return { count: arr.length, by_type: byType };
+}
+
+/**
+ * @param {string} eventName
+ * @param {*} details
+ */
+function vwDiag(eventName, details) {
+  vwLog("diag." + eventName, {
+    instance_id: VW_INSTANCE_ID,
+    ts: Date.now(),
+    details: details || {},
+  });
 }
 
 /**
@@ -2404,7 +2479,56 @@ function itemActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
 
+  var itemRid = nextDiagRequestId();
+  var worldIdBefore = getPlayerWorld(userId) || "";
+  var posBefore = worldIdBefore
+    ? getCanonicalPlayerState(worldIdBefore, userId)
+    : null;
+  var invBefore = loadPlayerInventory(userId);
+  vwDiag("item_action.request", {
+    rid: itemRid,
+    user_id: userId,
+    action: body && body.action ? String(body.action) : "",
+    body: body,
+    world_id: worldIdBefore,
+    position_before: posBefore,
+    inventory_before: summarizeInventory(invBefore),
+  });
+
   var handled = handleItemActionForUser(userId, body);
+  var worldIdAfter = getPlayerWorld(userId) || worldIdBefore;
+  var posAfter = worldIdAfter
+    ? getCanonicalPlayerState(worldIdAfter, userId)
+    : null;
+  var invAfter = loadPlayerInventory(userId);
+  var tileItemsAfter = [];
+  if (worldIdAfter && posAfter) {
+    var tileKeyAfter = String(posAfter.row) + "_" + String(posAfter.col);
+    var worldItemsAfter = loadWorldItems(worldIdAfter);
+    tileItemsAfter = Array.isArray(worldItemsAfter[tileKeyAfter])
+      ? worldItemsAfter[tileKeyAfter]
+      : [];
+  }
+  vwDiag("item_action.result", {
+    rid: itemRid,
+    user_id: userId,
+    status: handled.status,
+    ok: !!(handled.payload && handled.payload.ok),
+    error:
+      handled.payload && handled.payload.error
+        ? String(handled.payload.error)
+        : "",
+    world_id: worldIdAfter,
+    position_after: posAfter,
+    inventory_after: summarizeInventory(invAfter),
+    tile_items_after: summarizeItems(tileItemsAfter),
+  });
+  if (handled && handled.payload && typeof handled.payload === "object") {
+    handled.payload._diag = {
+      rid: itemRid,
+      instance_id: VW_INSTANCE_ID,
+    };
+  }
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
@@ -2624,7 +2748,42 @@ function moveHandler(context) {
   } catch (e) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
+  var moveRid = nextDiagRequestId();
+  var moveWorldBefore = getPlayerWorld(userId) || "";
+  var moveBefore = moveWorldBefore
+    ? getCanonicalPlayerState(moveWorldBefore, userId)
+    : null;
+  vwDiag("move.request", {
+    rid: moveRid,
+    user_id: userId,
+    body: body,
+    world_id: moveWorldBefore,
+    position_before: moveBefore,
+  });
   var handled = movePlayerForUser(userId, body);
+  var moveWorldAfter = getPlayerWorld(userId) || moveWorldBefore;
+  var moveAfter = moveWorldAfter
+    ? getCanonicalPlayerState(moveWorldAfter, userId)
+    : null;
+  vwDiag("move.result", {
+    rid: moveRid,
+    user_id: userId,
+    status: handled.status,
+    ok: !!(handled.payload && handled.payload.ok),
+    error:
+      handled.payload && handled.payload.error
+        ? String(handled.payload.error)
+        : "",
+    world_id: moveWorldAfter,
+    position_after: moveAfter,
+    payload: handled.payload,
+  });
+  if (handled && handled.payload && typeof handled.payload === "object") {
+    handled.payload._diag = {
+      rid: moveRid,
+      instance_id: VW_INSTANCE_ID,
+    };
+  }
   return ResponseBuilder.json(handled.payload, handled.status);
 }
 
@@ -2778,11 +2937,29 @@ function currentWorldHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  return ResponseBuilder.json(
-    getCurrentWorldStateForHttpUserImpl(userId, {
-      getCurrentWorldStateForUser: getCurrentWorldStateForUser,
-    }),
-  );
+  var worldRid = nextDiagRequestId();
+  var snapshot = getCurrentWorldStateForHttpUserImpl(userId, {
+    getCurrentWorldStateForUser: getCurrentWorldStateForUser,
+  });
+  vwDiag("current_world.snapshot", {
+    rid: worldRid,
+    user_id: userId,
+    ok: !!(snapshot && snapshot.ok),
+    world_id: snapshot && snapshot.world_id ? String(snapshot.world_id) : "",
+    player: snapshot && snapshot.player ? snapshot.player : null,
+    inventory: summarizeInventory(snapshot && snapshot.inventory),
+    tile_items: summarizeItems(snapshot && snapshot.tile_items),
+    item_count: Array.isArray(snapshot && snapshot.items)
+      ? snapshot.items.length
+      : 0,
+  });
+  if (snapshot && typeof snapshot === "object") {
+    snapshot._diag = {
+      rid: worldRid,
+      instance_id: VW_INSTANCE_ID,
+    };
+  }
+  return ResponseBuilder.json(snapshot);
 }
 
 /**
@@ -3156,6 +3333,11 @@ function init() {
   bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   bootstrapActionClassesImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   bootstrapLivingClassesImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+  vwDiag("init", {
+    item_class_table: VWORLD_ITEM_CLASS_TABLE,
+    action_class_table: VWORLD_ACTION_CLASS_TABLE,
+    living_class_table: VWORLD_LIVING_CLASS_TABLE,
+  });
   startNPCTicker();
   registerVirtualWorldRuntimeImpl({
     routeRegistry: routeRegistry,

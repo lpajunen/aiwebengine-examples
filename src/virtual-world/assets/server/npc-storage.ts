@@ -11,6 +11,8 @@ import {
   getLivingClass,
 } from "./living-registry.ts";
 import {
+  insertWorldRow,
+  updateWorldRow,
   deleteWorldRow,
   querySingleWorldRow,
   queryWorldRows,
@@ -36,6 +38,20 @@ type NPCState = {
 };
 
 type NPCDisplayNameResolver = (worldId: string, npcId: string) => string;
+
+function normalizeSafeInt(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  const rounded = Math.floor(numeric);
+  if (rounded < min) return min;
+  if (rounded > max) return max;
+  return rounded;
+}
 
 export function loadWorldNPCs(
   worldId: string,
@@ -78,10 +94,13 @@ export function loadWorldNPCs(
         slots: living.slots,
         bag: living.bag,
       });
+      const safeRow = normalizeSafeInt(row.row, 1, 0, 99);
+      const safeCol = normalizeSafeInt(row.col, 1, 0, 99);
+      const safeSeq = normalizeSafeInt(row.seq, 0, 0, 2147483647);
       fromRows[String(row.npc_id)] = {
-        row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
-        col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
-        seq: Number.isFinite(Number(row.seq)) ? Number(row.seq) : 0,
+        row: safeRow,
+        col: safeCol,
+        seq: safeSeq,
         rotation: Number.isFinite(Number(row.rotation))
           ? Number(row.rotation)
           : 0,
@@ -139,29 +158,38 @@ export function saveWorldNPCs(
           )
         : createEmptyLivingState(classId);
 
-      upsertWorldRow(
+      const safeRow = normalizeSafeInt(npc.row, 1, 0, 99);
+      const safeCol = normalizeSafeInt(npc.col, 1, 0, 99);
+      const safeSeq = normalizeSafeInt(npc.seq, 0, 0, 2147483647);
+
+      const rowData = {
+        npc_id: String(npcId),
+        world_id: String(worldId),
+        row: safeRow,
+        col: safeCol,
+        seq: safeSeq,
+        rotation: Number.isFinite(Number(npc.rotation))
+          ? Number(npc.rotation)
+          : 0,
+        state: typeof npc.state === "string" ? npc.state : "idle",
+        ts: toStoredWorldTimestamp(
+          Number.isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),
+        ),
+        living_class_id: living.class_id || classId,
+        slots_json: JSON.stringify(living.slots || {}),
+        bag_json: JSON.stringify(living.bag || []),
+        values_json: JSON.stringify(living.values || {}),
+      };
+      const existingRow = querySingleWorldRow(
         npcTable,
-        ["npc_id"],
-        {
-          npc_id: String(npcId),
-          world_id: String(worldId),
-          row: Number.isFinite(Number(npc.row)) ? Number(npc.row) : 1,
-          col: Number.isFinite(Number(npc.col)) ? Number(npc.col) : 1,
-          seq: Number.isFinite(Number(npc.seq)) ? Number(npc.seq) : 0,
-          rotation: Number.isFinite(Number(npc.rotation))
-            ? Number(npc.rotation)
-            : 0,
-          state: typeof npc.state === "string" ? npc.state : "idle",
-          ts: toStoredWorldTimestamp(
-            Number.isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),
-          ),
-          living_class_id: living.class_id || classId,
-          slots_json: JSON.stringify(living.slots || {}),
-          bag_json: JSON.stringify(living.bag || []),
-          values_json: JSON.stringify(living.values || {}),
-        },
+        JSON.stringify({ npc_id: String(npcId) }),
         log,
       );
+      if (existingRow && Number.isFinite(Number(existingRow.id))) {
+        updateWorldRow(npcTable, Number(existingRow.id), rowData, log);
+      } else {
+        insertWorldRow(npcTable, rowData, log);
+      }
     },
   );
 }
@@ -172,7 +200,7 @@ export function loadNPCActiveWorlds(
 ): Record<string, number> {
   const rows = queryWorldRows(
     npcActiveWorldTable,
-    "",
+    JSON.stringify({}),
     1000,
     "last_active_ts",
     "desc",
@@ -198,7 +226,7 @@ export function saveNPCActiveWorlds(
 ): void {
   const existingRows = queryWorldRows(
     npcActiveWorldTable,
-    "",
+    JSON.stringify({}),
     1000,
     "id",
     "desc",

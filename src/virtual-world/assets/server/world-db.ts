@@ -18,15 +18,17 @@ export function queryWorldRows(
   orderDir: "asc" | "desc",
   log: WorldDbLogFn,
 ): any[] {
+  const normalizedFilters =
+    typeof filters === "string" && filters.trim() ? filters : "{}";
   const result = parseWorldDbResult(
-    database.query(tableName, filters, limit, orderBy, orderDir),
+    database.query(tableName, normalizedFilters, limit, orderBy, orderDir),
     log,
   );
   if (!Array.isArray(result)) {
     if (result && result.error) {
       log("world db query failed", {
         table: tableName,
-        filters: filters || "",
+        filters: normalizedFilters,
         error: String(result.error),
       });
     }

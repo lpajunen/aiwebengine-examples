@@ -179,6 +179,20 @@ export function ensureLateWorldDatabaseSchema(
     "updated_ts",
     collector,
   );
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    tables.worldType,
+    function () {
+      return database.addUniqueIndex(
+        tables.worldType,
+        JSON.stringify(["world_id"]),
+      );
+    },
+    parseWorldDbResult,
+    log,
+    undefined,
+    collector,
+  );
 
   runWorldSchemaStep(
     "createTable",

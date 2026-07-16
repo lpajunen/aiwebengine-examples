@@ -141,17 +141,17 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
       },
       from: {
         type: "string",
-        enum: ["left_hand", "right_hand", "inventory"],
-        description: "Source slot for drop or equip",
+        description:
+          "Source selector for drop or equip: use 'inventory' for bag by index, or a living slot ID like 'left_hand'",
       },
       to: {
         type: "string",
-        enum: ["left_hand", "right_hand", "inventory"],
-        description: "Destination slot for equip",
+        description:
+          "Destination selector for equip: use 'inventory' for bag, or any valid living slot ID",
       },
       index: {
         type: "number",
-        description: "Inventory index used for drop or equip from inventory",
+        description: "Bag index used for drop or equip when from='inventory'",
       },
     },
   });

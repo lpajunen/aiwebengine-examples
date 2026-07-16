@@ -1,4 +1,8 @@
 import { getItemChangeDefinition } from "./item-events.ts";
+import {
+  getDefaultPlayerLivingClassId,
+  getLivingClass,
+} from "./living-registry.ts";
 
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;
@@ -111,6 +115,38 @@ function placeItemToSelector(
   }
   inv.slots[selector] = item;
   return true;
+}
+
+function canEquipItemToSelector(
+  inv: {
+    class_id: string;
+    slots: Record<string, any>;
+  },
+  selector: string,
+  item: any,
+): boolean {
+  if (isBagSelector(selector)) return true;
+  if (!inv.slots || typeof inv.slots !== "object") return false;
+  if (!(selector in inv.slots)) return false;
+
+  const classId = inv.class_id || getDefaultPlayerLivingClassId();
+  const livingClass = getLivingClass(classId);
+  if (!livingClass || !Array.isArray(livingClass.slotDefinitions)) return true;
+
+  const slotDef = livingClass.slotDefinitions.find(function (slot) {
+    return slot && String(slot.id || "") === selector;
+  });
+  if (
+    !slotDef ||
+    !Array.isArray(slotDef.accepts) ||
+    slotDef.accepts.length === 0
+  ) {
+    return true;
+  }
+
+  const itemType = String((item && item.type) || "");
+  if (!itemType) return false;
+  return slotDef.accepts.indexOf(itemType) !== -1;
 }
 
 function makeCheatItemId(
@@ -256,6 +292,17 @@ export function handleItemActionForUser(
 
     if (!movingItem) {
       return { status: 200, payload: { ok: false, error: "No item to equip" } };
+    }
+
+    if (!canEquipItemToSelector(inv, toSlot, movingItem)) {
+      placeItemToSelector(inv, fromSlot, movingItem);
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: "Item cannot be equipped to destination slot",
+        },
+      };
     }
 
     if (!placeItemToSelector(inv, toSlot, movingItem)) {

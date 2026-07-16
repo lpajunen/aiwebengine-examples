@@ -1,6 +1,5 @@
 import { fromStoredWorldTimestamp } from "./world-domain.ts";
 import {
-  deletePlayerPosition,
   loadPlayerHeartbeatMap,
   loadPlayerPosition,
   savePlayerPosition,
@@ -34,7 +33,7 @@ export function loadWorldPlayers(
     playerPositionTable,
     JSON.stringify({ world_id: String(worldId) }),
     1000,
-    "updated_ts",
+    "id",
     "desc",
     log,
   );
@@ -64,21 +63,6 @@ export function saveWorldPlayers(
   playerPositionTable: string,
   log: WorldDbLogFn,
 ): void {
-  const existingRows = queryWorldRows(
-    playerPositionTable,
-    JSON.stringify({ world_id: String(worldId) }),
-    1000,
-    "id",
-    "desc",
-    log,
-  );
-  const existingByUserId: Record<string, any> = {};
-  for (let i = 0; i < existingRows.length; i++) {
-    if (existingRows[i] && existingRows[i].user_id) {
-      existingByUserId[String(existingRows[i].user_id)] = existingRows[i];
-    }
-  }
-
   const nextPlayers = players && typeof players === "object" ? players : {};
   Object.keys(nextPlayers).forEach(function (userId) {
     const player = nextPlayers[userId] || {};
@@ -99,11 +83,6 @@ export function saveWorldPlayers(
       playerPositionTable,
       log,
     );
-    delete existingByUserId[userId];
-  });
-
-  Object.keys(existingByUserId).forEach(function (userId) {
-    deletePlayerPosition(userId, playerPositionTable, log);
   });
 }
 

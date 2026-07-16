@@ -112,9 +112,9 @@ export function loadAllPlayerPositions(
 ): Record<string, PlayerPositionRow> {
   const rows = queryWorldRows(
     playerPositionTable,
-    "",
+    JSON.stringify({}),
     1000,
-    "updated_ts",
+    "id",
     "desc",
     log,
   );
@@ -239,9 +239,9 @@ export function loadPlayerHeartbeatMap(
 ): Record<string, number> {
   const rows = queryWorldRows(
     playerHeartbeatTable,
-    "",
+    JSON.stringify({}),
     1000,
-    "heartbeat_ts",
+    "id",
     "desc",
     log,
   );
@@ -250,7 +250,7 @@ export function loadPlayerHeartbeatMap(
     const row = rows[i];
     if (!row || !row.user_id) continue;
     const heartbeatUserId = String(row.user_id);
-    if (out[heartbeatUserId]) continue;
+    if (Object.prototype.hasOwnProperty.call(out, heartbeatUserId)) continue;
     out[heartbeatUserId] = fromStoredWorldTimestamp(row.heartbeat_ts);
   }
   return out;

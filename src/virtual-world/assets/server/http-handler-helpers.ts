@@ -83,6 +83,20 @@ function buildMessageId(prefix: string): string {
   );
 }
 
+function buildInventorySelectors(inventory: any): {
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
+} {
+  const slotIds =
+    inventory && inventory.slots && typeof inventory.slots === "object"
+      ? Object.keys(inventory.slots).sort()
+      : ["left_hand", "right_hand"];
+  return {
+    inventory_slot_ids: slotIds,
+    inventory_selectors: slotIds.concat(["inventory"]),
+  };
+}
+
 export function listItemsForUser(
   userId: string,
   deps: Pick<
@@ -94,18 +108,31 @@ export function listItemsForUser(
     | "loadWorldItems"
     | "loadPlayerInventory"
   >,
-): { items: any[]; inventory: any } {
+): {
+  items: any[];
+  inventory: any;
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
+} {
   const worldId = deps.getPlayerWorld(userId);
   if (!worldId) {
+    const emptyInventory = deps.createEmptyInventory();
+    const emptySelectors = buildInventorySelectors(emptyInventory);
     return {
       items: [],
-      inventory: deps.createEmptyInventory(),
+      inventory: emptyInventory,
+      inventory_slot_ids: emptySelectors.inventory_slot_ids,
+      inventory_selectors: emptySelectors.inventory_selectors,
     };
   }
   deps.ensureWorldItems(worldId);
+  const inventory = deps.loadPlayerInventory(userId);
+  const selectors = buildInventorySelectors(inventory);
   return {
     items: deps.flattenWorldItems(deps.loadWorldItems(worldId)),
-    inventory: deps.loadPlayerInventory(userId),
+    inventory: inventory,
+    inventory_slot_ids: selectors.inventory_slot_ids,
+    inventory_selectors: selectors.inventory_selectors,
   };
 }
 
@@ -123,11 +150,14 @@ export function setNicknameForUser(
   }
   if (nick.toLowerCase() === "cheat") {
     const cheatResult = deps.grantAllItemsForUser(userId);
+    const selectors = buildInventorySelectors(cheatResult.inventory);
     return {
       status: 200,
       payload: {
         ok: true,
         inventory: cheatResult.inventory,
+        inventory_slot_ids: selectors.inventory_slot_ids,
+        inventory_selectors: selectors.inventory_selectors,
         items: cheatResult.items,
         message:
           "Item cheat activated: +" + cheatResult.granted_count + " items",

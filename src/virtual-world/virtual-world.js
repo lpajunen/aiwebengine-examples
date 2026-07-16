@@ -2422,6 +2422,24 @@ function itemsHandler(context) {
 }
 
 /**
+ * @param {any} payload
+ * @returns {any}
+ */
+function withInventorySelectors(payload) {
+  if (!payload || typeof payload !== "object" || !payload.inventory) {
+    return payload;
+  }
+  var inventory = payload.inventory;
+  var slotIds =
+    inventory && inventory.slots && typeof inventory.slots === "object"
+      ? Object.keys(inventory.slots).sort()
+      : ["left_hand", "right_hand"];
+  payload.inventory_slot_ids = slotIds;
+  payload.inventory_selectors = slotIds.concat(["inventory"]);
+  return payload;
+}
+
+/**
  * @param {string} userId
  * @param {*} body
  * @returns {{status: number, payload: any}}
@@ -2531,7 +2549,10 @@ function itemActionHandler(context) {
     inventory_after: summarizeInventory(invAfter),
     tile_items_after: summarizeItems(tileItemsAfter),
   });
-  return ResponseBuilder.json(handled.payload, handled.status);
+  return ResponseBuilder.json(
+    withInventorySelectors(handled.payload),
+    handled.status,
+  );
 }
 
 /**
@@ -2550,7 +2571,10 @@ function craftHandler(context) {
   }
 
   var handled = craftRecipeForUser(userId, body);
-  return ResponseBuilder.json(handled.payload, handled.status);
+  return ResponseBuilder.json(
+    withInventorySelectors(handled.payload),
+    handled.status,
+  );
 }
 
 /**
@@ -2634,7 +2658,10 @@ function setNicknameHandler(context) {
       }
     }
   }
-  return ResponseBuilder.json(handled.payload, handled.status);
+  return ResponseBuilder.json(
+    withInventorySelectors(handled.payload),
+    handled.status,
+  );
 }
 
 // ── Online players handler ────────────────────────────────────────────────────
@@ -2983,7 +3010,10 @@ function treeActionHandler(context) {
     return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
   }
   var handled = performTreeActionForUser(userId, body);
-  return ResponseBuilder.json(handled.payload, handled.status);
+  return ResponseBuilder.json(
+    withInventorySelectors(handled.payload),
+    handled.status,
+  );
 }
 
 // ── Item class CRUD handlers ───────────────────────────────────────────────────

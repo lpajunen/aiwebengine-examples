@@ -67,6 +67,20 @@ type ToolHandlerDeps = {
   getEffectiveNick: (userId: string) => string;
 };
 
+function buildInventorySelectors(inventory: any): {
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
+} {
+  const slotIds =
+    inventory && inventory.slots && typeof inventory.slots === "object"
+      ? Object.keys(inventory.slots).sort()
+      : ["left_hand", "right_hand"];
+  return {
+    inventory_slot_ids: slotIds,
+    inventory_selectors: slotIds.concat(["inventory"]),
+  };
+}
+
 export function virtualWorldGetStateToolHandler(
   context: any,
   deps: Pick<
@@ -152,21 +166,6 @@ export function virtualWorldManageItemsToolHandler(
 
   const args = context.args || {};
   const action = String(args.action || "list");
-
-  function buildInventorySelectors(inventory: any): {
-    inventory_slot_ids: string[];
-    inventory_selectors: string[];
-  } {
-    const slotIds =
-      inventory && inventory.slots && typeof inventory.slots === "object"
-        ? Object.keys(inventory.slots).sort()
-        : ["left_hand", "right_hand"];
-    return {
-      inventory_slot_ids: slotIds,
-      inventory_selectors: slotIds.concat(["inventory"]),
-    };
-  }
-
   if (action === "list") {
     const state = deps.getCurrentWorldStateForUser(userId);
     return JSON.stringify({
@@ -225,6 +224,11 @@ export function virtualWorldActToolHandler(
     destination_world_type: args.destination_world_type,
   });
   result.payload.status = result.status;
+  if (result && result.payload && result.payload.inventory) {
+    const selectors = buildInventorySelectors(result.payload.inventory);
+    result.payload.inventory_slot_ids = selectors.inventory_slot_ids;
+    result.payload.inventory_selectors = selectors.inventory_selectors;
+  }
   return JSON.stringify(result.payload);
 }
 
@@ -256,6 +260,7 @@ export function virtualWorldSetNicknameToolHandler(
   const sanitized = String(nick).trim().slice(0, 24);
   if (sanitized.toLowerCase() === "cheat") {
     const cheatResult = deps.grantAllItemsForUser(userId);
+    const selectors = buildInventorySelectors(cheatResult.inventory);
     const currentWorldId = deps.getPlayerWorld(userId);
     if (currentWorldId) {
       const existingNick = deps.getEffectiveNick(userId);
@@ -278,6 +283,8 @@ export function virtualWorldSetNicknameToolHandler(
       status: 200,
       ok: true,
       inventory: cheatResult.inventory,
+      inventory_slot_ids: selectors.inventory_slot_ids,
+      inventory_selectors: selectors.inventory_selectors,
       items: cheatResult.items,
       message: "Item cheat activated: +" + cheatResult.granted_count + " items",
     });

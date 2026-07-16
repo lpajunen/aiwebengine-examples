@@ -2760,7 +2760,9 @@ function cheatItemsHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  return ResponseBuilder.json(grantAllItemsForUser(userId));
+  return ResponseBuilder.json(
+    withInventorySelectors(grantAllItemsForUser(userId)),
+  );
 }
 
 /**

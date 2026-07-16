@@ -232,3 +232,99 @@ Implement in this order:
 6. Migrate the client inventory UI to render dynamic slots.
 
 This keeps the model coherent on the server before widening the UI changes.
+
+## Pause Snapshot (2026-07-16)
+
+Implementation has progressed substantially, but the migration is not complete.
+Use this section as the resume backlog.
+
+### Already Landed (High-Level)
+
+- Living class registry, slot/value templates, and persisted living fields are in place.
+- Server item/tree action paths now support dynamic `slots` + `bag` inventory shape.
+- Client inventory panel renders dynamic slots and bag items (no fixed two-hand-only rendering).
+- NPC client state and tile detail now include dynamic slots/bag/values.
+- MCP and HTTP responses now include `inventory_slot_ids` and `inventory_selectors` in core world and action flows.
+
+### Remaining Issues
+
+- Fixed-slot compatibility aliases still exist in many places and can drift from dynamic `slots`/`bag` state if touched inconsistently.
+- Dynamic slot/tag semantics are only partially enforced in gameplay logic; most behavior still checks item presence rather than slot capability tags.
+- Selector metadata construction is duplicated across several modules instead of one shared helper.
+- Living values are displayed, but there is no schema-driven formatting/units/ranges or UX for important stats.
+- Runtime/tool contracts still have some legacy naming semantics (`inventory` selector alias) that should be normalized/documented clearly for long-term API stability.
+
+## Resume Backlog
+
+### P0 - Finish Core Dynamic Model (No New Features Before These)
+
+- Remove remaining fixed-slot assumptions from crafting logic in `src/virtual-world/assets/server/crafting-helpers.ts`.
+- Remove/fence legacy alias writes (`left_hand`, `right_hand`, `inventory`) where not needed, and make `slots` + `bag` the only authoritative state.
+- Audit and tighten NPC normalization paths in `src/virtual-world/assets/server/npc-storage.ts` and `src/virtual-world/assets/server/npc-tick-helpers.ts` so they never re-introduce fixed-slot coupling.
+- Consolidate selector-building logic into one shared server helper and consume it from:
+  - `src/virtual-world/assets/server/current-world-state.ts`
+  - `src/virtual-world/assets/server/http-handler-helpers.ts`
+  - `src/virtual-world/assets/server/tool-handlers.ts`
+  - `src/virtual-world/virtual-world.js`
+
+### P1 - Behavior Correctness and Slot Semantics
+
+- Add slot-tag query helpers usage in behavior paths so actions can require capabilities (for example any `hand` slot) instead of literal slot IDs.
+- Expand equip validation beyond `accepts` item type checks to support tag/capability constraints where needed.
+- Ensure all action-condition source-item resolution consistently uses shared living item helper functions.
+- Add regression coverage for action flows where item state mutates (logic effects) and must be persisted back to slot or bag correctly.
+
+### P1 - API Contract Cleanup
+
+- Define one explicit selector contract (`inventory` alias vs `bag`) and document it in runtime schema + README notes.
+- Ensure every HTTP/MCP response that includes inventory includes selector metadata (double-check infrequent/admin/debug paths).
+- Decide whether to keep legacy selector aliases indefinitely or schedule deprecation.
+
+### P2 - UI Quality and Clarity
+
+- Improve living values rendering in `src/virtual-world/assets/public/client.js`:
+  - schema-aware formatting
+  - min/max progress rendering for numeric values
+  - optional grouping/prioritization of critical values
+- Add explicit i18n entries for any newly introduced living values and slot labels.
+- Improve NPC detail panel readability when many slots/values exist (collapsible groups or compact rows).
+
+### P2 - Internationalization / Labels
+
+- Add missing `living.value.*` keys for future value fields in `src/virtual-world/assets/public/i18n.js`.
+- Add/verify `living.slot.*` keys where slot labels are expected to be localized.
+- Ensure fallback labels from living class schema are respected everywhere.
+
+### P3 - Technical Debt and Consistency
+
+- Reduce duplicated inventory-shape normalization helpers across server modules.
+- Introduce shared utility for deriving canonical slot order (class definition order + stable fallback).
+- Consider introducing stricter types for dynamic inventory payloads in handler return types (currently many `any` payloads).
+
+## Concrete File Targets To Revisit
+
+- `src/virtual-world/assets/server/crafting-helpers.ts`
+- `src/virtual-world/assets/server/npc-storage.ts`
+- `src/virtual-world/assets/server/npc-tick-helpers.ts`
+- `src/virtual-world/assets/server/current-world-state.ts`
+- `src/virtual-world/assets/server/http-handler-helpers.ts`
+- `src/virtual-world/assets/server/tool-handlers.ts`
+- `src/virtual-world/assets/server/world-domain.ts`
+- `src/virtual-world/assets/server/item-action-helpers.ts`
+- `src/virtual-world/assets/public/client.js`
+- `src/virtual-world/assets/public/i18n.js`
+- `src/virtual-world/virtual-world.js`
+
+## Nice-to-Have Ideas (Post-Migration)
+
+- Living class editor UI for slot definitions/value schema in admin panels.
+- Visual equipped-item indicators on NPC avatars (not only textual tile detail).
+- Per-class inventory panel layouts and slot grouping (for example body/utility/pack).
+- Advanced value effects (fatigue impacts move speed, warmth affects world interactions).
+
+## Suggested Resume Order
+
+1. Complete P0 model cleanup and helper consolidation.
+2. Complete P1 behavior correctness and API contract cleanup.
+3. Improve P2 UI/i18n quality.
+4. Address P3 debt and then pursue Nice-to-Have ideas.

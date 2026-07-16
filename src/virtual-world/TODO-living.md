@@ -114,7 +114,7 @@ slotDefinitions: [
   { id: "left_hand", tags: ["hand", "manipulator"] },
   { id: "right_hand", tags: ["hand", "manipulator"] },
   { id: "back", tags: ["carry"] },
-]
+];
 ```
 
 Then actions can ask for an item in a `hand` slot instead of directly checking `left_hand` and `right_hand`.

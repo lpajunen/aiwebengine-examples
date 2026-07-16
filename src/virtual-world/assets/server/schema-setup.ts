@@ -20,6 +20,7 @@ type WorldSchemaTables = {
   worldItemMeta: string;
   itemClass: string;
   actionClass: string;
+  livingClass: string;
 };
 
 type ChatSchemaTables = {
@@ -842,6 +843,44 @@ export function ensureWorldDatabaseSchema(
     return database.addUniqueIndex(
       tables.actionClass,
       JSON.stringify(["action_id"]),
+    );
+  });
+
+  step("createTable", tables.livingClass, function () {
+    return database.createTable(tables.livingClass);
+  });
+  [
+    ["addTextColumn", "class_id", false],
+    ["addTextColumn", "kind", false],
+    ["addTextColumn", "slot_definitions_json", false],
+    ["addTextColumn", "value_template_json", false],
+    ["addTextColumn", "value_schema_json", false],
+    ["addIntegerColumn", "created_at", false],
+    ["addIntegerColumn", "updated_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      tables.livingClass,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              tables.livingClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              tables.livingClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", tables.livingClass, function () {
+    return database.addUniqueIndex(
+      tables.livingClass,
+      JSON.stringify(["class_id"]),
     );
   });
 

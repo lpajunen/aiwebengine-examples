@@ -94,6 +94,39 @@ export interface Inventory {
   inventory: InventoryItem[];
 }
 
+export type LivingKind = "player" | "npc" | "creature";
+
+export interface LivingSlotDefinition {
+  id: string;
+  labelKey: string;
+  fallbackLabel: string;
+  accepts?: string[];
+  tags?: string[];
+}
+
+export interface LivingValueSchemaEntry {
+  kind: "number" | "string" | "boolean";
+  min?: number;
+  max?: number;
+}
+
+export type LivingValueSchema = Record<string, LivingValueSchemaEntry>;
+
+export interface LivingClassRecord {
+  id: string;
+  kind: LivingKind;
+  slotDefinitions: LivingSlotDefinition[];
+  valueTemplate: Record<string, unknown>;
+  valueSchema?: LivingValueSchema;
+}
+
+export interface LivingState {
+  class_id: string;
+  slots: Record<string, InventoryItem | null>;
+  bag: InventoryItem[];
+  values: Record<string, unknown>;
+}
+
 export interface OakTile {
   row: number;
   col: number;
@@ -417,6 +450,71 @@ export function createEmptyInventory(): Inventory {
     right_hand: null,
     inventory: [],
   };
+}
+
+export function createEmptyLivingState(classId: string): LivingState {
+  return {
+    class_id: String(classId || ""),
+    slots: {},
+    bag: [],
+    values: {},
+  };
+}
+
+export function createLivingSlotsFromDefinitions(
+  slotDefinitions: LivingSlotDefinition[],
+): Record<string, InventoryItem | null> {
+  const slots: Record<string, InventoryItem | null> = {};
+  if (!Array.isArray(slotDefinitions)) return slots;
+  for (let i = 0; i < slotDefinitions.length; i++) {
+    const slotDef = slotDefinitions[i];
+    if (!slotDef || typeof slotDef.id !== "string") continue;
+    slots[String(slotDef.id)] = null;
+  }
+  return slots;
+}
+
+export function normalizeLivingValues(
+  values: unknown,
+  valueTemplate: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = Object.assign({}, valueTemplate || {});
+  if (!isRecordLike(values)) return out;
+  Object.keys(values).forEach(function (key) {
+    out[key] = values[key];
+  });
+  return out;
+}
+
+export function normalizeLivingState(
+  state: unknown,
+  livingClass: LivingClassRecord,
+): LivingState {
+  const out = createEmptyLivingState(livingClass.id);
+  const defaultSlots = createLivingSlotsFromDefinitions(
+    livingClass.slotDefinitions,
+  );
+  out.slots = defaultSlots;
+  out.values = normalizeLivingValues({}, livingClass.valueTemplate || {});
+  if (!isRecordLike(state)) return out;
+
+  if (isRecordLike(state.slots)) {
+    const stateSlots = state.slots as Record<string, unknown>;
+    Object.keys(defaultSlots).forEach(function (slotId) {
+      const candidate = stateSlots[slotId];
+      out.slots[slotId] = isValidItem(candidate) ? candidate : null;
+    });
+  }
+
+  if (Array.isArray(state.bag)) {
+    out.bag = state.bag.filter(isValidItem);
+  }
+
+  out.values = normalizeLivingValues(
+    isRecordLike(state.values) ? state.values : {},
+    livingClass.valueTemplate || {},
+  );
+  return out;
 }
 
 export function isValidItem(item: unknown): item is InventoryItem {

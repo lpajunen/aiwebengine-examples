@@ -177,6 +177,7 @@ import {
   upsertActionClass as upsertActionClassImpl,
   deleteActionClass as deleteActionClassImpl,
 } from "./server/item-registry.ts";
+import { bootstrapLivingClasses as bootstrapLivingClassesImpl } from "./server/living-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -807,6 +808,7 @@ var VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
 var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 var VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
+var VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 
 /**
  * @param {string} raw
@@ -1080,6 +1082,7 @@ function ensureWorldDatabaseSchema() {
       worldItemMeta: VWORLD_WORLD_ITEM_META_TABLE,
       itemClass: VWORLD_ITEM_CLASS_TABLE,
       actionClass: VWORLD_ACTION_CLASS_TABLE,
+      livingClass: VWORLD_LIVING_CLASS_TABLE,
     },
     parseWorldDbResult,
     vwLog,
@@ -3152,6 +3155,7 @@ function init() {
   ensureChatDatabaseSchema();
   bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   bootstrapActionClassesImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
+  bootstrapLivingClassesImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
   startNPCTicker();
   registerVirtualWorldRuntimeImpl({
     routeRegistry: routeRegistry,

@@ -111,6 +111,52 @@ function inventoryItemLabel(item) {
   return t(itemTypeToLabelKey(type), humanizeType(type));
 }
 
+/**
+ * @param {ClientInventory | any} inv
+ * @returns {Array<{key: string, value: unknown}>}
+ */
+function getLivingValuesEntries(inv) {
+  if (!inv || !inv.values || typeof inv.values !== "object") return [];
+  var keys = Object.keys(inv.values).sort();
+  var out = [];
+  for (var i = 0; i < keys.length; i++) {
+    out.push({ key: keys[i], value: inv.values[keys[i]] });
+  }
+  return out;
+}
+
+/**
+ * @param {string} classId
+ * @param {string} valueKey
+ * @returns {string}
+ */
+function livingValueLabel(classId, valueKey) {
+  var classes = getLivingRegistryClasses();
+  var cls = classes && classes[classId] ? classes[classId] : null;
+  var schema =
+    cls && cls.valueSchema && typeof cls.valueSchema === "object"
+      ? cls.valueSchema
+      : {};
+  var schemaEntry = schema[valueKey] || null;
+  var labelKey =
+    schemaEntry && schemaEntry.labelKey
+      ? schemaEntry.labelKey
+      : "living.value." + valueKey;
+  var fallback =
+    schemaEntry && schemaEntry.fallbackLabel
+      ? schemaEntry.fallbackLabel
+      : humanizeType(valueKey);
+  return t(labelKey, fallback);
+}
+
+/** @param {unknown} value */
+function formatLivingValue(value) {
+  if (typeof value === "number") return String(Math.round(value * 100) / 100);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (value == null) return "-";
+  return String(value);
+}
+
 /** @param {ClientInventory | any} inv */
 function getPrimaryHeldSlotIds(inv) {
   var slotIds = getInventorySlotIds(inv);
@@ -2513,6 +2559,29 @@ function renderInventoryPanel() {
 
   countDiv.textContent =
     inv.bag.length + " " + t("inventory.items_suffix", "items");
+
+  var livingValueEntries = getLivingValuesEntries(inv);
+  if (livingValueEntries.length > 0) {
+    var valueRows = "";
+    for (var lv = 0; lv < livingValueEntries.length; lv++) {
+      var entry = livingValueEntries[lv];
+      valueRows +=
+        '<div class="inv-row">' +
+        '<span class="label">' +
+        escHtml(livingValueLabel(inv.class_id || "", entry.key)) +
+        "</span>" +
+        '<span class="inv-row-actions">' +
+        escHtml(formatLivingValue(entry.value)) +
+        "</span>" +
+        "</div>";
+    }
+    listDiv.innerHTML +=
+      '<div class="inv-row"><span class="label" style="grid-column:1/-1;font-weight:700;opacity:0.9">' +
+      escHtml(t("inventory.values", "Living values")) +
+      "</span></div>" +
+      valueRows;
+  }
+
   updateHeldHud();
 }
 
@@ -3507,6 +3576,10 @@ function renderTileDetailPanel() {
       var npcSlots =
         npcData.slots && typeof npcData.slots === "object" ? npcData.slots : {};
       var npcBag = Array.isArray(npcData.bag) ? npcData.bag : [];
+      var npcValues =
+        npcData.values && typeof npcData.values === "object"
+          ? npcData.values
+          : {};
       html +=
         '<div class="tile-row">' +
         escHtml(npcDisplayName(npcEntry.id)) +
@@ -3535,6 +3608,18 @@ function renderTileDetailPanel() {
         html +=
           '<div class="tile-row">Bag items: ' +
           escHtml(String(npcBag.length)) +
+          "</div>";
+      }
+      var npcValueKeys = Object.keys(npcValues).sort();
+      for (var nv = 0; nv < npcValueKeys.length; nv++) {
+        var npcValueKey = npcValueKeys[nv];
+        html +=
+          '<div class="tile-row">' +
+          escHtml(
+            livingValueLabel(String(npcData.class_id || ""), npcValueKey),
+          ) +
+          ": " +
+          escHtml(formatLivingValue(npcValues[npcValueKey])) +
           "</div>";
       }
     }

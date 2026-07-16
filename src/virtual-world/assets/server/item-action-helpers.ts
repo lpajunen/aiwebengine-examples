@@ -3,6 +3,7 @@ import {
   getDefaultPlayerLivingClassId,
   getLivingClass,
 } from "./living-registry.ts";
+import { canEquipItemInSlot } from "./world-domain.ts";
 
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;
@@ -132,21 +133,8 @@ function canEquipItemToSelector(
   const classId = inv.class_id || getDefaultPlayerLivingClassId();
   const livingClass = getLivingClass(classId);
   if (!livingClass || !Array.isArray(livingClass.slotDefinitions)) return true;
-
-  const slotDef = livingClass.slotDefinitions.find(function (slot) {
-    return slot && String(slot.id || "") === selector;
-  });
-  if (
-    !slotDef ||
-    !Array.isArray(slotDef.accepts) ||
-    slotDef.accepts.length === 0
-  ) {
-    return true;
-  }
-
   const itemType = String((item && item.type) || "");
-  if (!itemType) return false;
-  return slotDef.accepts.indexOf(itemType) !== -1;
+  return canEquipItemInSlot(livingClass, selector, itemType);
 }
 
 function makeCheatItemId(

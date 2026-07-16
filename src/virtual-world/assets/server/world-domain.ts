@@ -474,6 +474,43 @@ export function createLivingSlotsFromDefinitions(
   return slots;
 }
 
+export function getLivingSlotDefinition(
+  livingClass: LivingClassRecord | null | undefined,
+  slotId: string,
+): LivingSlotDefinition | null {
+  if (!livingClass || !Array.isArray(livingClass.slotDefinitions)) return null;
+  const normalizedSlotId = String(slotId || "");
+  for (let i = 0; i < livingClass.slotDefinitions.length; i++) {
+    const slot = livingClass.slotDefinitions[i];
+    if (!slot || String(slot.id || "") !== normalizedSlotId) continue;
+    return slot;
+  }
+  return null;
+}
+
+export function slotAcceptsItemType(
+  slotDef: LivingSlotDefinition | null | undefined,
+  itemType: string,
+): boolean {
+  if (!slotDef) return false;
+  if (!Array.isArray(slotDef.accepts) || slotDef.accepts.length === 0) {
+    return true;
+  }
+  const normalizedItemType = String(itemType || "");
+  if (!normalizedItemType) return false;
+  return slotDef.accepts.indexOf(normalizedItemType) !== -1;
+}
+
+export function canEquipItemInSlot(
+  livingClass: LivingClassRecord | null | undefined,
+  slotId: string,
+  itemType: string,
+): boolean {
+  const slotDef = getLivingSlotDefinition(livingClass, slotId);
+  if (!slotDef) return false;
+  return slotAcceptsItemType(slotDef, itemType);
+}
+
 export function normalizeLivingValues(
   values: unknown,
   valueTemplate: Record<string, unknown>,

@@ -152,6 +152,21 @@ export function virtualWorldManageItemsToolHandler(
 
   const args = context.args || {};
   const action = String(args.action || "list");
+
+  function buildInventorySelectors(inventory: any): {
+    inventory_slot_ids: string[];
+    inventory_selectors: string[];
+  } {
+    const slotIds =
+      inventory && inventory.slots && typeof inventory.slots === "object"
+        ? Object.keys(inventory.slots).sort()
+        : ["left_hand", "right_hand"];
+    return {
+      inventory_slot_ids: slotIds,
+      inventory_selectors: slotIds.concat(["inventory"]),
+    };
+  }
+
   if (action === "list") {
     const state = deps.getCurrentWorldStateForUser(userId);
     return JSON.stringify({
@@ -160,6 +175,8 @@ export function virtualWorldManageItemsToolHandler(
       player: state.player,
       tile_items: state.tile_items,
       inventory: state.inventory,
+      inventory_slot_ids: state.inventory_slot_ids,
+      inventory_selectors: state.inventory_selectors,
       available_actions: state.available_actions,
     });
   }
@@ -172,6 +189,11 @@ export function virtualWorldManageItemsToolHandler(
   });
   result.payload.status = result.status;
   result.payload.world_id = deps.getPlayerWorld(userId);
+  if (result && result.payload && result.payload.inventory) {
+    const selectors = buildInventorySelectors(result.payload.inventory);
+    result.payload.inventory_slot_ids = selectors.inventory_slot_ids;
+    result.payload.inventory_selectors = selectors.inventory_selectors;
+  }
   return JSON.stringify(result.payload);
 }
 

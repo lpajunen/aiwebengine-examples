@@ -220,6 +220,8 @@ export function getCurrentWorldStateForUser(
   inventory: any;
   world_mods: any;
   houses: any;
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
   available_actions: string[];
   move_options: Record<
     string,
@@ -244,6 +246,11 @@ export function getCurrentWorldStateForUser(
   const currentTileItems = Array.isArray(worldItems[tileKey])
     ? worldItems[tileKey]
     : [];
+  const inventorySlotIds =
+    inventory && inventory.slots && typeof inventory.slots === "object"
+      ? Object.keys(inventory.slots).sort()
+      : ["left_hand", "right_hand"];
+  const inventorySelectors = inventorySlotIds.concat(["inventory"]);
 
   return {
     ok: true,
@@ -260,6 +267,8 @@ export function getCurrentWorldStateForUser(
     inventory: inventory,
     world_mods: deps.loadWorldMods(worldId),
     houses: deps.loadWorldHouses(worldId),
+    inventory_slot_ids: inventorySlotIds,
+    inventory_selectors: inventorySelectors,
     available_actions: deps.getAvailableWorldActions(
       inventory,
       currentTileItems,

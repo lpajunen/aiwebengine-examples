@@ -55,7 +55,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       left_hand: "Left Hand",
       right_hand: "Right Hand",
       backpack_empty: "Backpack empty",
+      values: "Living values",
       items_suffix: "items",
+    },
+    living: {
+      value: {
+        fatigue: "Fatigue",
+        warmth: "Warmth",
+      },
     },
   },
   fi: {
@@ -111,7 +118,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       left_hand: "Vasen käsi",
       right_hand: "Oikea käsi",
       backpack_empty: "Reppu on tyhjä",
+      values: "Olennon arvot",
       items_suffix: "esinettä",
+    },
+    living: {
+      value: {
+        fatigue: "Väsymys",
+        warmth: "Lämpö",
+      },
     },
   },
 });

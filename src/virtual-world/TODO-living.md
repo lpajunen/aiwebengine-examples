@@ -333,9 +333,14 @@ Every response that includes a living's `inventory` (or, for NPCs, top-level `sl
 - `src/virtual-world/assets/public/i18n.js`
 - `src/virtual-world/virtual-world.js`
 
+## Living Class Editor UI — DONE (2026-07-17)
+
+Added a third editor panel ("🧬 Living types") alongside the existing item-class and action-class editors, following the exact same pattern (server-rendered panel HTML in `page-bootstrap.ts`, list/CRUD JS in `client.js`, `GET/POST /virtual-world/living-classes` + `PUT/DELETE /virtual-world/living-classes/:id` HTTP routes, and a `virtualWorldManageLivingClasses` MCP tool) — the backend storage/registry (`living-class-storage.ts`, `living-registry.ts`) already existed and needed no changes beyond one bug fix. `slotDefinitions`/`valueTemplate`/`valueSchema` are edited as raw JSON textareas, matching how the existing editors already handle their own nested fields (`stateTemplate`, `logicSpec`). No new auth/permission gating was added — matches the existing item/action-class editors, which have none.
+
+Bug fixed along the way: `parseValueSchema()` in `living-registry.ts` was silently dropping `labelKey`/`fallbackLabel` when reading a living class back from the DB (only `kind`/`min`/`max` survived the round-trip), even though the type declares them and the built-in seed data sets them. Fixed to mirror `parseSlotDefinitions()`'s handling of the same fields on slot definitions — without this fix, any per-value label set through the new editor would have silently vanished on the next cache refresh.
+
 ## Nice-to-Have Ideas (Post-Migration)
 
-- Living class editor UI for slot definitions/value schema in admin panels.
 - Visual equipped-item indicators on NPC avatars (not only textual tile detail).
 - Per-class inventory panel layouts and slot grouping (for example body/utility/pack).
 - Advanced value effects (fatigue impacts move speed, warmth affects world interactions).

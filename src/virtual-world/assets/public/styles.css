@@ -764,7 +764,7 @@ canvas {
 }
 #btn-chat .unread-badge.visible { display: block; }
 
-/* ── Item / action class panels ─────────────────────────────────────────── */
+/* ── Item / action / living class panels ────────────────────────────────── */
 #btn-item-classes {
   background: rgba(30,90,60,0.85);
   border-color: rgba(80,200,130,0.55);
@@ -775,9 +775,15 @@ canvas {
   border-color: rgba(200,80,200,0.55);
 }
 #btn-action-classes:hover { background: rgba(120,40,120,1); }
+#btn-living-classes {
+  background: rgba(30,70,110,0.85);
+  border-color: rgba(80,150,220,0.55);
+}
+#btn-living-classes:hover { background: rgba(40,95,145,1); }
 
 #hud-item-class-panel,
-#hud-action-class-panel {
+#hud-action-class-panel,
+#hud-living-class-panel {
   right: 14px;
   bottom: 70px;
   width: min(400px, calc(100vw - 28px));

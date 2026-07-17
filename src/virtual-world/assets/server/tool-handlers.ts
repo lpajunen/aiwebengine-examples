@@ -18,6 +18,15 @@ type ActionClassHandlerDeps = {
   deleteActionClass: (id: string) => void;
 };
 
+type LivingClassHandlerDeps = {
+  getAuthenticatedUserId: (context: any) => string | null;
+  refreshLivingClasses: () => void;
+  getAllLivingClasses: () => any[];
+  getLivingClass: (id: string) => any | null;
+  upsertLivingClass: (record: any) => { ok: boolean; error?: string };
+  deleteLivingClass: (id: string) => void;
+};
+
 type ToolHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
   getCurrentWorldStateForUser: (userId: string) => any;
@@ -447,6 +456,85 @@ export function virtualWorldManageActionClassesToolHandler(
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     deps.deleteActionClass(id);
+    return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+}
+
+export function virtualWorldManageLivingClassesToolHandler(
+  context: any,
+  deps: LivingClassHandlerDeps,
+): string {
+  const userId = deps.getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+
+  const args = context.args || {};
+  const action = String(args.action || "list");
+
+  if (action === "list") {
+    deps.refreshLivingClasses();
+    return JSON.stringify({
+      ok: true,
+      living_classes: deps.getAllLivingClasses(),
+    });
+  }
+
+  if (action === "get") {
+    deps.refreshLivingClasses();
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const cls = deps.getLivingClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "Living class not found" });
+    return JSON.stringify({ ok: true, living_class: cls });
+  }
+
+  if (action === "create" || action === "update") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.refreshLivingClasses();
+    if (action === "update") {
+      const existing = deps.getLivingClass(id);
+      if (!existing)
+        return JSON.stringify({ ok: false, error: "Living class not found" });
+    }
+    const record = {
+      id,
+      kind: String(args.kind || "creature"),
+      slotDefinitions: Array.isArray(args.slotDefinitions)
+        ? args.slotDefinitions
+        : [],
+      valueTemplate:
+        args.valueTemplate && typeof args.valueTemplate === "object"
+          ? args.valueTemplate
+          : {},
+      valueSchema:
+        args.valueSchema && typeof args.valueSchema === "object"
+          ? args.valueSchema
+          : undefined,
+    };
+    const writeResult = deps.upsertLivingClass(record);
+    if (!writeResult || !writeResult.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "Living class upsert failed" +
+          (writeResult && writeResult.error
+            ? ": " + String(writeResult.error)
+            : ""),
+      });
+    }
+    deps.refreshLivingClasses();
+    return JSON.stringify({ ok: true, living_class: record });
+  }
+
+  if (action === "delete") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.deleteLivingClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 

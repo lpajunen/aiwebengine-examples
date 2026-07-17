@@ -45,10 +45,13 @@ var chatPanelVisible = false;
 var chatActiveTab = "world"; // 'world' | 'dm'
 var itemClassPanelVisible = false;
 var actionClassPanelVisible = false;
+var livingClassPanelVisible = false;
 /** @type {string | null} */
 var itemClassEditId = null;
 /** @type {string | null} */
 var actionClassEditId = null;
+/** @type {string | null} */
+var livingClassEditId = null;
 /** @type {any[]} */
 var worldChatMessages = INITIAL_CHAT || [];
 /** @type {string[]} */
@@ -4327,6 +4330,7 @@ function showItemClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
   if (craftingPanelVisible) closeCraftingPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
+  if (livingClassPanelVisible) closeLivingClassPanel();
   itemClassPanelVisible = true;
   requireElementById("hud-item-class-panel").style.display = "block";
   renderItemClassList();
@@ -4546,6 +4550,7 @@ function showActionClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
   if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
+  if (livingClassPanelVisible) closeLivingClassPanel();
   actionClassPanelVisible = true;
   requireElementById("hud-action-class-panel").style.display = "block";
   renderActionClassList();
@@ -4559,6 +4564,249 @@ function closeActionClassPanel() {
 function toggleActionClassPanel() {
   if (actionClassPanelVisible) closeActionClassPanel();
   else showActionClassPanel();
+}
+
+// ── Living class panel ────────────────────────────────────────────────────
+
+function renderLivingClassList() {
+  var listDiv = requireElementById("living-class-list");
+  fetchWithAuth("/virtual-world/living-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.living_classes) ? data.living_classes : [];
+      if (!classes.length) {
+        listDiv.innerHTML =
+          '<div class="class-row"><em style="opacity:0.55">No custom living types yet.</em></div>';
+        return;
+      }
+      var rows = "";
+      for (var i = 0; i < classes.length; i++) {
+        var lc = classes[i];
+        var label = escHtml(String(lc.kind || "?"));
+        var id = escHtml(String(lc.id || ""));
+        rows +=
+          '<div class="class-row">' +
+          '<span class="class-row-id">' +
+          id +
+          "</span> " +
+          '<span class="class-row-label">' +
+          label +
+          "</span>" +
+          '<span class="class-row-btns">' +
+          '<button data-living-class-id="' +
+          id +
+          '" onclick="editLivingClass(this.dataset.livingClassId)">Edit</button>' +
+          '<button data-living-class-id="' +
+          id +
+          '" onclick="deleteLivingClassUI(this.dataset.livingClassId)">Del</button>' +
+          "</span></div>";
+      }
+      listDiv.innerHTML = rows;
+    })
+    .catch(function () {
+      listDiv.innerHTML =
+        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+    });
+}
+
+/** @param {string} id */
+function editLivingClass(id) {
+  fetchWithAuth("/virtual-world/living-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.living_classes) ? data.living_classes : [];
+      var lc = null;
+      for (var i = 0; i < classes.length; i++) {
+        if (String(classes[i].id) === String(id)) {
+          lc = classes[i];
+          break;
+        }
+      }
+      if (!lc) {
+        showHudToast("Living type not found", true);
+        return;
+      }
+      livingClassEditId = String(id);
+      var idEl = /** @type {HTMLInputElement} */ (requireElementById("lc-id"));
+      idEl.value = String(lc.id || "");
+      idEl.disabled = true;
+      /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
+        String(lc.kind || "creature");
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("lc-slot-definitions")
+      ).value =
+        Array.isArray(lc.slotDefinitions) && lc.slotDefinitions.length
+          ? JSON.stringify(lc.slotDefinitions, null, 2)
+          : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("lc-value-template")
+      ).value =
+        lc.valueTemplate && Object.keys(lc.valueTemplate).length
+          ? JSON.stringify(lc.valueTemplate, null, 2)
+          : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("lc-value-schema")
+      ).value =
+        lc.valueSchema && Object.keys(lc.valueSchema).length
+          ? JSON.stringify(lc.valueSchema, null, 2)
+          : "";
+      requireElementById("living-class-form-title").textContent =
+        "Edit: " + String(id);
+    })
+    .catch(function () {
+      showHudToast("Failed to load living type", true);
+    });
+}
+
+function cancelLivingClassEdit() {
+  livingClassEditId = null;
+  var idEl = /** @type {HTMLInputElement} */ (requireElementById("lc-id"));
+  idEl.disabled = false;
+  idEl.value = "";
+  /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
+    "creature";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-slot-definitions")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-value-template")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-value-schema")
+  ).value = "";
+  requireElementById("living-class-form-title").textContent = "New living type";
+}
+
+function submitLivingClassForm() {
+  var idVal = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-id")
+  ).value.trim();
+  if (!idVal) {
+    showHudToast("Living type ID is required", true);
+    return;
+  }
+  var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-kind"))
+    .value;
+  var slotDefinitionsRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-slot-definitions")
+  ).value.trim();
+  var valueTemplateRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-value-template")
+  ).value.trim();
+  var valueSchemaRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-value-schema")
+  ).value.trim();
+  var slotDefinitions = [];
+  if (slotDefinitionsRaw) {
+    try {
+      slotDefinitions = JSON.parse(slotDefinitionsRaw);
+    } catch (e) {
+      showHudToast("Invalid slot definitions JSON", true);
+      return;
+    }
+    if (!Array.isArray(slotDefinitions)) {
+      showHudToast("Slot definitions must be a JSON array", true);
+      return;
+    }
+  }
+  var valueTemplate = {};
+  if (valueTemplateRaw) {
+    try {
+      valueTemplate = JSON.parse(valueTemplateRaw);
+    } catch (e) {
+      showHudToast("Invalid value template JSON", true);
+      return;
+    }
+  }
+  var valueSchema;
+  if (valueSchemaRaw) {
+    try {
+      valueSchema = JSON.parse(valueSchemaRaw);
+    } catch (e) {
+      showHudToast("Invalid value schema JSON", true);
+      return;
+    }
+  }
+  var record = {
+    id: idVal,
+    kind: kindVal,
+    slotDefinitions: slotDefinitions,
+    valueTemplate: valueTemplate,
+    valueSchema: valueSchema,
+  };
+  var url = livingClassEditId
+    ? "/virtual-world/living-classes/" + encodeURIComponent(livingClassEditId)
+    : "/virtual-world/living-classes";
+  var method = livingClassEditId ? "PUT" : "POST";
+  fetchWithAuth(url, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Save failed"), true);
+        return;
+      }
+      showHudToast("Saved!", false);
+      cancelLivingClassEdit();
+      renderLivingClassList();
+    })
+    .catch(function () {
+      showHudToast("Save failed", true);
+    });
+}
+
+/** @param {string} id */
+function deleteLivingClassUI(id) {
+  fetchWithAuth(
+    "/virtual-world/living-classes/" + encodeURIComponent(String(id)),
+    { method: "DELETE" },
+  )
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(String(data.error || "Delete failed"), true);
+        return;
+      }
+      showHudToast("Deleted " + String(id), false);
+      if (livingClassEditId === String(id)) cancelLivingClassEdit();
+      renderLivingClassList();
+    })
+    .catch(function () {
+      showHudToast("Delete failed", true);
+    });
+}
+
+function showLivingClassPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  if (craftingPanelVisible) closeCraftingPanel();
+  if (itemClassPanelVisible) closeItemClassPanel();
+  if (actionClassPanelVisible) closeActionClassPanel();
+  livingClassPanelVisible = true;
+  requireElementById("hud-living-class-panel").style.display = "block";
+  renderLivingClassList();
+}
+
+function closeLivingClassPanel() {
+  livingClassPanelVisible = false;
+  requireElementById("hud-living-class-panel").style.display = "none";
+}
+
+function toggleLivingClassPanel() {
+  if (livingClassPanelVisible) closeLivingClassPanel();
+  else showLivingClassPanel();
 }
 
 // ── Game loop ────────────────────────────────────────────────────────────

@@ -295,6 +295,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-chat" onclick="toggleChatPanel()">💬 Chat<span class="unread-badge" id="chat-unread-badge"></span></button>
     <button id="btn-item-classes" onclick="toggleItemClassPanel()">📦 Item types</button>
     <button id="btn-action-classes" onclick="toggleActionClassPanel()">⚡ Action types</button>
+    <button id="btn-living-classes" onclick="toggleLivingClassPanel()">🧬 Living types</button>
   </div>
 
   <div class="hud" id="hud-use-picker">
@@ -438,6 +439,34 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-actions">
         <button onclick="submitActionClassForm()">Save</button>
         <button onclick="cancelActionClassEdit()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud" id="hud-living-class-panel">
+    <div class="panel-header">
+      <span class="panel-title">Living Types</span>
+      <button class="panel-close" onclick="closeLivingClassPanel()" title="Close">×</button>
+    </div>
+    <div id="living-class-list" class="class-list"></div>
+    <div class="class-form">
+      <div class="class-form-title" id="living-class-form-title">New living type</div>
+      <div class="class-form-fields">
+        <label>ID <input id="lc-id" type="text" placeholder="my_creature" autocomplete="off"></label>
+        <label>Kind
+          <select id="lc-kind">
+            <option value="player">player</option>
+            <option value="npc">npc</option>
+            <option value="creature">creature</option>
+          </select>
+        </label>
+        <label>Slot definitions (JSON) <textarea id="lc-slot-definitions" rows="3" placeholder='[{"id":"left_hand","labelKey":"living.slot.left_hand","fallbackLabel":"Left hand","tags":["hand"]}]'></textarea></label>
+        <label>Value template (JSON) <textarea id="lc-value-template" rows="2" placeholder='{"fatigue": 0}'></textarea></label>
+        <label>Value schema (JSON) <textarea id="lc-value-schema" rows="3" placeholder='{"fatigue":{"kind":"number","min":0,"max":100}}'></textarea></label>
+      </div>
+      <div class="class-form-actions">
+        <button onclick="submitLivingClassForm()">Save</button>
+        <button onclick="cancelLivingClassEdit()">Cancel</button>
       </div>
     </div>
   </div>

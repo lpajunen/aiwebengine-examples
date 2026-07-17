@@ -372,6 +372,59 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "virtualWorldManageActionClassesToolHandler",
   );
 
+  const virtualWorldManageLivingClassesSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "get", "create", "update", "delete"],
+        description: "Operation to perform on living class definitions",
+        default: "list",
+      },
+      id: {
+        type: "string",
+        description:
+          "Living class ID (required for get, create, update, delete)",
+      },
+      kind: {
+        type: "string",
+        description: "Living kind: player, npc, or creature",
+      },
+      slotDefinitions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            labelKey: { type: "string" },
+            fallbackLabel: { type: "string" },
+            accepts: { type: "array", items: { type: "string" } },
+            tags: { type: "array", items: { type: "string" } },
+          },
+        },
+        description:
+          "Equipment/body slot definitions for this living class, in order",
+      },
+      valueTemplate: {
+        type: "object",
+        description:
+          "Default mutable living values for new instances of this class (e.g. fatigue)",
+      },
+      valueSchema: {
+        type: "object",
+        description:
+          "Value schema keyed by value name, each entry describing kind (number/string/boolean), min/max, and optional label",
+      },
+    },
+  });
+  safeRegisterTool(
+    deps,
+    "virtualWorldManageLivingClasses",
+    "List, get, create, update, or delete living class definitions in the virtual world",
+    virtualWorldManageLivingClassesSchema,
+    "virtualWorldManageLivingClassesToolHandler",
+  );
+
   safeRegisterAssetRoute(deps, "/virtual-world", "public/welcome.html");
   safeRegisterAssetRoute(
     deps,
@@ -510,6 +563,30 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     deps,
     "/virtual-world/action-classes/:id",
     "deleteActionClassHandler",
+    "DELETE",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/living-classes",
+    "livingClassesHandler",
+    "GET",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/living-classes",
+    "createLivingClassHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/living-classes/:id",
+    "updateLivingClassHandler",
+    "PUT",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/living-classes/:id",
+    "deleteLivingClassHandler",
     "DELETE",
   );
 }

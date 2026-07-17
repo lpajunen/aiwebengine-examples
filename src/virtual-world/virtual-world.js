@@ -178,7 +178,11 @@ import {
 } from "./server/item-registry.ts";
 import {
   bootstrapLivingClasses as bootstrapLivingClassesImpl,
+  deleteLivingClass as deleteLivingClassImpl,
   getAllLivingClasses as getAllLivingClassesImpl,
+  getLivingClass as getLivingClassImpl,
+  refreshLivingClassCache as refreshLivingClassCacheImpl,
+  upsertLivingClass as upsertLivingClassImpl,
 } from "./server/living-registry.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
@@ -189,6 +193,7 @@ import {
   virtualWorldSetNicknameToolHandler as virtualWorldSetNicknameToolHandlerImpl,
   virtualWorldManageItemClassesToolHandler as virtualWorldManageItemClassesToolHandlerImpl,
   virtualWorldManageActionClassesToolHandler as virtualWorldManageActionClassesToolHandlerImpl,
+  virtualWorldManageLivingClassesToolHandler as virtualWorldManageLivingClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
   addToDMIndex as addToDMIndexImpl,
@@ -2397,6 +2402,27 @@ function virtualWorldManageActionClassesToolHandler(context) {
 
 /**
  * @param {*} context
+ * @returns {string}
+ */
+function virtualWorldManageLivingClassesToolHandler(context) {
+  return virtualWorldManageLivingClassesToolHandlerImpl(context, {
+    getAuthenticatedUserId: getAuthenticatedUserId,
+    refreshLivingClasses: function () {
+      refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+    },
+    getAllLivingClasses: getAllLivingClassesImpl,
+    getLivingClass: getLivingClassImpl,
+    upsertLivingClass: function (record) {
+      return upsertLivingClassImpl(record, VWORLD_LIVING_CLASS_TABLE, vwLog);
+    },
+    deleteLivingClass: function (id) {
+      deleteLivingClassImpl(id, VWORLD_LIVING_CLASS_TABLE, vwLog);
+    },
+  });
+}
+
+/**
+ * @param {*} context
  */
 function itemsHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
@@ -3342,6 +3368,163 @@ function deleteActionClassHandler(context) {
   }
   deleteActionClassImpl(actionId, VWORLD_ACTION_CLASS_TABLE, vwLog);
   return ResponseBuilder.json({ ok: true, deleted_id: actionId });
+}
+
+// ── Living class CRUD handlers ────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function livingClassesHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+  var classes = getAllLivingClassesImpl();
+  return ResponseBuilder.json({ ok: true, living_classes: classes });
+}
+
+/**
+ * @param {*} value
+ * @param {"player" | "npc" | "creature"} fallback
+ * @returns {"player" | "npc" | "creature"}
+ */
+function normalizeLivingKind(value, fallback) {
+  var kind = String(value || "");
+  if (kind === "player" || kind === "npc" || kind === "creature") return kind;
+  return fallback;
+}
+
+/**
+ * @param {*} context
+ */
+function createLivingClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var id = String((body && body.id) || "").trim();
+  if (!id) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var record = {
+    id: id,
+    kind: normalizeLivingKind(body && body.kind, "creature"),
+    slotDefinitions: Array.isArray(body && body.slotDefinitions)
+      ? body.slotDefinitions
+      : [],
+    valueTemplate:
+      body && body.valueTemplate && typeof body.valueTemplate === "object"
+        ? body.valueTemplate
+        : {},
+    valueSchema:
+      body && body.valueSchema && typeof body.valueSchema === "object"
+        ? body.valueSchema
+        : undefined,
+  };
+  var livingCreateWrite = upsertLivingClassImpl(
+    record,
+    VWORLD_LIVING_CLASS_TABLE,
+    vwLog,
+  );
+  if (!livingCreateWrite || !livingCreateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Living class upsert failed" +
+          (livingCreateWrite && livingCreateWrite.error
+            ? ": " + String(livingCreateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, living_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function updateLivingClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  var existing = getLivingClassImpl(classId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "Living class not found" },
+      404,
+    );
+  }
+  var record = {
+    id: classId,
+    kind: normalizeLivingKind(body && body.kind, existing.kind),
+    slotDefinitions: Array.isArray(body && body.slotDefinitions)
+      ? body.slotDefinitions
+      : existing.slotDefinitions,
+    valueTemplate:
+      body && body.valueTemplate && typeof body.valueTemplate === "object"
+        ? body.valueTemplate
+        : existing.valueTemplate,
+    valueSchema:
+      body && body.valueSchema && typeof body.valueSchema === "object"
+        ? body.valueSchema
+        : existing.valueSchema,
+  };
+  var livingUpdateWrite = upsertLivingClassImpl(
+    record,
+    VWORLD_LIVING_CLASS_TABLE,
+    vwLog,
+  );
+  if (!livingUpdateWrite || !livingUpdateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "Living class upsert failed" +
+          (livingUpdateWrite && livingUpdateWrite.error
+            ? ": " + String(livingUpdateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, living_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function deleteLivingClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+  }
+  deleteLivingClassImpl(classId, VWORLD_LIVING_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
 function init() {

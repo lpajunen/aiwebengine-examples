@@ -140,6 +140,9 @@ function parseValueSchema(raw: string): LivingValueSchema {
         kind: kind,
         min: Number.isFinite(Number(def.min)) ? Number(def.min) : undefined,
         max: Number.isFinite(Number(def.max)) ? Number(def.max) : undefined,
+        labelKey: typeof def.labelKey === "string" ? def.labelKey : undefined,
+        fallbackLabel:
+          typeof def.fallbackLabel === "string" ? def.fallbackLabel : undefined,
       };
     });
     return schema;

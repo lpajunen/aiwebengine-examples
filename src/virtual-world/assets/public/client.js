@@ -128,16 +128,25 @@ function getLivingValuesEntries(inv) {
 /**
  * @param {string} classId
  * @param {string} valueKey
- * @returns {string}
+ * @returns {any | null}
  */
-function livingValueLabel(classId, valueKey) {
+function getLivingValueSchemaEntry(classId, valueKey) {
   var classes = getLivingRegistryClasses();
   var cls = classes && classes[classId] ? classes[classId] : null;
   var schema =
     cls && cls.valueSchema && typeof cls.valueSchema === "object"
       ? cls.valueSchema
       : {};
-  var schemaEntry = schema[valueKey] || null;
+  return schema[valueKey] || null;
+}
+
+/**
+ * @param {string} classId
+ * @param {string} valueKey
+ * @returns {string}
+ */
+function livingValueLabel(classId, valueKey) {
+  var schemaEntry = getLivingValueSchemaEntry(classId, valueKey);
   var labelKey =
     schemaEntry && schemaEntry.labelKey
       ? schemaEntry.labelKey
@@ -155,6 +164,45 @@ function formatLivingValue(value) {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (value == null) return "-";
   return String(value);
+}
+
+/**
+ * @param {any | null} schemaEntry
+ * @param {unknown} value
+ * @returns {string}
+ */
+function renderLivingValueDisplay(schemaEntry, value) {
+  var hasRange =
+    schemaEntry &&
+    schemaEntry.kind === "number" &&
+    typeof schemaEntry.min === "number" &&
+    typeof schemaEntry.max === "number" &&
+    schemaEntry.max > schemaEntry.min;
+  if (!hasRange || typeof value !== "number") {
+    return (
+      '<span class="living-value-text">' +
+      escHtml(formatLivingValue(value)) +
+      "</span>"
+    );
+  }
+  var min = schemaEntry.min;
+  var max = schemaEntry.max;
+  var clamped = Math.max(min, Math.min(max, value));
+  var pct = Math.round(((clamped - min) / (max - min)) * 100);
+  return (
+    '<span class="living-value-meter">' +
+    '<span class="living-value-meter-track">' +
+    '<span class="living-value-meter-fill" style="width:' +
+    pct +
+    '%"></span>' +
+    "</span>" +
+    '<span class="living-value-meter-text">' +
+    escHtml(formatLivingValue(value)) +
+    "/" +
+    escHtml(String(max)) +
+    "</span>" +
+    "</span>"
+  );
 }
 
 /** @param {ClientInventory | any} inv */
@@ -2571,7 +2619,10 @@ function renderInventoryPanel() {
         escHtml(livingValueLabel(inv.class_id || "", entry.key)) +
         "</span>" +
         '<span class="inv-row-actions">' +
-        escHtml(formatLivingValue(entry.value)) +
+        renderLivingValueDisplay(
+          getLivingValueSchemaEntry(inv.class_id || "", entry.key),
+          entry.value,
+        ) +
         "</span>" +
         "</div>";
     }
@@ -3580,8 +3631,9 @@ function renderTileDetailPanel() {
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
           : {};
+      html += '<div class="tile-npc-entry">';
       html +=
-        '<div class="tile-row">' +
+        '<div class="tile-npc-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
         "</div>";
       if (npcData.class_id) {
@@ -3619,9 +3671,16 @@ function renderTileDetailPanel() {
             livingValueLabel(String(npcData.class_id || ""), npcValueKey),
           ) +
           ": " +
-          escHtml(formatLivingValue(npcValues[npcValueKey])) +
+          renderLivingValueDisplay(
+            getLivingValueSchemaEntry(
+              String(npcData.class_id || ""),
+              npcValueKey,
+            ),
+            npcValues[npcValueKey],
+          ) +
           "</div>";
       }
+      html += "</div>";
     }
   }
   html += "</div>";

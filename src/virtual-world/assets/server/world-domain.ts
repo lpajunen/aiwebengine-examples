@@ -108,6 +108,8 @@ export interface LivingValueSchemaEntry {
   kind: "number" | "string" | "boolean";
   min?: number;
   max?: number;
+  labelKey?: string;
+  fallbackLabel?: string;
 }
 
 export type LivingValueSchema = Record<string, LivingValueSchemaEntry>;

@@ -285,20 +285,21 @@ Deliberately deferred, not part of this pass:
 - [x] Closed the two response-path gaps the audit found where `inventory` was returned without selector metadata: the cheat-nickname `presence_update` stream broadcast (both the HTTP path in `virtual-world.js`'s `setNicknameHandler` and the MCP path in `tool-handlers.ts`'s `virtualWorldSetNicknameToolHandler`), and the `/virtual-world/npcs` endpoint (`buildWorldNPCSnapshot` in `npc-storage.ts` now includes `inventory_slot_ids`/`inventory_selectors` per NPC, additive fields alongside the existing `slots`/`bag`).
 - [x] Documented the contract — see "Inventory Selector Contract" below.
 
-### P2 - UI Quality and Clarity
+### P2 - UI Quality and Clarity — DONE (2026-07-17)
 
-- Improve living values rendering in `src/virtual-world/assets/public/client.js`:
-  - schema-aware formatting
-  - min/max progress rendering for numeric values
-  - optional grouping/prioritization of critical values
-- Add explicit i18n entries for any newly introduced living values and slot labels.
-- Improve NPC detail panel readability when many slots/values exist (collapsible groups or compact rows).
+The audit behind this pass found `LIVING_REGISTRY` (including each value's `kind`/`min`/`max`) already reaches the client via `page-bootstrap.ts`, but nothing ever read `min`/`max` — `formatLivingValue()` just type-sniffed the raw value, and no meter/progress CSS existed anywhere.
 
-### P2 - Internationalization / Labels
+- [x] Schema-aware formatting + min/max meter: added `getLivingValueSchemaEntry`/`renderLivingValueDisplay` to `src/virtual-world/assets/public/client.js` — numeric values with both `min` and `max` defined render as a compact meter (track + fill + `value/max` text), everything else falls back to the existing plain-text `formatLivingValue`. New CSS in `src/virtual-world/assets/public/styles.css` (`.living-value-meter*`). Wired into both the player inventory panel and the NPC tile-detail panel's value rows.
+- [x] i18n entries — see "Internationalization / Labels" below.
+- [x] NPC detail panel readability: each NPC's rows (name, class, slots, bag count, values) are now wrapped in a `.tile-npc-entry` block with its own `.tile-npc-name` header, visually separated by a top border — fixes the real issue (multiple NPCs on one tile concatenating into one undifferentiated list). **Not built: collapsible/expand-toggle groups** — deliberately skipped. Today's living classes have only 2 slots + 1 value each; collapse/toggle interactivity for that little content would be over-engineering. Revisit if a living class grows substantially more complex.
+- **Deliberately deferred**: grouping/prioritization of critical values. Only one living value (`fatigue`) exists anywhere in the registry today — there's nothing to group or prioritize yet. Revisit once a second value type is actually added.
 
-- Add missing `living.value.*` keys for future value fields in `src/virtual-world/assets/public/i18n.js`.
-- Add/verify `living.slot.*` keys where slot labels are expected to be localized.
-- Ensure fallback labels from living class schema are respected everywhere.
+### P2 - Internationalization / Labels — DONE (2026-07-17)
+
+- [x] `living.value.*` — audited, nothing was missing: `fatigue` (the only value key any living class defines) and `warmth` (pre-added, forward-looking) were already present in both `en`/`fi`.
+- [x] `living.slot.*` — these were completely absent from `src/virtual-world/assets/public/i18n.js` despite `living-registry.ts` referencing exactly those `labelKey`s (`living.slot.left_hand`/`living.slot.right_hand`). Added for both `en`/`fi`, reusing the wording from the old (unused) `inventory.left_hand`/`inventory.right_hand` keys. Nothing was broken before this — slot labels were already silently falling back to the server-supplied `fallbackLabel` — but they weren't actually localized.
+- [x] Fallback labels respected everywhere: slots already worked end-to-end (`slotDef.fallbackLabel` correctly threaded through `t()`). Values did not — `livingValueLabel()` in `client.js` already tried to read `schemaEntry.labelKey`/`fallbackLabel`, but `LivingValueSchemaEntry` (`src/virtual-world/assets/server/world-domain.ts`) had no such fields. Added optional `labelKey?`/`fallbackLabel?` to the type (mirroring `LivingSlotDefinition`) and populated them for `fatigue` on both living classes in `living-registry.ts`.
+- **Noted, not fixed**: the old `inventory.left_hand`/`inventory.right_hand` i18n keys are now fully unused (nothing reads them) — left in place since removing unused keys is a lower-risk, separate cleanup; candidate for the P3 pass below.
 
 ### P3 - Technical Debt and Consistency
 
@@ -340,5 +341,5 @@ Every response that includes a living's `inventory` (or, for NPCs, top-level `sl
 
 1. ~~Complete P0 model cleanup and helper consolidation.~~ Done (2026-07-17).
 2. ~~Complete P1 behavior correctness and API contract cleanup.~~ Done (2026-07-17).
-3. Improve P2 UI/i18n quality.
+3. ~~Improve P2 UI/i18n quality.~~ Done (2026-07-17).
 4. Address P3 debt and then pursue Nice-to-Have ideas.

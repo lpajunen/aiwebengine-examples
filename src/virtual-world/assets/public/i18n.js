@@ -59,6 +59,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       items_suffix: "items",
     },
     living: {
+      slot: {
+        left_hand: "Left Hand",
+        right_hand: "Right Hand",
+      },
       value: {
         fatigue: "Fatigue",
         warmth: "Warmth",
@@ -122,6 +126,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       items_suffix: "esinettä",
     },
     living: {
+      slot: {
+        left_hand: "Vasen käsi",
+        right_hand: "Oikea käsi",
+      },
       value: {
         fatigue: "Väsymys",
         warmth: "Lämpö",

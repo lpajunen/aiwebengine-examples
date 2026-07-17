@@ -376,6 +376,28 @@ canvas {
   font-size: 12px;
   color: #cfdde7;
 }
+.living-value-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.living-value-meter-track {
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.14);
+  overflow: hidden;
+}
+.living-value-meter-fill {
+  height: 100%;
+  background: #7dd3fc;
+  border-radius: 3px;
+}
+.living-value-meter-text {
+  font-size: 11px;
+  color: #cfdde7;
+  white-space: nowrap;
+}
 
 #hud-tile-detail {
   left: 14px;
@@ -430,6 +452,22 @@ canvas {
   word-break: break-all;
 }
 #hud-tile-detail .tile-row:last-child { border-bottom: 0; }
+#hud-tile-detail .tile-npc-entry {
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+#hud-tile-detail .tile-npc-entry:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+#hud-tile-detail .tile-npc-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #a8d8ff;
+  padding: 3px 0;
+}
 #hud-tile-detail .tile-empty {
   font-size: 12px;
   color: rgba(255,255,255,0.4);

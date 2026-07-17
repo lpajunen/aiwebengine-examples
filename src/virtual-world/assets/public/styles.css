@@ -452,17 +452,17 @@ canvas {
   word-break: break-all;
 }
 #hud-tile-detail .tile-row:last-child { border-bottom: 0; }
-#hud-tile-detail .tile-npc-entry {
+#hud-tile-detail .tile-living-entry {
   padding-top: 6px;
   margin-top: 4px;
   border-top: 1px solid rgba(255,255,255,0.12);
 }
-#hud-tile-detail .tile-npc-entry:first-child {
+#hud-tile-detail .tile-living-entry:first-child {
   padding-top: 0;
   margin-top: 0;
   border-top: 0;
 }
-#hud-tile-detail .tile-npc-name {
+#hud-tile-detail .tile-living-name {
   font-size: 12px;
   font-weight: 700;
   color: #a8d8ff;

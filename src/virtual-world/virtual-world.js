@@ -2971,6 +2971,7 @@ function playersHandler(context) {
       getPlayerWorld: getPlayerWorld,
       markNPCWorldActive: markNPCWorldActive,
       buildActiveWorldPlayers: buildActiveWorldPlayers,
+      loadPlayerInventory: loadPlayerInventory,
     }),
   );
 }

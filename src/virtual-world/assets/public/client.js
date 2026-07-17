@@ -1375,8 +1375,9 @@ function makeRemoteAvatar(pid) {
  * @param {number} col
  * @param {number | null | undefined} seq
  * @param {number | null | undefined} rotation
+ * @param {any} [playerData]
  */
-function upsertRemoteAvatar(pid, row, col, seq, rotation) {
+function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
   if (pid === playerId) return;
   var tx = tileX(col),
     tz = tileZ(row);
@@ -1397,6 +1398,18 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation) {
       seq: incomingSeq !== null ? incomingSeq : 0,
       row: Number(row),
       col: Number(col),
+      class_id:
+        playerData && typeof playerData.class_id === "string"
+          ? playerData.class_id
+          : "",
+      slots:
+        playerData && playerData.slots && typeof playerData.slots === "object"
+          ? playerData.slots
+          : {},
+      values:
+        playerData && playerData.values && typeof playerData.values === "object"
+          ? playerData.values
+          : {},
     };
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
@@ -1407,6 +1420,23 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation) {
     if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
     remoteAvatars[pid].row = Number(row);
     remoteAvatars[pid].col = Number(col);
+    if (
+      playerData &&
+      playerData.slots &&
+      typeof playerData.slots === "object"
+    ) {
+      remoteAvatars[pid].slots = playerData.slots;
+    }
+    if (
+      playerData &&
+      playerData.values &&
+      typeof playerData.values === "object"
+    ) {
+      remoteAvatars[pid].values = playerData.values;
+    }
+    if (playerData && typeof playerData.class_id === "string") {
+      remoteAvatars[pid].class_id = playerData.class_id;
+    }
     refreshTileDetailIfOpen();
   }
 }
@@ -1963,7 +1993,7 @@ function fetchSnapshot() {
             requireElementById("pos-row").textContent = String(avatarRow);
           }
         } else {
-          upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation);
+          upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation, p);
         }
       });
     })
@@ -3603,17 +3633,57 @@ function renderTileDetailPanel() {
   } else {
     for (var j = 0; j < playersHere.length; j++) {
       var pp = playersHere[j];
-      if (pp.isMe) {
+      var ppData = pp.isMe ? playerInventory : remoteAvatars[pp.id] || {};
+      var ppSlots =
+        ppData.slots && typeof ppData.slots === "object" ? ppData.slots : {};
+      var ppValues =
+        ppData.values && typeof ppData.values === "object" ? ppData.values : {};
+      html += '<div class="tile-living-entry">';
+      html +=
+        '<div class="tile-living-name' +
+        (pp.isMe ? " tile-you" : "") +
+        '">' +
+        (pp.isMe
+          ? "You (" + escHtml(getNickForPlayer(pp.id)) + ")"
+          : escHtml(getNickForPlayer(pp.id))) +
+        "</div>";
+      if (ppData.class_id) {
         html +=
-          '<div class="tile-row tile-you">You (' +
-          escHtml(getNickForPlayer(pp.id)) +
-          ")</div>";
-      } else {
-        html +=
-          '<div class="tile-row">' +
-          escHtml(getNickForPlayer(pp.id)) +
+          '<div class="tile-row">Class: ' +
+          escHtml(String(ppData.class_id)) +
           "</div>";
       }
+      var ppSlotIds = Object.keys(ppSlots);
+      for (var ps = 0; ps < ppSlotIds.length; ps++) {
+        var ppSlotId = ppSlotIds[ps];
+        html +=
+          '<div class="tile-row">' +
+          escHtml(inventorySlotLabel(ppData, ppSlotId)) +
+          ": " +
+          escHtml(
+            ppSlots[ppSlotId]
+              ? inventoryItemLabel(ppSlots[ppSlotId])
+              : t("inventory.empty", "empty"),
+          ) +
+          "</div>";
+      }
+      var ppValueKeys = Object.keys(ppValues).sort();
+      for (var pv = 0; pv < ppValueKeys.length; pv++) {
+        var ppValueKey = ppValueKeys[pv];
+        html +=
+          '<div class="tile-row">' +
+          escHtml(livingValueLabel(String(ppData.class_id || ""), ppValueKey)) +
+          ": " +
+          renderLivingValueDisplay(
+            getLivingValueSchemaEntry(
+              String(ppData.class_id || ""),
+              ppValueKey,
+            ),
+            ppValues[ppValueKey],
+          ) +
+          "</div>";
+      }
+      html += "</div>";
     }
   }
   html += "</div>";
@@ -3634,9 +3704,9 @@ function renderTileDetailPanel() {
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
           : {};
-      html += '<div class="tile-npc-entry">';
+      html += '<div class="tile-living-entry">';
       html +=
-        '<div class="tile-npc-name">' +
+        '<div class="tile-living-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
         "</div>";
       if (npcData.class_id) {

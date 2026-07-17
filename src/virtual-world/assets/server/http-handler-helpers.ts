@@ -408,7 +408,10 @@ export function listPlayersForUser(
   userId: string,
   deps: Pick<
     HttpHandlerDeps,
-    "getPlayerWorld" | "markNPCWorldActive" | "buildActiveWorldPlayers"
+    | "getPlayerWorld"
+    | "markNPCWorldActive"
+    | "buildActiveWorldPlayers"
+    | "loadPlayerInventory"
   >,
 ): any[] {
   const worldId = deps.getPlayerWorld(userId);
@@ -417,6 +420,7 @@ export function listPlayersForUser(
   }
   deps.markNPCWorldActive(worldId);
   return deps.buildActiveWorldPlayers(worldId).map(function (player) {
+    const living = deps.loadPlayerInventory(player.player_id);
     return {
       player_id: player.player_id,
       row: player.row,
@@ -427,6 +431,9 @@ export function listPlayersForUser(
         : 0,
       session_id:
         typeof player.session_id === "string" ? player.session_id : "",
+      class_id: living.class_id,
+      slots: living.slots,
+      values: living.values,
     };
   });
 }

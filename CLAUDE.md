@@ -64,6 +64,7 @@ export * from "../assets/server/chat-storage.ts";
 The actual implementation lives in `src/virtual-world/assets/server/*.ts` (same filenames, real content). `src/virtual-world/assets/` is uploaded as the assets directory alongside the script (`--assets-dir src/virtual-world/assets`), so the real modules must physically live under `assets/` to be deployed — the `server/` shims exist purely so `virtual-world.js`'s relative imports resolve locally/for typechecking. **When editing virtual-world server logic, edit the file under `assets/server/`, not the shim under `server/`.** Keep both directories' filenames in sync when adding a new module (add the real file under `assets/server/`, add a matching one-line re-export shim under `server/`).
 
 `src/virtual-world/assets/public/` is browser-side JS served as static assets:
+
 - `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in `client.js`, `scene.js`, etc.
 - `client.js`, `scene.js`, `app-state.js`, `auth.js`, `i18n.js`, `tiles-and-items.js` are plain JS with JSDoc types, referencing the globals file.
 

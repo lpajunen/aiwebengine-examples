@@ -3064,7 +3064,10 @@ function itemClassesHandler(context) {
   }
   var userId = context.request.auth.userId;
   if (!userHasCreatorStone(userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   var classes = getAllItemClassesImpl();
@@ -3079,17 +3082,20 @@ function createItemClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var id = String((body && body.id) || "").trim();
   if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var record = {
     id: id,
@@ -3120,7 +3126,7 @@ function createItemClassHandler(context) {
       {
         ok: false,
         error:
-          "Item class upsert failed" +
+          "error.item_class_upsert_failed" +
           (itemCreateWrite && itemCreateWrite.error
             ? ": " + String(itemCreateWrite.error)
             : ""),
@@ -3139,24 +3145,27 @@ function updateItemClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var existing = getItemClassImpl(classId);
   if (!existing) {
     return ResponseBuilder.json(
-      { ok: false, error: "Item class not found" },
+      { ok: false, error: "error.item_class_not_found" },
       404,
     );
   }
@@ -3205,7 +3214,7 @@ function updateItemClassHandler(context) {
       {
         ok: false,
         error:
-          "Item class upsert failed" +
+          "error.item_class_upsert_failed" +
           (itemUpdateWrite && itemUpdateWrite.error
             ? ": " + String(itemUpdateWrite.error)
             : ""),
@@ -3224,13 +3233,16 @@ function deleteItemClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   deleteItemClassImpl(classId, VWORLD_ITEM_CLASS_TABLE, vwLog);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
@@ -3246,7 +3258,10 @@ function actionClassesHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   var classes = getAllActionClassesImpl();
@@ -3261,17 +3276,20 @@ function createActionClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var id = String((body && body.id) || "").trim();
   if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var record = {
     id: id,
@@ -3297,7 +3315,7 @@ function createActionClassHandler(context) {
       {
         ok: false,
         error:
-          "Action class upsert failed" +
+          "error.action_class_upsert_failed" +
           (actionCreateWrite && actionCreateWrite.error
             ? ": " + String(actionCreateWrite.error)
             : ""),
@@ -3316,24 +3334,27 @@ function updateActionClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var actionId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!actionId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var existing = getActionClassImpl(actionId);
   if (!existing) {
     return ResponseBuilder.json(
-      { ok: false, error: "Action class not found" },
+      { ok: false, error: "error.action_class_not_found" },
       404,
     );
   }
@@ -3378,7 +3399,7 @@ function updateActionClassHandler(context) {
       {
         ok: false,
         error:
-          "Action class upsert failed" +
+          "error.action_class_upsert_failed" +
           (actionUpdateWrite && actionUpdateWrite.error
             ? ": " + String(actionUpdateWrite.error)
             : ""),
@@ -3397,13 +3418,16 @@ function deleteActionClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var actionId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!actionId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   deleteActionClassImpl(actionId, VWORLD_ACTION_CLASS_TABLE, vwLog);
   return ResponseBuilder.json({ ok: true, deleted_id: actionId });
@@ -3419,7 +3443,10 @@ function livingClassesHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
   var classes = getAllLivingClassesImpl();
@@ -3445,17 +3472,20 @@ function createLivingClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var id = String((body && body.id) || "").trim();
   if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var record = {
     id: id,
@@ -3482,7 +3512,7 @@ function createLivingClassHandler(context) {
       {
         ok: false,
         error:
-          "Living class upsert failed" +
+          "error.living_class_upsert_failed" +
           (livingCreateWrite && livingCreateWrite.error
             ? ": " + String(livingCreateWrite.error)
             : ""),
@@ -3501,24 +3531,27 @@ function updateLivingClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   var body;
   try {
     body = JSON.parse(context.request.body || "{}");
   } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
   var existing = getLivingClassImpl(classId);
   if (!existing) {
     return ResponseBuilder.json(
-      { ok: false, error: "Living class not found" },
+      { ok: false, error: "error.living_class_not_found" },
       404,
     );
   }
@@ -3547,7 +3580,7 @@ function updateLivingClassHandler(context) {
       {
         ok: false,
         error:
-          "Living class upsert failed" +
+          "error.living_class_upsert_failed" +
           (livingUpdateWrite && livingUpdateWrite.error
             ? ": " + String(livingUpdateWrite.error)
             : ""),
@@ -3566,13 +3599,16 @@ function deleteLivingClassHandler(context) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
   );
   if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "Missing id" }, 400);
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
   deleteLivingClassImpl(classId, VWORLD_LIVING_CLASS_TABLE, vwLog);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });

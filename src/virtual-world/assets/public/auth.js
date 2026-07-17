@@ -59,7 +59,13 @@ function loginRedirectUrl() {
 function redirectToLogin() {
   if (authState === AUTH_STATE_REDIRECTING) return;
   authState = AUTH_STATE_REDIRECTING;
-  setAuthStatusMessage("Session expired. Redirecting to login...", true);
+  setAuthStatusMessage(
+    t(
+      "auth.session_expired_redirecting",
+      "Session expired. Redirecting to login...",
+    ),
+    true,
+  );
   window.setTimeout(function () {
     window.location.href = loginRedirectUrl();
   }, AUTH_LOGIN_REDIRECT_DELAY_MS);
@@ -159,7 +165,13 @@ function handleAuth401(source) {
   if (authState === AUTH_STATE_EXTENDING) return;
   authState = AUTH_STATE_EXTENDING;
   authProbeAttempts = 0;
-  setAuthStatusMessage("Session expired, trying to reconnect...", false);
+  setAuthStatusMessage(
+    t(
+      "auth.session_expired_reconnecting",
+      "Session expired, trying to reconnect...",
+    ),
+    false,
+  );
   console.warn("Auth expired during request:", source);
   runAuthProbeAttempt();
 }

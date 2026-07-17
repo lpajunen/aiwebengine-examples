@@ -48,7 +48,7 @@ export function movePlayerForUser(
   if (!Number.isFinite(toRow) || !Number.isFinite(toCol)) {
     return {
       status: 400,
-      payload: { ok: false, error: "Invalid move payload" },
+      payload: { ok: false, error: "error.invalid_move_payload" },
     };
   }
 

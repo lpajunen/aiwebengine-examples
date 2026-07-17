@@ -132,12 +132,18 @@ export function performTreeActionForUser(
   }
 
   if (!actionDefinition) {
-    return { status: 400, payload: { ok: false, error: "Invalid action" } };
+    return {
+      status: 400,
+      payload: { ok: false, error: "error.invalid_action" },
+    };
   }
 
   const worldId = deps.getPlayerWorld(userId);
   if (!worldId) {
-    return { status: 200, payload: { ok: false, error: "No world found" } };
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.no_world_found" },
+    };
   }
   deps.ensureWorldItems(worldId);
 
@@ -358,14 +364,14 @@ export function performTreeActionForUser(
         blockedZone.kind === "oak_clearing" &&
         deps.isOakClearingTile(worldId, row, col)
       ) {
-        return blockedZone.errorMessage || "Action not allowed here";
+        return blockedZone.errorMessage || "error.action_not_allowed_here";
       }
 
       if (
         blockedZone.kind === "oak_center" &&
         deps.isOakCenterTile(worldId, row, col)
       ) {
-        return blockedZone.errorMessage || "Action not allowed here";
+        return blockedZone.errorMessage || "error.action_not_allowed_here";
       }
     }
 
@@ -510,7 +516,7 @@ export function performTreeActionForUser(
       status: 200,
       payload: {
         ok: false,
-        error: "Missing required item for action",
+        error: "error.missing_required_item_for_action",
       },
     };
   }
@@ -530,7 +536,7 @@ export function performTreeActionForUser(
           status: 200,
           payload: {
             ok: false,
-            error: condResult.errorMessage || "Action condition not met",
+            error: condResult.errorMessage || "error.action_condition_not_met",
           },
         };
       }
@@ -582,7 +588,7 @@ export function performTreeActionForUser(
         status: 200,
         payload: {
           ok: false,
-          error: "A blessing already rests here",
+          error: "error.blessing_already_rests_here",
         },
       };
     }
@@ -641,7 +647,7 @@ export function performTreeActionForUser(
   if (!resolvedTarget.inBounds) {
     return {
       status: 200,
-      payload: { ok: false, error: "Target out of bounds" },
+      payload: { ok: false, error: "error.target_out_of_bounds" },
     };
   }
 

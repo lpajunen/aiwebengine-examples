@@ -135,7 +135,7 @@ export function setNicknameForUser(
   if (!nick) {
     return {
       status: 400,
-      payload: { error: "Nickname cannot be empty" },
+      payload: { error: "error.nickname_empty" },
     };
   }
   if (nick.toLowerCase() === "cheat") {
@@ -205,14 +205,14 @@ export function postWorldChatForUser(
   if (!worldId) {
     return {
       status: 400,
-      payload: { error: "Not in a world" },
+      payload: { error: "error.not_in_world" },
     };
   }
   const text = sanitizeText(rawText, 500);
   if (!text) {
     return {
       status: 400,
-      payload: { error: "Message cannot be empty" },
+      payload: { error: "error.message_empty" },
     };
   }
   const msg = {
@@ -246,20 +246,20 @@ export function postDirectMessageForUser(
   if (!to) {
     return {
       status: 400,
-      payload: { error: "Recipient required" },
+      payload: { error: "error.recipient_required" },
     };
   }
   if (to === userId) {
     return {
       status: 400,
-      payload: { error: "Cannot DM yourself" },
+      payload: { error: "error.cannot_dm_self" },
     };
   }
   const text = sanitizeText(rawText, 500);
   if (!text) {
     return {
       status: 400,
-      payload: { error: "Message cannot be empty" },
+      payload: { error: "error.message_empty" },
     };
   }
   const msg = {
@@ -289,7 +289,7 @@ export function getDirectMessageHistoryForUser(
   if (!trimmedWithUser) {
     return {
       status: 400,
-      payload: { error: "with param required" },
+      payload: { error: "error.with_param_required" },
     };
   }
   return {

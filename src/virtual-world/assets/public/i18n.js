@@ -56,6 +56,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       backpack_empty: "Backpack empty",
       values: "Living values",
       items_suffix: "items",
+      drop: "Drop",
+      store: "Store",
     },
     living: {
       slot: {
@@ -66,6 +68,210 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         fatigue: "Fatigue",
         warmth: "Warmth",
       },
+    },
+    hud: {
+      title: "Virtual World",
+      rename: "Rename",
+      switch_language: "Switch language",
+      save: "Save",
+      cancel: "Cancel",
+      world_label: "World:",
+      position_label: "Position:",
+      held_left: "L:",
+      held_right: "R:",
+      use: "Use",
+      pick: "Pick",
+      items: "Items",
+      craft: "Craft",
+      players: "Players",
+      chat: "Chat",
+      item_types: "Item types",
+      action_types: "Action types",
+      living_types: "Living types",
+    },
+    legend: {
+      title: "Legend",
+      forest_floor: "Forest Floor",
+      spruce_thicket: "Spruce Thicket",
+      pine_tree: "Pine Tree",
+      water: "Water",
+      rock_mountain: "Rock / Mountain",
+      you: "You",
+    },
+    controls: {
+      move_label: "Move:",
+      or: "or",
+      camera_label: "Camera:",
+      to_orbit: "to orbit",
+      to_zoom: "to zoom",
+    },
+    panel: {
+      close: "Close",
+      choose_action: "Choose Action",
+      inventory: "Inventory",
+      crafting: "Crafting",
+      players_online: "Players Online",
+      chat: "Chat",
+      item_types: "Item Types",
+      action_types: "Action Types",
+      living_types: "Living Types",
+    },
+    players: {
+      name: "Name",
+      world: "World",
+      online_since: "Online since",
+      last_active: "Last active",
+      seconds_ago: "s ago",
+      minutes_ago: "m ago",
+      hours_ago: "h ago",
+      days_ago: "d ago",
+      no_players_online: "No players online",
+      you_badge: "(you)",
+      in_your_world: "In your world",
+      dm_button: "DM",
+    },
+    chat: {
+      world_tab: "World",
+      dm_tab: "Direct Messages",
+      no_conversations:
+        "No conversations yet. Click 💬 DM next to a player to start one.",
+      no_messages: "No messages yet.",
+      say_something: "Say something…",
+      send: "Send",
+      back: "← Back",
+      dm_placeholder: "Send a direct message…",
+    },
+    class_editor: {
+      new_item_type: "New item type",
+      new_action_type: "New action type",
+      new_living_type: "New living type",
+      id_label: "ID",
+      label_label: "Label",
+      kind_label: "Kind",
+      target_kind_label: "Target kind",
+      spawnable: "Spawnable",
+      extra: "Extra",
+      non_droppable: "Non-droppable",
+      action_ids_label: "Action IDs (comma-sep)",
+      state_template_label: "State template (JSON)",
+      source_items_label: "Source items (comma-sep)",
+      logic_spec_label: "Logic spec (JSON)",
+      slot_definitions_label: "Slot definitions (JSON)",
+      value_template_label: "Value template (JSON)",
+      value_schema_label: "Value schema (JSON)",
+      save: "Save",
+      cancel: "Cancel",
+      edit_button: "Edit",
+      del_button: "Del",
+      edit_prefix: "Edit:",
+      failed_to_load_list: "Failed to load.",
+      no_custom_item_types: "No custom item types yet.",
+      no_custom_action_types: "No custom action types yet.",
+      no_custom_living_types: "No custom living types yet.",
+      item_not_found: "Item type not found",
+      action_not_found: "Action type not found",
+      living_not_found: "Living type not found",
+      failed_to_load_item_type: "Failed to load item type",
+      failed_to_load_action_type: "Failed to load action type",
+      failed_to_load_living_type: "Failed to load living type",
+      item_id_required: "Item type ID is required",
+      action_id_required: "Action type ID is required",
+      living_id_required: "Living type ID is required",
+      invalid_state_template_json: "Invalid state template JSON",
+      invalid_logic_spec_json: "Invalid logic spec JSON",
+      invalid_slot_definitions_json: "Invalid slot definitions JSON",
+      slot_definitions_must_be_array: "Slot definitions must be a JSON array",
+      invalid_value_template_json: "Invalid value template JSON",
+      invalid_value_schema_json: "Invalid value schema JSON",
+      save_failed: "Save failed",
+      saved: "Saved!",
+      delete_failed: "Delete failed",
+      deleted_prefix: "Deleted",
+    },
+    tile: {
+      square: "Square",
+      terrain_section: "Terrain",
+      built_by: "Built by",
+      items_section: "Items",
+      leads_to: "Leads to",
+      people_section: "People",
+      you_label: "You",
+      class_label: "Class:",
+      npcs_section: "NPCs",
+      bag_items: "Bag items:",
+      none: "None",
+    },
+    crafting: {
+      no_recipes: "No recipes available.",
+      ingredients: "Ingredients:",
+      result: "Result:",
+      ready: "Ready",
+      missing_ingredients: "Missing ingredients",
+      failed: "Crafting failed",
+      crafted_prefix: "Crafted:",
+      request_failed: "Crafting request failed",
+    },
+    recipe: {
+      unknown: "Unknown recipe",
+      no_ingredients: "No ingredients",
+      no_outputs: "No outputs",
+      place_pine_tree: "place pine tree",
+      place_house: "place house",
+      target_facing_tile: "Target: facing tile",
+      target_current_tile: "Target: current tile",
+      target_inventory: "Target: inventory",
+    },
+    nick: {
+      redirecting_to_logout: "Redirecting to logout...",
+      logout_hint: 'Triple click "You" to log out',
+      changed_name_to: "Changed name to",
+    },
+    world_type: {
+      island: "Island",
+      cave: "Cave",
+      building: "House",
+      forest: "Forest",
+      world_suffix: "world",
+    },
+    auth: {
+      session_expired_redirecting: "Session expired. Redirecting to login...",
+      session_expired_reconnecting: "Session expired, trying to reconnect...",
+    },
+    error: {
+      editing_rights_required: "Editing rights required",
+      missing_id: "Missing id",
+      invalid_json_body: "Invalid JSON body",
+      item_class_not_found: "Item class not found",
+      action_class_not_found: "Action class not found",
+      living_class_not_found: "Living class not found",
+      item_class_upsert_failed: "Item class upsert failed",
+      action_class_upsert_failed: "Action class upsert failed",
+      living_class_upsert_failed: "Living class upsert failed",
+      unknown_recipe: "Unknown recipe",
+      no_world_found: "No world found",
+      missing_required_ingredients: "Missing required ingredients",
+      target_out_of_bounds: "Target out of bounds",
+      oak_clearing_must_remain_open: "The oak clearing must remain open",
+      cannot_place_tree_here: "Cannot place tree here",
+      cannot_place_house_here: "Cannot place house here",
+      invalid_action: "Invalid action",
+      missing_required_item_for_action: "Missing required item for action",
+      blessing_already_rests_here: "A blessing already rests here",
+      action_not_allowed_here: "Action not allowed here",
+      action_condition_not_met: "Action condition not met",
+      nickname_empty: "Nickname cannot be empty",
+      not_in_world: "Not in a world",
+      message_empty: "Message cannot be empty",
+      recipient_required: "Recipient required",
+      cannot_dm_self: "Cannot DM yourself",
+      with_param_required: "with param required",
+      invalid_drop_source: "Invalid drop source",
+      item_cannot_be_dropped: "Item cannot be dropped",
+      no_item_to_equip: "No item to equip",
+      item_cannot_be_equipped: "Item cannot be equipped to destination slot",
+      invalid_destination_slot: "Invalid destination slot",
+      unknown_action: "Unknown action",
+      invalid_move_payload: "Invalid move payload",
     },
   },
   fi: {
@@ -122,6 +328,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       backpack_empty: "Reppu on tyhjä",
       values: "Olennon arvot",
       items_suffix: "esinettä",
+      drop: "Pudota",
+      store: "Säilytä",
     },
     living: {
       slot: {
@@ -133,8 +341,217 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         warmth: "Lämpö",
       },
     },
+    hud: {
+      title: "Virtuaalimaailma",
+      rename: "Nimeä uudelleen",
+      switch_language: "Vaihda kieltä",
+      save: "Tallenna",
+      cancel: "Peruuta",
+      world_label: "Maailma:",
+      position_label: "Sijainti:",
+      held_left: "V:",
+      held_right: "O:",
+      use: "Käytä",
+      pick: "Poimi",
+      items: "Tavarat",
+      craft: "Valmista",
+      players: "Pelaajat",
+      chat: "Keskustelu",
+      item_types: "Esinetyypit",
+      action_types: "Toimintotyypit",
+      living_types: "Olentotyypit",
+    },
+    legend: {
+      title: "Selite",
+      forest_floor: "Metsäpohja",
+      spruce_thicket: "Kuusitiheikkö",
+      pine_tree: "Mänty",
+      water: "Vesi",
+      rock_mountain: "Kivikko / Vuori",
+      you: "Sinä",
+    },
+    controls: {
+      move_label: "Liiku:",
+      or: "tai",
+      camera_label: "Kamera:",
+      to_orbit: "kierrä",
+      to_zoom: "zoomaa",
+    },
+    panel: {
+      close: "Sulje",
+      choose_action: "Valitse toiminto",
+      inventory: "Reppu",
+      crafting: "Valmistus",
+      players_online: "Pelaajat verkossa",
+      chat: "Keskustelu",
+      item_types: "Esinetyypit",
+      action_types: "Toimintotyypit",
+      living_types: "Olentotyypit",
+    },
+    players: {
+      name: "Nimi",
+      world: "Maailma",
+      online_since: "Kirjautunut",
+      last_active: "Viimeksi aktiivinen",
+      seconds_ago: " s sitten",
+      minutes_ago: " min sitten",
+      hours_ago: " t sitten",
+      days_ago: " pv sitten",
+      no_players_online: "Ei pelaajia verkossa",
+      you_badge: "(sinä)",
+      in_your_world: "Maailmassasi",
+      dm_button: "Viesti",
+    },
+    chat: {
+      world_tab: "Maailma",
+      dm_tab: "Yksityisviestit",
+      no_conversations:
+        "Ei vielä keskusteluja. Aloita klikkaamalla 💬 Viesti pelaajan kohdalla.",
+      no_messages: "Ei vielä viestejä.",
+      say_something: "Sano jotain…",
+      send: "Lähetä",
+      back: "← Takaisin",
+      dm_placeholder: "Lähetä yksityisviesti…",
+    },
+    class_editor: {
+      new_item_type: "Uusi esinetyyppi",
+      new_action_type: "Uusi toimintotyyppi",
+      new_living_type: "Uusi olentotyyppi",
+      id_label: "Tunniste",
+      label_label: "Nimi",
+      kind_label: "Laji",
+      target_kind_label: "Kohteen tyyppi",
+      spawnable: "Ilmestyy",
+      extra: "Erikois",
+      non_droppable: "Ei pudotettavissa",
+      action_ids_label: "Toimintotunnisteet (pilkulla erotettu)",
+      state_template_label: "Tilamalli (JSON)",
+      source_items_label: "Lähde-esineet (pilkulla erotettu)",
+      logic_spec_label: "Logiikkamäärittely (JSON)",
+      slot_definitions_label: "Paikkamäärittelyt (JSON)",
+      value_template_label: "Arvomalli (JSON)",
+      value_schema_label: "Arvokaavio (JSON)",
+      save: "Tallenna",
+      cancel: "Peruuta",
+      edit_button: "Muokkaa",
+      del_button: "Poista",
+      edit_prefix: "Muokkaa:",
+      failed_to_load_list: "Lataus epäonnistui.",
+      no_custom_item_types: "Ei mukautettuja esinetyyppejä vielä.",
+      no_custom_action_types: "Ei mukautettuja toimintotyyppejä vielä.",
+      no_custom_living_types: "Ei mukautettuja olentotyyppejä vielä.",
+      item_not_found: "Esinetyyppiä ei löytynyt",
+      action_not_found: "Toimintotyyppiä ei löytynyt",
+      living_not_found: "Olentotyyppiä ei löytynyt",
+      failed_to_load_item_type: "Esinetyypin lataus epäonnistui",
+      failed_to_load_action_type: "Toimintotyypin lataus epäonnistui",
+      failed_to_load_living_type: "Olentotyypin lataus epäonnistui",
+      item_id_required: "Esinetyypin tunniste vaaditaan",
+      action_id_required: "Toimintotyypin tunniste vaaditaan",
+      living_id_required: "Olentotyypin tunniste vaaditaan",
+      invalid_state_template_json: "Virheellinen tilamallin JSON",
+      invalid_logic_spec_json: "Virheellinen logiikkamäärittelyn JSON",
+      invalid_slot_definitions_json: "Virheellinen paikkamäärittelyjen JSON",
+      slot_definitions_must_be_array:
+        "Paikkamäärittelyjen tulee olla JSON-taulukko",
+      invalid_value_template_json: "Virheellinen arvomallin JSON",
+      invalid_value_schema_json: "Virheellinen arvokaavion JSON",
+      save_failed: "Tallennus epäonnistui",
+      saved: "Tallennettu!",
+      delete_failed: "Poisto epäonnistui",
+      deleted_prefix: "Poistettu",
+    },
+    tile: {
+      square: "Ruutu",
+      terrain_section: "Maasto",
+      built_by: "Rakentanut",
+      items_section: "Esineet",
+      leads_to: "Vie kohteeseen",
+      people_section: "Ihmiset",
+      you_label: "Sinä",
+      class_label: "Laji:",
+      npcs_section: "NPC:t",
+      bag_items: "Reppuesineitä:",
+      none: "Ei mitään",
+    },
+    crafting: {
+      no_recipes: "Ei valmistettavia reseptejä.",
+      ingredients: "Ainekset:",
+      result: "Tulos:",
+      ready: "Valmis",
+      missing_ingredients: "Aineksia puuttuu",
+      failed: "Valmistus epäonnistui",
+      crafted_prefix: "Valmistettu:",
+      request_failed: "Valmistuspyyntö epäonnistui",
+    },
+    recipe: {
+      unknown: "Tuntematon resepti",
+      no_ingredients: "Ei aineksia",
+      no_outputs: "Ei tuotoksia",
+      place_pine_tree: "aseta mänty",
+      place_house: "rakenna talo",
+      target_facing_tile: "Kohde: edessä oleva ruutu",
+      target_current_tile: "Kohde: nykyinen ruutu",
+      target_inventory: "Kohde: reppu",
+    },
+    nick: {
+      redirecting_to_logout: "Ohjataan uloskirjautumiseen...",
+      logout_hint: 'Kirjaudu ulos klikkaamalla "Sinä" kolmesti',
+      changed_name_to: "Nimi vaihdettu:",
+    },
+    world_type: {
+      island: "Saari",
+      cave: "Luola",
+      building: "Talo",
+      forest: "Metsä",
+      world_suffix: "maailma",
+    },
+    auth: {
+      session_expired_redirecting:
+        "Istunto vanhentui. Ohjataan kirjautumissivulle...",
+      session_expired_reconnecting:
+        "Istunto vanhentui, yritetään yhdistää uudelleen...",
+    },
+    error: {
+      editing_rights_required: "Muokkausoikeudet vaaditaan",
+      missing_id: "Tunniste puuttuu",
+      invalid_json_body: "Virheellinen JSON-pyyntö",
+      item_class_not_found: "Esinetyyppiä ei löytynyt",
+      action_class_not_found: "Toimintotyyppiä ei löytynyt",
+      living_class_not_found: "Olentotyyppiä ei löytynyt",
+      item_class_upsert_failed: "Esinetyypin tallennus epäonnistui",
+      action_class_upsert_failed: "Toimintotyypin tallennus epäonnistui",
+      living_class_upsert_failed: "Olentotyypin tallennus epäonnistui",
+      unknown_recipe: "Tuntematon resepti",
+      no_world_found: "Maailmaa ei löytynyt",
+      missing_required_ingredients: "Tarvittavat ainekset puuttuvat",
+      target_out_of_bounds: "Kohde on alueen ulkopuolella",
+      oak_clearing_must_remain_open: "Tammen aukion on pysyttävä avoimena",
+      cannot_place_tree_here: "Puuta ei voi istuttaa tähän",
+      cannot_place_house_here: "Taloa ei voi rakentaa tähän",
+      invalid_action: "Virheellinen toiminto",
+      missing_required_item_for_action: "Toimintoon vaadittava esine puuttuu",
+      blessing_already_rests_here: "Siunaus lepää jo täällä",
+      action_not_allowed_here: "Toiminto ei ole sallittu täällä",
+      action_condition_not_met: "Toiminnon ehto ei täyty",
+      nickname_empty: "Nimimerkki ei voi olla tyhjä",
+      not_in_world: "Et ole maailmassa",
+      message_empty: "Viesti ei voi olla tyhjä",
+      recipient_required: "Vastaanottaja vaaditaan",
+      cannot_dm_self: "Et voi lähettää viestiä itsellesi",
+      with_param_required: "with-parametri vaaditaan",
+      invalid_drop_source: "Virheellinen pudotuslähde",
+      item_cannot_be_dropped: "Esinettä ei voi pudottaa",
+      no_item_to_equip: "Ei varustettavaa esinettä",
+      item_cannot_be_equipped: "Esinettä ei voi varustaa kohdepaikkaan",
+      invalid_destination_slot: "Virheellinen kohdepaikka",
+      unknown_action: "Tuntematon toiminto",
+      invalid_move_payload: "Virheellinen siirtopyyntö",
+    },
   },
 });
+
+var VW_LOCALE_STORAGE_KEY = "vw_locale";
 
 /** @type {string | null} */
 var activeLocale = null;
@@ -142,6 +559,16 @@ var activeLocale = null;
 /** @returns {string} */
 function resolveLocale() {
   if (activeLocale) return activeLocale;
+  var stored = null;
+  try {
+    stored = window.localStorage.getItem(VW_LOCALE_STORAGE_KEY);
+  } catch (e) {
+    stored = null;
+  }
+  if (stored && I18N_MESSAGES[stored]) {
+    activeLocale = stored;
+    return activeLocale;
+  }
   var raw =
     (navigator.languages && navigator.languages.length > 0
       ? navigator.languages[0]
@@ -154,6 +581,30 @@ function resolveLocale() {
   var base = normalized.split("-")[0];
   activeLocale = I18N_MESSAGES[base] ? base : "en";
   return activeLocale;
+}
+
+/**
+ * @param {string} locale
+ */
+function setLocale(locale) {
+  if (!I18N_MESSAGES[locale]) return;
+  activeLocale = locale;
+  try {
+    window.localStorage.setItem(VW_LOCALE_STORAGE_KEY, locale);
+  } catch (e) {
+    // localStorage may be unavailable (private browsing, etc.) - locale
+    // still applies for the current page load via activeLocale.
+  }
+}
+
+/** @returns {string} */
+function getOtherLocale() {
+  var current = resolveLocale();
+  var locales = Object.keys(I18N_MESSAGES);
+  for (var i = 0; i < locales.length; i++) {
+    if (locales[i] !== current) return locales[i];
+  }
+  return current;
 }
 
 /**
@@ -187,6 +638,30 @@ function t(key, fallback) {
   return fallback || key;
 }
 
+function applyStaticTranslations() {
+  var textEls = document.querySelectorAll("[data-i18n-key]");
+  for (var i = 0; i < textEls.length; i++) {
+    var el = textEls[i];
+    var key = el.getAttribute("data-i18n-key");
+    if (key) el.textContent = t(key, el.textContent || "");
+  }
+  var placeholderEls = document.querySelectorAll("[data-i18n-placeholder]");
+  for (var j = 0; j < placeholderEls.length; j++) {
+    var pEl = placeholderEls[j];
+    var pKey = pEl.getAttribute("data-i18n-placeholder");
+    if (pKey && pEl instanceof HTMLInputElement) {
+      pEl.placeholder = t(pKey, pEl.placeholder || "");
+    }
+  }
+  var titleEls = document.querySelectorAll("[data-i18n-title]");
+  for (var k = 0; k < titleEls.length; k++) {
+    var tEl = titleEls[k];
+    var tKey = tEl.getAttribute("data-i18n-title");
+    if (tKey)
+      tEl.setAttribute("title", t(tKey, tEl.getAttribute("title") || ""));
+  }
+}
+
 /**
  * @param {string} type
  * @returns {string}
@@ -197,6 +672,20 @@ function humanizeType(type) {
     .replace(/\b\w/g, function (ch) {
       return ch.toUpperCase();
     });
+}
+
+/**
+ * @param {string} msg
+ * @returns {string}
+ */
+function translateServerMessage(msg) {
+  var raw = String(msg || "");
+  if (raw.indexOf("error.") !== 0) return raw;
+  var colonIdx = raw.indexOf(": ");
+  var key = colonIdx === -1 ? raw : raw.slice(0, colonIdx);
+  var suffix = colonIdx === -1 ? "" : raw.slice(colonIdx);
+  var lastPart = key.split(".").pop() || key;
+  return t(key, humanizeType(lastPart)) + suffix;
 }
 
 /**

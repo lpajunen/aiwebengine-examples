@@ -133,7 +133,10 @@ export function handleItemActionForUser(
   const action = String((body && body.action) || "");
   const worldId = deps.getPlayerWorld(userId);
   if (!worldId) {
-    return { status: 200, payload: { ok: false, error: "No world found" } };
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.no_world_found" },
+    };
   }
   deps.ensureWorldItems(worldId);
 
@@ -204,14 +207,14 @@ export function handleItemActionForUser(
     if (!dropItem) {
       return {
         status: 200,
-        payload: { ok: false, error: "Invalid drop source" },
+        payload: { ok: false, error: "error.invalid_drop_source" },
       };
     }
 
     if (dropItem.non_droppable) {
       return {
         status: 200,
-        payload: { ok: false, error: "Item cannot be dropped" },
+        payload: { ok: false, error: "error.item_cannot_be_dropped" },
       };
     }
 
@@ -250,7 +253,10 @@ export function handleItemActionForUser(
     const movingItem = takeItemFromSelector(inv, fromSlot, fromIndex);
 
     if (!movingItem) {
-      return { status: 200, payload: { ok: false, error: "No item to equip" } };
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.no_item_to_equip" },
+      };
     }
 
     if (!canEquipItemToSelector(inv, toSlot, movingItem)) {
@@ -259,7 +265,7 @@ export function handleItemActionForUser(
         status: 200,
         payload: {
           ok: false,
-          error: "Item cannot be equipped to destination slot",
+          error: "error.item_cannot_be_equipped",
         },
       };
     }
@@ -268,7 +274,7 @@ export function handleItemActionForUser(
       placeItemToSelector(inv, fromSlot, movingItem);
       return {
         status: 200,
-        payload: { ok: false, error: "Invalid destination slot" },
+        payload: { ok: false, error: "error.invalid_destination_slot" },
       };
     }
 
@@ -283,7 +289,7 @@ export function handleItemActionForUser(
     };
   }
 
-  return { status: 400, payload: { ok: false, error: "Unknown action" } };
+  return { status: 400, payload: { ok: false, error: "error.unknown_action" } };
 }
 
 export function grantAllItemsForUser(

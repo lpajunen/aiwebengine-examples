@@ -311,10 +311,10 @@ function recipeIsCraftable(recipe) {
 
 /** @param {any} recipe */
 function recipeLabel(recipe) {
-  if (!recipe) return "Unknown recipe";
+  if (!recipe) return t("recipe.unknown", "Unknown recipe");
   return t(
     String(recipe.label_key || ""),
-    String(recipe.fallback_label || "Unknown recipe"),
+    String(recipe.fallback_label || t("recipe.unknown", "Unknown recipe")),
   );
 }
 
@@ -330,7 +330,7 @@ function recipeIngredientsLabel(recipe) {
     !Array.isArray(recipe.input_items) ||
     recipe.input_items.length === 0
   ) {
-    return "No ingredients";
+    return t("recipe.no_ingredients", "No ingredients");
   }
   var parts = [];
   for (var i = 0; i < recipe.input_items.length; i++) {
@@ -351,7 +351,7 @@ function recipeResultLabel(recipe) {
     !Array.isArray(recipe.outputs) ||
     recipe.outputs.length === 0
   ) {
-    return "No outputs";
+    return t("recipe.no_outputs", "No outputs");
   }
   var parts = [];
   for (var i = 0; i < recipe.outputs.length; i++) {
@@ -364,9 +364,9 @@ function recipeResultLabel(recipe) {
           itemLabelForRecipe(String(output.item_id || "")),
       );
     } else if (output.kind === "place_tree") {
-      parts.push("place pine tree");
+      parts.push(t("recipe.place_pine_tree", "place pine tree"));
     } else if (output.kind === "place_house") {
-      parts.push("place house");
+      parts.push(t("recipe.place_house", "place house"));
     }
   }
   return parts.join(", ");
@@ -377,13 +377,18 @@ function recipeTargetLabel(recipe) {
   var targetKind = String(
     recipe && recipe.target_kind ? recipe.target_kind : "inventory",
   );
-  if (targetKind === "facing_tile") return "Target: facing tile";
-  if (targetKind === "current_tile") return "Target: current tile";
-  return "Target: inventory";
+  if (targetKind === "facing_tile")
+    return t("recipe.target_facing_tile", "Target: facing tile");
+  if (targetKind === "current_tile")
+    return t("recipe.target_current_tile", "Target: current tile");
+  return t("recipe.target_inventory", "Target: inventory");
 }
 
 function triggerLogout() {
-  showHudToast("Redirecting to logout...", false);
+  showHudToast(
+    t("nick.redirecting_to_logout", "Redirecting to logout..."),
+    false,
+  );
   setTimeout(function () {
     window.location.href = "/auth/logout";
   }, 150);
@@ -392,19 +397,23 @@ function triggerLogout() {
 function initLogoutTrigger() {
   var youEl = requireElementById("legend-you");
   youEl.style.cursor = "pointer";
-  youEl.title = 'Triple click "You" to log out';
+  youEl.title = t("nick.logout_hint", 'Triple click "You" to log out');
   function onLogoutTap() {
     var now = Date.now();
     if (now - lastLogoutTapAt < 180) return;
     lastLogoutTapAt = now;
     logoutClickCount += 1;
     youEl.style.opacity = "0.8";
-    youEl.title = 'Triple click "You" to log out (' + logoutClickCount + "/3)";
+    youEl.title =
+      t("nick.logout_hint", 'Triple click "You" to log out') +
+      " (" +
+      logoutClickCount +
+      "/3)";
     if (logoutClickResetTimer) window.clearTimeout(logoutClickResetTimer);
     logoutClickResetTimer = window.setTimeout(function () {
       logoutClickCount = 0;
       youEl.style.opacity = "1";
-      youEl.title = 'Triple click "You" to log out';
+      youEl.title = t("nick.logout_hint", 'Triple click "You" to log out');
       logoutClickResetTimer = null;
     }, 2000);
     if (logoutClickCount >= 3) {
@@ -414,7 +423,7 @@ function initLogoutTrigger() {
         logoutClickResetTimer = null;
       }
       youEl.style.opacity = "1";
-      youEl.title = 'Triple click "You" to log out';
+      youEl.title = t("nick.logout_hint", 'Triple click "You" to log out');
       triggerLogout();
     }
   }
@@ -2006,6 +2015,8 @@ function fetchSnapshot() {
 
 function initMultiplayer() {
   scheduleSessionRefresh();
+  applyStaticTranslations();
+  updateLocaleToggleIcon();
   updateHeldHud();
   renderInventoryPanel();
   updateEditingRightsUI();
@@ -2180,7 +2191,10 @@ function initMultiplayer() {
           var nickDisplay = document.getElementById("nick-display");
           if (nickDisplay) nickDisplay.textContent = playerNick;
           if (oldNick && oldNick !== playerNick) {
-            showHudToast("Changed name to " + playerNick, false);
+            showHudToast(
+              t("nick.changed_name_to", "Changed name to") + " " + playerNick,
+              false,
+            );
           }
         }
         if (payload.inventory) {
@@ -2448,7 +2462,8 @@ function postTreeAction(action) {
     .then(function (result) {
       if (!result.ok) {
         console.log("Use failed:", result.error);
-        if (result.error) showHudToast(result.error, true);
+        if (result.error)
+          showHudToast(translateServerMessage(result.error), true);
         updateUseButtonState();
         return;
       }
@@ -2531,7 +2546,7 @@ function renderInventoryPanel() {
    * @returns {string}
    */
   function handHtml(title, slot, item) {
-    var label = item ? inventoryItemLabel(item) : "empty";
+    var label = item ? inventoryItemLabel(item) : t("inventory.empty", "empty");
     var html =
       '<div class="name">' +
       title +
@@ -2543,10 +2558,18 @@ function renderInventoryPanel() {
     if (item) {
       if (!item.non_droppable) {
         html +=
-          "<button onclick=\"dropFromSlot('" + slot + "')\">Drop</button>";
+          "<button onclick=\"dropFromSlot('" +
+          slot +
+          "')\">" +
+          escHtml(t("inventory.drop", "Drop")) +
+          "</button>";
       }
       html +=
-        "<button onclick=\"equipToInventory('" + slot + "')\">Store</button>";
+        "<button onclick=\"equipToInventory('" +
+        slot +
+        "')\">" +
+        escHtml(t("inventory.store", "Store")) +
+        "</button>";
     }
     html += "</div>";
     return html;
@@ -2585,10 +2608,14 @@ function renderInventoryPanel() {
             ? ""
             : "<button onclick=\"dropFromSlot('" +
               slotId +
-              "')\">Drop</button> ") +
+              "')\">" +
+              escHtml(t("inventory.drop", "Drop")) +
+              "</button> ") +
           "<button onclick=\"equipToInventory('" +
           slotId +
-          "')\">Store</button>"
+          "')\">" +
+          escHtml(t("inventory.store", "Store")) +
+          "</button>"
         : "") +
       "</span>" +
       "</div>";
@@ -2632,7 +2659,11 @@ function renderInventoryPanel() {
         equipBtns +
         (item.non_droppable
           ? ""
-          : '<button onclick="dropFromInventory(' + i + ')">Drop</button> ') +
+          : '<button onclick="dropFromInventory(' +
+            i +
+            ')">' +
+            escHtml(t("inventory.drop", "Drop")) +
+            "</button> ") +
         actionBtns +
         "</span>" +
         "</div>";
@@ -2709,7 +2740,9 @@ function renderCraftingPanel() {
   var recipeIds = Object.keys(recipes).sort();
   if (recipeIds.length === 0) {
     listDiv.innerHTML =
-      '<div class="craft-row"><div class="craft-status">No recipes available.</div></div>';
+      '<div class="craft-row"><div class="craft-status">' +
+      escHtml(t("crafting.no_recipes", "No recipes available.")) +
+      "</div></div>";
     return;
   }
   var rows = "";
@@ -2725,21 +2758,31 @@ function renderCraftingPanel() {
       '<div class="craft-meta">' +
       escHtml(recipeTargetLabel(recipe)) +
       "</div>" +
-      '<div class="craft-ingredients">Ingredients: ' +
+      '<div class="craft-ingredients">' +
+      escHtml(t("crafting.ingredients", "Ingredients:")) +
+      " " +
       escHtml(recipeIngredientsLabel(recipe)) +
       "</div>" +
-      '<div class="craft-result">Result: ' +
+      '<div class="craft-result">' +
+      escHtml(t("crafting.result", "Result:")) +
+      " " +
       escHtml(recipeResultLabel(recipe)) +
       "</div>" +
       '<div class="craft-actions">' +
       '<span class="craft-status">' +
-      escHtml(craftable ? "Ready" : "Missing ingredients") +
+      escHtml(
+        craftable
+          ? t("crafting.ready", "Ready")
+          : t("crafting.missing_ingredients", "Missing ingredients"),
+      ) +
       "</span>" +
       "<button onclick=\"craftRecipeById('" +
       recipeId +
       "')\"" +
       (craftable ? "" : " disabled") +
-      ">Craft</button>" +
+      ">" +
+      escHtml(t("hud.craft", "Craft")) +
+      "</button>" +
       "</div>" +
       "</div>";
   }
@@ -2771,12 +2814,12 @@ function formatRelTime(ts) {
   if (!ts) return "-";
   var diff = Math.max(0, Date.now() - new Date(ts).getTime());
   var secs = Math.floor(diff / 1000);
-  if (secs < 60) return secs + "s ago";
+  if (secs < 60) return secs + t("players.seconds_ago", "s ago");
   var mins = Math.floor(secs / 60);
-  if (mins < 60) return mins + "m ago";
+  if (mins < 60) return mins + t("players.minutes_ago", "m ago");
   var hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + "h ago";
-  return Math.floor(hrs / 24) + "d ago";
+  if (hrs < 24) return hrs + t("players.hours_ago", "h ago");
+  return Math.floor(hrs / 24) + t("players.days_ago", "d ago");
 }
 
 function sortOnlinePlayersList() {
@@ -2835,7 +2878,9 @@ function renderPlayersPanel() {
   if (!tbody) return;
   if (!onlinePlayersList.length) {
     tbody.innerHTML =
-      '<tr><td colspan="5" style="color:rgba(255,255,255,0.4);font-style:italic;text-align:center;padding:10px;">No players online</td></tr>';
+      '<tr><td colspan="5" style="color:rgba(255,255,255,0.4);font-style:italic;text-align:center;padding:10px;">' +
+      escapeHtml(t("players.no_players_online", "No players online")) +
+      "</td></tr>";
     return;
   }
   var rows = onlinePlayersList.map(function (p) {
@@ -2843,16 +2888,24 @@ function renderPlayersPanel() {
     var sameWorld = String(p.world_id) === String(worldId);
     var nick = escapeHtml(p.nick || p.player_id.slice(0, 16));
     var worldLabel = p.world_id ? escapeHtml(String(p.world_id)) : "-";
-    var youBadge = isMe ? '<span class="you-badge">(you)</span>' : "";
+    var youBadge = isMe
+      ? '<span class="you-badge">' +
+        escapeHtml(t("players.you_badge", "(you)")) +
+        "</span>"
+      : "";
     var mapBadge =
       sameWorld && !isMe
-        ? '<span title="In your world" style="margin-left:4px;font-size:10px;opacity:0.7;">🗺️</span>'
+        ? '<span title="' +
+          escapeHtml(t("players.in_your_world", "In your world")) +
+          '" style="margin-left:4px;font-size:10px;opacity:0.7;">🗺️</span>'
         : "";
     var dmBtn = isMe
       ? ""
       : '<button class="btn-dm" data-uid="' +
         escapeHtml(p.player_id) +
-        '" onclick="openChatPanelDM(this.dataset.uid)">💬 DM</button>';
+        '" onclick="openChatPanelDM(this.dataset.uid)">💬 ' +
+        escapeHtml(t("players.dm_button", "DM")) +
+        "</button>";
     return (
       "<tr" +
       (sameWorld && !isMe
@@ -2990,7 +3043,10 @@ function commitNickEdit() {
           if (chatPanelVisible && chatActiveTab === "dm" && activeDmUserId)
             renderDMThread(activeDmUserId);
           if (oldNick && oldNick !== playerNick) {
-            showHudToast("Changed name to " + playerNick, false);
+            showHudToast(
+              t("nick.changed_name_to", "Changed name to") + " " + playerNick,
+              false,
+            );
           }
         }
       }
@@ -3182,7 +3238,14 @@ function showDMConvoList() {
   convoList.style.display = "";
   if (!dmIndex.length) {
     convoList.innerHTML =
-      '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No conversations yet. Click 💬 DM next to a player to start one.</div>';
+      '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">' +
+      escHtml(
+        t(
+          "chat.no_conversations",
+          "No conversations yet. Click 💬 DM next to a player to start one.",
+        ),
+      ) +
+      "</div>";
     return;
   }
   convoList.innerHTML = dmIndex
@@ -3247,7 +3310,9 @@ function renderDMThread(otherUserId) {
   if (!container) return;
   container.innerHTML = msgs.length
     ? msgs.map(buildMsgHtml).join("")
-    : '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">No messages yet.</div>';
+    : '<div style="color:rgba(255,255,255,0.4);font-style:italic;font-size:12px;padding:8px;">' +
+      escHtml(t("chat.no_messages", "No messages yet.")) +
+      "</div>";
   scrollChatToBottom("dm-thread-msgs");
 }
 
@@ -3345,14 +3410,20 @@ function craftRecipeById(recipeId) {
     })
     .then(function (result) {
       if (!result || !result.ok) {
-        showHudToast((result && result.error) || "Crafting failed", true);
+        showHudToast(
+          result && result.error
+            ? translateServerMessage(result.error)
+            : t("crafting.failed", "Crafting failed"),
+          true,
+        );
         return;
       }
       applyItemStateFromResult(result);
       requestHeartbeatSoon();
       if (result.recipe_id) {
         showHudToast(
-          "Crafted: " +
+          t("crafting.crafted_prefix", "Crafted:") +
+            " " +
             recipeLabel(getBootstrappedRecipeDefs()[result.recipe_id]),
           false,
         );
@@ -3362,7 +3433,10 @@ function craftRecipeById(recipeId) {
       if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
         return;
       console.error("Craft request failed:", err);
-      showHudToast("Crafting request failed", true);
+      showHudToast(
+        t("crafting.request_failed", "Crafting request failed"),
+        true,
+      );
     });
 }
 
@@ -3530,7 +3604,7 @@ function renderTileDetailPanel() {
   var isOakCenter = String(worldId) === "10000" && row === 50 && col === 50;
 
   requireElementById("tile-detail-title").textContent =
-    "Square (" + col + ", " + row + ")";
+    t("tile.square", "Square") + " (" + col + ", " + row + ")";
 
   var terrainType = MAP[row][col];
   var treeMod = dynamicTrees[key];
@@ -3595,7 +3669,10 @@ function renderTileDetailPanel() {
   var html = "";
 
   html += '<div class="tile-section">';
-  html += '<div class="tile-section-label">Terrain</div>';
+  html +=
+    '<div class="tile-section-label">' +
+    escHtml(t("tile.terrain_section", "Terrain")) +
+    "</div>";
   html += '<div class="tile-row">' + escHtml(terrainLabel) + "</div>";
   if (
     terrainType === clientTileValueForName("house") &&
@@ -3603,7 +3680,9 @@ function renderTileDetailPanel() {
     dynamicHouses[key].built_by
   ) {
     html +=
-      '<div class="tile-row">Built by ' +
+      '<div class="tile-row">' +
+      escHtml(t("tile.built_by", "Built by")) +
+      " " +
       escHtml(getNickForPlayer(dynamicHouses[key].built_by)) +
       "</div>";
   }
@@ -3611,9 +3690,14 @@ function renderTileDetailPanel() {
 
   html += '<div class="tile-section">';
   html +=
-    '<div class="tile-section-label">Items (' + tileItems.length + ")</div>";
+    '<div class="tile-section-label">' +
+    escHtml(t("tile.items_section", "Items")) +
+    " (" +
+    tileItems.length +
+    ")</div>";
   if (tileItems.length === 0) {
-    html += '<div class="tile-empty">None</div>';
+    html +=
+      '<div class="tile-empty">' + escHtml(t("tile.none", "None")) + "</div>";
   } else {
     for (var i = 0; i < tileItems.length; i++) {
       var itm = tileItems[i];
@@ -3621,7 +3705,9 @@ function renderTileDetailPanel() {
       html += '<div class="tile-row">' + escHtml(label) + "</div>";
       if (itm.type === "portal") {
         html +=
-          '<div class="tile-row">Leads to ' +
+          '<div class="tile-row">' +
+          escHtml(t("tile.leads_to", "Leads to")) +
+          " " +
           escHtml(portalDestinationLabel(itm)) +
           "</div>";
       }
@@ -3631,9 +3717,14 @@ function renderTileDetailPanel() {
 
   html += '<div class="tile-section">';
   html +=
-    '<div class="tile-section-label">People (' + playersHere.length + ")</div>";
+    '<div class="tile-section-label">' +
+    escHtml(t("tile.people_section", "People")) +
+    " (" +
+    playersHere.length +
+    ")</div>";
   if (playersHere.length === 0) {
-    html += '<div class="tile-empty">None</div>';
+    html +=
+      '<div class="tile-empty">' + escHtml(t("tile.none", "None")) + "</div>";
   } else {
     for (var j = 0; j < playersHere.length; j++) {
       var pp = playersHere[j];
@@ -3648,12 +3739,17 @@ function renderTileDetailPanel() {
         (pp.isMe ? " tile-you" : "") +
         '">' +
         (pp.isMe
-          ? "You (" + escHtml(getNickForPlayer(pp.id)) + ")"
+          ? t("tile.you_label", "You") +
+            " (" +
+            escHtml(getNickForPlayer(pp.id)) +
+            ")"
           : escHtml(getNickForPlayer(pp.id))) +
         "</div>";
       if (ppData.class_id) {
         html +=
-          '<div class="tile-row">Class: ' +
+          '<div class="tile-row">' +
+          escHtml(t("tile.class_label", "Class:")) +
+          " " +
           escHtml(String(ppData.class_id)) +
           "</div>";
       }
@@ -3694,9 +3790,14 @@ function renderTileDetailPanel() {
 
   html += '<div class="tile-section">';
   html +=
-    '<div class="tile-section-label">NPCs (' + npcsHere.length + ")</div>";
+    '<div class="tile-section-label">' +
+    escHtml(t("tile.npcs_section", "NPCs")) +
+    " (" +
+    npcsHere.length +
+    ")</div>";
   if (npcsHere.length === 0) {
-    html += '<div class="tile-empty">None</div>';
+    html +=
+      '<div class="tile-empty">' + escHtml(t("tile.none", "None")) + "</div>";
   } else {
     for (var k = 0; k < npcsHere.length; k++) {
       var npcEntry = npcsHere[k];
@@ -3715,7 +3816,9 @@ function renderTileDetailPanel() {
         "</div>";
       if (npcData.class_id) {
         html +=
-          '<div class="tile-row">Class: ' +
+          '<div class="tile-row">' +
+          escHtml(t("tile.class_label", "Class:")) +
+          " " +
           escHtml(String(npcData.class_id)) +
           "</div>";
       }
@@ -3735,7 +3838,9 @@ function renderTileDetailPanel() {
       }
       if (npcBag.length > 0) {
         html +=
-          '<div class="tile-row">Bag items: ' +
+          '<div class="tile-row">' +
+          escHtml(t("tile.bag_items", "Bag items:")) +
+          " " +
           escHtml(String(npcBag.length)) +
           "</div>";
       }
@@ -4174,6 +4279,37 @@ document.addEventListener("mouseup", function (e) {
   }
 });
 
+// ── Localization ──────────────────────────────────────────────────────────
+
+/** @type {Record<string, string>} */
+var LOCALE_FLAG_BY_CODE = { en: "🇬🇧", fi: "🇫🇮" };
+
+function updateLocaleToggleIcon() {
+  var btn = document.getElementById("btn-locale-toggle");
+  if (!btn) return;
+  var nextLocale = getOtherLocale();
+  btn.textContent = LOCALE_FLAG_BY_CODE[nextLocale] || "🌐";
+}
+
+function retranslateUI() {
+  applyStaticTranslations();
+  updateLocaleToggleIcon();
+  renderInventoryPanel();
+  refreshTileDetailIfOpen();
+  updateHeldHud();
+  if (craftingPanelVisible) renderCraftingPanel();
+  if (playersPanelVisible) renderPlayersPanel();
+  if (itemClassPanelVisible) renderItemClassList();
+  if (actionClassPanelVisible) renderActionClassList();
+  if (livingClassPanelVisible) renderLivingClassList();
+  if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+}
+
+function toggleLocale() {
+  setLocale(getOtherLocale());
+  retranslateUI();
+}
+
 // ── Editing rights (creator's stone) ─────────────────────────────────────
 
 /** @returns {boolean} */
@@ -4226,7 +4362,11 @@ function renderItemClassList() {
         data && Array.isArray(data.item_classes) ? data.item_classes : [];
       if (!classes.length) {
         listDiv.innerHTML =
-          '<div class="class-row"><em style="opacity:0.55">No custom item types yet.</em></div>';
+          '<div class="class-row"><em style="opacity:0.55">' +
+          escHtml(
+            t("class_editor.no_custom_item_types", "No custom item types yet."),
+          ) +
+          "</em></div>";
         return;
       }
       var rows = "";
@@ -4247,17 +4387,23 @@ function renderItemClassList() {
           '<span class="class-row-btns">' +
           '<button data-item-class-id="' +
           id +
-          '" onclick="editItemClass(this.dataset.itemClassId)">Edit</button>' +
+          '" onclick="editItemClass(this.dataset.itemClassId)">' +
+          escHtml(t("class_editor.edit_button", "Edit")) +
+          "</button>" +
           '<button data-item-class-id="' +
           id +
-          '" onclick="deleteItemClassUI(this.dataset.itemClassId)">Del</button>' +
+          '" onclick="deleteItemClassUI(this.dataset.itemClassId)">' +
+          escHtml(t("class_editor.del_button", "Del")) +
+          "</button>" +
           "</span></div>";
       }
       listDiv.innerHTML = rows;
     })
     .catch(function () {
       listDiv.innerHTML =
-        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+        '<div class="class-row" style="color:#f88">' +
+        escHtml(t("class_editor.failed_to_load_list", "Failed to load.")) +
+        "</div>";
     });
 }
 
@@ -4278,7 +4424,10 @@ function editItemClass(id) {
         }
       }
       if (!ic) {
-        showHudToast("Item type not found", true);
+        showHudToast(
+          t("class_editor.item_not_found", "Item type not found"),
+          true,
+        );
         return;
       }
       itemClassEditId = String(id);
@@ -4307,10 +4456,13 @@ function editItemClass(id) {
           ? JSON.stringify(ic.stateTemplate, null, 2)
           : "";
       requireElementById("item-class-form-title").textContent =
-        "Edit: " + String(id);
+        t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
     .catch(function () {
-      showHudToast("Failed to load item type", true);
+      showHudToast(
+        t("class_editor.failed_to_load_item_type", "Failed to load item type"),
+        true,
+      );
     });
 }
 
@@ -4334,7 +4486,10 @@ function cancelItemClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("ic-state-template")
   ).value = "";
-  requireElementById("item-class-form-title").textContent = "New item type";
+  requireElementById("item-class-form-title").textContent = t(
+    "class_editor.new_item_type",
+    "New item type",
+  );
 }
 
 function submitItemClassForm() {
@@ -4342,7 +4497,10 @@ function submitItemClassForm() {
     requireElementById("ic-id")
   ).value.trim();
   if (!idVal) {
-    showHudToast("Item type ID is required", true);
+    showHudToast(
+      t("class_editor.item_id_required", "Item type ID is required"),
+      true,
+    );
     return;
   }
   var labelVal = /** @type {HTMLInputElement} */ (
@@ -4376,7 +4534,13 @@ function submitItemClassForm() {
     try {
       stateTemplate = JSON.parse(stateTemplateRaw);
     } catch (e) {
-      showHudToast("Invalid state template JSON", true);
+      showHudToast(
+        t(
+          "class_editor.invalid_state_template_json",
+          "Invalid state template JSON",
+        ),
+        true,
+      );
       return;
     }
   }
@@ -4404,15 +4568,20 @@ function submitItemClassForm() {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Save failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.save_failed", "Save failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Saved!", false);
+      showHudToast(t("class_editor.saved", "Saved!"), false);
       cancelItemClassEdit();
       renderItemClassList();
     })
     .catch(function () {
-      showHudToast("Save failed", true);
+      showHudToast(t("class_editor.save_failed", "Save failed"), true);
     });
 }
 
@@ -4427,15 +4596,23 @@ function deleteItemClassUI(id) {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Delete failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.delete_failed", "Delete failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Deleted " + String(id), false);
+      showHudToast(
+        t("class_editor.deleted_prefix", "Deleted") + " " + String(id),
+        false,
+      );
       if (itemClassEditId === String(id)) cancelItemClassEdit();
       renderItemClassList();
     })
     .catch(function () {
-      showHudToast("Delete failed", true);
+      showHudToast(t("class_editor.delete_failed", "Delete failed"), true);
     });
 }
 
@@ -4472,7 +4649,14 @@ function renderActionClassList() {
         data && Array.isArray(data.action_classes) ? data.action_classes : [];
       if (!classes.length) {
         listDiv.innerHTML =
-          '<div class="class-row"><em style="opacity:0.55">No custom action types yet.</em></div>';
+          '<div class="class-row"><em style="opacity:0.55">' +
+          escHtml(
+            t(
+              "class_editor.no_custom_action_types",
+              "No custom action types yet.",
+            ),
+          ) +
+          "</em></div>";
         return;
       }
       var rows = "";
@@ -4491,17 +4675,23 @@ function renderActionClassList() {
           '<span class="class-row-btns">' +
           '<button data-action-class-id="' +
           id +
-          '" onclick="editActionClass(this.dataset.actionClassId)">Edit</button>' +
+          '" onclick="editActionClass(this.dataset.actionClassId)">' +
+          escHtml(t("class_editor.edit_button", "Edit")) +
+          "</button>" +
           '<button data-action-class-id="' +
           id +
-          '" onclick="deleteActionClassUI(this.dataset.actionClassId)">Del</button>' +
+          '" onclick="deleteActionClassUI(this.dataset.actionClassId)">' +
+          escHtml(t("class_editor.del_button", "Del")) +
+          "</button>" +
           "</span></div>";
       }
       listDiv.innerHTML = rows;
     })
     .catch(function () {
       listDiv.innerHTML =
-        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+        '<div class="class-row" style="color:#f88">' +
+        escHtml(t("class_editor.failed_to_load_list", "Failed to load.")) +
+        "</div>";
     });
 }
 
@@ -4522,7 +4712,10 @@ function editActionClass(id) {
         }
       }
       if (!ac) {
-        showHudToast("Action type not found", true);
+        showHudToast(
+          t("class_editor.action_not_found", "Action type not found"),
+          true,
+        );
         return;
       }
       actionClassEditId = String(id);
@@ -4543,10 +4736,16 @@ function editActionClass(id) {
         requireElementById("ac-logic-spec")
       ).value = ac.logicSpec ? JSON.stringify(ac.logicSpec, null, 2) : "";
       requireElementById("action-class-form-title").textContent =
-        "Edit: " + String(id);
+        t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
     .catch(function () {
-      showHudToast("Failed to load action type", true);
+      showHudToast(
+        t(
+          "class_editor.failed_to_load_action_type",
+          "Failed to load action type",
+        ),
+        true,
+      );
     });
 }
 
@@ -4565,7 +4764,10 @@ function cancelActionClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("ac-logic-spec")
   ).value = "";
-  requireElementById("action-class-form-title").textContent = "New action type";
+  requireElementById("action-class-form-title").textContent = t(
+    "class_editor.new_action_type",
+    "New action type",
+  );
 }
 
 function submitActionClassForm() {
@@ -4573,7 +4775,10 @@ function submitActionClassForm() {
     requireElementById("ac-id")
   ).value.trim();
   if (!idVal) {
-    showHudToast("Action type ID is required", true);
+    showHudToast(
+      t("class_editor.action_id_required", "Action type ID is required"),
+      true,
+    );
     return;
   }
   var labelVal = /** @type {HTMLInputElement} */ (
@@ -4599,7 +4804,10 @@ function submitActionClassForm() {
     try {
       logicSpec = JSON.parse(logicSpecRaw);
     } catch (e) {
-      showHudToast("Invalid logic spec JSON", true);
+      showHudToast(
+        t("class_editor.invalid_logic_spec_json", "Invalid logic spec JSON"),
+        true,
+      );
       return;
     }
   }
@@ -4624,15 +4832,20 @@ function submitActionClassForm() {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Save failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.save_failed", "Save failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Saved!", false);
+      showHudToast(t("class_editor.saved", "Saved!"), false);
       cancelActionClassEdit();
       renderActionClassList();
     })
     .catch(function () {
-      showHudToast("Save failed", true);
+      showHudToast(t("class_editor.save_failed", "Save failed"), true);
     });
 }
 
@@ -4647,15 +4860,23 @@ function deleteActionClassUI(id) {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Delete failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.delete_failed", "Delete failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Deleted " + String(id), false);
+      showHudToast(
+        t("class_editor.deleted_prefix", "Deleted") + " " + String(id),
+        false,
+      );
       if (actionClassEditId === String(id)) cancelActionClassEdit();
       renderActionClassList();
     })
     .catch(function () {
-      showHudToast("Delete failed", true);
+      showHudToast(t("class_editor.delete_failed", "Delete failed"), true);
     });
 }
 
@@ -4692,7 +4913,14 @@ function renderLivingClassList() {
         data && Array.isArray(data.living_classes) ? data.living_classes : [];
       if (!classes.length) {
         listDiv.innerHTML =
-          '<div class="class-row"><em style="opacity:0.55">No custom living types yet.</em></div>';
+          '<div class="class-row"><em style="opacity:0.55">' +
+          escHtml(
+            t(
+              "class_editor.no_custom_living_types",
+              "No custom living types yet.",
+            ),
+          ) +
+          "</em></div>";
         return;
       }
       var rows = "";
@@ -4711,17 +4939,23 @@ function renderLivingClassList() {
           '<span class="class-row-btns">' +
           '<button data-living-class-id="' +
           id +
-          '" onclick="editLivingClass(this.dataset.livingClassId)">Edit</button>' +
+          '" onclick="editLivingClass(this.dataset.livingClassId)">' +
+          escHtml(t("class_editor.edit_button", "Edit")) +
+          "</button>" +
           '<button data-living-class-id="' +
           id +
-          '" onclick="deleteLivingClassUI(this.dataset.livingClassId)">Del</button>' +
+          '" onclick="deleteLivingClassUI(this.dataset.livingClassId)">' +
+          escHtml(t("class_editor.del_button", "Del")) +
+          "</button>" +
           "</span></div>";
       }
       listDiv.innerHTML = rows;
     })
     .catch(function () {
       listDiv.innerHTML =
-        '<div class="class-row" style="color:#f88">Failed to load.</div>';
+        '<div class="class-row" style="color:#f88">' +
+        escHtml(t("class_editor.failed_to_load_list", "Failed to load.")) +
+        "</div>";
     });
 }
 
@@ -4742,7 +4976,10 @@ function editLivingClass(id) {
         }
       }
       if (!lc) {
-        showHudToast("Living type not found", true);
+        showHudToast(
+          t("class_editor.living_not_found", "Living type not found"),
+          true,
+        );
         return;
       }
       livingClassEditId = String(id);
@@ -4770,10 +5007,16 @@ function editLivingClass(id) {
           ? JSON.stringify(lc.valueSchema, null, 2)
           : "";
       requireElementById("living-class-form-title").textContent =
-        "Edit: " + String(id);
+        t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
     .catch(function () {
-      showHudToast("Failed to load living type", true);
+      showHudToast(
+        t(
+          "class_editor.failed_to_load_living_type",
+          "Failed to load living type",
+        ),
+        true,
+      );
     });
 }
 
@@ -4793,7 +5036,10 @@ function cancelLivingClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-value-schema")
   ).value = "";
-  requireElementById("living-class-form-title").textContent = "New living type";
+  requireElementById("living-class-form-title").textContent = t(
+    "class_editor.new_living_type",
+    "New living type",
+  );
 }
 
 function submitLivingClassForm() {
@@ -4801,7 +5047,10 @@ function submitLivingClassForm() {
     requireElementById("lc-id")
   ).value.trim();
   if (!idVal) {
-    showHudToast("Living type ID is required", true);
+    showHudToast(
+      t("class_editor.living_id_required", "Living type ID is required"),
+      true,
+    );
     return;
   }
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-kind"))
@@ -4820,11 +5069,23 @@ function submitLivingClassForm() {
     try {
       slotDefinitions = JSON.parse(slotDefinitionsRaw);
     } catch (e) {
-      showHudToast("Invalid slot definitions JSON", true);
+      showHudToast(
+        t(
+          "class_editor.invalid_slot_definitions_json",
+          "Invalid slot definitions JSON",
+        ),
+        true,
+      );
       return;
     }
     if (!Array.isArray(slotDefinitions)) {
-      showHudToast("Slot definitions must be a JSON array", true);
+      showHudToast(
+        t(
+          "class_editor.slot_definitions_must_be_array",
+          "Slot definitions must be a JSON array",
+        ),
+        true,
+      );
       return;
     }
   }
@@ -4833,7 +5094,13 @@ function submitLivingClassForm() {
     try {
       valueTemplate = JSON.parse(valueTemplateRaw);
     } catch (e) {
-      showHudToast("Invalid value template JSON", true);
+      showHudToast(
+        t(
+          "class_editor.invalid_value_template_json",
+          "Invalid value template JSON",
+        ),
+        true,
+      );
       return;
     }
   }
@@ -4842,7 +5109,13 @@ function submitLivingClassForm() {
     try {
       valueSchema = JSON.parse(valueSchemaRaw);
     } catch (e) {
-      showHudToast("Invalid value schema JSON", true);
+      showHudToast(
+        t(
+          "class_editor.invalid_value_schema_json",
+          "Invalid value schema JSON",
+        ),
+        true,
+      );
       return;
     }
   }
@@ -4867,15 +5140,20 @@ function submitLivingClassForm() {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Save failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.save_failed", "Save failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Saved!", false);
+      showHudToast(t("class_editor.saved", "Saved!"), false);
       cancelLivingClassEdit();
       renderLivingClassList();
     })
     .catch(function () {
-      showHudToast("Save failed", true);
+      showHudToast(t("class_editor.save_failed", "Save failed"), true);
     });
 }
 
@@ -4890,15 +5168,23 @@ function deleteLivingClassUI(id) {
     })
     .then(function (data) {
       if (!data.ok) {
-        showHudToast(String(data.error || "Delete failed"), true);
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.delete_failed", "Delete failed"),
+          true,
+        );
         return;
       }
-      showHudToast("Deleted " + String(id), false);
+      showHudToast(
+        t("class_editor.deleted_prefix", "Deleted") + " " + String(id),
+        false,
+      );
       if (livingClassEditId === String(id)) cancelLivingClassEdit();
       renderLivingClassList();
     })
     .catch(function () {
-      showHudToast("Delete failed", true);
+      showHudToast(t("class_editor.delete_failed", "Delete failed"), true);
     });
 }
 

@@ -61,12 +61,18 @@ export function craftRecipeForUser(
   const recipeId = String((body && body.recipe_id) || "");
   const recipe = getRecipeDefinition(recipeId);
   if (!recipe) {
-    return { status: 400, payload: { ok: false, error: "Unknown recipe" } };
+    return {
+      status: 400,
+      payload: { ok: false, error: "error.unknown_recipe" },
+    };
   }
 
   const worldId = deps.getPlayerWorld(userId);
   if (!worldId) {
-    return { status: 200, payload: { ok: false, error: "No world found" } };
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.no_world_found" },
+    };
   }
   deps.ensureWorldItems(worldId);
 
@@ -79,7 +85,7 @@ export function craftRecipeForUser(
         status: 200,
         payload: {
           ok: false,
-          error: "Missing required ingredients",
+          error: "error.missing_required_ingredients",
           recipe_id: recipe.id,
         },
       };
@@ -108,7 +114,7 @@ export function craftRecipeForUser(
       status: 200,
       payload: {
         ok: false,
-        error: "Target out of bounds",
+        error: "error.target_out_of_bounds",
         recipe_id: recipe.id,
       },
     };
@@ -130,7 +136,7 @@ export function craftRecipeForUser(
           status: 200,
           payload: {
             ok: false,
-            error: "The oak clearing must remain open",
+            error: "error.oak_clearing_must_remain_open",
             recipe_id: recipe.id,
           },
         };
@@ -144,7 +150,7 @@ export function craftRecipeForUser(
           status: 200,
           payload: {
             ok: false,
-            error: "Cannot place tree here",
+            error: "error.cannot_place_tree_here",
             recipe_id: recipe.id,
           },
         };
@@ -156,7 +162,7 @@ export function craftRecipeForUser(
           status: 200,
           payload: {
             ok: false,
-            error: "The oak clearing must remain open",
+            error: "error.oak_clearing_must_remain_open",
             recipe_id: recipe.id,
           },
         };
@@ -166,7 +172,7 @@ export function craftRecipeForUser(
           status: 200,
           payload: {
             ok: false,
-            error: "Cannot place house here",
+            error: "error.cannot_place_house_here",
             recipe_id: recipe.id,
           },
         };

@@ -447,10 +447,10 @@ function normalizeWorldType(worldType) {
  */
 function worldTypeLabel(worldType) {
   var normalized = normalizeWorldType(worldType);
-  if (normalized === "island") return "Island";
-  if (normalized === "cave") return "Cave";
-  if (normalized === "building") return "House";
-  return "Forest";
+  if (normalized === "island") return t("world_type.island", "Island");
+  if (normalized === "cave") return t("world_type.cave", "Cave");
+  if (normalized === "building") return t("world_type.building", "House");
+  return t("world_type.forest", "Forest");
 }
 
 /**
@@ -464,10 +464,18 @@ function portalDestinationLabel(item) {
       : "forest",
   );
   var worldLabel = worldTypeLabel(destinationType);
+  var worldSuffix = t("world_type.world_suffix", "world");
   if (item && item.destination_world_id) {
-    return worldLabel + " world (#" + String(item.destination_world_id) + ")";
+    return (
+      worldLabel +
+      " " +
+      worldSuffix +
+      " (#" +
+      String(item.destination_world_id) +
+      ")"
+    );
   }
-  return worldLabel + " world";
+  return worldLabel + " " + worldSuffix;
 }
 
 var PORTAL_BUILD_ACTIONS = [

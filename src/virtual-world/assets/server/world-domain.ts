@@ -511,6 +511,42 @@ export function canEquipItemInSlot(
   return slotAcceptsItemType(slotDef, itemType);
 }
 
+export function getSlotIdsWithTag(
+  livingClass: LivingClassRecord | null | undefined,
+  tag: string,
+): string[] {
+  if (!livingClass || !Array.isArray(livingClass.slotDefinitions)) return [];
+  const normalizedTag = String(tag || "");
+  if (!normalizedTag) return [];
+  const out: string[] = [];
+  for (let i = 0; i < livingClass.slotDefinitions.length; i++) {
+    const slotDef = livingClass.slotDefinitions[i];
+    if (!slotDef || !Array.isArray(slotDef.tags)) continue;
+    if (slotDef.tags.indexOf(normalizedTag) !== -1) {
+      out.push(String(slotDef.id));
+    }
+  }
+  return out;
+}
+
+export function getItemsInSlotsWithTag(
+  inv: unknown,
+  livingClass: LivingClassRecord | null | undefined,
+  tag: string,
+): InventoryItem[] {
+  const slotIds = getSlotIdsWithTag(livingClass, tag);
+  if (slotIds.length === 0 || !isRecordLike(inv) || !isRecordLike(inv.slots)) {
+    return [];
+  }
+  const slots = inv.slots as Record<string, unknown>;
+  const out: InventoryItem[] = [];
+  for (let i = 0; i < slotIds.length; i++) {
+    const item = slots[slotIds[i]];
+    if (isValidItem(item)) out.push(item);
+  }
+  return out;
+}
+
 export function normalizeLivingValues(
   values: unknown,
   valueTemplate: Record<string, unknown>,
@@ -661,7 +697,7 @@ export function buildInventorySelectors(inv: unknown): {
       : ["left_hand", "right_hand"];
   return {
     inventory_slot_ids: slotIds,
-    inventory_selectors: slotIds.concat(["inventory"]),
+    inventory_selectors: slotIds.concat(["inventory", "bag"]),
   };
 }
 

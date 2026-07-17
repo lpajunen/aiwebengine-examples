@@ -2598,6 +2598,7 @@ function grantAllItemsForUser(userId) {
     ensureWorldItems: ensureWorldItems,
     loadWorldItems: loadWorldItems,
     flattenWorldItems: flattenWorldItems,
+    getItemStateTemplate: getItemStateTemplateImpl,
   });
 }
 
@@ -2631,6 +2632,9 @@ function setNicknameHandler(context) {
       var currentWorldId = getPlayerWorld(userId);
       if (currentWorldId) {
         var existingNick = getEffectiveNick(userId);
+        var presenceSelectors = buildInventorySelectors(
+          handled.payload.inventory,
+        );
         sendGlobalPresenceEvent(
           "upsert",
           userId,
@@ -2640,6 +2644,8 @@ function setNicknameHandler(context) {
           Date.now(),
           {
             inventory: handled.payload.inventory,
+            inventory_slot_ids: presenceSelectors.inventory_slot_ids,
+            inventory_selectors: presenceSelectors.inventory_selectors,
             items: handled.payload.items,
             message: handled.payload.message,
           },

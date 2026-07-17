@@ -3,7 +3,7 @@ import {
   getDefaultPlayerLivingClassId,
   getLivingClass,
 } from "./living-registry.ts";
-import { canEquipItemInSlot } from "./world-domain.ts";
+import { canEquipItemInSlot, getAllLivingItems } from "./world-domain.ts";
 
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;
@@ -35,6 +35,7 @@ type ItemActionDeps = {
     item: any,
   ) => void;
   getAllKnownItemTypes: () => string[];
+  getItemStateTemplate?: (type: string) => Record<string, unknown>;
 };
 
 function normalizeLivingInventoryShape(inv: any): {
@@ -313,6 +314,7 @@ export function grantAllItemsForUser(
     | "ensureWorldItems"
     | "loadWorldItems"
     | "flattenWorldItems"
+    | "getItemStateTemplate"
   >,
 ): {
   ok: boolean;
@@ -329,20 +331,10 @@ export function grantAllItemsForUser(
   const now = Date.now();
 
   const ownedTypes: Record<string, boolean> = {};
-  if (inv && inv.slots && typeof inv.slots === "object") {
-    const slotIds = Object.keys(inv.slots);
-    for (let i = 0; i < slotIds.length; i++) {
-      const held = inv.slots[slotIds[i]];
-      if (held && held.type) {
-        ownedTypes[held.type] = true;
-      }
-    }
-  }
-  if (Array.isArray(inv.bag)) {
-    for (let j = 0; j < inv.bag.length; j++) {
-      if (inv.bag[j] && inv.bag[j].type) {
-        ownedTypes[inv.bag[j].type] = true;
-      }
+  const heldItems = getAllLivingItems(inv);
+  for (let i = 0; i < heldItems.length; i++) {
+    if (heldItems[i] && heldItems[i].type) {
+      ownedTypes[heldItems[i].type] = true;
     }
   }
 
@@ -353,6 +345,9 @@ export function grantAllItemsForUser(
       id: makeCheatItemId(userId, worldId, i),
       type: itemTypes[i],
       created_at: now,
+      state: deps.getItemStateTemplate
+        ? deps.getItemStateTemplate(itemTypes[i])
+        : undefined,
     });
     grantedCount++;
   }

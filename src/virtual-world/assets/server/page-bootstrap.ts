@@ -1,4 +1,5 @@
 import { getBootstrapRegistry } from "./item-registry.ts";
+import { getAllLivingItems } from "./world-domain.ts";
 
 type SpawnDeps = {
   isOakWorld: (worldId: string | number) => boolean;
@@ -141,17 +142,7 @@ export function getDefaultSpawnPosition(
 
 export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
   const inv = deps.loadPlayerInventory(userId);
-  let allItems: any[] = [];
-  if (inv && inv.slots && typeof inv.slots === "object") {
-    const slotIds = Object.keys(inv.slots);
-    for (let i = 0; i < slotIds.length; i++) {
-      const held = inv.slots[slotIds[i]];
-      if (held) allItems.push(held);
-    }
-  }
-  if (Array.isArray(inv.bag)) {
-    allItems = allItems.concat(inv.bag);
-  }
+  const allItems = getAllLivingItems(inv);
   const hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
   });

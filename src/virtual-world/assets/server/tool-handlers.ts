@@ -261,6 +261,8 @@ export function virtualWorldSetNicknameToolHandler(
         Date.now(),
         {
           inventory: cheatResult.inventory,
+          inventory_slot_ids: selectors.inventory_slot_ids,
+          inventory_selectors: selectors.inventory_selectors,
           items: cheatResult.items,
           message:
             "Item cheat activated: +" + cheatResult.granted_count + " items",

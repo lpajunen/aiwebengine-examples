@@ -1,4 +1,4 @@
-import { buildInventorySelectors } from "./world-domain.ts";
+import { buildInventorySelectors, getAllLivingItems } from "./world-domain.ts";
 
 type CanonicalState = {
   row: number;
@@ -78,15 +78,7 @@ export function getAvailableWorldActions(
     }
   }
 
-  if (inventory && inventory.slots && typeof inventory.slots === "object") {
-    const slotIds = Object.keys(inventory.slots);
-    for (let i = 0; i < slotIds.length; i++) {
-      addItemAction(inventory.slots[slotIds[i]]);
-    }
-  }
-
-  const invItems =
-    inventory && Array.isArray(inventory.bag) ? inventory.bag : [];
+  const invItems = getAllLivingItems(inventory);
   for (let i = 0; i < invItems.length; i++) {
     addItemAction(invItems[i]);
   }

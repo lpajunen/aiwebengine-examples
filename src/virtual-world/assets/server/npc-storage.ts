@@ -1,6 +1,8 @@
 import {
+  buildInventorySelectors,
   createEmptyLivingState,
   fromStoredWorldTimestamp,
+  getItemsInSlotsWithTag,
   normalizeLivingState,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
@@ -310,6 +312,8 @@ export function buildWorldNPCSnapshot(
   left_hand: string;
   right_hand: string;
   inventory_count: number;
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
 }> {
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
@@ -317,8 +321,15 @@ export function buildWorldNPCSnapshot(
     const bag = Array.isArray(n && n.bag) ? n.bag : [];
     const values =
       n && n.values && typeof n.values === "object" ? n.values : {};
-    const leftHandItem = slots.left_hand || null;
-    const rightHandItem = slots.right_hand || null;
+    const classId =
+      typeof n.class_id === "string" && n.class_id
+        ? String(n.class_id)
+        : getDefaultNPCLivingClassId();
+    const livingClass = getLivingClass(classId);
+    const handItems = getItemsInSlotsWithTag({ slots }, livingClass, "hand");
+    const leftHandItem = handItems[0] || null;
+    const rightHandItem = handItems[1] || null;
+    const selectors = buildInventorySelectors({ slots, bag });
     return {
       npc_id: npcId,
       display_name: getNPCDisplayName(worldId, npcId),
@@ -327,10 +338,7 @@ export function buildWorldNPCSnapshot(
       seq: Number(n.seq || 0),
       rotation: Number.isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
       state: typeof n.state === "string" ? n.state : "idle",
-      class_id:
-        typeof n.class_id === "string" && n.class_id
-          ? String(n.class_id)
-          : getDefaultNPCLivingClassId(),
+      class_id: classId,
       slots: slots,
       bag: bag,
       values: values,
@@ -339,6 +347,8 @@ export function buildWorldNPCSnapshot(
       right_hand:
         rightHandItem && rightHandItem.type ? String(rightHandItem.type) : "",
       inventory_count: bag.length,
+      inventory_slot_ids: selectors.inventory_slot_ids,
+      inventory_selectors: selectors.inventory_selectors,
     };
   });
 }

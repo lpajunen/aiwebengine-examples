@@ -142,16 +142,17 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
       from: {
         type: "string",
         description:
-          "Source selector for drop or equip: use 'inventory' for bag by index, or a living slot ID like 'left_hand'",
+          "Source selector for drop or equip: use 'inventory' (or the equivalent alias 'bag') for bag by index, or a living slot ID like 'left_hand'",
       },
       to: {
         type: "string",
         description:
-          "Destination selector for equip: use 'inventory' for bag, or any valid living slot ID",
+          "Destination selector for equip: use 'inventory' (or the equivalent alias 'bag') for bag, or any valid living slot ID",
       },
       index: {
         type: "number",
-        description: "Bag index used for drop or equip when from='inventory'",
+        description:
+          "Bag index used for drop or equip when from='inventory' (or 'bag')",
       },
     },
   });

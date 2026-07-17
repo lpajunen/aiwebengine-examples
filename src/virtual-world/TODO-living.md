@@ -265,18 +265,25 @@ All four items landed. `slots` + `bag` (+ `values`) is now the only living-state
 
 Deliberately deferred (not part of this pass, tracked below): full slot-tag-based capability logic, canonical class-definition-order slot sorting (still alphabetical), and NPC-snapshot/client UI changes — client-side files were not touched since they already prefer `slots`/`bag` and only fell back to the legacy fields when `slots` was absent, which no longer happens.
 
-### P1 - Behavior Correctness and Slot Semantics
+### P1 - Behavior Correctness and Slot Semantics — DONE (2026-07-17)
 
-- Add slot-tag query helpers usage in behavior paths so actions can require capabilities (for example any `hand` slot) instead of literal slot IDs.
-- Expand equip validation beyond `accepts` item type checks to support tag/capability constraints where needed.
-- Ensure all action-condition source-item resolution consistently uses shared living item helper functions.
-- Add regression coverage for action flows where item state mutates (logic effects) and must be persisted back to slot or bag correctly.
+The audit behind this pass found the backlog's premise didn't quite match the code: no action anywhere hardcoded a literal slot ID for eligibility — an item works identically whether it's in the bag or equipped, because no capability restriction exists at all. So "un-hardcoding" wasn't the actual gap; the real gap was that the query plumbing for capability-based checks didn't exist yet.
 
-### P1 - API Contract Cleanup
+- [x] Added `getSlotIdsWithTag`/`getItemsInSlotsWithTag` to `src/virtual-world/assets/server/world-domain.ts` — generic slot-tag query helpers, following the existing `canEquipItemInSlot`-style convention of taking `livingClass` as a parameter. **Deliberately not wired into any gameplay eligibility check in this pass** — doing so (e.g. requiring tree/kantele actions' source item to be in a `hand`-tagged slot) would be a real gameplay behavior change, not a refactor, and needs its own review when there's an actual design for it.
+- [x] Gave the new helper one safe, non-gameplay caller: `buildWorldNPCSnapshot` in `npc-storage.ts` now derives its `left_hand`/`right_hand` display fields via `getItemsInSlotsWithTag(..., "hand")` instead of hardcoding `slots.left_hand`/`slots.right_hand` — same output today, but no longer silently blind to a living class with different or additional hand-tagged slots.
+- [x] Consolidated three call sites that duplicated `getAllLivingItems`'s slots+bag iteration inline: `current-world-state.ts`'s `getAvailableWorldActions`, `page-bootstrap.ts`'s `ensureStarterKit`, and `item-action-helpers.ts`'s `grantAllItemsForUser`. Behavior-equivalent, pure de-duplication.
+- [x] Fixed a real bug found while scoping "regression coverage for logic-effect mutation flows": `grantAllItemsForUser` (the `/virtual-world/cheat-items` admin action) created items with no `state` field, unlike the crafting and normal item-spawn paths. `action-logic-interpreter.ts` skips all condition checks when `item.state` is missing, so a cheat-granted kantele bypassed the `tuned`/`playsLeft` checks and playing it corrupted state to `playsLeft: -1`. Fixed by seeding `state` via `getItemStateTemplate`, matching `crafting-helpers.ts`/`item-storage.ts`.
 
-- Define one explicit selector contract (`inventory` alias vs `bag`) and document it in runtime schema + README notes.
-- Ensure every HTTP/MCP response that includes inventory includes selector metadata (double-check infrequent/admin/debug paths).
-- Decide whether to keep legacy selector aliases indefinitely or schedule deprecation.
+Deliberately deferred, not part of this pass:
+
+- **Item-side tag/capability equip validation** — neither built-in living class (`player_human`, `npc_human`) sets `accepts` on any slot, and there's no item-side tag/capability field to match against. Building this out now would mean inventing a data model with zero current consumers; revisit if/when a concrete need shows up.
+- **A test framework** — this repo has no test infrastructure at all (confirmed: no framework in `package.json`, no test files anywhere). The one concrete bug the audit surfaced was fixed directly instead of building test scaffolding around it.
+
+### P1 - API Contract Cleanup — DONE (2026-07-17)
+
+- [x] Both `"inventory"` and `"bag"` are kept indefinitely as equivalent bag-selector aliases (already true server-side via `isBagSelector` in `item-action-helpers.ts` — no deprecation, cheap to keep). `"inventory"` is the documented/canonical one. `buildInventorySelectors` in `world-domain.ts` now advertises both (`inventory_selectors` = slot ids + `["inventory", "bag"]`), and the MCP tool-schema descriptions in `runtime-registration.ts` now mention both.
+- [x] Closed the two response-path gaps the audit found where `inventory` was returned without selector metadata: the cheat-nickname `presence_update` stream broadcast (both the HTTP path in `virtual-world.js`'s `setNicknameHandler` and the MCP path in `tool-handlers.ts`'s `virtualWorldSetNicknameToolHandler`), and the `/virtual-world/npcs` endpoint (`buildWorldNPCSnapshot` in `npc-storage.ts` now includes `inventory_slot_ids`/`inventory_selectors` per NPC, additive fields alongside the existing `slots`/`bag`).
+- [x] Documented the contract — see "Inventory Selector Contract" below.
 
 ### P2 - UI Quality and Clarity
 
@@ -298,6 +305,15 @@ Deliberately deferred (not part of this pass, tracked below): full slot-tag-base
 - Reduce duplicated inventory-shape normalization helpers across server modules.
 - Introduce shared utility for deriving canonical slot order (class definition order + stable fallback).
 - Consider introducing stricter types for dynamic inventory payloads in handler return types (currently many `any` payloads).
+
+## Inventory Selector Contract
+
+A "selector" addresses either a specific living slot or the bag:
+
+- A living slot: any string matching a slot id on the living's `slots` map (e.g. `left_hand`, `right_hand`).
+- The bag: `"inventory"` (canonical/documented) or `"bag"` (equivalent alias, kept indefinitely — not scheduled for deprecation). Both are accepted everywhere a selector is read (`isBagSelector` in `src/virtual-world/assets/server/item-action-helpers.ts`).
+
+Every response that includes a living's `inventory` (or, for NPCs, top-level `slots`/`bag`) also includes `inventory_slot_ids` (the living's current slot ids) and `inventory_selectors` (`inventory_slot_ids` + `["inventory", "bag"]`), built by the single shared `buildInventorySelectors` helper in `src/virtual-world/assets/server/world-domain.ts`. This includes the player world-state/items/item-action/craft/cheat responses (HTTP + MCP), the cheat-nickname `presence_update` stream broadcast, and the `/virtual-world/npcs` snapshot.
 
 ## Concrete File Targets To Revisit
 
@@ -323,6 +339,6 @@ Deliberately deferred (not part of this pass, tracked below): full slot-tag-base
 ## Suggested Resume Order
 
 1. ~~Complete P0 model cleanup and helper consolidation.~~ Done (2026-07-17).
-2. Complete P1 behavior correctness and API contract cleanup.
+2. ~~Complete P1 behavior correctness and API contract cleanup.~~ Done (2026-07-17).
 3. Improve P2 UI/i18n quality.
 4. Address P3 debt and then pursue Nice-to-Have ideas.

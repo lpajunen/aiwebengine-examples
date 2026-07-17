@@ -7,6 +7,7 @@ import {
 import {
   findFirstLivingItemByTypes,
   isValidItem,
+  LivingState,
   replaceLivingItemById,
 } from "./world-domain.ts";
 
@@ -24,7 +25,7 @@ type TreeActionDeps = {
   grantAllItemsForUser: (userId: string) => any;
   getPlayerWorld: (userId: string) => string;
   ensureWorldItems: (worldId: string) => void;
-  loadPlayerInventory: (userId: string) => any;
+  loadPlayerInventory: (userId: string) => LivingState;
   getCanonicalPlayerState: (
     worldId: string,
     userId: string,
@@ -35,7 +36,10 @@ type TreeActionDeps = {
     rotation: number;
   };
   loadWorldItems: (worldId: string) => Record<string, any[]>;
-  canInventoryUseTreeAction: (inventory: any, action: string) => boolean;
+  canInventoryUseTreeAction: (
+    inventory: LivingState,
+    action: string,
+  ) => boolean;
   canTileItemsUseTreeAction: (items: any[], action: string) => boolean;
   switchUserWorld: (
     userId: string,
@@ -104,7 +108,7 @@ type TreeActionDeps = {
   deleteWorldItems: (items: any[]) => void;
   isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
   saveWorldTrees: (worldId: string, trees: Record<string, any>) => void;
-  savePlayerInventory: (userId: string, inventory: any) => void;
+  savePlayerInventory: (userId: string, inventory: unknown) => void;
 };
 
 export function performTreeActionForUser(

@@ -1,4 +1,8 @@
-import { buildInventorySelectors, getAllLivingItems } from "./world-domain.ts";
+import {
+  buildInventorySelectors,
+  getAllLivingItems,
+  LivingState,
+} from "./world-domain.ts";
 
 type CanonicalState = {
   row: number;
@@ -20,14 +24,14 @@ type CurrentWorldStateDeps = {
   markNPCWorldActive: (worldId: string) => void;
   ensureWorldItems: (worldId: string) => void;
   getCanonicalPlayerState: (worldId: string, userId: string) => CanonicalState;
-  loadPlayerInventory: (userId: string) => any;
+  loadPlayerInventory: (userId: string) => LivingState;
   loadWorldItems: (worldId: string) => Record<string, any[]>;
   flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
   loadWorldMods: (worldId: string) => any;
   loadWorldHouses: (worldId: string) => any;
   getWorldType: (worldId: string) => string;
   getAvailableWorldActions: (
-    inventory: any,
+    inventory: LivingState,
     currentTileItems: any[],
   ) => string[];
   getMoveOptions: (
@@ -61,7 +65,7 @@ export function worldTileNameForValue(
 }
 
 export function getAvailableWorldActions(
-  inventory: any,
+  inventory: LivingState,
   currentTileItems: any[],
   getActionsForItemType: (itemType: string) => string[],
 ): string[] {
@@ -204,7 +208,7 @@ export function getCurrentWorldStateForUser(
   player: CanonicalState;
   items: any[];
   tile_items: any[];
-  inventory: any;
+  inventory: LivingState;
   world_mods: any;
   houses: any;
   inventory_slot_ids: string[];

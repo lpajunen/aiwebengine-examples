@@ -1,16 +1,15 @@
 import { getRecipeDefinition } from "./item-registry.ts";
-import { consumeLivingItemsByType, getAllLivingItems } from "./world-domain.ts";
+import {
+  consumeLivingItemsByType,
+  getAllLivingItems,
+  LivingState,
+} from "./world-domain.ts";
 
 type RecipeDeps = {
   getPlayerWorld: (userId: string) => string;
   ensureWorldItems: (worldId: string) => void;
-  loadPlayerInventory: (userId: string) => {
-    class_id: string;
-    slots: Record<string, any>;
-    bag: any[];
-    values: Record<string, unknown>;
-  };
-  savePlayerInventory: (userId: string, inventory: any) => void;
+  loadPlayerInventory: (userId: string) => LivingState;
+  savePlayerInventory: (userId: string, inventory: unknown) => void;
   getCanonicalPlayerState: (
     worldId: string,
     userId: string,
@@ -38,7 +37,7 @@ type RecipeDeps = {
   COLS: number;
 };
 
-function countItemsByType(inventory: any): Record<string, number> {
+function countItemsByType(inventory: LivingState): Record<string, number> {
   const counts: Record<string, number> = {};
   const items = getAllLivingItems(inventory);
   for (let i = 0; i < items.length; i++) {

@@ -3,7 +3,11 @@ import {
   getDefaultPlayerLivingClassId,
   getLivingClass,
 } from "./living-registry.ts";
-import { canEquipItemInSlot, getAllLivingItems } from "./world-domain.ts";
+import {
+  canEquipItemInSlot,
+  getAllLivingItems,
+  LivingState,
+} from "./world-domain.ts";
 
 type ItemActionDeps = {
   getPlayerWorld: (userId: string) => string;
@@ -12,7 +16,7 @@ type ItemActionDeps = {
     worldId: string,
     userId: string,
   ) => { row: number; col: number; seq: number; rotation: number };
-  loadPlayerInventory: (userId: string) => any;
+  loadPlayerInventory: (userId: string) => LivingState;
   loadWorldItems: (worldId: string) => Record<string, any[]>;
   isPickableWorldItem: (item: any) => boolean;
   deleteWorldItems: (items: any[]) => void;
@@ -37,27 +41,6 @@ type ItemActionDeps = {
   getAllKnownItemTypes: () => string[];
   getItemStateTemplate?: (type: string) => Record<string, unknown>;
 };
-
-function normalizeLivingInventoryShape(inv: any): {
-  class_id: string;
-  slots: Record<string, any>;
-  bag: any[];
-  values: Record<string, unknown>;
-} {
-  const slots =
-    inv && inv.slots && typeof inv.slots === "object"
-      ? (inv.slots as Record<string, any>)
-      : {};
-  const bag = Array.isArray(inv && inv.bag) ? inv.bag : [];
-  return {
-    class_id:
-      inv && typeof inv.class_id === "string" ? String(inv.class_id) : "",
-    slots: slots,
-    bag: bag,
-    values:
-      inv && inv.values && typeof inv.values === "object" ? inv.values : {},
-  };
-}
 
 function isBagSelector(selector: string): boolean {
   const key = String(selector || "");
@@ -156,7 +139,7 @@ export function handleItemActionForUser(
 
   const canonical = deps.getCanonicalPlayerState(worldId, userId);
   const tileKey = canonical.row + "_" + canonical.col;
-  const inv = normalizeLivingInventoryShape(deps.loadPlayerInventory(userId));
+  const inv = deps.loadPlayerInventory(userId);
   const worldItems = deps.loadWorldItems(worldId);
 
   function getItemChangeActionId(itemChangeId: string): string {
@@ -320,11 +303,11 @@ export function grantAllItemsForUser(
   ok: boolean;
   action: string;
   granted_count: number;
-  inventory: any;
+  inventory: LivingState;
   items: Array<any>;
 } {
   const worldId = deps.getPlayerWorld(userId) || "";
-  const inv = normalizeLivingInventoryShape(deps.loadPlayerInventory(userId));
+  const inv = deps.loadPlayerInventory(userId);
   const itemTypes = deps.getAllKnownItemTypes().filter(function (type) {
     return type !== "portal";
   });

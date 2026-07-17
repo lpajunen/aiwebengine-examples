@@ -1,6 +1,7 @@
 import {
   buildInventorySelectors,
   createEmptyLivingState,
+  LivingState,
 } from "./world-domain.ts";
 
 type HttpHandlerDeps = {
@@ -8,7 +9,7 @@ type HttpHandlerDeps = {
   ensureWorldItems: (worldId: string) => void;
   flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
   loadWorldItems: (worldId: string) => Record<string, any[]>;
-  loadPlayerInventory: (userId: string) => any;
+  loadPlayerInventory: (userId: string) => LivingState;
   savePlayerNick: (userId: string, nick: string) => void;
   grantAllItemsForUser: (userId: string) => any;
   buildOnlinePlayersSnapshot: () => any[];
@@ -99,7 +100,7 @@ export function listItemsForUser(
   >,
 ): {
   items: any[];
-  inventory: any;
+  inventory: LivingState;
   inventory_slot_ids: string[];
   inventory_selectors: string[];
 } {

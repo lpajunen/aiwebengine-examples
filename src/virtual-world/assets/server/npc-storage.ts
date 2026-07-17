@@ -126,17 +126,7 @@ export function saveWorldNPCs(
           : getDefaultNPCLivingClassId();
       const livingClass = getLivingClass(classId);
       const living = livingClass
-        ? normalizeLivingState(
-            {
-              class_id: classId,
-              slots:
-                npc.slots && typeof npc.slots === "object" ? npc.slots : {},
-              bag: Array.isArray(npc.bag) ? npc.bag : [],
-              values:
-                npc.values && typeof npc.values === "object" ? npc.values : {},
-            },
-            livingClass,
-          )
+        ? normalizeLivingState(npc, livingClass)
         : createEmptyLivingState(classId);
 
       const safeRow = normalizeSafeInt(npc.row, 1, 0, 99);

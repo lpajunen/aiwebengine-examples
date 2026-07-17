@@ -1,6 +1,7 @@
 import { getLivingClass } from "./living-registry.ts";
 import {
   createLivingSlotsFromDefinitions,
+  LivingState,
   normalizeLivingState,
 } from "./world-domain.ts";
 
@@ -270,7 +271,7 @@ export function tickNPCTreeActions(params: {
   rows: number;
   cols: number;
   shuffleDirections: (dirs: Array<{ dr: number; dc: number }>) => void;
-  getInventoryTreeActions: (inventory: any) => string[];
+  getInventoryTreeActions: (inventory: LivingState) => string[];
   isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
   isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
   directionToRotation: (dr: number, dc: number) => number;

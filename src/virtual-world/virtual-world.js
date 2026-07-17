@@ -1988,7 +1988,7 @@ function worldTileNameForValue(tileValue) {
 }
 
 /**
- * @param {{slots: Record<string, any>, bag: any[]}} inventory
+ * @param {{class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}} inventory
  * @param {any[]} currentTileItems
  * @returns {string[]}
  */

@@ -1,3 +1,5 @@
+import { LivingState } from "./world-domain.ts";
+
 type TickWorldDeps = {
   ensureWorldItems: (worldId: string) => void;
   ensureWorldNPCs: (worldId: string) => Record<string, any>;
@@ -48,7 +50,7 @@ type TickWorldDeps = {
     eventType: string,
     payload: any,
   ) => void;
-  getInventoryTreeActions: (inventory: any) => string[];
+  getInventoryTreeActions: (inventory: LivingState) => string[];
   isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
   isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
 };

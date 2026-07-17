@@ -1,5 +1,5 @@
 import { getBootstrapRegistry } from "./item-registry.ts";
-import { getAllLivingItems } from "./world-domain.ts";
+import { getAllLivingItems, LivingState } from "./world-domain.ts";
 
 type SpawnDeps = {
   isOakWorld: (worldId: string | number) => boolean;
@@ -15,8 +15,8 @@ type SpawnDeps = {
 };
 
 type StarterKitDeps = {
-  loadPlayerInventory: (userId: string) => any;
-  savePlayerInventory: (userId: string, inventory: any) => void;
+  loadPlayerInventory: (userId: string) => LivingState;
+  savePlayerInventory: (userId: string, inventory: unknown) => void;
 };
 
 type PageBootstrapDeps = {
@@ -29,7 +29,7 @@ type PageBootstrapDeps = {
   loadWorldHouses: (worldId: string) => any;
   ensureWorldItems: (worldId: string) => void;
   loadWorldItems: (worldId: string) => any;
-  loadPlayerInventory: (userId: string) => any;
+  loadPlayerInventory: (userId: string) => LivingState;
   getWorldNPCSnapshot: (worldId: string) => any;
   loadPlayerPosition: (userId: string) => any;
   getDefaultSpawnPosition: (

@@ -1,7 +1,7 @@
 import {
   createEmptyLivingState,
-  createEmptyInventory,
   isValidItem,
+  LivingState,
   normalizeLivingState,
   normalizeWorldType,
   toStoredWorldTimestamp,
@@ -48,12 +48,7 @@ export function loadPlayerInventory(
   userId: string,
   playerInventoryTable: string,
   log: WorldDbLogFn,
-): {
-  class_id: string;
-  slots: Record<string, any>;
-  bag: any[];
-  values: Record<string, unknown>;
-} {
+): LivingState {
   const normalizeRawToLiving = function (raw: unknown, classId: string) {
     const livingClass = getLivingClass(classId);
     if (!livingClass) {
@@ -105,21 +100,7 @@ export function savePlayerInventory(
       : getDefaultPlayerLivingClassId();
   const livingClass = getLivingClass(classId);
   const normalized = livingClass
-    ? normalizeLivingState(
-        {
-          class_id: classId,
-          slots:
-            incoming.slots && typeof incoming.slots === "object"
-              ? incoming.slots
-              : {},
-          bag: Array.isArray(incoming.bag) ? incoming.bag : [],
-          values:
-            incoming.values && typeof incoming.values === "object"
-              ? incoming.values
-              : {},
-        },
-        livingClass,
-      )
+    ? normalizeLivingState(incoming, livingClass)
     : createEmptyLivingState(classId);
 
   upsertWorldRow(

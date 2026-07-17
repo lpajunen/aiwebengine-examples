@@ -88,12 +88,6 @@ export interface InventoryItem {
   [key: string]: unknown;
 }
 
-export interface Inventory {
-  left_hand: InventoryItem | null;
-  right_hand: InventoryItem | null;
-  inventory: InventoryItem[];
-}
-
 export type LivingKind = "player" | "npc" | "creature";
 
 export interface LivingSlotDefinition {
@@ -446,14 +440,6 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-export function createEmptyInventory(): Inventory {
-  return {
-    left_hand: null,
-    right_hand: null,
-    inventory: [],
-  };
-}
-
 export function createEmptyLivingState(classId: string): LivingState {
   return {
     class_id: String(classId || ""),
@@ -600,26 +586,6 @@ export function isValidItem(item: unknown): item is InventoryItem {
   );
 }
 
-export function normalizeInventory(inv: unknown): Inventory {
-  const out = createEmptyInventory();
-  if (!isRecordLike(inv)) return out;
-  if (isRecordLike(inv.slots)) {
-    const slots = inv.slots as Record<string, unknown>;
-    if (isValidItem(slots.left_hand)) out.left_hand = slots.left_hand;
-    if (isValidItem(slots.right_hand)) out.right_hand = slots.right_hand;
-    if (Array.isArray(inv.bag)) {
-      out.inventory = inv.bag.filter(isValidItem);
-    }
-    return out;
-  }
-  if (isValidItem(inv.left_hand)) out.left_hand = inv.left_hand;
-  if (isValidItem(inv.right_hand)) out.right_hand = inv.right_hand;
-  if (Array.isArray(inv.inventory)) {
-    out.inventory = inv.inventory.filter(isValidItem);
-  }
-  return out;
-}
-
 export function getEquippedItems(inv: unknown): InventoryItem[] {
   const out: InventoryItem[] = [];
   if (isRecordLike(inv) && isRecordLike(inv.slots)) {
@@ -628,12 +594,7 @@ export function getEquippedItems(inv: unknown): InventoryItem[] {
       const item = slots[slotId];
       if (isValidItem(item)) out.push(item);
     });
-    return out;
   }
-
-  const normalized = normalizeInventory(inv);
-  if (normalized.left_hand) out.push(normalized.left_hand);
-  if (normalized.right_hand) out.push(normalized.right_hand);
   return out;
 }
 
@@ -641,10 +602,7 @@ export function getBagItems(inv: unknown): InventoryItem[] {
   if (isRecordLike(inv) && Array.isArray(inv.bag)) {
     return inv.bag.filter(isValidItem);
   }
-  const normalized = normalizeInventory(inv);
-  return Array.isArray(normalized.inventory)
-    ? normalized.inventory.slice()
-    : [];
+  return [];
 }
 
 export function getAllLivingItems(inv: unknown): InventoryItem[] {
@@ -752,23 +710,6 @@ export function replaceLivingItemById(
     }
   }
 
-  if (isValidItem(inv.left_hand) && inv.left_hand.id === itemId) {
-    inv.left_hand = replacement;
-    return true;
-  }
-  if (isValidItem(inv.right_hand) && inv.right_hand.id === itemId) {
-    inv.right_hand = replacement;
-    return true;
-  }
-  if (Array.isArray(inv.inventory)) {
-    for (let i = 0; i < inv.inventory.length; i++) {
-      const current = inv.inventory[i];
-      if (isValidItem(current) && current.id === itemId) {
-        inv.inventory[i] = replacement;
-        return true;
-      }
-    }
-  }
   return false;
 }
 
@@ -783,13 +724,6 @@ export function getInventoryTreeActions(inv: unknown): string[] {
     });
     if (Array.isArray(inv.bag)) {
       items = items.concat(inv.bag.filter(isValidItem));
-    }
-  } else {
-    const normalized = normalizeInventory(inv);
-    if (normalized.left_hand) items.push(normalized.left_hand);
-    if (normalized.right_hand) items.push(normalized.right_hand);
-    if (Array.isArray(normalized.inventory)) {
-      items = items.concat(normalized.inventory);
     }
   }
 

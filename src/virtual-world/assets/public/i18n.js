@@ -52,8 +52,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     inventory: {
       empty: "empty",
-      left_hand: "Left Hand",
-      right_hand: "Right Hand",
       backpack_empty: "Backpack empty",
       values: "Living values",
       items_suffix: "items",
@@ -119,8 +117,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     inventory: {
       empty: "tyhjä",
-      left_hand: "Vasen käsi",
-      right_hand: "Oikea käsi",
       backpack_empty: "Reppu on tyhjä",
       values: "Olennon arvot",
       items_suffix: "esinettä",

@@ -2,6 +2,7 @@ import { buildInventorySelectors } from "./world-domain.ts";
 
 type ItemClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
+  hasEditingRights: (userId: string) => boolean;
   refreshItemClasses: () => void;
   getAllItemClasses: () => any[];
   getItemClass: (id: string) => any | undefined;
@@ -11,6 +12,7 @@ type ItemClassHandlerDeps = {
 
 type ActionClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
+  hasEditingRights: (userId: string) => boolean;
   refreshActionClasses: () => void;
   getAllActionClasses: () => any[];
   getActionClass: (id: string) => any | undefined;
@@ -20,6 +22,7 @@ type ActionClassHandlerDeps = {
 
 type LivingClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
+  hasEditingRights: (userId: string) => boolean;
   refreshLivingClasses: () => void;
   getAllLivingClasses: () => any[];
   getLivingClass: (id: string) => any | null;
@@ -315,6 +318,9 @@ export function virtualWorldManageItemClassesToolHandler(
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
+  if (!deps.hasEditingRights(userId)) {
+    return JSON.stringify({ ok: false, error: "Editing rights required" });
+  }
 
   const args = context.args || {};
   const action = String(args.action || "list");
@@ -393,6 +399,9 @@ export function virtualWorldManageActionClassesToolHandler(
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
+  if (!deps.hasEditingRights(userId)) {
+    return JSON.stringify({ ok: false, error: "Editing rights required" });
+  }
 
   const args = context.args || {};
   const action = String(args.action || "list");
@@ -469,6 +478,9 @@ export function virtualWorldManageLivingClassesToolHandler(
   const userId = deps.getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+  if (!deps.hasEditingRights(userId)) {
+    return JSON.stringify({ ok: false, error: "Editing rights required" });
   }
 
   const args = context.args || {};

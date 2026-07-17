@@ -17,6 +17,7 @@ import {
   applyOakReservation,
   buildInventorySelectors,
   canonicalTreeAction,
+  findFirstLivingItemByTypes,
   getOakClearingTiles,
   isOakCenterTile,
   isOakClearingTile,
@@ -2365,6 +2366,7 @@ function virtualWorldSetNicknameToolHandler(context) {
 function virtualWorldManageItemClassesToolHandler(context) {
   return virtualWorldManageItemClassesToolHandlerImpl(context, {
     getAuthenticatedUserId: getAuthenticatedUserId,
+    hasEditingRights: userHasCreatorStone,
     refreshItemClasses: function () {
       refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
     },
@@ -2386,6 +2388,7 @@ function virtualWorldManageItemClassesToolHandler(context) {
 function virtualWorldManageActionClassesToolHandler(context) {
   return virtualWorldManageActionClassesToolHandlerImpl(context, {
     getAuthenticatedUserId: getAuthenticatedUserId,
+    hasEditingRights: userHasCreatorStone,
     refreshActionClasses: function () {
       refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
     },
@@ -2407,6 +2410,7 @@ function virtualWorldManageActionClassesToolHandler(context) {
 function virtualWorldManageLivingClassesToolHandler(context) {
   return virtualWorldManageLivingClassesToolHandlerImpl(context, {
     getAuthenticatedUserId: getAuthenticatedUserId,
+    hasEditingRights: userHasCreatorStone,
     refreshLivingClasses: function () {
       refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
     },
@@ -3040,6 +3044,15 @@ function treeActionHandler(context) {
   );
 }
 
+/**
+ * @param {string} userId
+ * @returns {boolean}
+ */
+function userHasCreatorStone(userId) {
+  var inv = loadPlayerInventory(userId);
+  return !!findFirstLivingItemByTypes(inv, ["creator_stone"]);
+}
+
 // ── Item class CRUD handlers ───────────────────────────────────────────────────
 
 /**
@@ -3048,6 +3061,10 @@ function treeActionHandler(context) {
 function itemClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  if (!userHasCreatorStone(userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   var classes = getAllItemClassesImpl();
@@ -3060,6 +3077,9 @@ function itemClassesHandler(context) {
 function createItemClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var body;
   try {
@@ -3117,6 +3137,9 @@ function createItemClassHandler(context) {
 function updateItemClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
@@ -3200,6 +3223,9 @@ function deleteItemClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+  }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
   );
@@ -3219,6 +3245,9 @@ function actionClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+  }
   refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   var classes = getAllActionClassesImpl();
   return ResponseBuilder.json({ ok: true, action_classes: classes });
@@ -3230,6 +3259,9 @@ function actionClassesHandler(context) {
 function createActionClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var body;
   try {
@@ -3282,6 +3314,9 @@ function createActionClassHandler(context) {
 function updateActionClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var actionId = String(
     (context.request.params && context.request.params.id) || "",
@@ -3361,6 +3396,9 @@ function deleteActionClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
+  }
   var actionId = String(
     (context.request.params && context.request.params.id) || "",
   );
@@ -3379,6 +3417,9 @@ function deleteActionClassHandler(context) {
 function livingClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
   var classes = getAllLivingClassesImpl();
@@ -3402,6 +3443,9 @@ function normalizeLivingKind(value, fallback) {
 function createLivingClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var body;
   try {
@@ -3455,6 +3499,9 @@ function createLivingClassHandler(context) {
 function updateLivingClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",
@@ -3517,6 +3564,9 @@ function updateLivingClassHandler(context) {
 function deleteLivingClassHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json({ error: "Editing rights required" }, 403);
   }
   var classId = String(
     (context.request.params && context.request.params.id) || "",

@@ -1638,6 +1638,7 @@ function fetchItemSnapshot() {
       }
       if (payload.inventory) {
         playerInventory = normalizeClientInventory(payload.inventory);
+        updateEditingRightsUI();
       }
       if (Array.isArray(payload.items)) {
         var next = /** @type {Record<string, ClientItem[]>} */ ({});
@@ -2007,6 +2008,7 @@ function initMultiplayer() {
   scheduleSessionRefresh();
   updateHeldHud();
   renderInventoryPanel();
+  updateEditingRightsUI();
   initLogoutTrigger();
   // Active player positions are not part of the bootstrapped page state,
   // so keep one initial snapshot to populate remote avatars.
@@ -2185,6 +2187,7 @@ function initMultiplayer() {
           playerInventory = normalizeClientInventory(payload.inventory);
           renderInventoryPanel();
           updateUseButtonState();
+          updateEditingRightsUI();
         }
         if (payload.items) {
           applyItemStateFromResult(payload);
@@ -3293,6 +3296,7 @@ function applyItemStateFromResult(result) {
   );
   if (result.inventory) {
     playerInventory = normalizeClientInventory(result.inventory);
+    updateEditingRightsUI();
   }
   if (Array.isArray(result.items)) {
     // Convert flat server snapshot into tile map.
@@ -4169,6 +4173,45 @@ document.addEventListener("mouseup", function (e) {
     resetJoystick();
   }
 });
+
+// ── Editing rights (creator's stone) ─────────────────────────────────────
+
+/** @returns {boolean} */
+function playerHasCreatorStone() {
+  if (!playerInventory) return false;
+  var slots =
+    playerInventory.slots && typeof playerInventory.slots === "object"
+      ? playerInventory.slots
+      : {};
+  var slotIds = Object.keys(slots);
+  for (var i = 0; i < slotIds.length; i++) {
+    var item = slots[slotIds[i]];
+    if (item && item.type === "creator_stone") return true;
+  }
+  var bag = Array.isArray(playerInventory.bag) ? playerInventory.bag : [];
+  for (var j = 0; j < bag.length; j++) {
+    if (bag[j] && bag[j].type === "creator_stone") return true;
+  }
+  return false;
+}
+
+function updateEditingRightsUI() {
+  var hasRights = playerHasCreatorStone();
+  requireElementById("btn-item-classes").style.display = hasRights
+    ? ""
+    : "none";
+  requireElementById("btn-action-classes").style.display = hasRights
+    ? ""
+    : "none";
+  requireElementById("btn-living-classes").style.display = hasRights
+    ? ""
+    : "none";
+  if (!hasRights) {
+    if (itemClassPanelVisible) closeItemClassPanel();
+    if (actionClassPanelVisible) closeActionClassPanel();
+    if (livingClassPanelVisible) closeLivingClassPanel();
+  }
+}
 
 // ── Item class panel ─────────────────────────────────────────────────────
 

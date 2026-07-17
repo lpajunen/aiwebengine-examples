@@ -17,6 +17,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       juniper_bundle: { name: "Juniper bundle" },
       birch_bark_letter: { name: "Birch-bark letter" },
       blessing_marker: { name: "Rowan blessing" },
+      creator_stone: { name: "Creator's stone" },
       unknown: { name: "Unknown item" },
     },
     tree_action: {
@@ -82,6 +83,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       juniper_bundle: { name: "Katajanippu" },
       birch_bark_letter: { name: "Tuohikirje" },
       blessing_marker: { name: "Pihlajansiunaus" },
+      creator_stone: { name: "Luojan kivi" },
       unknown: { name: "Tuntematon esine" },
     },
     tree_action: {
@@ -216,5 +218,6 @@ function itemTypeToLabelKey(type) {
   if (type === "blessing_marker") return "item.blessing_marker.name";
   if (type === "portal") return "item.portal.name";
   if (type === "starter_kit") return "item.starter_kit.name";
+  if (type === "creator_stone") return "item.creator_stone.name";
   return "item.unknown.name";
 }

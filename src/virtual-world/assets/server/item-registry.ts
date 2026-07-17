@@ -233,6 +233,17 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: [],
   },
+  creator_stone: {
+    id: "creator_stone",
+    kind: "artifact",
+    extra: true,
+    visuals: {
+      color: 0x9b5cff,
+      labelKey: "item.creator_stone.name",
+      fallbackLabel: "Creator's stone",
+    },
+    actionIds: [],
+  },
 };
 
 export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {

@@ -25,11 +25,6 @@ type EffectiveMapDeps = {
 type EnsureWorldNPCsDeps = {
   loadWorldNPCs: (worldId: string) => Record<string, any>;
   saveWorldNPCs: (worldId: string, npcs: Record<string, any>) => void;
-  normalizeInventory: (inventory: any) => {
-    left_hand: any;
-    right_hand: any;
-    inventory: any[];
-  };
   getEffectiveMap: (worldId: string) => number[][];
   loadWorldPlayers: (worldId: string) => Record<string, any>;
   NPC_MIN_COUNT: number;
@@ -153,24 +148,17 @@ export function ensureWorldNPCs(
           slots: {},
           bag: [],
           values: {},
-          left_hand: null,
-          right_hand: null,
-          inventory: [],
         };
         hasNormalizationChanges = true;
         return;
       }
 
-      const inventory = deps.normalizeInventory(npc);
       if (
         typeof npc.class_id !== "string" ||
         !npc.class_id ||
         !npc.slots ||
         typeof npc.slots !== "object" ||
-        !Array.isArray(npc.bag) ||
-        npc.left_hand !== inventory.left_hand ||
-        npc.right_hand !== inventory.right_hand ||
-        !Array.isArray(npc.inventory)
+        !Array.isArray(npc.bag)
       ) {
         if (typeof npc.class_id !== "string" || !npc.class_id) {
           npc.class_id = getDefaultNPCLivingClassId();
@@ -179,21 +167,10 @@ export function ensureWorldNPCs(
           const cls = getLivingClass(String(npc.class_id));
           npc.slots = cls
             ? createLivingSlotsFromDefinitions(cls.slotDefinitions)
-            : {
-                left_hand: null,
-                right_hand: null,
-              };
+            : {};
         }
         if (!Array.isArray(npc.bag)) npc.bag = [];
         if (!npc.values || typeof npc.values !== "object") npc.values = {};
-        npc.left_hand = inventory.left_hand;
-        npc.right_hand = inventory.right_hand;
-        npc.inventory = inventory.inventory;
-        if (npc.slots && typeof npc.slots === "object") {
-          npc.slots.left_hand = inventory.left_hand;
-          npc.slots.right_hand = inventory.right_hand;
-        }
-        npc.bag = inventory.inventory;
         hasNormalizationChanges = true;
       }
     });
@@ -241,7 +218,7 @@ export function ensureWorldNPCs(
     const livingClass = getLivingClass(classId);
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
-      : { left_hand: null, right_hand: null };
+      : {};
     npcs[npcId] = {
       row,
       col,
@@ -255,9 +232,6 @@ export function ensureWorldNPCs(
       values: livingClass
         ? Object.assign({}, livingClass.valueTemplate || {})
         : {},
-      left_hand: null,
-      right_hand: null,
-      inventory: [],
     };
   }
 

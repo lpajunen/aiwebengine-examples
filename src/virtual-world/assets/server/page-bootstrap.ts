@@ -148,21 +148,16 @@ export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
       const held = inv.slots[slotIds[i]];
       if (held) allItems.push(held);
     }
-  } else {
-    if (inv.left_hand) allItems.push(inv.left_hand);
-    if (inv.right_hand) allItems.push(inv.right_hand);
   }
   if (Array.isArray(inv.bag)) {
     allItems = allItems.concat(inv.bag);
-  } else if (Array.isArray(inv.inventory)) {
-    allItems = allItems.concat(inv.inventory);
   }
   const hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
   });
   if (!hasKit) {
     if (!Array.isArray(inv.bag)) {
-      inv.bag = Array.isArray(inv.inventory) ? inv.inventory : [];
+      inv.bag = [];
     }
     inv.bag.push({
       id: "starter_kit_" + userId,
@@ -170,7 +165,6 @@ export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
       created_at: Date.now(),
       non_droppable: true,
     });
-    inv.inventory = inv.bag;
     deps.savePlayerInventory(userId, inv);
   }
 }

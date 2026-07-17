@@ -1,12 +1,14 @@
 import { getRecipeDefinition } from "./item-registry.ts";
+import { consumeLivingItemsByType, getAllLivingItems } from "./world-domain.ts";
 
 type RecipeDeps = {
   getPlayerWorld: (userId: string) => string;
   ensureWorldItems: (worldId: string) => void;
   loadPlayerInventory: (userId: string) => {
-    left_hand: any;
-    right_hand: any;
-    inventory: any[];
+    class_id: string;
+    slots: Record<string, any>;
+    bag: any[];
+    values: Record<string, unknown>;
   };
   savePlayerInventory: (userId: string, inventory: any) => void;
   getCanonicalPlayerState: (
@@ -38,14 +40,7 @@ type RecipeDeps = {
 
 function countItemsByType(inventory: any): Record<string, number> {
   const counts: Record<string, number> = {};
-  const items = [];
-  if (inventory && inventory.left_hand) items.push(inventory.left_hand);
-  if (inventory && inventory.right_hand) items.push(inventory.right_hand);
-  if (inventory && Array.isArray(inventory.inventory)) {
-    for (let i = 0; i < inventory.inventory.length; i++) {
-      items.push(inventory.inventory[i]);
-    }
-  }
+  const items = getAllLivingItems(inventory);
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const type = item && item.type ? String(item.type) : "";
@@ -53,39 +48,6 @@ function countItemsByType(inventory: any): Record<string, number> {
     counts[type] = (counts[type] || 0) + 1;
   }
   return counts;
-}
-
-function consumeInventoryItems(
-  inventory: any,
-  itemId: string,
-  count: number,
-): void {
-  let remaining = Number(count || 0);
-  if (remaining <= 0) return;
-  if (
-    remaining > 0 &&
-    inventory.left_hand &&
-    String(inventory.left_hand.type || "") === String(itemId)
-  ) {
-    inventory.left_hand = null;
-    remaining--;
-  }
-  if (
-    remaining > 0 &&
-    inventory.right_hand &&
-    String(inventory.right_hand.type || "") === String(itemId)
-  ) {
-    inventory.right_hand = null;
-    remaining--;
-  }
-  if (remaining > 0 && Array.isArray(inventory.inventory)) {
-    for (let i = inventory.inventory.length - 1; i >= 0 && remaining > 0; i--) {
-      const item = inventory.inventory[i];
-      if (!item || String(item.type || "") !== String(itemId)) continue;
-      inventory.inventory.splice(i, 1);
-      remaining--;
-    }
-  }
 }
 
 function makeCraftedItemId(worldId: string, itemSeq: number): string {
@@ -215,7 +177,7 @@ export function craftRecipeForUser(
 
   for (let i = 0; i < recipe.inputItems.length; i++) {
     const input = recipe.inputItems[i];
-    consumeInventoryItems(inventory, input.itemId, input.count);
+    consumeLivingItemsByType(inventory, input.itemId, input.count);
   }
 
   const craftedItems = [];
@@ -233,7 +195,7 @@ export function craftRecipeForUser(
             ? deps.getItemStateTemplate(output.itemId)
             : undefined,
         };
-        inventory.inventory.push(craftedItem);
+        inventory.bag.push(craftedItem);
         craftedItems.push(craftedItem);
       }
       continue;

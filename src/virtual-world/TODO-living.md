@@ -248,24 +248,22 @@ Use this section as the resume backlog.
 
 ### Remaining Issues
 
-- Fixed-slot compatibility aliases still exist in many places and can drift from dynamic `slots`/`bag` state if touched inconsistently.
 - Dynamic slot/tag semantics are only partially enforced in gameplay logic; most behavior still checks item presence rather than slot capability tags.
-- Selector metadata construction is duplicated across several modules instead of one shared helper.
 - Living values are displayed, but there is no schema-driven formatting/units/ranges or UX for important stats.
 - Runtime/tool contracts still have some legacy naming semantics (`inventory` selector alias) that should be normalized/documented clearly for long-term API stability.
 
 ## Resume Backlog
 
-### P0 - Finish Core Dynamic Model (No New Features Before These)
+### P0 - Finish Core Dynamic Model — DONE (2026-07-17)
 
-- Remove remaining fixed-slot assumptions from crafting logic in `src/virtual-world/assets/server/crafting-helpers.ts`.
-- Remove/fence legacy alias writes (`left_hand`, `right_hand`, `inventory`) where not needed, and make `slots` + `bag` the only authoritative state.
-- Audit and tighten NPC normalization paths in `src/virtual-world/assets/server/npc-storage.ts` and `src/virtual-world/assets/server/npc-tick-helpers.ts` so they never re-introduce fixed-slot coupling.
-- Consolidate selector-building logic into one shared server helper and consume it from:
-  - `src/virtual-world/assets/server/current-world-state.ts`
-  - `src/virtual-world/assets/server/http-handler-helpers.ts`
-  - `src/virtual-world/assets/server/tool-handlers.ts`
-  - `src/virtual-world/virtual-world.js`
+All four items landed. `slots` + `bag` (+ `values`) is now the only living-state shape produced or accepted anywhere on the server; the `left_hand`/`right_hand`/`inventory` alias fields are gone from every load/save/tick/response path (the string literals `"left_hand"`/`"right_hand"` that remain are legitimate slot IDs — in `living-registry.ts` class definitions, i18n keys, and generic slot lookups like `slots.left_hand` — not fixed fields). Two new shared helpers landed in `src/virtual-world/assets/server/world-domain.ts`: `consumeLivingItemsByType` and `buildInventorySelectors`.
+
+- [x] Removed fixed-slot assumptions from crafting logic in `src/virtual-world/assets/server/crafting-helpers.ts` — now uses `getAllLivingItems`/`consumeLivingItemsByType` from `world-domain.ts`. Also fixed a latent bug where crafted outputs were pushed to `.inventory` instead of `.bag` (previously masked by the alias).
+- [x] Removed legacy alias writes (`left_hand`, `right_hand`, `inventory`) from `item-storage.ts`, `npc-storage.ts`, `npc-tick-helpers.ts`, `world-bootstrap.ts`, `page-bootstrap.ts`, `item-action-helpers.ts`, `current-world-state.ts` — `slots` + `bag` is now the only authoritative state read or written anywhere.
+- [x] Audited and tightened NPC normalization paths in `npc-storage.ts` and `npc-tick-helpers.ts`. `npc-tick-helpers.ts` was the worst offender (hardcoded two-hand shape rebuilt every tick, no living-class awareness at all) — it now imports `getLivingClass`/`createLivingSlotsFromDefinitions`/`normalizeLivingState` and normalizes per-tick state the same class-aware way `npc-storage.ts` already did at load/save time. `world-bootstrap.ts`'s `ensureWorldNPCs` (upstream NPC seeding/repair path, not literally named in the original bullet but independently reintroducing the same anti-pattern) was cleaned up too.
+- [x] Consolidated selector-building logic into `buildInventorySelectors` in `world-domain.ts`, replacing four independent copies in `current-world-state.ts`, `http-handler-helpers.ts`, `tool-handlers.ts`, and `virtual-world.js` (`withInventorySelectors`).
+
+Deliberately deferred (not part of this pass, tracked below): full slot-tag-based capability logic, canonical class-definition-order slot sorting (still alphabetical), and NPC-snapshot/client UI changes — client-side files were not touched since they already prefer `slots`/`bag` and only fell back to the legacy fields when `slots` was absent, which no longer happens.
 
 ### P1 - Behavior Correctness and Slot Semantics
 
@@ -324,7 +322,7 @@ Use this section as the resume backlog.
 
 ## Suggested Resume Order
 
-1. Complete P0 model cleanup and helper consolidation.
+1. ~~Complete P0 model cleanup and helper consolidation.~~ Done (2026-07-17).
 2. Complete P1 behavior correctness and API contract cleanup.
 3. Improve P2 UI/i18n quality.
 4. Address P3 debt and then pursue Nice-to-Have ideas.

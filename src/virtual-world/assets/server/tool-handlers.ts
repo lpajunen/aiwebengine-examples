@@ -1,3 +1,5 @@
+import { buildInventorySelectors } from "./world-domain.ts";
+
 type ItemClassHandlerDeps = {
   getAuthenticatedUserId: (context: any) => string | null;
   refreshItemClasses: () => void;
@@ -66,20 +68,6 @@ type ToolHandlerDeps = {
   ) => void;
   getEffectiveNick: (userId: string) => string;
 };
-
-function buildInventorySelectors(inventory: any): {
-  inventory_slot_ids: string[];
-  inventory_selectors: string[];
-} {
-  const slotIds =
-    inventory && inventory.slots && typeof inventory.slots === "object"
-      ? Object.keys(inventory.slots).sort()
-      : ["left_hand", "right_hand"];
-  return {
-    inventory_slot_ids: slotIds,
-    inventory_selectors: slotIds.concat(["inventory"]),
-  };
-}
 
 export function virtualWorldGetStateToolHandler(
   context: any,

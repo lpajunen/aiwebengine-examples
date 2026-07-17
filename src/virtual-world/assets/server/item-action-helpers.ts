@@ -42,22 +42,12 @@ function normalizeLivingInventoryShape(inv: any): {
   slots: Record<string, any>;
   bag: any[];
   values: Record<string, unknown>;
-  left_hand: any;
-  right_hand: any;
-  inventory: any[];
 } {
   const slots =
     inv && inv.slots && typeof inv.slots === "object"
       ? (inv.slots as Record<string, any>)
-      : {
-          left_hand: inv && inv.left_hand ? inv.left_hand : null,
-          right_hand: inv && inv.right_hand ? inv.right_hand : null,
-        };
-  const bag = Array.isArray(inv && inv.bag)
-    ? inv.bag
-    : Array.isArray(inv && inv.inventory)
-      ? inv.inventory
-      : [];
+      : {};
+  const bag = Array.isArray(inv && inv.bag) ? inv.bag : [];
   return {
     class_id:
       inv && typeof inv.class_id === "string" ? String(inv.class_id) : "",
@@ -65,9 +55,6 @@ function normalizeLivingInventoryShape(inv: any): {
     bag: bag,
     values:
       inv && inv.values && typeof inv.values === "object" ? inv.values : {},
-    left_hand: slots.left_hand || null,
-    right_hand: slots.right_hand || null,
-    inventory: bag,
   };
 }
 

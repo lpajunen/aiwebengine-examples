@@ -1,3 +1,5 @@
+import { buildInventorySelectors } from "./world-domain.ts";
+
 type CanonicalState = {
   row: number;
   col: number;
@@ -81,17 +83,10 @@ export function getAvailableWorldActions(
     for (let i = 0; i < slotIds.length; i++) {
       addItemAction(inventory.slots[slotIds[i]]);
     }
-  } else {
-    addItemAction(inventory && inventory.left_hand);
-    addItemAction(inventory && inventory.right_hand);
   }
 
   const invItems =
-    inventory && Array.isArray(inventory.bag)
-      ? inventory.bag
-      : inventory && Array.isArray(inventory.inventory)
-        ? inventory.inventory
-        : [];
+    inventory && Array.isArray(inventory.bag) ? inventory.bag : [];
   for (let i = 0; i < invItems.length; i++) {
     addItemAction(invItems[i]);
   }
@@ -246,11 +241,10 @@ export function getCurrentWorldStateForUser(
   const currentTileItems = Array.isArray(worldItems[tileKey])
     ? worldItems[tileKey]
     : [];
-  const inventorySlotIds =
-    inventory && inventory.slots && typeof inventory.slots === "object"
-      ? Object.keys(inventory.slots).sort()
-      : ["left_hand", "right_hand"];
-  const inventorySelectors = inventorySlotIds.concat(["inventory"]);
+  const {
+    inventory_slot_ids: inventorySlotIds,
+    inventory_selectors: inventorySelectors,
+  } = buildInventorySelectors(inventory);
 
   return {
     ok: true,

@@ -1,43 +1,27 @@
-import { normalizeInventory } from "./world-domain.ts";
+import { getLivingClass } from "./living-registry.ts";
+import {
+  createLivingSlotsFromDefinitions,
+  normalizeLivingState,
+} from "./world-domain.ts";
 
 function ensureNPCSlotsAndBag(npc: any): {
   slots: Record<string, any>;
   bag: any[];
 } {
   if (!npc.slots || typeof npc.slots !== "object") {
-    npc.slots = {
-      left_hand: npc.left_hand || null,
-      right_hand: npc.right_hand || null,
-    };
+    const livingClass = getLivingClass(String(npc.class_id || ""));
+    npc.slots = livingClass
+      ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
+      : {};
   }
   if (!Array.isArray(npc.bag)) {
-    npc.bag = Array.isArray(npc.inventory) ? npc.inventory : [];
+    npc.bag = [];
   }
   return { slots: npc.slots, bag: npc.bag };
 }
 
-function syncLegacyAliases(npc: any): void {
-  npc.left_hand = npc.slots && npc.slots.left_hand ? npc.slots.left_hand : null;
-  npc.right_hand =
-    npc.slots && npc.slots.right_hand ? npc.slots.right_hand : null;
-  npc.inventory = Array.isArray(npc.bag) ? npc.bag : [];
-}
-
 function getOrderedSlotIds(slots: Record<string, any>): string[] {
-  const ids = Object.keys(slots || {});
-  ids.sort();
-  const leftIndex = ids.indexOf("left_hand");
-  const rightIndex = ids.indexOf("right_hand");
-  if (leftIndex > 0) {
-    ids.splice(leftIndex, 1);
-    ids.unshift("left_hand");
-  }
-  const targetRightIndex = ids.indexOf("right_hand");
-  if (targetRightIndex > 1) {
-    ids.splice(targetRightIndex, 1);
-    ids.splice(1, 0, "right_hand");
-  }
-  return ids;
+  return Object.keys(slots || {}).sort();
 }
 
 function takeFirstOccupiedSlotItem(slots: Record<string, any>): {
@@ -86,13 +70,12 @@ export function buildOccupiedNPCMap(
 
 export function normalizeNPCInventoryState(npc: any): void {
   ensureNPCSlotsAndBag(npc);
-  const npcInv = normalizeInventory(npc);
-  if (!("left_hand" in npc.slots)) npc.slots.left_hand = null;
-  if (!("right_hand" in npc.slots)) npc.slots.right_hand = null;
-  npc.slots.left_hand = npcInv.left_hand;
-  npc.slots.right_hand = npcInv.right_hand;
-  npc.bag = npcInv.inventory;
-  syncLegacyAliases(npc);
+  const livingClass = getLivingClass(String(npc.class_id || ""));
+  if (!livingClass) return;
+  const living = normalizeLivingState(npc, livingClass);
+  npc.slots = living.slots;
+  npc.bag = living.bag;
+  npc.values = living.values;
 }
 
 export function tickNPCMovement(params: {
@@ -273,8 +256,6 @@ export function tickNPCItemInteractions(params: {
       );
     }
   }
-
-  syncLegacyAliases(n);
 
   return { hasChanges, itemChanges };
 }

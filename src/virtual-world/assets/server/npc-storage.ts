@@ -1,9 +1,7 @@
 import {
   createEmptyLivingState,
-  createEmptyInventory,
   fromStoredWorldTimestamp,
   normalizeLivingState,
-  normalizeInventory,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
@@ -32,9 +30,6 @@ type NPCState = {
   slots?: unknown;
   bag?: unknown;
   values?: unknown;
-  left_hand?: unknown;
-  right_hand?: unknown;
-  inventory?: unknown;
 };
 
 type NPCDisplayNameResolver = (worldId: string, npcId: string) => string;
@@ -90,10 +85,6 @@ export function loadWorldNPCs(
           );
         }
       } catch (e) {}
-      const inventory = normalizeInventory({
-        slots: living.slots,
-        bag: living.bag,
-      });
       const safeRow = normalizeSafeInt(row.row, 1, 0, 99);
       const safeCol = normalizeSafeInt(row.col, 1, 0, 99);
       const safeSeq = normalizeSafeInt(row.seq, 0, 0, 2147483647);
@@ -110,9 +101,6 @@ export function loadWorldNPCs(
         slots: living.slots,
         bag: living.bag,
         values: living.values,
-        left_hand: inventory.left_hand,
-        right_hand: inventory.right_hand,
-        inventory: inventory.inventory,
       };
     }
     return fromRows;
@@ -140,17 +128,8 @@ export function saveWorldNPCs(
             {
               class_id: classId,
               slots:
-                npc.slots && typeof npc.slots === "object"
-                  ? npc.slots
-                  : {
-                      left_hand: npc.left_hand || null,
-                      right_hand: npc.right_hand || null,
-                    },
-              bag: Array.isArray(npc.bag)
-                ? npc.bag
-                : Array.isArray(npc.inventory)
-                  ? npc.inventory
-                  : [],
+                npc.slots && typeof npc.slots === "object" ? npc.slots : {},
+              bag: Array.isArray(npc.bag) ? npc.bag : [],
               values:
                 npc.values && typeof npc.values === "object" ? npc.values : {},
             },
@@ -335,15 +314,11 @@ export function buildWorldNPCSnapshot(
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
     const slots = n && n.slots && typeof n.slots === "object" ? n.slots : {};
-    const bag = Array.isArray(n && n.bag)
-      ? n.bag
-      : Array.isArray(n && n.inventory)
-        ? n.inventory
-        : [];
+    const bag = Array.isArray(n && n.bag) ? n.bag : [];
     const values =
       n && n.values && typeof n.values === "object" ? n.values : {};
-    const leftHandItem = slots.left_hand || n.left_hand || null;
-    const rightHandItem = slots.right_hand || n.right_hand || null;
+    const leftHandItem = slots.left_hand || null;
+    const rightHandItem = slots.right_hand || null;
     return {
       npc_id: npcId,
       display_name: getNPCDisplayName(worldId, npcId),

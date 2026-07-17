@@ -53,34 +53,13 @@ export function loadPlayerInventory(
   slots: Record<string, any>;
   bag: any[];
   values: Record<string, unknown>;
-  left_hand: any;
-  right_hand: any;
-  inventory: any[];
 } {
-  const toLegacyAliases = function (living: {
-    class_id: string;
-    slots: Record<string, any>;
-    bag: any[];
-    values: Record<string, unknown>;
-  }) {
-    return {
-      class_id: living.class_id,
-      slots: living.slots,
-      bag: living.bag,
-      values: living.values,
-      left_hand: living.slots.left_hand || null,
-      right_hand: living.slots.right_hand || null,
-      inventory: living.bag,
-    };
-  };
-
   const normalizeRawToLiving = function (raw: unknown, classId: string) {
     const livingClass = getLivingClass(classId);
     if (!livingClass) {
-      const empty = createEmptyLivingState(classId);
-      return toLegacyAliases(empty);
+      return createEmptyLivingState(classId);
     }
-    return toLegacyAliases(normalizeLivingState(raw, livingClass));
+    return normalizeLivingState(raw, livingClass);
   };
 
   const row = querySingleWorldRow(
@@ -132,15 +111,8 @@ export function savePlayerInventory(
           slots:
             incoming.slots && typeof incoming.slots === "object"
               ? incoming.slots
-              : {
-                  left_hand: incoming.left_hand || null,
-                  right_hand: incoming.right_hand || null,
-                },
-          bag: Array.isArray(incoming.bag)
-            ? incoming.bag
-            : Array.isArray(incoming.inventory)
-              ? incoming.inventory
-              : [],
+              : {},
+          bag: Array.isArray(incoming.bag) ? incoming.bag : [],
           values:
             incoming.values && typeof incoming.values === "object"
               ? incoming.values

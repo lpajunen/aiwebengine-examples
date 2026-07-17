@@ -15,14 +15,13 @@ import {
   OAK_CENTER_ROW,
   OAK_WORLD_ID,
   applyOakReservation,
+  buildInventorySelectors,
   canonicalTreeAction,
-  createEmptyInventory,
   getOakClearingTiles,
   isOakCenterTile,
   isOakClearingTile,
   isOakWorld,
   isWorldTileWalkable,
-  normalizeInventory,
   normalizeWorldType,
   TREE_ACTION_BY_ITEM_TYPE,
   WORLD_MOD_LAYER_OBJECT,
@@ -660,7 +659,7 @@ function ensureStarterKit(userId) {
 
 /**
  * @param {string} userId
- * @returns {{left_hand: any, right_hand: any, inventory: any[]}}
+ * @returns {{class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}}
  */
 function loadPlayerInventory(userId) {
   return loadPlayerInventoryImpl(userId, VWORLD_PLAYER_INVENTORY_TABLE, vwLog);
@@ -1598,7 +1597,6 @@ function ensureWorldNPCs(worldId) {
   return ensureWorldNPCsImpl(worldId, {
     loadWorldNPCs: loadWorldNPCs,
     saveWorldNPCs: saveWorldNPCs,
-    normalizeInventory: normalizeInventory,
     getEffectiveMap: getEffectiveMap,
     loadWorldPlayers: loadWorldPlayers,
     NPC_MIN_COUNT: NPC_MIN_COUNT,
@@ -1906,11 +1904,7 @@ function summarizeInventory(inventory) {
     var item = slots[slotId];
     if (item && item.type) occupiedSlots.push(slotId + ":" + String(item.type));
   }
-  var bag = Array.isArray(inv.bag)
-    ? inv.bag
-    : Array.isArray(inv.inventory)
-      ? inv.inventory
-      : [];
+  var bag = Array.isArray(inv.bag) ? inv.bag : [];
   /** @type {Record<string, number>} */
   var bagTypes = {};
   for (var j = 0; j < bag.length; j++) {
@@ -1994,7 +1988,7 @@ function worldTileNameForValue(tileValue) {
 }
 
 /**
- * @param {{left_hand: any, right_hand: any, inventory: any[]}} inventory
+ * @param {{slots: Record<string, any>, bag: any[]}} inventory
  * @param {any[]} currentTileItems
  * @returns {string[]}
  */
@@ -2049,7 +2043,7 @@ function getMoveOptions(worldId, canonical) {
 
 /**
  * @param {string} userId
- * @returns {{ok: boolean, world_id: string, world_type: string, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {left_hand: any, right_hand: any, inventory: any[]}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
+ * @returns {{ok: boolean, world_id: string, world_type: string, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
  */
 function getCurrentWorldStateForUser(userId) {
   return getCurrentWorldStateForUserImpl(userId, {
@@ -2412,7 +2406,6 @@ function itemsHandler(context) {
   return ResponseBuilder.json(
     listItemsForUserImpl(userId, {
       getPlayerWorld: getPlayerWorld,
-      createEmptyInventory: createEmptyInventory,
       ensureWorldItems: ensureWorldItems,
       flattenWorldItems: flattenWorldItems,
       loadWorldItems: loadWorldItems,
@@ -2429,13 +2422,9 @@ function withInventorySelectors(payload) {
   if (!payload || typeof payload !== "object" || !payload.inventory) {
     return payload;
   }
-  var inventory = payload.inventory;
-  var slotIds =
-    inventory && inventory.slots && typeof inventory.slots === "object"
-      ? Object.keys(inventory.slots).sort()
-      : ["left_hand", "right_hand"];
-  payload.inventory_slot_ids = slotIds;
-  payload.inventory_selectors = slotIds.concat(["inventory"]);
+  var selectors = buildInventorySelectors(payload.inventory);
+  payload.inventory_slot_ids = selectors.inventory_slot_ids;
+  payload.inventory_selectors = selectors.inventory_selectors;
   return payload;
 }
 
@@ -2598,7 +2587,7 @@ function makeCheatItemId(userId, worldId, index) {
 
 /**
  * @param {string} userId
- * @returns {{ok: boolean, action: string, granted_count: number, inventory: {left_hand: any, right_hand: any, inventory: any[]}, items: Array<{id: string, type: string, row: number, col: number}>}}
+ * @returns {{ok: boolean, action: string, granted_count: number, inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, items: Array<{id: string, type: string, row: number, col: number}>}}
  */
 function grantAllItemsForUser(userId) {
   return grantAllItemsForUserImpl(userId, {

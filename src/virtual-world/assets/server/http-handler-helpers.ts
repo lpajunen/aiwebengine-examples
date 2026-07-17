@@ -1,6 +1,10 @@
+import {
+  buildInventorySelectors,
+  createEmptyLivingState,
+} from "./world-domain.ts";
+
 type HttpHandlerDeps = {
   getPlayerWorld: (userId: string) => string;
-  createEmptyInventory: () => any;
   ensureWorldItems: (worldId: string) => void;
   flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
   loadWorldItems: (worldId: string) => Record<string, any[]>;
@@ -83,26 +87,11 @@ function buildMessageId(prefix: string): string {
   );
 }
 
-function buildInventorySelectors(inventory: any): {
-  inventory_slot_ids: string[];
-  inventory_selectors: string[];
-} {
-  const slotIds =
-    inventory && inventory.slots && typeof inventory.slots === "object"
-      ? Object.keys(inventory.slots).sort()
-      : ["left_hand", "right_hand"];
-  return {
-    inventory_slot_ids: slotIds,
-    inventory_selectors: slotIds.concat(["inventory"]),
-  };
-}
-
 export function listItemsForUser(
   userId: string,
   deps: Pick<
     HttpHandlerDeps,
     | "getPlayerWorld"
-    | "createEmptyInventory"
     | "ensureWorldItems"
     | "flattenWorldItems"
     | "loadWorldItems"
@@ -116,7 +105,7 @@ export function listItemsForUser(
 } {
   const worldId = deps.getPlayerWorld(userId);
   if (!worldId) {
-    const emptyInventory = deps.createEmptyInventory();
+    const emptyInventory = createEmptyLivingState("");
     const emptySelectors = buildInventorySelectors(emptyInventory);
     return {
       items: [],

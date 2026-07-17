@@ -613,6 +613,58 @@ export function getAllLivingItems(inv: unknown): InventoryItem[] {
   return getEquippedItems(inv).concat(getBagItems(inv));
 }
 
+export function consumeLivingItemsByType(
+  inv: unknown,
+  itemId: string,
+  count: number,
+): number {
+  let remaining = Number(count || 0);
+  if (remaining <= 0 || !isRecordLike(inv)) return 0;
+  let consumed = 0;
+  const normalizedItemId = String(itemId || "");
+
+  if (isRecordLike(inv.slots)) {
+    const slots = inv.slots as Record<string, unknown>;
+    const slotIds = Object.keys(slots);
+    for (let i = 0; i < slotIds.length && remaining > 0; i++) {
+      const slotId = slotIds[i];
+      const item = slots[slotId];
+      if (isValidItem(item) && String(item.type || "") === normalizedItemId) {
+        slots[slotId] = null;
+        remaining--;
+        consumed++;
+      }
+    }
+  }
+
+  if (remaining > 0 && Array.isArray(inv.bag)) {
+    for (let i = inv.bag.length - 1; i >= 0 && remaining > 0; i--) {
+      const item = inv.bag[i];
+      if (isValidItem(item) && String(item.type || "") === normalizedItemId) {
+        inv.bag.splice(i, 1);
+        remaining--;
+        consumed++;
+      }
+    }
+  }
+
+  return consumed;
+}
+
+export function buildInventorySelectors(inv: unknown): {
+  inventory_slot_ids: string[];
+  inventory_selectors: string[];
+} {
+  const slotIds =
+    isRecordLike(inv) && isRecordLike(inv.slots)
+      ? Object.keys(inv.slots as Record<string, unknown>).sort()
+      : ["left_hand", "right_hand"];
+  return {
+    inventory_slot_ids: slotIds,
+    inventory_selectors: slotIds.concat(["inventory"]),
+  };
+}
+
 export function findFirstLivingItemByTypes(
   inv: unknown,
   sourceItemIds: string[],

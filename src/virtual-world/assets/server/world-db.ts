@@ -77,11 +77,16 @@ export function updateWorldRow(
   return result;
 }
 
+/**
+ * Delete rows matching the filters and return how many were actually
+ * deleted. The count is what makes claim semantics possible: under
+ * concurrency, only the caller whose delete affected a row owns the item.
+ */
 export function deleteWorldRowsWhere(
   tableName: string,
   filters: string,
   log: WorldDbLogFn,
-): void {
+): number {
   const result = parseWorldDbResult(
     database.deleteWhere(tableName, filters),
     log,
@@ -91,6 +96,74 @@ export function deleteWorldRowsWhere(
       table: tableName,
       error: String(result.error),
     });
+    return 0;
+  }
+  return result && Number.isFinite(Number(result.deleted))
+    ? Number(result.deleted)
+    : 0;
+}
+
+/**
+ * Run fn inside a database transaction (or a savepoint when the handler is
+ * already inside one). Fail-open: if the transaction cannot be started the
+ * work still runs unwrapped — atomicity is lost but the game keeps working.
+ * On exception the transaction is rolled back and the error rethrown; a
+ * commit failure is logged (the runtime has already discarded the writes and
+ * clients heal via resync).
+ */
+export function runInWorldTransaction<T>(
+  label: string,
+  log: WorldDbLogFn,
+  fn: () => T,
+): T {
+  let began = false;
+  try {
+    const beginResult = parseWorldDbResult(
+      database.beginTransaction(5000),
+      log,
+    );
+    began = !!(beginResult && beginResult.success);
+    if (!began) {
+      log("transaction begin failed; running unwrapped", {
+        label: label,
+        error: String(
+          beginResult && beginResult.error ? beginResult.error : "unknown",
+        ),
+      });
+    }
+  } catch (e) {
+    log("transaction begin threw; running unwrapped", {
+      label: label,
+      error: String(e),
+    });
+  }
+  try {
+    const result = fn();
+    if (began) {
+      const commitResult = parseWorldDbResult(
+        database.commitTransaction(),
+        log,
+      );
+      if (commitResult && commitResult.error) {
+        log("transaction commit failed", {
+          label: label,
+          error: String(commitResult.error),
+        });
+      }
+    }
+    return result;
+  } catch (e) {
+    if (began) {
+      try {
+        database.rollbackTransaction();
+      } catch (rollbackError) {
+        log("transaction rollback failed", {
+          label: label,
+          error: String(rollbackError),
+        });
+      }
+    }
+    throw e;
   }
 }
 

@@ -69,7 +69,29 @@ in-process cache with known instance lifetime).
 
 ### 3. Atomic item/inventory operations (economy integrity)
 
-**Today:** item pickup, drop, crafting, and NPC item interactions are
+**Status: implemented (July 2026).** Two mechanisms:
+
+- **Claim by delete** — `deleteWorldRowsWhere` now returns rows-affected,
+  `deleteWorldItems` returns the subset of items the caller actually
+  claimed, and both player pickup (`item-action-helpers.ts`) and NPC pickup
+  (`npc-tick-helpers.ts`) only grant claimed items. This kills the headline
+  dupe (two concurrent pickups both succeeding) regardless of transaction
+  isolation, because the row delete itself is atomic.
+- **Transactional flows** — `runInWorldTransaction` in `world-db.ts`
+  (savepoint-aware, fail-open if begin fails) wraps item actions, crafting,
+  tree actions, cheat grants, and the per-world NPC tick body (the tick
+  lease is acquired outside the transaction so its visibility does not wait
+  for commit), so multi-write sequences like drop
+  (inventory save + world-item upsert) are all-or-nothing.
+
+Remaining gaps: the player-inventory row is still last-write-wins per user —
+two concurrent requests _by the same user_ can lose an inventory update or
+double-spend craft ingredients if the backend's isolation level does not
+lock the read (needs versioned rows/CAS, runtime capability 2); item-seq
+allocation (`nextWorldItemId`) has the same read-modify-write shape but now
+runs inside the craft transaction.
+
+**Original problem:** item pickup, drop, crafting, and NPC item interactions are
 load → modify → delete/upsert sequences with no transaction or
 compare-and-swap. Leases and seq numbers narrow race windows but do not
 close them: two concurrent pickups of the same item can both succeed, and

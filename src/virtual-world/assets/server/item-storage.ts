@@ -322,29 +322,44 @@ export function upsertWorldItem(
   );
 }
 
+/**
+ * Delete a world item row; returns true only when this call actually
+ * removed the row. Under concurrent pickups exactly one caller gets true —
+ * that caller owns the item.
+ */
 export function deleteWorldItemById(
   itemId: string,
   worldItemTable: string,
   log: WorldDbLogFn,
-): void {
-  if (!itemId) return;
-  deleteWorldRowsWhere(
-    worldItemTable,
-    JSON.stringify({ item_id: String(itemId) }),
-    log,
+): boolean {
+  if (!itemId) return false;
+  return (
+    deleteWorldRowsWhere(
+      worldItemTable,
+      JSON.stringify({ item_id: String(itemId) }),
+      log,
+    ) > 0
   );
 }
 
+/**
+ * Delete the given items and return the subset this caller actually claimed
+ * (rows it deleted). Callers must only grant claimed items to inventories.
+ */
 export function deleteWorldItems(
   items: any[],
   worldItemTable: string,
   log: WorldDbLogFn,
-): void {
-  if (!Array.isArray(items)) return;
+): any[] {
+  const claimed: any[] = [];
+  if (!Array.isArray(items)) return claimed;
   for (let i = 0; i < items.length; i++) {
     if (!items[i] || typeof items[i].id !== "string") continue;
-    deleteWorldItemById(String(items[i].id), worldItemTable, log);
+    if (deleteWorldItemById(String(items[i].id), worldItemTable, log)) {
+      claimed.push(items[i]);
+    }
   }
+  return claimed;
 }
 
 export function nextWorldItemId(

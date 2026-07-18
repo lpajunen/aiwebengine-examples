@@ -19,7 +19,7 @@ type ItemActionDeps = {
   loadPlayerInventory: (userId: string) => LivingState;
   loadWorldItems: (worldId: string) => Record<string, any[]>;
   isPickableWorldItem: (item: any) => boolean;
-  deleteWorldItems: (items: any[]) => void;
+  deleteWorldItems: (items: any[]) => any[];
   savePlayerInventory: (userId: string, inventory: unknown) => void;
   saveWorldItems: (worldId: string, items: Record<string, any[]>) => void;
   broadcastItemChange: (
@@ -162,14 +162,18 @@ export function handleItemActionForUser(
     const picked = allTileItems.filter(function (item) {
       return deps.isPickableWorldItem(item);
     });
-    const remainingOnTile = allTileItems.filter(function (item) {
-      return item && !deps.isPickableWorldItem(item);
-    });
-    if (picked.length > 0) {
-      for (let i = 0; i < picked.length; i++) {
-        inv.bag.push(picked[i]);
+    // Claim by delete: only items whose rows this request actually removed
+    // are granted, so a concurrent pickup of the same item cannot dupe it.
+    const claimed = picked.length > 0 ? deps.deleteWorldItems(picked) : [];
+    if (claimed.length > 0) {
+      const claimedIds: Record<string, boolean> = {};
+      for (let i = 0; i < claimed.length; i++) {
+        inv.bag.push(claimed[i]);
+        claimedIds[String(claimed[i].id)] = true;
       }
-      deps.deleteWorldItems(picked);
+      const remainingOnTile = allTileItems.filter(function (item) {
+        return item && !claimedIds[String(item.id)];
+      });
       if (remainingOnTile.length > 0) {
         worldItems[tileKey] = remainingOnTile;
       } else {
@@ -183,7 +187,7 @@ export function handleItemActionForUser(
         getItemChangeActionId("pick"),
         canonical.row,
         canonical.col,
-        picked,
+        claimed,
       );
     }
     return {
@@ -191,7 +195,7 @@ export function handleItemActionForUser(
       payload: {
         ok: true,
         action: "pick",
-        picked_count: picked.length,
+        picked_count: claimed.length,
         row: canonical.row,
         col: canonical.col,
         tile_items: getTileItemsSnapshot(canonical.row, canonical.col),

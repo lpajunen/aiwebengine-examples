@@ -167,7 +167,7 @@ export function tickNPCItemInteractions(params: {
   npc: any;
   worldItems: Record<string, any[]>;
   isPickableWorldItem: (item: any) => boolean;
-  deleteWorldItems: (items: any[]) => void;
+  deleteWorldItems: (items: any[]) => any[];
   upsertWorldItem: (
     worldId: string,
     row: number,
@@ -192,35 +192,41 @@ export function tickNPCItemInteractions(params: {
   const pickableItems = allNpcTileItems.filter(function (item) {
     return params.isPickableWorldItem(item);
   });
-  const nonPickableItems = allNpcTileItems.filter(function (item) {
-    return item && !params.isPickableWorldItem(item);
-  });
 
   let hasChanges = false;
   let itemChanges = false;
   const living = ensureNPCSlotsAndBag(n);
 
   if (pickableItems.length > 0 && Math.random() < 0.65) {
-    for (let pickIdx = 0; pickIdx < pickableItems.length; pickIdx++) {
-      living.bag.push(pickableItems[pickIdx]);
+    // Claim by delete: only grant items whose rows this tick actually
+    // removed, so racing players/instances cannot dupe them.
+    const claimed = params.deleteWorldItems(pickableItems);
+    if (claimed.length > 0) {
+      const claimedIds: Record<string, boolean> = {};
+      for (let pickIdx = 0; pickIdx < claimed.length; pickIdx++) {
+        living.bag.push(claimed[pickIdx]);
+        claimedIds[String(claimed[pickIdx].id)] = true;
+      }
+      const remainingItems = allNpcTileItems.filter(function (item) {
+        return item && !claimedIds[String(item.id)];
+      });
+      if (remainingItems.length > 0) {
+        params.worldItems[tileKey] = remainingItems;
+      } else {
+        delete params.worldItems[tileKey];
+      }
+      itemChanges = true;
+      hasChanges = true;
+      params.broadcastItemChange(
+        params.worldId,
+        "npc",
+        params.npcId,
+        "pick",
+        n.row,
+        n.col,
+        claimed,
+      );
     }
-    params.deleteWorldItems(pickableItems);
-    if (nonPickableItems.length > 0) {
-      params.worldItems[tileKey] = nonPickableItems;
-    } else {
-      delete params.worldItems[tileKey];
-    }
-    itemChanges = true;
-    hasChanges = true;
-    params.broadcastItemChange(
-      params.worldId,
-      "npc",
-      params.npcId,
-      "pick",
-      n.row,
-      n.col,
-      pickableItems,
-    );
   }
 
   const slotIds = getOrderedSlotIds(living.slots);

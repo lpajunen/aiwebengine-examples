@@ -24,7 +24,7 @@ type TickWorldDeps = {
   saveWorldTrees: (worldId: string, trees: Record<string, any>) => void;
   vwLog: (msg: string, obj?: unknown) => void;
   isPickableWorldItem: (item: any) => boolean;
-  deleteWorldItems: (items: any[]) => void;
+  deleteWorldItems: (items: any[]) => any[];
   upsertWorldItem: (
     worldId: string,
     row: number,
@@ -74,6 +74,7 @@ type TryTickDeps = TickWorldDeps &
     loadNPCLastTick: (worldId: string) => number;
     saveNPCLastTick: (worldId: string, ts: number) => void;
     NPC_TICK_MS: number;
+    runInTransaction?: <T>(label: string, fn: () => T) => T;
   };
 
 type RunTickDeps = TryTickDeps & {
@@ -244,7 +245,15 @@ export function tryTickWorldNPCs(
     return false;
   }
 
-  tickWorldNPCs(worldId, now, deps);
+  // The lease was acquired outside the transaction on purpose: its
+  // visibility to other instances must not wait for this tick's commit.
+  if (deps.runInTransaction) {
+    deps.runInTransaction("npc_tick:" + String(worldId), function () {
+      tickWorldNPCs(worldId, now, deps);
+    });
+  } else {
+    tickWorldNPCs(worldId, now, deps);
+  }
   deps.saveNPCLastTick(worldId, now);
   return true;
 }

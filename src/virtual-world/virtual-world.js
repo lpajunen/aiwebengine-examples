@@ -41,6 +41,7 @@ import {
   parseWorldDbResult as parseWorldDbResultImpl,
   querySingleWorldRow as querySingleWorldRowImpl,
   queryWorldRows as queryWorldRowsImpl,
+  runInWorldTransaction as runInWorldTransactionImpl,
   updateWorldRow as updateWorldRowImpl,
   upsertWorldRow as upsertWorldRowImpl,
 } from "./server/world-db.ts";
@@ -1396,16 +1397,28 @@ function upsertWorldItem(worldId, row, col, item) {
 
 /**
  * @param {string} itemId
+ * @returns {boolean} true when this call actually deleted the row
  */
 function deleteWorldItemById(itemId) {
-  deleteWorldItemByIdImpl(itemId, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  return deleteWorldItemByIdImpl(itemId, VWORLD_WORLD_ITEM_TABLE, vwLog);
 }
 
 /**
  * @param {any[]} items
+ * @returns {any[]} the subset of items this call actually claimed
  */
 function deleteWorldItems(items) {
-  deleteWorldItemsImpl(items, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  return deleteWorldItemsImpl(items, VWORLD_WORLD_ITEM_TABLE, vwLog);
+}
+
+/**
+ * @template T
+ * @param {string} label
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function runInWorldTransaction(label, fn) {
+  return runInWorldTransactionImpl(label, vwLog, fn);
 }
 
 /**
@@ -1723,6 +1736,7 @@ function runNPCTick() {
     VWORLD_NPC_TICK_TABLE: VWORLD_NPC_TICK_TABLE,
     loadNPCLastTick: loadNPCLastTick,
     saveNPCLastTick: saveNPCLastTick,
+    runInTransaction: runInWorldTransaction,
     NPC_TICK_MS: NPC_TICK_MS,
     parseWorldDbResult: parseWorldDbResult,
     acquireLease: database.acquireLease,
@@ -1786,6 +1800,7 @@ function tryTickWorldNPCs(worldId, now) {
   return tryTickWorldNPCsImpl(worldId, now, {
     loadNPCLastTick: loadNPCLastTick,
     saveNPCLastTick: saveNPCLastTick,
+    runInTransaction: runInWorldTransaction,
     NPC_TICK_MS: NPC_TICK_MS,
     parseWorldDbResult: parseWorldDbResult,
     acquireLease: database.acquireLease,
@@ -1831,6 +1846,7 @@ function maybeTickWorldNPCs(worldId) {
   maybeTickWorldNPCsImpl(worldId, {
     loadNPCLastTick: loadNPCLastTick,
     saveNPCLastTick: saveNPCLastTick,
+    runInTransaction: runInWorldTransaction,
     NPC_TICK_MS: NPC_TICK_MS,
     parseWorldDbResult: parseWorldDbResult,
     acquireLease: database.acquireLease,
@@ -2268,6 +2284,17 @@ function movePlayerForUser(userId, body) {
  * @returns {{status: number, payload: any}}
  */
 function performTreeActionForUser(userId, body) {
+  return runInWorldTransaction("tree_action", function () {
+    return performTreeActionForUserInner(userId, body);
+  });
+}
+
+/**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function performTreeActionForUserInner(userId, body) {
   return performTreeActionForUserImpl(userId, body, {
     canonicalTreeAction: canonicalTreeAction,
     getActionDefinition: getActionDefinition,
@@ -2491,20 +2518,22 @@ function withInventorySelectors(payload) {
  * @returns {{status: number, payload: any}}
  */
 function handleItemActionForUser(userId, body) {
-  return handleItemActionForUserImpl(userId, body, {
-    getPlayerWorld: getPlayerWorld,
-    ensureWorldItems: ensureWorldItems,
-    getCanonicalPlayerState: getCanonicalPlayerState,
-    loadPlayerInventory: loadPlayerInventory,
-    loadWorldItems: loadWorldItems,
-    isPickableWorldItem: isPickableWorldItem,
-    deleteWorldItems: deleteWorldItems,
-    savePlayerInventory: savePlayerInventory,
-    saveWorldItems: saveWorldItems,
-    broadcastItemChange: broadcastItemChange,
-    flattenWorldItems: flattenWorldItems,
-    upsertWorldItem: upsertWorldItem,
-    getAllKnownItemTypes: getAllKnownItemTypes,
+  return runInWorldTransaction("item_action", function () {
+    return handleItemActionForUserImpl(userId, body, {
+      getPlayerWorld: getPlayerWorld,
+      ensureWorldItems: ensureWorldItems,
+      getCanonicalPlayerState: getCanonicalPlayerState,
+      loadPlayerInventory: loadPlayerInventory,
+      loadWorldItems: loadWorldItems,
+      isPickableWorldItem: isPickableWorldItem,
+      deleteWorldItems: deleteWorldItems,
+      savePlayerInventory: savePlayerInventory,
+      saveWorldItems: saveWorldItems,
+      broadcastItemChange: broadcastItemChange,
+      flattenWorldItems: flattenWorldItems,
+      upsertWorldItem: upsertWorldItem,
+      getAllKnownItemTypes: getAllKnownItemTypes,
+    });
   });
 }
 
@@ -2514,6 +2543,17 @@ function handleItemActionForUser(userId, body) {
  * @returns {{status: number, payload: any}}
  */
 function craftRecipeForUser(userId, body) {
+  return runInWorldTransaction("craft", function () {
+    return craftRecipeForUserInner(userId, body);
+  });
+}
+
+/**
+ * @param {string} userId
+ * @param {*} body
+ * @returns {{status: number, payload: any}}
+ */
+function craftRecipeForUserInner(userId, body) {
   return craftRecipeForUserImpl(userId, body, {
     getPlayerWorld: getPlayerWorld,
     ensureWorldItems: ensureWorldItems,
@@ -2647,15 +2687,17 @@ function makeCheatItemId(userId, worldId, index) {
  * @returns {{ok: boolean, action: string, granted_count: number, inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, items: Array<{id: string, type: string, row: number, col: number}>}}
  */
 function grantAllItemsForUser(userId) {
-  return grantAllItemsForUserImpl(userId, {
-    getPlayerWorld: getPlayerWorld,
-    loadPlayerInventory: loadPlayerInventory,
-    getAllKnownItemTypes: getAllKnownItemTypes,
-    savePlayerInventory: savePlayerInventory,
-    ensureWorldItems: ensureWorldItems,
-    loadWorldItems: loadWorldItems,
-    flattenWorldItems: flattenWorldItems,
-    getItemStateTemplate: getItemStateTemplateImpl,
+  return runInWorldTransaction("cheat_grant_all", function () {
+    return grantAllItemsForUserImpl(userId, {
+      getPlayerWorld: getPlayerWorld,
+      loadPlayerInventory: loadPlayerInventory,
+      getAllKnownItemTypes: getAllKnownItemTypes,
+      savePlayerInventory: savePlayerInventory,
+      ensureWorldItems: ensureWorldItems,
+      loadWorldItems: loadWorldItems,
+      flattenWorldItems: flattenWorldItems,
+      getItemStateTemplate: getItemStateTemplateImpl,
+    });
   });
 }
 

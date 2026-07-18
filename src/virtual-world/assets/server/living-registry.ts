@@ -11,72 +11,138 @@ import {
 
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
+function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
+  return [
+    {
+      id: "left_hand",
+      labelKey: "living.slot.left_hand",
+      fallbackLabel: "Left hand",
+      tags: ["hand", "manipulator"],
+    },
+    {
+      id: "right_hand",
+      labelKey: "living.slot.right_hand",
+      fallbackLabel: "Right hand",
+      tags: ["hand", "manipulator"],
+    },
+    {
+      id: "left_leg",
+      labelKey: "living.slot.left_leg",
+      fallbackLabel: "Left leg",
+      tags: ["leg"],
+    },
+    {
+      id: "right_leg",
+      labelKey: "living.slot.right_leg",
+      fallbackLabel: "Right leg",
+      tags: ["leg"],
+    },
+  ];
+}
+
+function quadrupedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
+  return [
+    {
+      id: "front_left_leg",
+      labelKey: "living.slot.front_left_leg",
+      fallbackLabel: "Front left leg",
+      tags: ["leg"],
+    },
+    {
+      id: "front_right_leg",
+      labelKey: "living.slot.front_right_leg",
+      fallbackLabel: "Front right leg",
+      tags: ["leg"],
+    },
+    {
+      id: "back_left_leg",
+      labelKey: "living.slot.back_left_leg",
+      fallbackLabel: "Back left leg",
+      tags: ["leg"],
+    },
+    {
+      id: "back_right_leg",
+      labelKey: "living.slot.back_right_leg",
+      fallbackLabel: "Back right leg",
+      tags: ["leg"],
+    },
+  ];
+}
+
+function defaultFatigueValueTemplate(): Record<string, unknown> {
+  return { fatigue: 0 };
+}
+
+function defaultFatigueValueSchema(): LivingValueSchema {
+  return {
+    fatigue: {
+      kind: "number",
+      min: 0,
+      max: 100,
+      labelKey: "living.value.fatigue",
+      fallbackLabel: "Fatigue",
+    },
+  };
+}
+
 const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
   player_human: {
     id: "player_human",
     kind: "player",
     labelKey: "living.class.player_human",
     fallbackLabel: "Human",
-    slotDefinitions: [
-      {
-        id: "left_hand",
-        labelKey: "living.slot.left_hand",
-        fallbackLabel: "Left hand",
-        tags: ["hand", "manipulator"],
-      },
-      {
-        id: "right_hand",
-        labelKey: "living.slot.right_hand",
-        fallbackLabel: "Right hand",
-        tags: ["hand", "manipulator"],
-      },
-    ],
-    valueTemplate: {
-      fatigue: 0,
-    },
-    valueSchema: {
-      fatigue: {
-        kind: "number",
-        min: 0,
-        max: 100,
-        labelKey: "living.value.fatigue",
-        fallbackLabel: "Fatigue",
-      },
-    },
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
+  player_elf: {
+    id: "player_elf",
+    kind: "player",
+    labelKey: "living.class.player_elf",
+    fallbackLabel: "Elf",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
+  player_hobbit: {
+    id: "player_hobbit",
+    kind: "player",
+    labelKey: "living.class.player_hobbit",
+    fallbackLabel: "Hobbit",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
   },
   npc_human: {
     id: "npc_human",
     kind: "npc",
     labelKey: "living.class.npc_human",
     fallbackLabel: "Human",
-    slotDefinitions: [
-      {
-        id: "left_hand",
-        labelKey: "living.slot.left_hand",
-        fallbackLabel: "Left hand",
-        tags: ["hand", "manipulator"],
-      },
-      {
-        id: "right_hand",
-        labelKey: "living.slot.right_hand",
-        fallbackLabel: "Right hand",
-        tags: ["hand", "manipulator"],
-      },
-    ],
-    valueTemplate: {
-      fatigue: 0,
-    },
-    valueSchema: {
-      fatigue: {
-        kind: "number",
-        min: 0,
-        max: 100,
-        labelKey: "living.value.fatigue",
-        fallbackLabel: "Fatigue",
-      },
-    },
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
+  npc_wolf: {
+    id: "npc_wolf",
+    kind: "npc",
+    labelKey: "living.class.npc_wolf",
+    fallbackLabel: "Wolf",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
+  npc_bear: {
+    id: "npc_bear",
+    kind: "npc",
+    labelKey: "living.class.npc_bear",
+    fallbackLabel: "Bear",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
   },
 };
+
+const NPC_SPECIES_POOL = ["npc_human", "npc_wolf", "npc_bear"];
 
 let _livingClassCache: Record<string, LivingClassRecord> | null = null;
 
@@ -331,4 +397,9 @@ export function getDefaultPlayerLivingClassId(): string {
 
 export function getDefaultNPCLivingClassId(): string {
   return "npc_human";
+}
+
+export function pickRandomNPCLivingClassId(): string {
+  const index = Math.floor(Math.random() * NPC_SPECIES_POOL.length);
+  return NPC_SPECIES_POOL[index] || getDefaultNPCLivingClassId();
 }

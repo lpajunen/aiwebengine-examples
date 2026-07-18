@@ -65,11 +65,21 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     living: {
       class: {
         player_human: "Human",
+        player_elf: "Elf",
+        player_hobbit: "Hobbit",
         npc_human: "Human",
+        npc_wolf: "Wolf",
+        npc_bear: "Bear",
       },
       slot: {
         left_hand: "Left Hand",
         right_hand: "Right Hand",
+        left_leg: "Left Leg",
+        right_leg: "Right Leg",
+        front_left_leg: "Front Left Leg",
+        front_right_leg: "Front Right Leg",
+        back_left_leg: "Back Left Leg",
+        back_right_leg: "Back Right Leg",
       },
       value: {
         fatigue: "Fatigue",
@@ -352,11 +362,21 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     living: {
       class: {
         player_human: "Ihminen",
+        player_elf: "Haltia",
+        player_hobbit: "Hobitti",
         npc_human: "Ihminen",
+        npc_wolf: "Susi",
+        npc_bear: "Karhu",
       },
       slot: {
         left_hand: "Vasen käsi",
         right_hand: "Oikea käsi",
+        left_leg: "Vasen jalka",
+        right_leg: "Oikea jalka",
+        front_left_leg: "Etuvasen jalka",
+        front_right_leg: "Etuoikea jalka",
+        back_left_leg: "Takavasen jalka",
+        back_right_leg: "Takaoikea jalka",
       },
       value: {
         fatigue: "Väsymys",

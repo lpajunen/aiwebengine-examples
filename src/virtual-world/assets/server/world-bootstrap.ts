@@ -7,6 +7,7 @@ import {
 import {
   getDefaultNPCLivingClassId,
   getLivingClass,
+  pickRandomNPCLivingClassId,
 } from "./living-registry.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 
@@ -214,7 +215,7 @@ export function ensureWorldNPCs(
     occupied[tileKey] = true;
     const index = Object.keys(npcs).length + 1;
     const npcId = "npc_" + worldId + "_" + index;
-    const classId = getDefaultNPCLivingClassId();
+    const classId = pickRandomNPCLivingClassId();
     const livingClass = getLivingClass(classId);
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)

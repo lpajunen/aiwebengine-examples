@@ -21,11 +21,7 @@ type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
 export type ItemKind =
-  | "tool"
-  | "artifact"
-  | "world_item"
-  | "placeable"
-  | "consumable";
+  "tool" | "artifact" | "world_item" | "placeable" | "consumable";
 
 export interface ItemDefinition {
   id: string;
@@ -729,14 +725,11 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
     sourceItemIds: parseJson(row.source_item_ids_json, []) as string[],
     canonicalId: row.canonical_id ? String(row.canonical_id) : undefined,
     execution: parseJson(row.execution_json, undefined) as
-      | ActionDefinition["execution"]
-      | undefined,
+      ActionDefinition["execution"] | undefined,
     validation: parseJson(row.validation_json, undefined) as
-      | ActionDefinition["validation"]
-      | undefined,
+      ActionDefinition["validation"] | undefined,
     logicSpec: parseJson(row.logic_spec_json, undefined) as
-      | ActionDefinition["logicSpec"]
-      | undefined,
+      ActionDefinition["logicSpec"] | undefined,
   };
 }
 

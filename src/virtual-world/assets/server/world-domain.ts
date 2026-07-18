@@ -9,8 +9,7 @@ export const WORLD_MOD_LAYER_TERRAIN = "terrain";
 export const WORLD_MOD_LAYER_OBJECT = "object";
 
 export type WorldModLayer =
-  | typeof WORLD_MOD_LAYER_TERRAIN
-  | typeof WORLD_MOD_LAYER_OBJECT;
+  typeof WORLD_MOD_LAYER_TERRAIN | typeof WORLD_MOD_LAYER_OBJECT;
 
 export const WORLD_TILE_GROUND = "ground";
 export const WORLD_TILE_SPRUCE_THICKET = "spruce_thicket";

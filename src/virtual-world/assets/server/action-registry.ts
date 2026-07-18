@@ -5,10 +5,7 @@ export interface ActionDefinition {
   labelKey: string;
   fallbackLabel: string;
   targetKind:
-    | "self"
-    | "current_tile"
-    | "facing_tile"
-    | "facing_or_current_tile";
+    "self" | "current_tile" | "facing_tile" | "facing_or_current_tile";
   sourceItemIds: string[];
   canonicalId?: string;
   execution?: {

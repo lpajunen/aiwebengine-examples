@@ -451,7 +451,6 @@ var avatarCol = INIT_COL;
 var targetX = avatarCol * TILE + TILE / 2;
 var targetZ = avatarRow * TILE + TILE / 2;
 var moveSeq = INIT_SEQ; // last confirmed server sequence number
-var lastAssignedSeq = INIT_SEQ; // last seq assigned to any move (queued or in-flight)
 
 appState.world = {
   rows: ROWS,
@@ -1385,8 +1384,9 @@ function makeRemoteAvatar(pid) {
  * @param {number | null | undefined} seq
  * @param {number | null | undefined} rotation
  * @param {any} [playerData]
+ * @param {any[]} [path] ordered waypoints of a batched move, for animation
  */
-function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
+function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
   if (pid === playerId) return;
   var tx = tileX(col),
     tz = tileZ(row);
@@ -1424,6 +1424,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
         playerData.slots &&
         typeof playerData.slots === "object"
       ),
+      waypoints: [],
     };
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
@@ -1432,9 +1433,34 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
     // must still be applied.
     var seqAdvanced = incomingSeq === null || incomingSeq > knownSeq;
     if (seqAdvanced) {
-      remoteAvatars[pid].targetX = tx;
-      remoteAvatars[pid].targetZ = tz;
-      if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
+      // A batched move carries its intermediate waypoints; walk the avatar
+      // through them instead of lerping straight to the final tile (which
+      // would cut corners through walls).
+      var waypoints = [];
+      if (Array.isArray(path) && path.length > 1) {
+        for (var wi = 0; wi < path.length; wi++) {
+          if (!path[wi]) continue;
+          waypoints.push({
+            x: tileX(Number(path[wi].col)),
+            z: tileZ(Number(path[wi].row)),
+            rot: Number(path[wi].rotation),
+          });
+        }
+      }
+      if (waypoints.length > 1) {
+        var firstWaypoint = waypoints[0];
+        remoteAvatars[pid].targetX = firstWaypoint.x;
+        remoteAvatars[pid].targetZ = firstWaypoint.z;
+        if (isFinite(firstWaypoint.rot)) {
+          remoteAvatars[pid].targetRot = firstWaypoint.rot;
+        }
+        remoteAvatars[pid].waypoints = waypoints.slice(1);
+      } else {
+        remoteAvatars[pid].targetX = tx;
+        remoteAvatars[pid].targetZ = tz;
+        if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
+        remoteAvatars[pid].waypoints = [];
+      }
       if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
       remoteAvatars[pid].row = Number(row);
       remoteAvatars[pid].col = Number(col);
@@ -1785,22 +1811,52 @@ function applyItemDeltaFromEvent(payload) {
 var pendingMoves = []; // FIFO queue of {row,col,seq} — one entry per step
 var moveInFlight = false;
 
+/**
+ * Rebuild the queued moves as direction deltas reapplied from an
+ * authoritative server position (preserves the user's intended movement
+ * directions), then snap local prediction to the end of the rebuilt queue.
+ * @param {number} row
+ * @param {number} col
+ */
+function rebasePendingMovesFrom(row, col) {
+  var lastPos = { row: row, col: col };
+  for (var i = 0; i < pendingMoves.length; i++) {
+    var deltaRow = pendingMoves[i].toRow - pendingMoves[i].fromRow;
+    var deltaCol = pendingMoves[i].toCol - pendingMoves[i].fromCol;
+    pendingMoves[i].fromRow = lastPos.row;
+    pendingMoves[i].fromCol = lastPos.col;
+    pendingMoves[i].toRow = lastPos.row + deltaRow;
+    pendingMoves[i].toCol = lastPos.col + deltaCol;
+    lastPos = {
+      row: pendingMoves[i].toRow,
+      col: pendingMoves[i].toCol,
+    };
+  }
+  avatarRow = lastPos.row;
+  avatarCol = lastPos.col;
+  targetX = tileX(avatarCol);
+  targetZ = tileZ(avatarRow);
+  requireElementById("pos-col").textContent = String(avatarCol);
+  requireElementById("pos-row").textContent = String(avatarRow);
+}
+
 function flushMove() {
   if (authState !== AUTH_STATE_OK) return;
   if (moveInFlight || pendingMoves.length === 0) return;
-  var payload = pendingMoves.shift();
+  // Send the whole queue as one batched intent; the server validates the
+  // longest applicable prefix as a unit and applies it atomically.
+  var batch = pendingMoves;
+  pendingMoves = [];
   moveInFlight = true;
   fetchWithAuth("/virtual-world/move", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // world_id and player_id are determined server-side from auth session
     body: JSON.stringify({
-      fromRow: payload.fromRow,
-      fromCol: payload.fromCol,
-      toRow: payload.toRow,
-      toCol: payload.toCol,
-      rotation: payload.rotation,
-      seq: payload.seq,
+      steps: batch.map(function (m) {
+        return { row: m.toRow, col: m.toCol, rotation: m.rotation };
+      }),
+      seq: moveSeq + 1,
       session_id: sessionId,
     }),
   })
@@ -1826,57 +1882,38 @@ function flushMove() {
           }
           if (typeof result.seq === "number" && isFinite(result.seq)) {
             moveSeq = result.seq;
-            lastAssignedSeq = result.seq;
           }
           pendingMoves = [];
         } else {
-          // Server rejected the move (wall/bounds) — rebuild the queue by extracting
-          // the movement delta from each queued move and reapplying from the corrected position.
-          // This preserves the user's intended movement direction.
-          var lastPos = { row: result.row, col: result.col };
-          for (var i = 0; i < pendingMoves.length; i++) {
-            // Extract the intended movement direction (delta) from the original move
-            var deltaRow = pendingMoves[i].toRow - pendingMoves[i].fromRow;
-            var deltaCol = pendingMoves[i].toCol - pendingMoves[i].fromCol;
-
-            // Reapply the delta from the corrected position
-            pendingMoves[i].fromRow = lastPos.row;
-            pendingMoves[i].fromCol = lastPos.col;
-            pendingMoves[i].toRow = lastPos.row + deltaRow;
-            pendingMoves[i].toCol = lastPos.col + deltaCol;
-
-            lastPos = {
-              row: pendingMoves[i].toRow,
-              col: pendingMoves[i].toCol,
-            };
-          }
-
-          // Update client state to match the end of the rebuilt queue for smooth continuation
-          avatarRow = lastPos.row;
-          avatarCol = lastPos.col;
-          targetX = tileX(avatarCol);
-          targetZ = tileZ(avatarRow);
-          requireElementById("pos-col").textContent = String(avatarCol);
-          requireElementById("pos-row").textContent = String(avatarRow);
+          // Whole batch rejected (wall/bounds). Drop it and rebase moves
+          // queued while the batch was in flight onto the server position.
+          rebasePendingMovesFrom(result.row, result.col);
         }
       } else {
-        // Confirmed — update the last confirmed server sequence number.
-        // Only update if this response is newer than what we've already confirmed.
-        // This prevents late responses from moving moveSeq backwards.
+        // Confirmed — only move moveSeq forward so a late response can
+        // never rewind it.
         if (result.seq > moveSeq) {
           moveSeq = result.seq;
         }
+        if (
+          typeof result.applied_count === "number" &&
+          result.applied_count < batch.length
+        ) {
+          // Blocked mid-path: the unapplied tail was invalid server-side.
+          // Rebase moves queued during flight onto the authoritative
+          // position and snap local prediction back to it.
+          rebasePendingMovesFrom(result.row, result.col);
+        }
       }
-      flushMove(); // drain next step if any
+      flushMove(); // drain any moves queued while the batch was in flight
     })
     .catch(function (err) {
       moveInFlight = false;
+      // Put the failed batch back at the front and retry after 500 ms
+      pendingMoves = batch.concat(pendingMoves);
       if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED")) {
-        pendingMoves.unshift(payload);
         return;
       }
-      // Put the failed step back at the front and retry after 500 ms
-      pendingMoves.unshift(payload);
       setTimeout(flushMove, 500);
     });
 }
@@ -1890,21 +1927,14 @@ function flushMove() {
  * @returns {boolean}
  */
 function postMove(fromRow, fromCol, toRow, toCol, rotation) {
-  // Each optimistic step gets the next expected seq number.
   // Never silently drop steps: if queue is full, caller must not move locally.
   if (pendingMoves.length >= MAX_PENDING_MOVES) return false;
-  // Assign the next sequence number and track it separately from moveSeq.
-  // This ensures every move gets a unique seq even when moves are queued
-  // while previous moves are in-flight (before server confirms them).
-  var nextSeq = lastAssignedSeq + 1;
-  lastAssignedSeq = nextSeq;
   pendingMoves.push({
     fromRow: fromRow,
     fromCol: fromCol,
     toRow: toRow,
     toCol: toCol,
     rotation: rotation,
-    seq: nextSeq,
   });
   flushMove();
   return true;
@@ -2072,7 +2102,6 @@ function applyPlayersSnapshot(players) {
           avatar.rotation.y = Number(p.rotation);
         }
         moveSeq = snapSeq;
-        lastAssignedSeq = snapSeq;
         requireElementById("pos-col").textContent = String(avatarCol);
         requireElementById("pos-row").textContent = String(avatarRow);
       }
@@ -2131,7 +2160,6 @@ function initMultiplayer() {
           }
           if (hasIncomingSeq) {
             moveSeq = incomingSeq;
-            lastAssignedSeq = incomingSeq;
           }
           requireElementById("pos-col").textContent = String(avatarCol);
           requireElementById("pos-row").textContent = String(avatarRow);
@@ -2146,6 +2174,8 @@ function initMultiplayer() {
       payload.col,
       payload.seq,
       payload.rotation,
+      undefined,
+      payload.path,
     );
   }
 
@@ -5342,9 +5372,21 @@ function animate() {
     avatar.position.y += (0 - avatar.position.y) * lerp;
   }
 
-  // Lerp remote avatars toward their targets
+  // Lerp remote avatars toward their targets, advancing through any queued
+  // batched-move waypoints so paths are walked tile by tile.
   for (var pid in remoteAvatars) {
     var ra = remoteAvatars[pid];
+    if (ra.waypoints && ra.waypoints.length > 0) {
+      var waypointDist =
+        Math.abs(ra.group.position.x - ra.targetX) +
+        Math.abs(ra.group.position.z - ra.targetZ);
+      if (waypointDist < 0.1) {
+        var nextWaypoint = ra.waypoints.shift();
+        ra.targetX = nextWaypoint.x;
+        ra.targetZ = nextWaypoint.z;
+        if (isFinite(nextWaypoint.rot)) ra.targetRot = nextWaypoint.rot;
+      }
+    }
     ra.group.position.x += (ra.targetX - ra.group.position.x) * lerp;
     ra.group.position.z += (ra.targetZ - ra.group.position.z) * lerp;
     var rotDelta = ra.targetRot - ra.group.rotation.y;

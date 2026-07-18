@@ -15,7 +15,6 @@ type MoveDeps = {
   ) => { row: number; col: number; seq: number; rotation: number };
   getEffectiveMap: (worldId: string) => number[][];
   isWorldTileWalkable: (tileValue: any) => boolean;
-  saveWorldPlayers: (worldId: string, players: Record<string, any>) => void;
   savePlayerPosition: (userId: string, worldId: string, position: any) => void;
   sendWorldScopedStreamEvent: (
     worldId: string,
@@ -28,11 +27,38 @@ type MoveDeps = {
   COLS: number;
 };
 
-export function movePlayerForUser(
-  userId: string,
-  body: any,
-  deps: MoveDeps,
-): { status: number; payload: any } {
+// Hard bound on steps accepted in one batched move request. The client's
+// pending queue is capped at 40; anything larger is a malformed or abusive
+// payload rather than a legitimate batch.
+const MAX_MOVE_BATCH_STEPS = 60;
+
+type MoveStep = { row: number; col: number; rotation: number };
+
+/**
+ * Normalize the request body into an ordered list of steps. Batched bodies
+ * carry `steps: [{row, col, rotation?}, ...]`; legacy bodies carry a single
+ * `toRow`/`toCol` (or `row`/`col`) pair. Returns null when the payload is
+ * invalid.
+ */
+function normalizeMoveSteps(body: any): MoveStep[] | null {
+  if (Array.isArray(body && body.steps)) {
+    if (body.steps.length === 0 || body.steps.length > MAX_MOVE_BATCH_STEPS) {
+      return null;
+    }
+    const steps: MoveStep[] = [];
+    for (let i = 0; i < body.steps.length; i++) {
+      const raw = body.steps[i];
+      const row = Number(raw && raw.row);
+      const col = Number(raw && raw.col);
+      if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+      steps.push({
+        row: row,
+        col: col,
+        rotation: Number(raw && raw.rotation),
+      });
+    }
+    return steps;
+  }
   const toRow =
     body && body.toRow !== undefined
       ? Number(body.toRow)
@@ -41,11 +67,20 @@ export function movePlayerForUser(
     body && body.toCol !== undefined
       ? Number(body.toCol)
       : Number(body && body.col);
-  let rotation = Number(body && body.rotation);
+  if (!Number.isFinite(toRow) || !Number.isFinite(toCol)) return null;
+  return [{ row: toRow, col: toCol, rotation: Number(body && body.rotation) }];
+}
+
+export function movePlayerForUser(
+  userId: string,
+  body: any,
+  deps: MoveDeps,
+): { status: number; payload: any } {
+  const steps = normalizeMoveSteps(body);
   const sessionId =
     body && body.session_id ? String(body.session_id) : "legacy";
 
-  if (!Number.isFinite(toRow) || !Number.isFinite(toCol)) {
+  if (!steps) {
     return {
       status: 400,
       payload: { ok: false, error: "error.invalid_move_payload" },
@@ -88,8 +123,9 @@ export function movePlayerForUser(
       session_id: savedPos ? savedPos.session_id : "",
     };
   }
-  if (!Number.isFinite(rotation)) rotation = Number(cur && cur.rotation);
-  if (!Number.isFinite(rotation)) rotation = 0;
+  const fallbackRotation = Number.isFinite(Number(cur && cur.rotation))
+    ? Number(cur.rotation)
+    : 0;
 
   const expectedSeq = cur.seq + 1;
   const clientSeq =
@@ -103,8 +139,9 @@ export function movePlayerForUser(
       client_seq: clientSeq,
       cur_row: cur.row,
       cur_col: cur.col,
-      req_row: toRow,
-      req_col: toCol,
+      req_row: steps[0].row,
+      req_col: steps[0].col,
+      requested_steps: steps.length,
     });
     return {
       status: 200,
@@ -118,25 +155,44 @@ export function movePlayerForUser(
     };
   }
 
-  const dr = Math.abs(toRow - cur.row);
-  const dc = Math.abs(toCol - cur.col);
+  // Validate the longest applicable prefix of the batch as a unit. Each step
+  // must be a single walkable in-bounds step from the previous position; the
+  // effective map is built once per request instead of once per step.
   const map = deps.getEffectiveMap(worldId);
-  const withinBounds =
-    toRow >= 0 && toRow < deps.ROWS && toCol >= 0 && toCol < deps.COLS;
-  const singleStep = dr + dc === 1;
-  const walkable = withinBounds && deps.isWorldTileWalkable(map[toRow][toCol]);
+  const applied: MoveStep[] = [];
+  let posRow = cur.row;
+  let posCol = cur.col;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const withinBounds =
+      step.row >= 0 &&
+      step.row < deps.ROWS &&
+      step.col >= 0 &&
+      step.col < deps.COLS;
+    const singleStep =
+      Math.abs(step.row - posRow) + Math.abs(step.col - posCol) === 1;
+    if (
+      !withinBounds ||
+      !singleStep ||
+      !deps.isWorldTileWalkable(map[step.row][step.col])
+    ) {
+      break;
+    }
+    applied.push(step);
+    posRow = step.row;
+    posCol = step.col;
+  }
 
-  if (!singleStep || !walkable) {
+  if (applied.length === 0) {
     deps.vwLog("move rejected: invalid step", {
       user_id: userId,
       world_id: worldId,
       session_id: sessionId,
       from_row: cur.row,
       from_col: cur.col,
-      to_row: toRow,
-      to_col: toCol,
-      single_step: singleStep,
-      walkable: walkable,
+      to_row: steps[0].row,
+      to_col: steps[0].col,
+      requested_steps: steps.length,
     });
     return {
       status: 200,
@@ -150,46 +206,59 @@ export function movePlayerForUser(
     };
   }
 
-  players[userId] = {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-    session_id: sessionId,
-    ts: Date.now(),
-  };
-  deps.saveWorldPlayers(worldId, players);
+  const lastStep = applied[applied.length - 1];
+  const rotation = Number.isFinite(lastStep.rotation)
+    ? lastStep.rotation
+    : fallbackRotation;
+  // Each applied step consumes one seq so per-step client assignment and
+  // snapshot comparisons keep working unchanged.
+  const newSeq = cur.seq + applied.length;
+
+  // Only this player's row is written; rewriting the whole player map here
+  // (the old behavior) could clobber other players' concurrent moves with
+  // the stale positions read above.
   deps.savePlayerPosition(userId, worldId, {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
+    row: posRow,
+    col: posCol,
+    seq: newSeq,
     rotation: rotation,
     session_id: sessionId,
     ts: Date.now(),
   });
   deps.sendWorldScopedStreamEvent(String(worldId), "player_moved", {
     player_id: userId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
+    row: posRow,
+    col: posCol,
+    seq: newSeq,
     rotation: rotation,
+    path: applied.map(function (step) {
+      return {
+        row: step.row,
+        col: step.col,
+        rotation: Number.isFinite(step.rotation) ? step.rotation : rotation,
+      };
+    }),
   });
   deps.vwLog("move accepted", {
     user_id: userId,
     world_id: worldId,
     session_id: sessionId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
+    row: posRow,
+    col: posCol,
+    seq: newSeq,
+    applied_steps: applied.length,
+    requested_steps: steps.length,
   });
   return {
     status: 200,
     payload: {
       ok: true,
-      row: toRow,
-      col: toCol,
-      seq: cur.seq + 1,
+      row: posRow,
+      col: posCol,
+      seq: newSeq,
       rotation: rotation,
+      applied_count: applied.length,
+      requested_count: steps.length,
       world_id: String(worldId),
     },
   };

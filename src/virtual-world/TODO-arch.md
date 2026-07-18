@@ -105,7 +105,24 @@ dupes valuable.
 
 ### 4. Movement as sessions or batched intents, not per-tile POSTs
 
-**Today:** the client queues one HTTP POST per tile step (`pendingMoves`),
+**Status: implemented via batched intents (July 2026).** The client sends
+its whole pending queue as one POST (`steps: [{row, col, rotation}, ...]`,
+capped at 60 server-side); `movePlayerForUser` validates the longest
+applicable prefix as a unit against one map build, consumes one seq per
+applied step (so snapshot comparisons are unchanged), writes only the
+moving player's position row (the old code rewrote every player's row per
+move, which could clobber concurrent moves with stale reads), and
+broadcasts a single `player_moved` carrying the applied `path` — remote
+clients walk avatars through those waypoints instead of lerping through
+walls. Partial application (`applied_count < requested_count`) makes the
+client snap to the server position and rebase queued moves. Legacy
+single-step bodies (`toRow`/`toCol`, used by the MCP move tool) still work.
+This work also retired the duplicated inline move logic in
+`virtual-world.js`, which had never actually delegated to
+`move-player.ts`. WebSockets (the session variant) remain future work
+gated on runtime capability 3.
+
+**Original problem:** the client queues one HTTP POST per tile step (`pendingMoves`),
 sent serially. Each step costs a lease read/write, a full player-map load,
 two position writes, and a broadcast. Movement throughput is bound by
 request latency and write-amplified roughly 5× per step.

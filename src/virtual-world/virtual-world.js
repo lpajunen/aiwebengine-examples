@@ -66,7 +66,6 @@ import {
   buildActiveWorldPlayers as buildActiveWorldPlayersImpl,
   getCanonicalPlayerState as getCanonicalPlayerStateImpl,
   loadWorldPlayers as loadWorldPlayersImpl,
-  saveWorldPlayers as saveWorldPlayersImpl,
 } from "./server/player-snapshots.ts";
 import {
   createEmptyWorldMods as createEmptyWorldModsImpl,
@@ -546,14 +545,6 @@ function getAllLivingClasses() {
  */
 function loadWorldPlayers(worldId) {
   return loadWorldPlayersImpl(worldId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
-}
-
-/**
- * @param {string} worldId
- * @param {Record<string, any>} players
- */
-function saveWorldPlayers(worldId, players) {
-  saveWorldPlayersImpl(worldId, players, VWORLD_PLAYER_POSITION_TABLE, vwLog);
 }
 
 /**
@@ -2118,164 +2109,23 @@ function getCurrentWorldStateForUser(userId) {
  * @returns {{status: number, payload: any}}
  */
 function movePlayerForUser(userId, body) {
-  var toRow =
-    body && body.toRow !== undefined
-      ? Number(body.toRow)
-      : Number(body && body.row);
-  var toCol =
-    body && body.toCol !== undefined
-      ? Number(body.toCol)
-      : Number(body && body.col);
-  var rotation = Number(body && body.rotation);
-  var sessionId = body && body.session_id ? String(body.session_id) : "legacy";
-
-  if (!isFinite(toRow) || !isFinite(toCol)) {
-    return {
-      status: 400,
-      payload: { ok: false, error: "Invalid move payload" },
-    };
-  }
-
-  var worldId = getPlayerWorld(userId);
-  if (!worldId) {
-    return { status: 200, payload: { ok: false, row: 1, col: 1 } };
-  }
-  markNPCWorldActive(worldId);
-
-  var lease = loadPlayerMoveLease(userId);
-  var now = Date.now();
-  var leaseSessionId =
-    lease && typeof lease.session_id === "string" ? lease.session_id : "";
-  var leaseValid = !!lease && Number(lease.expires_at || 0) > now;
-  if (leaseValid && leaseSessionId !== sessionId) {
-    vwLog("move taking over lease", {
-      user_id: userId,
-      world_id: worldId,
-      previous_session: leaseSessionId,
-      session_id: sessionId,
-    });
-  }
-  savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
-
-  var players = loadWorldPlayers(worldId);
-  var cur = players[userId];
-  if (!cur) {
-    var savedPos = loadPlayerPosition(userId);
-    var defaultSpawn = getDefaultSpawnPosition(worldId, userId);
-    cur = {
-      row: savedPos ? savedPos.row : defaultSpawn.row,
-      col: savedPos ? savedPos.col : defaultSpawn.col,
-      seq: savedPos ? savedPos.seq : defaultSpawn.seq,
-      rotation: savedPos
-        ? Number(savedPos.rotation)
-        : Number(defaultSpawn.rotation),
-      session_id: savedPos ? savedPos.session_id : "",
-    };
-  }
-  if (!isFinite(rotation)) rotation = Number(cur && cur.rotation);
-  if (!isFinite(rotation)) rotation = 0;
-
-  var expectedSeq = cur.seq + 1;
-  var clientSeq =
-    body && body.seq !== undefined ? Number(body.seq) : expectedSeq;
-  if (clientSeq !== expectedSeq) {
-    vwLog("move rejected: stale seq", {
-      user_id: userId,
-      world_id: worldId,
-      session_id: sessionId,
-      expected_seq: expectedSeq,
-      client_seq: clientSeq,
-      cur_row: cur.row,
-      cur_col: cur.col,
-      req_row: toRow,
-      req_col: toCol,
-    });
-    return {
-      status: 200,
-      payload: {
-        ok: false,
-        stale: true,
-        row: cur.row,
-        col: cur.col,
-        seq: cur.seq,
-      },
-    };
-  }
-
-  var dr = Math.abs(toRow - cur.row);
-  var dc = Math.abs(toCol - cur.col);
-  var map = getEffectiveMap(worldId);
-  var withinBounds = toRow >= 0 && toRow < ROWS && toCol >= 0 && toCol < COLS;
-  var singleStep = dr + dc === 1;
-  var walkable = withinBounds && isWorldTileWalkable(map[toRow][toCol]);
-
-  if (!singleStep || !walkable) {
-    vwLog("move rejected: invalid step", {
-      user_id: userId,
-      world_id: worldId,
-      session_id: sessionId,
-      from_row: cur.row,
-      from_col: cur.col,
-      to_row: toRow,
-      to_col: toCol,
-      single_step: singleStep,
-      walkable: walkable,
-    });
-    return {
-      status: 200,
-      payload: {
-        ok: false,
-        stale: false,
-        row: cur.row,
-        col: cur.col,
-        seq: cur.seq,
-      },
-    };
-  }
-
-  players[userId] = {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-    session_id: sessionId,
-    ts: Date.now(),
-  };
-  saveWorldPlayers(worldId, players);
-  savePlayerPosition(userId, worldId, {
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-    session_id: sessionId,
-    ts: Date.now(),
+  return movePlayerForUserImpl(userId, body, {
+    getPlayerWorld: getPlayerWorld,
+    markNPCWorldActive: markNPCWorldActive,
+    loadPlayerMoveLease: loadPlayerMoveLease,
+    savePlayerMoveLease: savePlayerMoveLease,
+    loadWorldPlayers: loadWorldPlayers,
+    loadPlayerPosition: loadPlayerPosition,
+    getDefaultSpawnPosition: getDefaultSpawnPosition,
+    getEffectiveMap: getEffectiveMap,
+    isWorldTileWalkable: isWorldTileWalkable,
+    savePlayerPosition: savePlayerPosition,
+    sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    vwLog: vwLog,
+    LEASE_TTL_MS: LEASE_TTL_MS,
+    ROWS: ROWS,
+    COLS: COLS,
   });
-  sendWorldScopedStreamEvent(String(worldId), "player_moved", {
-    player_id: userId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-    rotation: rotation,
-  });
-  vwLog("move accepted", {
-    user_id: userId,
-    world_id: worldId,
-    session_id: sessionId,
-    row: toRow,
-    col: toCol,
-    seq: cur.seq + 1,
-  });
-  return {
-    status: 200,
-    payload: {
-      ok: true,
-      row: toRow,
-      col: toCol,
-      seq: cur.seq + 1,
-      rotation: rotation,
-      world_id: String(worldId),
-    },
-  };
 }
 
 /**

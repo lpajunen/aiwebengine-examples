@@ -18,7 +18,20 @@ Ordered roughly cheapest-first; this is also the suggested landing order.
 
 ### 1. Versioned event protocol with a single resync path
 
-**Today:** SSE events are ad-hoc, unversioned JSON blobs per type
+**Status: implemented (July 2026).** All world- and recipient-scoped events
+carry `{scope, seq}` allocated from `vworld_event_seqs` (transactional
+read-increment in `event-seq.ts`; falls back to unversioned on failure —
+fail-open, delivery is never blocked). The client (`trackEventSeq`) drops
+duplicates, applies-then-resyncs on gaps, and all healing paths converge on
+one debounced `requestResync()` hitting `GET /virtual-world/resync`, which
+returns scope seqs (read before the snapshots so concurrent events re-apply
+idempotently) plus players/NPCs/world-state snapshots. Remaining gaps:
+per-emit seq allocation adds a DB read+write (folds into item 2's in-memory
+world state), resync does not replay missed chat/DM events (chat relies on
+its history endpoints), and payload schemas are still not shared with the
+client (item 6).
+
+**Original problem:** SSE events are ad-hoc, unversioned JSON blobs per type
 (`player_moved`, `item_changed`, …), each carrying whatever fields its emit
 site happened to include. The client compensates with healing hacks —
 re-fetching snapshots on SSE errors, or the debounced `/players` re-fetch

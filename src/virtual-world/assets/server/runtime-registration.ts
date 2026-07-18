@@ -467,6 +467,7 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "POST",
   );
   safeRegisterRoute(deps, "/virtual-world/players", "playersHandler", "GET");
+  safeRegisterRoute(deps, "/virtual-world/resync", "resyncHandler", "GET");
   safeRegisterRoute(
     deps,
     "/virtual-world/current-world",

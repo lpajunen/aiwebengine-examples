@@ -132,6 +132,11 @@ import {
   runWorldSchemaStep as runWorldSchemaStepImpl,
 } from "./server/schema-setup.ts";
 import {
+  allocateEventSeq as allocateEventSeqImpl,
+  getCurrentEventSeq as getCurrentEventSeqImpl,
+} from "./server/event-seq.ts";
+import {
+  buildResyncForUser as buildResyncForUserImpl,
   getCurrentWorldStateForHttpUser as getCurrentWorldStateForHttpUserImpl,
   getDirectMessageHistoryForUser as getDirectMessageHistoryForUserImpl,
   heartbeatForUser as heartbeatForUserImpl,
@@ -824,6 +829,7 @@ var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 var VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 var VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
+var VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 
 /**
  * @param {string} raw
@@ -1098,6 +1104,7 @@ function ensureWorldDatabaseSchema() {
       itemClass: VWORLD_ITEM_CLASS_TABLE,
       actionClass: VWORLD_ACTION_CLASS_TABLE,
       livingClass: VWORLD_LIVING_CLASS_TABLE,
+      eventSeq: VWORLD_EVENT_SEQ_TABLE,
     },
     parseWorldDbResult,
     vwLog,
@@ -1502,6 +1509,22 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
 }
 
 /**
+ * @param {string} scopeKey
+ * @returns {number}
+ */
+function allocateEventSeq(scopeKey) {
+  return allocateEventSeqImpl(scopeKey, VWORLD_EVENT_SEQ_TABLE, vwLog);
+}
+
+/**
+ * @param {string} scopeKey
+ * @returns {number}
+ */
+function getCurrentEventSeq(scopeKey) {
+  return getCurrentEventSeqImpl(scopeKey, VWORLD_EVENT_SEQ_TABLE, vwLog);
+}
+
+/**
  * @param {string} worldId
  * @param {string} type
  * @param {*} payload
@@ -1513,6 +1536,7 @@ function sendWorldScopedStreamEvent(worldId, type, payload) {
     type,
     payload,
     vwLog,
+    allocateEventSeq,
   );
 }
 
@@ -1528,6 +1552,7 @@ function sendRecipientScopedStreamEvent(recipientId, type, payload) {
     type,
     payload,
     vwLog,
+    allocateEventSeq,
   );
 }
 
@@ -2980,6 +3005,26 @@ function playersHandler(context) {
       loadPlayerInventory: loadPlayerInventory,
     }),
   );
+}
+
+/**
+ * @param {*} context
+ */
+function resyncHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var result = buildResyncForUserImpl(userId, {
+    getPlayerWorld: getPlayerWorld,
+    markNPCWorldActive: markNPCWorldActive,
+    buildActiveWorldPlayers: buildActiveWorldPlayers,
+    loadPlayerInventory: loadPlayerInventory,
+    getWorldNPCSnapshot: getWorldNPCSnapshot,
+    getCurrentWorldStateForUser: getCurrentWorldStateForUser,
+    getCurrentEventSeq: getCurrentEventSeq,
+  });
+  return ResponseBuilder.json(result.payload, result.status);
 }
 
 /**

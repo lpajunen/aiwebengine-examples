@@ -1,4 +1,8 @@
+import { recipientEventScope, worldEventScope } from "./event-seq.ts";
+
 type WorldDbLogFn = (msg: string, obj?: unknown) => void;
+
+type AllocateSeqFn = (scopeKey: string) => number;
 
 export function sendVirtualWorldStreamEvent(
   streamPath: string,
@@ -6,12 +10,20 @@ export function sendVirtualWorldStreamEvent(
   payload: unknown,
   filter: Record<string, string>,
   log: WorldDbLogFn,
+  scope?: string,
+  seq?: number,
 ): void {
   try {
-    const message = JSON.stringify({
+    const envelope: Record<string, unknown> = {
       type: String(type),
       payload: payload,
-    });
+    };
+    // seq 0 means allocation failed — send unversioned rather than not at all.
+    if (scope && typeof seq === "number" && seq > 0) {
+      envelope.scope = String(scope);
+      envelope.seq = seq;
+    }
+    const message = JSON.stringify(envelope);
     const hasFilter = !!filter && Object.keys(filter).length > 0;
     const result = hasFilter
       ? routeRegistry.sendStreamMessageFiltered(
@@ -46,8 +58,10 @@ export function sendRecipientScopedStreamEvent(
   type: string,
   payload: unknown,
   log: WorldDbLogFn,
+  allocateSeq?: AllocateSeqFn,
 ): void {
   if (!recipientId) return;
+  const scope = recipientEventScope(recipientId);
   sendVirtualWorldStreamEvent(
     streamPath,
     type,
@@ -56,6 +70,8 @@ export function sendRecipientScopedStreamEvent(
       recipient_id: String(recipientId),
     },
     log,
+    scope,
+    allocateSeq ? allocateSeq(scope) : 0,
   );
 }
 
@@ -65,8 +81,10 @@ export function sendWorldScopedStreamEvent(
   type: string,
   payload: unknown,
   log: WorldDbLogFn,
+  allocateSeq?: AllocateSeqFn,
 ): void {
   if (!worldId) return;
+  const scope = worldEventScope(worldId);
   sendVirtualWorldStreamEvent(
     streamPath,
     type,
@@ -75,6 +93,8 @@ export function sendWorldScopedStreamEvent(
       world_id: String(worldId),
     },
     log,
+    scope,
+    allocateSeq ? allocateSeq(scope) : 0,
   );
 }
 

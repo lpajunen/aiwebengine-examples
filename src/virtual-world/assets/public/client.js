@@ -1464,7 +1464,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
     if (seqAdvanced || appliedLivingData) refreshTileDetailIfOpen();
   }
   if (!remoteAvatars[pid].hasLivingData) {
-    requestPlayerSnapshotRefetch();
+    requestResync();
   }
 }
 
@@ -1638,61 +1638,46 @@ function syncNPCSnapshot(npcs) {
   }
 }
 
-function fetchNPCSnapshot() {
-  if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth("/virtual-world/npcs")
-    .then(function (npcs) {
-      syncNPCSnapshot(npcs);
-    })
-    .catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-    });
-}
-
-function fetchItemSnapshot() {
-  if (authState !== AUTH_STATE_OK) return;
-  var requestSeq = itemSnapshotRequestSeq + 1;
-  itemSnapshotRequestSeq = requestSeq;
-  fetchJsonWithAuth("/virtual-world/current-world")
-    .then(function (payload) {
-      if (!payload || typeof payload !== "object") return;
-      if (payload.world_id && String(payload.world_id) !== String(worldId)) {
-        return;
-      }
-      if (requestSeq < appliedItemSnapshotSeq) {
-        return;
-      }
-      if (payload.inventory) {
-        playerInventory = normalizeClientInventory(payload.inventory);
-        updateEditingRightsUI();
-      }
-      if (Array.isArray(payload.items)) {
-        var next = /** @type {Record<string, ClientItem[]>} */ ({});
-        for (var i = 0; i < payload.items.length; i++) {
-          var it = payload.items[i];
-          if (!it || !it.id || !it.type) continue;
-          var key = it.row + "_" + it.col;
-          if (!next[key]) next[key] = [];
-          next[key].push({
-            id: it.id,
-            type: it.type,
-            destination_world_id: it.destination_world_id,
-            destination_world_type: it.destination_world_type,
-          });
-        }
-        worldItemsByTile = next;
-      }
-      appliedItemSnapshotSeq = requestSeq;
-      rebuildItemMeshes();
-      refreshTileDetailIfOpen();
-      updateHeldHud();
-      if (inventoryPanelVisible) renderInventoryPanel();
-    })
-    .catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-    });
+/**
+ * Apply a current-world state payload (inventory + world items), guarded by
+ * the item snapshot request seq so a stale in-flight response never
+ * overwrites newer SSE-delta state.
+ * @param {any} payload
+ * @param {number} requestSeq
+ */
+function applyWorldStatePayload(payload, requestSeq) {
+  if (!payload || typeof payload !== "object") return;
+  if (payload.world_id && String(payload.world_id) !== String(worldId)) {
+    return;
+  }
+  if (requestSeq < appliedItemSnapshotSeq) {
+    return;
+  }
+  if (payload.inventory) {
+    playerInventory = normalizeClientInventory(payload.inventory);
+    updateEditingRightsUI();
+  }
+  if (Array.isArray(payload.items)) {
+    var next = /** @type {Record<string, ClientItem[]>} */ ({});
+    for (var i = 0; i < payload.items.length; i++) {
+      var it = payload.items[i];
+      if (!it || !it.id || !it.type) continue;
+      var key = it.row + "_" + it.col;
+      if (!next[key]) next[key] = [];
+      next[key].push({
+        id: it.id,
+        type: it.type,
+        destination_world_id: it.destination_world_id,
+        destination_world_type: it.destination_world_type,
+      });
+    }
+    worldItemsByTile = next;
+  }
+  appliedItemSnapshotSeq = requestSeq;
+  rebuildItemMeshes();
+  refreshTileDetailIfOpen();
+  updateHeldHud();
+  if (inventoryPanelVisible) renderInventoryPanel();
 }
 
 /**
@@ -1787,7 +1772,7 @@ function applyItemDeltaFromEvent(payload) {
   } else if (itemEventDef && itemEventDef.delta_kind === "snapshot") {
     applyTileItemsState(row, col, changedItems);
   } else {
-    fetchItemSnapshot();
+    requestResync();
     return;
   }
 
@@ -1989,68 +1974,112 @@ function requestHeartbeatSoon() {
   scheduleHeartbeat(nextDelay);
 }
 
-// Remote avatars created from player_moved events have no inventory data
-// (the broadcast carries only position); re-fetch the /players snapshot,
-// which includes slots/values/class_id, to fill them in. Debounced with a
-// minimum gap so a stream of move events triggers at most one fetch per gap.
+// ── Versioned event protocol: seq tracking + single resync path ──────────
+// Server events carry {scope, seq} where seq is monotonic per scope
+// ("world:<id>" / "recipient:<id>"). A gap means events were missed; any
+// missing-state situation (gap, SSE reconnect, avatar without inventory
+// data) requests one debounced full resync instead of per-feature snapshot
+// fetches.
+/** @type {Record<string, number>} */
+var eventSeqByScope = {};
 /** @type {number | null} */
-var playerSnapshotRefetchTimer = null;
-var lastPlayerSnapshotRefetchAt = 0;
-var PLAYER_SNAPSHOT_REFETCH_MIN_GAP_MS = 5000;
-function requestPlayerSnapshotRefetch() {
-  if (playerSnapshotRefetchTimer !== null) return;
-  var wait = Math.max(
-    500,
-    PLAYER_SNAPSHOT_REFETCH_MIN_GAP_MS -
-      (Date.now() - lastPlayerSnapshotRefetchAt),
-  );
-  playerSnapshotRefetchTimer = window.setTimeout(function () {
-    playerSnapshotRefetchTimer = null;
-    lastPlayerSnapshotRefetchAt = Date.now();
-    fetchSnapshot();
+var resyncTimer = null;
+var lastResyncAt = 0;
+var RESYNC_MIN_GAP_MS = 5000;
+
+function requestResync() {
+  if (resyncTimer !== null) return;
+  var wait = Math.max(500, RESYNC_MIN_GAP_MS - (Date.now() - lastResyncAt));
+  resyncTimer = window.setTimeout(function () {
+    resyncTimer = null;
+    performResync();
   }, wait);
 }
 
-function fetchSnapshot() {
+/**
+ * @param {*} scope
+ * @param {*} seq
+ * @returns {boolean} true when the event should be applied
+ */
+function trackEventSeq(scope, seq) {
+  if (!scope || typeof scope !== "string") return true;
+  var n = Number(seq);
+  if (!isFinite(n) || n <= 0) return true; // unversioned event
+  var last = eventSeqByScope[scope];
+  if (typeof last !== "number") {
+    eventSeqByScope[scope] = n;
+    return true;
+  }
+  if (n <= last) return false; // duplicate or stale
+  // Gap: still apply this event (deltas are idempotent), but resync to
+  // recover whatever was missed in between.
+  if (n > last + 1) requestResync();
+  eventSeqByScope[scope] = n;
+  return true;
+}
+
+function performResync() {
   if (authState !== AUTH_STATE_OK) return;
-  fetchJsonWithAuth("/virtual-world/players")
-    .then(function (players) {
-      /** @type {any[]} */ (players).forEach(function (p) {
-        if (p.player_id === playerId) {
-          var snapSeq = Number(p.seq || 0);
-          var snapshotSessionId =
-            typeof p.session_id === "string" ? p.session_id : "";
-          if (snapshotSessionId && snapshotSessionId !== sessionId) {
-            return;
-          }
-          // Snapshot healing for same-user tabs when SSE is delayed/flaky.
-          // Only accept snapshot if we're idle AND it's not stale (older than our current state).
-          if (
-            !moveInFlight &&
-            pendingMoves.length === 0 &&
-            snapSeq >= moveSeq
-          ) {
-            avatarRow = p.row;
-            avatarCol = p.col;
-            targetX = tileX(avatarCol);
-            targetZ = tileZ(avatarRow);
-            if (isFinite(Number(p.rotation))) {
-              avatar.rotation.y = Number(p.rotation);
-            }
-            moveSeq = snapSeq;
-            lastAssignedSeq = snapSeq;
-            requireElementById("pos-col").textContent = String(avatarCol);
-            requireElementById("pos-row").textContent = String(avatarRow);
-          }
-        } else {
-          upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation, p);
+  lastResyncAt = Date.now();
+  var requestSeq = itemSnapshotRequestSeq + 1;
+  itemSnapshotRequestSeq = requestSeq;
+  fetchJsonWithAuth("/virtual-world/resync")
+    .then(function (payload) {
+      if (!payload || typeof payload !== "object") return;
+      if (payload.world_id && String(payload.world_id) !== String(worldId)) {
+        return;
+      }
+      var scopeSeqs = payload.scope_seqs;
+      if (scopeSeqs && typeof scopeSeqs === "object") {
+        for (var scope in scopeSeqs) {
+          var serverSeq = Number(scopeSeqs[scope]);
+          if (!isFinite(serverSeq) || serverSeq <= 0) continue;
+          var known = eventSeqByScope[scope];
+          // Events seen live while the resync was in flight may already be
+          // ahead of the server-read baseline; never move backwards.
+          eventSeqByScope[scope] =
+            typeof known === "number" ? Math.max(known, serverSeq) : serverSeq;
         }
-      });
+      }
+      if (Array.isArray(payload.players)) applyPlayersSnapshot(payload.players);
+      if (Array.isArray(payload.npcs)) syncNPCSnapshot(payload.npcs);
+      applyWorldStatePayload(payload.world, requestSeq);
     })
     .catch(function (err) {
       if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
         return;
     });
+}
+
+/** @param {any[]} players */
+function applyPlayersSnapshot(players) {
+  players.forEach(function (p) {
+    if (p.player_id === playerId) {
+      var snapSeq = Number(p.seq || 0);
+      var snapshotSessionId =
+        typeof p.session_id === "string" ? p.session_id : "";
+      if (snapshotSessionId && snapshotSessionId !== sessionId) {
+        return;
+      }
+      // Snapshot healing for same-user tabs when SSE is delayed/flaky.
+      // Only accept snapshot if we're idle AND it's not stale (older than our current state).
+      if (!moveInFlight && pendingMoves.length === 0 && snapSeq >= moveSeq) {
+        avatarRow = p.row;
+        avatarCol = p.col;
+        targetX = tileX(avatarCol);
+        targetZ = tileZ(avatarRow);
+        if (isFinite(Number(p.rotation))) {
+          avatar.rotation.y = Number(p.rotation);
+        }
+        moveSeq = snapSeq;
+        lastAssignedSeq = snapSeq;
+        requireElementById("pos-col").textContent = String(avatarCol);
+        requireElementById("pos-row").textContent = String(avatarRow);
+      }
+    } else {
+      upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation, p);
+    }
+  });
 }
 
 function initMultiplayer() {
@@ -2061,10 +2090,11 @@ function initMultiplayer() {
   renderInventoryPanel();
   updateEditingRightsUI();
   initLogoutTrigger();
-  // Active player positions are not part of the bootstrapped page state,
-  // so keep one initial snapshot to populate remote avatars.
-  fetchSnapshot();
   syncNPCSnapshot(NPCS);
+  // Active player positions are not part of the bootstrapped page state;
+  // an initial resync populates remote avatars and establishes the
+  // per-scope event seq baselines for gap detection.
+  performResync();
 
   var eventsSseParams = new URLSearchParams({
     world_id: String(worldId),
@@ -2263,6 +2293,7 @@ function initMultiplayer() {
         payload = JSON.parse(payload);
       } catch (e) {}
     }
+    if (!trackEventSeq(message.scope, message.seq)) return;
     switch (message.type) {
       case "player_moved":
         handlePlayerMovedEvent(payload);
@@ -2320,9 +2351,7 @@ function initMultiplayer() {
         return;
       }
       if (eventsReconnectTimer) window.clearTimeout(eventsReconnectTimer);
-      fetchSnapshot();
-      fetchNPCSnapshot();
-      fetchItemSnapshot();
+      requestResync();
       eventsRetryCount += 1;
       eventsReconnectTimer = window.setTimeout(
         openUnifiedSSE,

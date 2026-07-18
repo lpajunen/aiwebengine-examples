@@ -21,6 +21,7 @@ type WorldSchemaTables = {
   itemClass: string;
   actionClass: string;
   livingClass: string;
+  eventSeq: string;
 };
 
 type ChatSchemaTables = {
@@ -414,6 +415,32 @@ export function ensureWorldDatabaseSchema(
     return database.addUniqueIndex(
       tables.playerHeartbeat,
       JSON.stringify(["user_id"]),
+    );
+  });
+
+  step("createTable", tables.eventSeq, function () {
+    return database.createTable(tables.eventSeq);
+  });
+  step(
+    "addTextColumn",
+    tables.eventSeq,
+    function () {
+      return database.addTextColumn(tables.eventSeq, "scope_key", false);
+    },
+    "scope_key",
+  );
+  step(
+    "addIntegerColumn",
+    tables.eventSeq,
+    function () {
+      return database.addIntegerColumn(tables.eventSeq, "seq", false);
+    },
+    "seq",
+  );
+  step("addUniqueIndex", tables.eventSeq, function () {
+    return database.addUniqueIndex(
+      tables.eventSeq,
+      JSON.stringify(["scope_key"]),
     );
   });
 

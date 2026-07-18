@@ -69,6 +69,7 @@ type HttpHandlerDeps = {
   LEASE_TTL_MS: number;
   getCurrentWorldStateForUser: (userId: string) => any;
   getWorldNPCSnapshot: (worldId: string) => any[];
+  getCurrentEventSeq: (scopeKey: string) => number;
 };
 
 function sanitizeText(value: any, maxLength: number): string {
@@ -436,6 +437,50 @@ export function listPlayersForUser(
       values: living.values,
     };
   });
+}
+
+/**
+ * One-shot resync payload: current event-scope seqs plus full snapshots of
+ * players, NPCs, and world state. Scope seqs are read BEFORE the snapshots
+ * are built so an event emitted concurrently is re-delivered to the client
+ * on top of the snapshot (all deltas are idempotent by id/seq) instead of
+ * being silently skipped.
+ */
+export function buildResyncForUser(
+  userId: string,
+  deps: Pick<
+    HttpHandlerDeps,
+    | "getPlayerWorld"
+    | "markNPCWorldActive"
+    | "buildActiveWorldPlayers"
+    | "loadPlayerInventory"
+    | "getWorldNPCSnapshot"
+    | "getCurrentWorldStateForUser"
+    | "getCurrentEventSeq"
+  >,
+): { status: number; payload: any } {
+  const worldId = deps.getPlayerWorld(userId);
+  if (!worldId) {
+    return {
+      status: 400,
+      payload: { error: "error.not_in_world" },
+    };
+  }
+  const worldScope = "world:" + String(worldId);
+  const recipientScope = "recipient:" + String(userId);
+  const scopeSeqs: Record<string, number> = {};
+  scopeSeqs[worldScope] = deps.getCurrentEventSeq(worldScope);
+  scopeSeqs[recipientScope] = deps.getCurrentEventSeq(recipientScope);
+  return {
+    status: 200,
+    payload: {
+      world_id: String(worldId),
+      scope_seqs: scopeSeqs,
+      players: listPlayersForUser(userId, deps),
+      npcs: listNPCsForUser(userId, deps),
+      world: deps.getCurrentWorldStateForUser(userId),
+    },
+  };
 }
 
 export function getCurrentWorldStateForHttpUser(

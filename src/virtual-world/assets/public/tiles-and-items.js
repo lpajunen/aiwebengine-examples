@@ -387,8 +387,9 @@ function livingClassLabel(classId) {
   if (!id) return id;
   var classes = getLivingRegistryClasses();
   var cls = classes[id];
-  if (!cls) return id;
-  return t(cls.labelKey || id, cls.fallbackLabel || humanizeType(id));
+  var labelKey = (cls && cls.labelKey) || "living.class." + id;
+  var fallbackLabel = (cls && cls.fallbackLabel) || humanizeType(id);
+  return t(labelKey, fallbackLabel);
 }
 
 /**
@@ -397,18 +398,19 @@ function livingClassLabel(classId) {
  * @returns {string}
  */
 function inventorySlotLabel(inv, slotId) {
+  var id = String(slotId || "");
   var livingClass = getLivingClassForInventory(inv);
   if (livingClass && Array.isArray(livingClass.slotDefinitions)) {
     for (var i = 0; i < livingClass.slotDefinitions.length; i++) {
       var slotDef = livingClass.slotDefinitions[i];
-      if (!slotDef || String(slotDef.id) !== String(slotId)) continue;
+      if (!slotDef || String(slotDef.id) !== id) continue;
       return t(
-        slotDef.labelKey || String(slotId || ""),
-        slotDef.fallbackLabel || humanizeType(String(slotId || "")),
+        slotDef.labelKey || "living.slot." + id,
+        slotDef.fallbackLabel || humanizeType(id),
       );
     }
   }
-  return humanizeType(String(slotId || ""));
+  return t("living.slot." + id, humanizeType(id));
 }
 
 /**

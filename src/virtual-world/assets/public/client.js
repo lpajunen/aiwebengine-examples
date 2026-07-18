@@ -1419,22 +1419,35 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
         playerData && playerData.values && typeof playerData.values === "object"
           ? playerData.values
           : {},
+      hasLivingData: !!(
+        playerData &&
+        playerData.slots &&
+        typeof playerData.slots === "object"
+      ),
     };
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
-    if (incomingSeq !== null && incomingSeq <= knownSeq) return;
-    remoteAvatars[pid].targetX = tx;
-    remoteAvatars[pid].targetZ = tz;
-    if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
-    if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
-    remoteAvatars[pid].row = Number(row);
-    remoteAvatars[pid].col = Number(col);
+    // Position updates are seq-gated, but inventory payloads (e.g. from a
+    // healing snapshot re-fetch) carry the same seq as the last move and
+    // must still be applied.
+    var seqAdvanced = incomingSeq === null || incomingSeq > knownSeq;
+    if (seqAdvanced) {
+      remoteAvatars[pid].targetX = tx;
+      remoteAvatars[pid].targetZ = tz;
+      if (hasIncomingRot) remoteAvatars[pid].targetRot = incomingRot;
+      if (incomingSeq !== null) remoteAvatars[pid].seq = incomingSeq;
+      remoteAvatars[pid].row = Number(row);
+      remoteAvatars[pid].col = Number(col);
+    }
+    var appliedLivingData = false;
     if (
       playerData &&
       playerData.slots &&
       typeof playerData.slots === "object"
     ) {
       remoteAvatars[pid].slots = playerData.slots;
+      remoteAvatars[pid].hasLivingData = true;
+      appliedLivingData = true;
     }
     if (
       playerData &&
@@ -1442,11 +1455,16 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData) {
       typeof playerData.values === "object"
     ) {
       remoteAvatars[pid].values = playerData.values;
+      appliedLivingData = true;
     }
     if (playerData && typeof playerData.class_id === "string") {
       remoteAvatars[pid].class_id = playerData.class_id;
+      appliedLivingData = true;
     }
-    refreshTileDetailIfOpen();
+    if (seqAdvanced || appliedLivingData) refreshTileDetailIfOpen();
+  }
+  if (!remoteAvatars[pid].hasLivingData) {
+    requestPlayerSnapshotRefetch();
   }
 }
 
@@ -1969,6 +1987,28 @@ function requestHeartbeatSoon() {
     );
   }
   scheduleHeartbeat(nextDelay);
+}
+
+// Remote avatars created from player_moved events have no inventory data
+// (the broadcast carries only position); re-fetch the /players snapshot,
+// which includes slots/values/class_id, to fill them in. Debounced with a
+// minimum gap so a stream of move events triggers at most one fetch per gap.
+/** @type {number | null} */
+var playerSnapshotRefetchTimer = null;
+var lastPlayerSnapshotRefetchAt = 0;
+var PLAYER_SNAPSHOT_REFETCH_MIN_GAP_MS = 5000;
+function requestPlayerSnapshotRefetch() {
+  if (playerSnapshotRefetchTimer !== null) return;
+  var wait = Math.max(
+    500,
+    PLAYER_SNAPSHOT_REFETCH_MIN_GAP_MS -
+      (Date.now() - lastPlayerSnapshotRefetchAt),
+  );
+  playerSnapshotRefetchTimer = window.setTimeout(function () {
+    playerSnapshotRefetchTimer = null;
+    lastPlayerSnapshotRefetchAt = Date.now();
+    fetchSnapshot();
+  }, wait);
 }
 
 function fetchSnapshot() {

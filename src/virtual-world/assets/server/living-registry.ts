@@ -15,6 +15,8 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
   player_human: {
     id: "player_human",
     kind: "player",
+    labelKey: "living.class.player_human",
+    fallbackLabel: "Human",
     slotDefinitions: [
       {
         id: "left_hand",
@@ -45,6 +47,8 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
   npc_human: {
     id: "npc_human",
     kind: "npc",
+    labelKey: "living.class.npc_human",
+    fallbackLabel: "Human",
     slotDefinitions: [
       {
         id: "left_hand",
@@ -159,6 +163,9 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
       kind === "player" || kind === "npc" || kind === "creature"
         ? kind
         : "player",
+    labelKey: typeof row.label_key === "string" ? row.label_key : "",
+    fallbackLabel:
+      typeof row.fallback_label === "string" ? row.fallback_label : "",
     slotDefinitions: parseSlotDefinitions(
       String(row.slot_definitions_json || "[]"),
     ),
@@ -173,6 +180,8 @@ function livingClassToDbRow(
 ): {
   class_id: string;
   kind: string;
+  label_key: string;
+  fallback_label: string;
   slot_definitions_json: string;
   value_template_json: string;
   value_schema_json: string;
@@ -183,6 +192,8 @@ function livingClassToDbRow(
   return {
     class_id: record.id,
     kind: record.kind,
+    label_key: record.labelKey || "",
+    fallback_label: record.fallbackLabel || "",
     slot_definitions_json: JSON.stringify(record.slotDefinitions || []),
     value_template_json: JSON.stringify(record.valueTemplate || {}),
     value_schema_json: JSON.stringify(record.valueSchema || {}),
@@ -197,6 +208,8 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
   return {
     id: cls.id,
     kind: cls.kind,
+    labelKey: cls.labelKey,
+    fallbackLabel: cls.fallbackLabel,
     slotDefinitions: cls.slotDefinitions.map(function (slot) {
       return {
         id: slot.id,
@@ -224,22 +237,34 @@ export function bootstrapLivingClasses(
     if (record.id) cache[record.id] = record;
   }
 
+  // The two reserved built-in IDs are always resynced to the current code
+  // definition (rather than only backfilled when missing) so that schema
+  // additions here (e.g. new labelKey/fallbackLabel fields) reach rows that
+  // were already seeded by an older deploy. Custom classes are untouched.
   const ids = Object.keys(DEFAULT_LIVING_CLASSES);
   let seeded = 0;
+  let resynced = 0;
   for (let i = 0; i < ids.length; i++) {
     const classId = ids[i];
-    if (cache[classId]) continue;
     const cls = getBuiltInLivingClass(classId);
     if (!cls) continue;
+    const existed = !!cache[classId];
     upsertLivingClassRow(livingClassToDbRow(cls, now), livingClassTable, log);
     cache[classId] = cls;
-    seeded++;
+    if (existed) {
+      resynced++;
+    } else {
+      seeded++;
+    }
   }
 
   if (rows.length === 0) {
     log("living class repository seeded", { count: seeded });
-  } else if (seeded > 0) {
-    log("living class repository backfilled", { inserted_count: seeded });
+  } else if (seeded > 0 || resynced > 0) {
+    log("living class repository backfilled", {
+      inserted_count: seeded,
+      resynced_count: resynced,
+    });
   }
 
   _livingClassCache = cache;

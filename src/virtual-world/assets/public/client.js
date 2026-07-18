@@ -3750,7 +3750,7 @@ function renderTileDetailPanel() {
           '<div class="tile-row">' +
           escHtml(t("tile.class_label", "Class:")) +
           " " +
-          escHtml(String(ppData.class_id)) +
+          escHtml(livingClassLabel(String(ppData.class_id))) +
           "</div>";
       }
       var ppSlotIds = Object.keys(ppSlots);
@@ -3819,7 +3819,7 @@ function renderTileDetailPanel() {
           '<div class="tile-row">' +
           escHtml(t("tile.class_label", "Class:")) +
           " " +
-          escHtml(String(npcData.class_id)) +
+          escHtml(livingClassLabel(String(npcData.class_id))) +
           "</div>";
       }
       var npcSlotIds = Object.keys(npcSlots);
@@ -4926,7 +4926,7 @@ function renderLivingClassList() {
       var rows = "";
       for (var i = 0; i < classes.length; i++) {
         var lc = classes[i];
-        var label = escHtml(String(lc.kind || "?"));
+        var label = escHtml(String(lc.fallbackLabel || lc.id || "?"));
         var id = escHtml(String(lc.id || ""));
         rows +=
           '<div class="class-row">' +
@@ -4986,6 +4986,8 @@ function editLivingClass(id) {
       var idEl = /** @type {HTMLInputElement} */ (requireElementById("lc-id"));
       idEl.value = String(lc.id || "");
       idEl.disabled = true;
+      /** @type {HTMLInputElement} */ (requireElementById("lc-label")).value =
+        String(lc.fallbackLabel || "");
       /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
         String(lc.kind || "creature");
       /** @type {HTMLTextAreaElement} */ (
@@ -5025,6 +5027,7 @@ function cancelLivingClassEdit() {
   var idEl = /** @type {HTMLInputElement} */ (requireElementById("lc-id"));
   idEl.disabled = false;
   idEl.value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("lc-label")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
     "creature";
   /** @type {HTMLTextAreaElement} */ (
@@ -5053,6 +5056,9 @@ function submitLivingClassForm() {
     );
     return;
   }
+  var labelVal = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-label")
+  ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-kind"))
     .value;
   var slotDefinitionsRaw = /** @type {HTMLTextAreaElement} */ (
@@ -5122,6 +5128,7 @@ function submitLivingClassForm() {
   var record = {
     id: idVal,
     kind: kindVal,
+    fallbackLabel: labelVal || idVal,
     slotDefinitions: slotDefinitions,
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,

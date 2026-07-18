@@ -111,6 +111,8 @@ export type LivingValueSchema = Record<string, LivingValueSchemaEntry>;
 export interface LivingClassRecord {
   id: string;
   kind: LivingKind;
+  labelKey?: string;
+  fallbackLabel?: string;
   slotDefinitions: LivingSlotDefinition[];
   valueTemplate: Record<string, unknown>;
   valueSchema?: LivingValueSchema;
@@ -241,8 +243,12 @@ export function hashString(value: string): number {
   return hash >>> 0;
 }
 
-export function getWorldFlavorText(worldId: string): string {
-  return WORLD_FLAVOR_TEXTS[hashString(worldId) % WORLD_FLAVOR_TEXTS.length];
+export function getWorldFlavorTextIndex(worldId: string): number {
+  return hashString(worldId) % WORLD_FLAVOR_TEXTS.length;
+}
+
+export function getWorldFlavorTextByIndex(index: number): string {
+  return WORLD_FLAVOR_TEXTS[index] || "";
 }
 
 export function getNPCDisplayName(worldId: string, npcId: string): string {

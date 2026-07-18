@@ -868,6 +868,8 @@ export function ensureWorldDatabaseSchema(
   [
     ["addTextColumn", "class_id", false],
     ["addTextColumn", "kind", false],
+    ["addTextColumn", "label_key", false],
+    ["addTextColumn", "fallback_label", false],
     ["addTextColumn", "slot_definitions_json", false],
     ["addTextColumn", "value_template_json", false],
     ["addTextColumn", "value_schema_json", false],

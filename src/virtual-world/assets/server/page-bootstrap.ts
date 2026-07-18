@@ -47,7 +47,8 @@ type PageBootstrapDeps = {
   buildOnlinePlayersSnapshot: () => any[];
   loadWorldChat: (worldId: string) => any[];
   loadDMIndex: (userId: string) => string[];
-  getWorldFlavorText: (worldId: string) => string;
+  getWorldFlavorTextIndex: (worldId: string) => number;
+  getWorldFlavorTextByIndex: (index: number) => string;
   worldTileDefs: any;
   getBootstrapRegistry: () => any;
   getAllLivingClasses: () => any[];
@@ -73,6 +74,7 @@ type PageState = {
   initSeq: number;
   initRotation: number;
   worldFlavorText: string;
+  worldFlavorTextIndex: number;
   worldTileDefs: any;
   itemRegistry: any;
   livingRegistry: any;
@@ -241,7 +243,10 @@ export function buildVirtualWorldPageState(
     initRotation: Number.isFinite(Number(initialPos.rotation))
       ? Number(initialPos.rotation)
       : 0,
-    worldFlavorText: deps.getWorldFlavorText(worldId),
+    worldFlavorText: deps.getWorldFlavorTextByIndex(
+      deps.getWorldFlavorTextIndex(worldId),
+    ),
+    worldFlavorTextIndex: deps.getWorldFlavorTextIndex(worldId),
     worldTileDefs: deps.worldTileDefs,
     itemRegistry: deps.getBootstrapRegistry(),
     livingRegistry: livingRegistry,
@@ -260,7 +265,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 <body class="game">
   <div class="hud" id="hud-pos">
     <strong data-i18n-key="hud.title">Virtual World</strong>
-    <div style="margin:4px 0 6px;color:#d8e7c2;font-style:italic;max-width:220px;line-height:1.35;">${escapeHtml(state.worldFlavorText)}</div>
+    <div style="margin:4px 0 6px;color:#d8e7c2;font-style:italic;max-width:220px;line-height:1.35;" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
     <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
     <span data-i18n-key="hud.world_label">World:</span> ${state.worldId}<br>
     <span data-i18n-key="hud.position_label">Position:</span> <span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span><br>
@@ -453,6 +458,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-title" id="living-class-form-title" data-i18n-key="class_editor.new_living_type">New living type</div>
       <div class="class-form-fields">
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="lc-id" type="text" placeholder="my_creature" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="lc-label" type="text" placeholder="My Creature" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.kind_label">Kind</span>
           <select id="lc-kind">
             <option value="player">player</option>

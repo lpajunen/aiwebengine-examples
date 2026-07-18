@@ -24,6 +24,8 @@ export function upsertLivingClassRow(
   row: {
     class_id: string;
     kind: string;
+    label_key: string;
+    fallback_label: string;
     slot_definitions_json: string;
     value_template_json: string;
     value_schema_json: string;

@@ -23,12 +23,15 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     tree_action: {
       plant: "Plant pine sapling",
       cut: "Use woodsman's saw",
+      build_house: "Use hammer (build house)",
+      destroy_house: "Use hammer (destroy house)",
       build_portal: "Raise rune gate",
       build_portal_forest: "Raise rune gate to forest world",
       build_portal_island: "Raise rune gate to island world",
       build_portal_cave: "Raise rune gate to cave world",
       build_portal_building: "Raise rune gate to house world",
       remove_portal: "Close rune gate",
+      tune: "Tune kantele",
       play_tune: "Play kantele tune",
       place_blessing: "Place rowan blessing",
       portal_travel: "Enter rune gate",
@@ -60,6 +63,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       store: "Store",
     },
     living: {
+      class: {
+        player_human: "Human",
+        npc_human: "Human",
+      },
       slot: {
         left_hand: "Left Hand",
         right_hand: "Right Hand",
@@ -233,6 +240,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       forest: "Forest",
       world_suffix: "world",
     },
+    world: {
+      flavor_text_0: "A low rune-song lingers between the spruce boughs.",
+      flavor_text_1: "Rowan charms sway softly where the pine paths meet.",
+      flavor_text_2:
+        "The forest floor feels old here, as if someone just finished a quiet verse.",
+      flavor_text_3:
+        "Juniper smoke and birdsong drift through this hidden clearing.",
+    },
     auth: {
       session_expired_redirecting: "Session expired. Redirecting to login...",
       session_expired_reconnecting: "Session expired, trying to reconnect...",
@@ -295,12 +310,15 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     tree_action: {
       plant: "Istuta männyn taimi",
       cut: "Käytä metsurin sahaa",
+      build_house: "Käytä vasaraa (rakenna talo)",
+      destroy_house: "Käytä vasaraa (pura talo)",
       build_portal: "Nosta riimuportti",
       build_portal_forest: "Nosta riimuportti metsämaailmaan",
       build_portal_island: "Nosta riimuportti saareen",
       build_portal_cave: "Nosta riimuportti luolaan",
       build_portal_building: "Nosta riimuportti taloon",
       remove_portal: "Sulje riimuportti",
+      tune: "Viritä kantele",
       play_tune: "Soita kanteleen sävel",
       place_blessing: "Aseta pihlajansiunaus",
       portal_travel: "Astu riimuporttiin",
@@ -332,6 +350,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       store: "Säilytä",
     },
     living: {
+      class: {
+        player_human: "Ihminen",
+        npc_human: "Ihminen",
+      },
       slot: {
         left_hand: "Vasen käsi",
         right_hand: "Oikea käsi",
@@ -505,6 +527,15 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       building: "Talo",
       forest: "Metsä",
       world_suffix: "maailma",
+    },
+    world: {
+      flavor_text_0: "Hiljainen riimulaulu leijuu kuusten oksien lomassa.",
+      flavor_text_1:
+        "Pihlajan suoja-amuletit huojuvat hiljaa siellä, missä männikköpolut kohtaavat.",
+      flavor_text_2:
+        "Metsän pohja tuntuu täällä vanhalta, ikään kuin joku olisi juuri lausunut hiljaisen säkeen.",
+      flavor_text_3:
+        "Katajan savu ja lintujen laulu leijuvat tässä piilotetussa aukiossa.",
     },
     auth: {
       session_expired_redirecting:

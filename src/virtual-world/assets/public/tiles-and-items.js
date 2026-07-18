@@ -379,6 +379,19 @@ function getInventorySlotIds(inv) {
 }
 
 /**
+ * @param {string} classId
+ * @returns {string}
+ */
+function livingClassLabel(classId) {
+  var id = String(classId || "");
+  if (!id) return id;
+  var classes = getLivingRegistryClasses();
+  var cls = classes[id];
+  if (!cls) return id;
+  return t(cls.labelKey || id, cls.fallbackLabel || humanizeType(id));
+}
+
+/**
  * @param {ClientInventory | any} inv
  * @param {string} slotId
  * @returns {string}

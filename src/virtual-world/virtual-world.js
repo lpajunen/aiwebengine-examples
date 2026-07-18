@@ -8,7 +8,8 @@ import {
   getActionsForItemType,
   getInventoryTreeActions,
   getNPCDisplayName,
-  getWorldFlavorText,
+  getWorldFlavorTextByIndex,
+  getWorldFlavorTextIndex,
   hashString,
   ITEM_TYPES,
   OAK_CENTER_COL,
@@ -515,7 +516,8 @@ function getVirtualWorldPage(context) {
       buildOnlinePlayersSnapshot: buildOnlinePlayersSnapshot,
       loadWorldChat: loadWorldChat,
       loadDMIndex: loadDMIndex,
-      getWorldFlavorText: getWorldFlavorText,
+      getWorldFlavorTextIndex: getWorldFlavorTextIndex,
+      getWorldFlavorTextByIndex: getWorldFlavorTextByIndex,
       worldTileDefs: WORLD_TILE_DEFS,
       getBootstrapRegistry: getBootstrapRegistry,
       getAllLivingClasses: getAllLivingClasses,
@@ -3490,6 +3492,8 @@ function createLivingClassHandler(context) {
   var record = {
     id: id,
     kind: normalizeLivingKind(body && body.kind, "creature"),
+    labelKey: String((body && body.labelKey) || ""),
+    fallbackLabel: String((body && body.fallbackLabel) || id),
     slotDefinitions: Array.isArray(body && body.slotDefinitions)
       ? body.slotDefinitions
       : [],
@@ -3558,6 +3562,14 @@ function updateLivingClassHandler(context) {
   var record = {
     id: classId,
     kind: normalizeLivingKind(body && body.kind, existing.kind),
+    labelKey:
+      body && body.labelKey !== undefined
+        ? String(body.labelKey || "")
+        : existing.labelKey,
+    fallbackLabel:
+      body && body.fallbackLabel
+        ? String(body.fallbackLabel)
+        : existing.fallbackLabel,
     slotDefinitions: Array.isArray(body && body.slotDefinitions)
       ? body.slotDefinitions
       : existing.slotDefinitions,

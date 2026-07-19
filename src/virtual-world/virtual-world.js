@@ -35,47 +35,47 @@ import {
   worldTypeForPortalBuildAction,
 } from "./server/world-domain.ts";
 import {
-  deleteWorldRow as deleteWorldRowImpl,
-  deleteWorldRowsWhere as deleteWorldRowsWhereImpl,
-  insertWorldRow as insertWorldRowImpl,
-  parseWorldDbResult as parseWorldDbResultImpl,
-  querySingleWorldRow as querySingleWorldRowImpl,
-  queryWorldRows as queryWorldRowsImpl,
-  runInWorldTransaction as runInWorldTransactionImpl,
-  updateWorldRow as updateWorldRowImpl,
-  upsertWorldRow as upsertWorldRowImpl,
+  deleteWorldRow,
+  deleteWorldRowsWhere,
+  insertWorldRow,
+  parseWorldDbResult,
+  querySingleWorldRow,
+  queryWorldRows,
+  runInWorldTransaction,
+  updateWorldRow,
+  upsertWorldRow,
 } from "./server/world-db.ts";
 import {
-  deletePlayerHeartbeat as deletePlayerHeartbeatImpl,
-  deletePlayerMoveLease as deletePlayerMoveLeaseImpl,
-  deletePlayerPosition as deletePlayerPositionImpl,
-  getPlayerWorld as getPlayerWorldImpl,
-  loadAllPlayerPositions as loadAllPlayerPositionsImpl,
-  loadPlayerHeartbeatMap as loadPlayerHeartbeatMapImpl,
-  loadPlayerHeartbeatTs as loadPlayerHeartbeatTsImpl,
-  loadPlayerMoveLease as loadPlayerMoveLeaseImpl,
-  loadPlayerPosition as loadPlayerPositionImpl,
-  markPlayerPositionInactive as markPlayerPositionInactiveImpl,
-  normalizePlayerPositionRow as normalizePlayerPositionRowImpl,
-  savePlayerHeartbeatTs as savePlayerHeartbeatTsImpl,
-  savePlayerMoveLease as savePlayerMoveLeaseImpl,
-  savePlayerPosition as savePlayerPositionImpl,
-  savePlayerWorld as savePlayerWorldImpl,
+  deletePlayerHeartbeat,
+  deletePlayerMoveLease,
+  deletePlayerPosition,
+  getPlayerWorld,
+  loadAllPlayerPositions,
+  loadPlayerHeartbeatMap,
+  loadPlayerHeartbeatTs,
+  loadPlayerMoveLease,
+  loadPlayerPosition,
+  markPlayerPositionInactive,
+  normalizePlayerPositionRow,
+  savePlayerHeartbeatTs,
+  savePlayerMoveLease,
+  savePlayerPosition,
+  savePlayerWorld,
 } from "./server/player-persistence.ts";
 import {
   buildActiveWorldPlayers as buildActiveWorldPlayersImpl,
   getCanonicalPlayerState as getCanonicalPlayerStateImpl,
-  loadWorldPlayers as loadWorldPlayersImpl,
+  loadWorldPlayers,
 } from "./server/player-snapshots.ts";
 import {
-  createEmptyWorldMods as createEmptyWorldModsImpl,
-  loadWorldHouses as loadWorldHousesImpl,
-  loadWorldMods as loadWorldModsImpl,
-  loadWorldTrees as loadWorldTreesImpl,
-  parseWorldModPayload as parseWorldModPayloadImpl,
-  saveWorldHouses as saveWorldHousesImpl,
-  saveWorldModLayer as saveWorldModLayerImpl,
-  saveWorldTrees as saveWorldTreesImpl,
+  createEmptyWorldMods,
+  loadWorldHouses,
+  loadWorldMods,
+  loadWorldTrees,
+  parseWorldModPayload,
+  saveWorldHouses,
+  saveWorldModLayer,
+  saveWorldTrees,
 } from "./server/world-mod-storage.ts";
 import {
   broadcastItemChange as broadcastItemChangeImpl,
@@ -85,25 +85,25 @@ import {
 } from "./server/stream-broadcast.ts";
 import {
   buildOnlinePlayersSnapshot as buildOnlinePlayersSnapshotImpl,
-  deleteOnlinePresence as deleteOnlinePresenceImpl,
-  getEffectiveNick as getEffectiveNickImpl,
-  loadPlayerNick as loadPlayerNickImpl,
-  savePlayerNick as savePlayerNickImpl,
+  deleteOnlinePresence,
+  getEffectiveNick,
+  loadPlayerNick,
+  savePlayerNick,
   updateOnlinePresence as updateOnlinePresenceImpl,
 } from "./server/social-state.ts";
 import {
-  deleteWorldItemById as deleteWorldItemByIdImpl,
-  deleteWorldItems as deleteWorldItemsImpl,
+  deleteWorldItemById,
+  deleteWorldItems,
   ensureWorldItems as ensureWorldItemsImpl,
   flattenWorldItems as flattenWorldItemsImpl,
-  loadPlayerInventory as loadPlayerInventoryImpl,
-  loadWorldItemMeta as loadWorldItemMetaImpl,
+  loadPlayerInventory,
+  loadWorldItemMeta,
   loadWorldItems as loadWorldItemsImpl,
-  nextWorldItemId as nextWorldItemIdImpl,
-  savePlayerInventory as savePlayerInventoryImpl,
-  saveWorldItemMeta as saveWorldItemMetaImpl,
-  saveWorldItems as saveWorldItemsImpl,
-  upsertWorldItem as upsertWorldItemImpl,
+  nextWorldItemId,
+  savePlayerInventory,
+  saveWorldItemMeta,
+  saveWorldItems,
+  upsertWorldItem,
 } from "./server/item-storage.ts";
 import {
   grantAllItemsForUser as grantAllItemsForUserImpl,
@@ -120,23 +120,20 @@ import {
   ensureWorldNPCs as ensureWorldNPCsImpl,
   getEffectiveMap as getEffectiveMapImpl,
   getOrCreatePlayerWorld as getOrCreatePlayerWorldImpl,
-  getWorldDimensions as getWorldDimensionsImpl,
+  getWorldDimensions,
   getWorldInfo as getWorldInfoImpl,
-  getWorldType as getWorldTypeImpl,
+  getWorldType,
   resolvePortalDestinationWorldType as resolvePortalDestinationWorldTypeImpl,
-  saveWorldType as saveWorldTypeImpl,
+  saveWorldType,
 } from "./server/world-bootstrap.ts";
 import {
-  ensureChatDatabaseSchema as ensureChatDatabaseSchemaImpl,
-  ensureLateWorldDatabaseSchema as ensureLateWorldDatabaseSchemaImpl,
-  ensureWorldDatabaseSchema as ensureWorldDatabaseSchemaImpl,
-  runChatSchemaStep as runChatSchemaStepImpl,
-  runWorldSchemaStep as runWorldSchemaStepImpl,
+  ensureChatDatabaseSchema,
+  ensureLateWorldDatabaseSchema,
+  ensureWorldDatabaseSchema,
+  runChatSchemaStep,
+  runWorldSchemaStep,
 } from "./server/schema-setup.ts";
-import {
-  allocateEventSeq as allocateEventSeqImpl,
-  getCurrentEventSeq as getCurrentEventSeqImpl,
-} from "./server/event-seq.ts";
+import { allocateEventSeq, getCurrentEventSeq } from "./server/event-seq.ts";
 import {
   buildResyncForUser as buildResyncForUserImpl,
   getCurrentWorldStateForHttpUser as getCurrentWorldStateForHttpUserImpl,
@@ -155,21 +152,21 @@ import {
   getAvailableWorldActions as getAvailableWorldActionsImpl,
   getCurrentWorldStateForUser as getCurrentWorldStateForUserImpl,
   getMoveOptions as getMoveOptionsImpl,
-  getTargetTileFromRotation as getTargetTileFromRotationImpl,
-  normalizeMoveDirection as normalizeMoveDirectionImpl,
-  rotationForDirection as rotationForDirectionImpl,
+  getTargetTileFromRotation,
+  normalizeMoveDirection,
+  rotationForDirection,
   worldTileNameForValue as worldTileNameForValueImpl,
 } from "./server/current-world-state.ts";
 import { movePlayerForUser as movePlayerForUserImpl } from "./server/move-player.ts";
 import {
   buildVirtualWorldPageState as buildVirtualWorldPageStateImpl,
   ensureStarterKit as ensureStarterKitImpl,
-  escapeHtml as escapeHtmlImpl,
+  escapeHtml,
   getDefaultSpawnPosition as getDefaultSpawnPositionImpl,
   renderVirtualWorldPageHtml as renderVirtualWorldPageHtmlImpl,
 } from "./server/page-bootstrap.ts";
-import { getBootstrapRegistry as getBootstrapRegistryImpl } from "./server/item-registry.ts";
-import { getActionDefinition as getActionDefinitionImpl } from "./server/item-registry.ts";
+import { getBootstrapRegistry } from "./server/item-registry.ts";
+import { getActionDefinition } from "./server/item-registry.ts";
 import {
   bootstrapItemClasses as bootstrapItemClassesImpl,
   refreshItemClassCache as refreshItemClassCacheImpl,
@@ -188,7 +185,7 @@ import {
 import {
   bootstrapLivingClasses as bootstrapLivingClassesImpl,
   deleteLivingClass as deleteLivingClassImpl,
-  getAllLivingClasses as getAllLivingClassesImpl,
+  getAllLivingClasses,
   getLivingClass as getLivingClassImpl,
   refreshLivingClassCache as refreshLivingClassCacheImpl,
   upsertLivingClass as upsertLivingClassImpl,
@@ -216,23 +213,23 @@ import {
   virtualWorldManageWorldClassesToolHandler as virtualWorldManageWorldClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
-  addToDMIndex as addToDMIndexImpl,
-  appendDMMessage as appendDMMessageImpl,
-  appendWorldChatMessage as appendWorldChatMessageImpl,
-  dmConversationKey as dmConversationKeyImpl,
-  loadDMHistory as loadDMHistoryImpl,
-  loadDMIndex as loadDMIndexImpl,
-  loadWorldChat as loadWorldChatImpl,
+  addToDMIndex,
+  appendDMMessage,
+  appendWorldChatMessage,
+  dmConversationKey,
+  loadDMHistory,
+  loadDMIndex,
+  loadWorldChat,
 } from "./server/chat-storage.ts";
 import {
   buildWorldNPCSnapshot as buildWorldNPCSnapshotImpl,
-  loadNPCActiveWorlds as loadNPCActiveWorldsImpl,
-  loadNPCLastTick as loadNPCLastTickImpl,
-  loadWorldNPCs as loadWorldNPCsImpl,
-  markNPCWorldActive as markNPCWorldActiveImpl,
-  saveNPCActiveWorlds as saveNPCActiveWorldsImpl,
-  saveNPCLastTick as saveNPCLastTickImpl,
-  saveWorldNPCs as saveWorldNPCsImpl,
+  loadNPCActiveWorlds,
+  loadNPCLastTick,
+  loadWorldNPCs,
+  markNPCWorldActive,
+  saveNPCActiveWorlds,
+  saveNPCLastTick,
+  saveWorldNPCs,
 } from "./server/npc-storage.ts";
 import {
   buildOccupiedNPCMap as buildOccupiedNPCMapImpl,
@@ -332,123 +329,6 @@ function generateMap(worldId) {
  * @param {string} userId
  * @returns {string}
  */
-function getPlayerWorld(userId) {
-  return getPlayerWorldImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @param {string} worldId
- * @returns {string}
- */
-function savePlayerWorld(userId, worldId) {
-  return savePlayerWorldImpl(userId, worldId);
-}
-
-/**
- * @param {*} row
- * @returns {{world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number} | null}
- */
-function normalizePlayerPositionRow(row) {
-  return normalizePlayerPositionRowImpl(row);
-}
-
-/**
- * @param {string} userId
- * @returns {{world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number} | null}
- */
-function loadPlayerPosition(userId) {
-  return loadPlayerPositionImpl(userId);
-}
-
-/**
- * @returns {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>}
- */
-function loadAllPlayerPositions() {
-  return loadAllPlayerPositionsImpl();
-}
-
-/**
- * @param {string} userId
- * @param {string} worldId
- * @param {{row:number,col:number,seq:number,rotation:number,session_id?:string,ts?:number}} position
- */
-function savePlayerPosition(userId, worldId, position) {
-  savePlayerPositionImpl(userId, worldId, position);
-}
-
-/**
- * @param {string} userId
- */
-function deletePlayerPosition(userId) {
-  deletePlayerPositionImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @returns {{session_id: string, expires_at: number} | null}
- */
-function loadPlayerMoveLease(userId) {
-  return loadPlayerMoveLeaseImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @param {string} sessionId
- * @param {number} expiresAt
- */
-function savePlayerMoveLease(userId, sessionId, expiresAt) {
-  savePlayerMoveLeaseImpl(userId, sessionId, expiresAt);
-}
-
-/**
- * @param {string} userId
- */
-function deletePlayerMoveLease(userId) {
-  deletePlayerMoveLeaseImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @returns {number}
- */
-function loadPlayerHeartbeatTs(userId) {
-  return loadPlayerHeartbeatTsImpl(userId);
-}
-
-/**
- * @returns {Record<string, number>}
- */
-function loadPlayerHeartbeatMap() {
-  return loadPlayerHeartbeatMapImpl();
-}
-
-/**
- * @param {string} userId
- * @param {number} heartbeatTs
- */
-function savePlayerHeartbeatTs(userId, heartbeatTs) {
-  savePlayerHeartbeatTsImpl(userId, heartbeatTs);
-}
-
-/**
- * @param {string} userId
- */
-function deletePlayerHeartbeat(userId) {
-  deletePlayerHeartbeatImpl(userId);
-}
-
-/**
- * @param {string} userId
- */
-function markPlayerPositionInactive(userId) {
-  markPlayerPositionInactiveImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @returns {string}
- */
 function getOrCreatePlayerWorld(userId) {
   return getOrCreatePlayerWorldImpl(
     userId,
@@ -456,32 +336,6 @@ function getOrCreatePlayerWorld(userId) {
     savePlayerWorld,
     saveWorldType,
   );
-}
-
-/**
- * @param {string | number} worldId
- * @returns {string}
- */
-function getWorldType(worldId) {
-  return getWorldTypeImpl(worldId);
-}
-
-/**
- * @param {string | number} worldId
- * @param {string | undefined | null} worldType
- * @param {{rows: number, cols: number}=} dimensions
- * @returns {string}
- */
-function saveWorldType(worldId, worldType, dimensions) {
-  return saveWorldTypeImpl(worldId, worldType, dimensions);
-}
-
-/**
- * @param {string | number} worldId
- * @returns {{rows: number, cols: number}}
- */
-function getWorldDimensions(worldId) {
-  return getWorldDimensionsImpl(worldId);
 }
 
 /**
@@ -518,14 +372,6 @@ function createWorldOfType(worldType, dimensions) {
     saveWorldType,
     dimensions,
   );
-}
-
-/**
- * @param {string} value
- * @returns {string}
- */
-function escapeHtml(value) {
-  return escapeHtmlImpl(value);
 }
 
 /**
@@ -573,93 +419,12 @@ function getVirtualWorldPage(context) {
   return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
 }
 
-function getBootstrapRegistry() {
-  return getBootstrapRegistryImpl();
-}
-
-function getAllLivingClasses() {
-  return getAllLivingClassesImpl();
-}
-
-/**
- * @param {string} worldId
- * @returns {Record<string, any>}
- */
-function loadWorldPlayers(worldId) {
-  return loadWorldPlayersImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @returns {Record<string, any>}
- */
-function loadWorldTrees(worldId) {
-  return loadWorldTreesImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {Record<string, any>} trees
- */
-function saveWorldTrees(worldId, trees) {
-  saveWorldTreesImpl(worldId, trees);
-}
-
 /**
  * @param {string} worldId
  * @returns {string}
  */
 function worldHouseStorageKey(worldId) {
   return "vworld_houses:" + String(worldId);
-}
-
-/**
- * @param {string} worldId
- * @returns {Record<string, any>}
- */
-function loadWorldHouses(worldId) {
-  return loadWorldHousesImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {Record<string, any>} houses
- */
-function saveWorldHouses(worldId, houses) {
-  saveWorldHousesImpl(worldId, houses);
-}
-
-/**
- * @returns {Record<string, Record<string, any>>}
- */
-function createEmptyWorldMods() {
-  return createEmptyWorldModsImpl();
-}
-
-/**
- * @param {*} raw
- * @returns {*}
- */
-function parseWorldModPayload(raw) {
-  return parseWorldModPayloadImpl(raw);
-}
-
-/**
- * @param {string} worldId
- * @returns {Record<string, Record<string, any>>}
- */
-function loadWorldMods(worldId) {
-  return loadWorldModsImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {string} layer
- * @param {string} sourceKind
- * @param {Record<string, any>} entries
- */
-function saveWorldModLayer(worldId, layer, sourceKind, entries) {
-  saveWorldModLayerImpl(worldId, layer, sourceKind, entries);
 }
 
 /**
@@ -699,48 +464,7 @@ function ensureStarterKit(userId) {
   });
 }
 
-/**
- * @param {string} userId
- * @returns {{class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}}
- */
-function loadPlayerInventory(userId) {
-  return loadPlayerInventoryImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @param {*} inventory
- */
-function savePlayerInventory(userId, inventory) {
-  savePlayerInventoryImpl(userId, inventory);
-}
-
 // ── Player nicknames ──────────────────────────────────────────────────────────
-
-/**
- * @param {string} userId
- * @returns {string}
- */
-function loadPlayerNick(userId) {
-  return loadPlayerNickImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @param {string} nick
- */
-function savePlayerNick(userId, nick) {
-  savePlayerNickImpl(userId, nick);
-}
-
-/**
- * Returns the custom nick if set, otherwise falls back to a truncated userId.
- * @param {string} userId
- * @returns {string}
- */
-function getEffectiveNick(userId) {
-  return getEffectiveNickImpl(userId);
-}
 
 // ── Global online presence ────────────────────────────────────────────────────
 
@@ -800,13 +524,6 @@ function updateOnlinePresence(userId, worldId, sessionId) {
 }
 
 /**
- * @param {string} userId
- */
-function deleteOnlinePresence(userId) {
-  deleteOnlinePresenceImpl(userId);
-}
-
-/**
  * Build a snapshot of all online players (TTL = 30 s).
  * @returns {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>}
  */
@@ -828,14 +545,6 @@ function parseChatDbResult(raw) {
     vwLog("chat db parse failed", { error: String(e) });
     return null;
   }
-}
-
-/**
- * @param {string} raw
- * @returns {*}
- */
-function parseWorldDbResult(raw) {
-  return parseWorldDbResultImpl(raw);
 }
 
 /**
@@ -935,114 +644,6 @@ function executeSchemaStep(scope, op, tableName, run, columnName, collector) {
     });
   }
   return result;
-}
-
-/**
- * @param {string} op
- * @param {string} tableName
- * @param {() => string} run
- * @param {string} [columnName]
- * @param {Array<any>} [collector]
- * @returns {*}
- */
-function runWorldSchemaStep(op, tableName, run, columnName, collector) {
-  return runWorldSchemaStepImpl(op, tableName, run, columnName, collector);
-}
-
-/**
- * @param {string} op
- * @param {string} tableName
- * @param {() => string} run
- * @param {string} [columnName]
- * @param {Array<any>} [collector]
- * @returns {*}
- */
-function runChatSchemaStep(op, tableName, run, columnName, collector) {
-  return runChatSchemaStepImpl(op, tableName, run, columnName, collector);
-}
-
-/**
- * @param {Array<any>} [collector]
- */
-function ensureLateWorldDatabaseSchema(collector) {
-  ensureLateWorldDatabaseSchemaImpl(collector);
-}
-
-/**
- * @param {string} tableName
- * @param {string} filters
- * @param {number} limit
- * @param {string} orderBy
- * @param {"asc" | "desc"} orderDir
- * @returns {any[]}
- */
-function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
-  return queryWorldRowsImpl(tableName, filters, limit, orderBy, orderDir);
-}
-
-/**
- * @param {string} tableName
- * @param {*} data
- * @returns {*}
- */
-function insertWorldRow(tableName, data) {
-  return insertWorldRowImpl(tableName, data);
-}
-
-/**
- * @param {string} tableName
- * @param {string[]} keyColumns
- * @param {*} data
- * @returns {*}
- */
-function upsertWorldRow(tableName, keyColumns, data) {
-  return upsertWorldRowImpl(tableName, keyColumns, data);
-}
-
-/**
- * @param {string} tableName
- * @param {number} id
- * @param {*} data
- * @returns {*}
- */
-function updateWorldRow(tableName, id, data) {
-  return updateWorldRowImpl(tableName, id, data);
-}
-
-/**
- * @param {string} tableName
- * @param {string} filters
- */
-function deleteWorldRowsWhere(tableName, filters) {
-  deleteWorldRowsWhereImpl(tableName, filters);
-}
-
-/**
- * @param {string} tableName
- * @param {number} id
- */
-function deleteWorldRow(tableName, id) {
-  deleteWorldRowImpl(tableName, id);
-}
-
-/**
- * @param {string} tableName
- * @param {string} filters
- * @returns {any | null}
- */
-function querySingleWorldRow(tableName, filters) {
-  return querySingleWorldRowImpl(tableName, filters);
-}
-
-function ensureWorldDatabaseSchema() {
-  ensureWorldDatabaseSchemaImpl();
-}
-
-/**
- * @param {Array<any>} [collector]
- */
-function ensureChatDatabaseSchema(collector) {
-  ensureChatDatabaseSchemaImpl(collector);
 }
 
 /**
@@ -1193,85 +794,7 @@ function normalizeDMRows(rows) {
     });
 }
 
-/**
- * @param {string} worldId
- * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
- */
-function loadWorldChat(worldId) {
-  return loadWorldChatImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {{id:string,sender_id:string,sender_nick:string,text:string,ts:number}} msg
- */
-function appendWorldChatMessage(worldId, msg) {
-  appendWorldChatMessageImpl(worldId, msg);
-}
-
 // ── Direct messages ───────────────────────────────────────────────────────────
-
-/**
- * Returns the storage key for a DM conversation (stable regardless of who
- * is sender / recipient).
- * @param {string} a
- * @param {string} b
- * @returns {string}
- */
-function dmConversationKey(a, b) {
-  return dmConversationKeyImpl(a, b);
-}
-
-/**
- * @param {string} a
- * @param {string} b
- * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
- */
-function loadDMHistory(a, b) {
-  return loadDMHistoryImpl(a, b);
-}
-
-/**
- * @param {string} a
- * @param {string} b
- * @param {{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}} msg
- */
-function appendDMMessage(a, b, msg) {
-  appendDMMessageImpl(a, b, msg);
-}
-
-/**
- * @param {string} userId
- * @returns {string[]}
- */
-function loadDMIndex(userId) {
-  return loadDMIndexImpl(userId);
-}
-
-/**
- * @param {string} userId
- * @param {string} otherUserId
- * @param {number} [ts]
- */
-function addToDMIndex(userId, otherUserId, ts) {
-  addToDMIndexImpl(userId, otherUserId, ts);
-}
-
-/**
- * @param {string} worldId
- * @returns {{next_item_seq: number, seeded: number, updated_ts: number}}
- */
-function loadWorldItemMeta(worldId) {
-  return loadWorldItemMetaImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {{next_item_seq:number, seeded:number, updated_ts?:number}} meta
- */
-function saveWorldItemMeta(worldId, meta) {
-  saveWorldItemMetaImpl(worldId, meta);
-}
 
 /**
  * @param {string} worldId
@@ -1279,58 +802,6 @@ function saveWorldItemMeta(worldId, meta) {
  */
 function loadWorldItems(worldId) {
   return loadWorldItemsImpl(worldId, resolvePortalDestinationWorldType);
-}
-
-/**
- * @param {string} worldId
- * @param {Record<string, any[]>} items
- */
-function saveWorldItems(worldId, items) {
-  saveWorldItemsImpl(worldId, items);
-}
-
-/**
- * @param {string} worldId
- * @param {number} row
- * @param {number} col
- * @param {*} item
- */
-function upsertWorldItem(worldId, row, col, item) {
-  upsertWorldItemImpl(worldId, row, col, item);
-}
-
-/**
- * @param {string} itemId
- * @returns {boolean} true when this call actually deleted the row
- */
-function deleteWorldItemById(itemId) {
-  return deleteWorldItemByIdImpl(itemId);
-}
-
-/**
- * @param {any[]} items
- * @returns {any[]} the subset of items this call actually claimed
- */
-function deleteWorldItems(items) {
-  return deleteWorldItemsImpl(items);
-}
-
-/**
- * @template T
- * @param {string} label
- * @param {() => T} fn
- * @returns {T}
- */
-function runInWorldTransaction(label, fn) {
-  return runInWorldTransactionImpl(label, fn);
-}
-
-/**
- * @param {string} worldId
- * @returns {number}
- */
-function nextWorldItemId(worldId) {
-  return nextWorldItemIdImpl(worldId);
 }
 
 /**
@@ -1423,22 +894,6 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
 }
 
 /**
- * @param {string} scopeKey
- * @returns {number}
- */
-function allocateEventSeq(scopeKey) {
-  return allocateEventSeqImpl(scopeKey);
-}
-
-/**
- * @param {string} scopeKey
- * @returns {number}
- */
-function getCurrentEventSeq(scopeKey) {
-  return getCurrentEventSeqImpl(scopeKey);
-}
-
-/**
  * @param {string} worldId
  * @param {string} type
  * @param {*} payload
@@ -1466,59 +921,6 @@ function sendRecipientScopedStreamEvent(recipientId, type, payload) {
     payload,
     allocateEventSeq,
   );
-}
-
-/**
- * @param {string} worldId
- * @returns {Record<string, any>}
- */
-function loadWorldNPCs(worldId) {
-  return loadWorldNPCsImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {Record<string, any>} npcs
- */
-function saveWorldNPCs(worldId, npcs) {
-  saveWorldNPCsImpl(worldId, npcs);
-}
-
-/**
- * @returns {Record<string, number>}
- */
-function loadNPCActiveWorlds() {
-  return loadNPCActiveWorldsImpl();
-}
-
-/**
- * @param {Record<string, number>} worlds
- */
-function saveNPCActiveWorlds(worlds) {
-  saveNPCActiveWorldsImpl(worlds);
-}
-
-/**
- * @param {string} worldId
- */
-function markNPCWorldActive(worldId) {
-  markNPCWorldActiveImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @returns {number}
- */
-function loadNPCLastTick(worldId) {
-  return loadNPCLastTickImpl(worldId);
-}
-
-/**
- * @param {string} worldId
- * @param {number} lastTickTs
- */
-function saveNPCLastTick(worldId, lastTickTs) {
-  saveNPCLastTickImpl(worldId, lastTickTs);
 }
 
 /**
@@ -1843,32 +1245,6 @@ function getAvailableWorldActions(inventory, currentTileItems) {
 }
 
 /**
- * @param {number} row
- * @param {number} col
- * @param {number} rotation
- * @returns {{row: number, col: number, direction: string}}
- */
-function getTargetTileFromRotation(row, col, rotation) {
-  return getTargetTileFromRotationImpl(row, col, rotation);
-}
-
-/**
- * @param {string} direction
- * @returns {string}
- */
-function normalizeMoveDirection(direction) {
-  return normalizeMoveDirectionImpl(direction);
-}
-
-/**
- * @param {string} direction
- * @returns {number|null}
- */
-function rotationForDirection(direction) {
-  return rotationForDirectionImpl(direction);
-}
-
-/**
  * @param {string} worldId
  * @param {{row: number, col: number}} canonical
  * @returns {Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>}
@@ -1983,14 +1359,6 @@ function performTreeActionForUserInner(userId, body) {
     saveWorldTrees: saveWorldTrees,
     savePlayerInventory: savePlayerInventory,
   });
-}
-
-/**
- * @param {string | null | undefined} action
- * @returns {*}
- */
-function getActionDefinition(action) {
-  return getActionDefinitionImpl(action);
 }
 
 /**
@@ -2117,7 +1485,7 @@ function virtualWorldManageLivingClassesToolHandler(context) {
     refreshLivingClasses: function () {
       refreshLivingClassCacheImpl();
     },
-    getAllLivingClasses: getAllLivingClassesImpl,
+    getAllLivingClasses: getAllLivingClasses,
     getLivingClass: getLivingClassImpl,
     upsertLivingClass: function (record) {
       return upsertLivingClassImpl(record);
@@ -3186,7 +2554,7 @@ function livingClassesHandler(context) {
     );
   }
   refreshLivingClassCacheImpl();
-  var classes = getAllLivingClassesImpl();
+  var classes = getAllLivingClasses();
   return ResponseBuilder.json({ ok: true, living_classes: classes });
 }
 

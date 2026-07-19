@@ -504,7 +504,29 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "/virtual-world/tiles-and-items.js",
     "public/tiles-and-items.js",
   );
-  safeRegisterAssetRoute(deps, "/virtual-world/client.js", "public/client.js");
+  // The browser client is split into feature modules; load order matters and
+  // is defined by the script tags in page-bootstrap.ts.
+  var clientModules = [
+    "client-core.js",
+    "client-world-render.js",
+    "client-avatars.js",
+    "client-net.js",
+    "client-actions.js",
+    "client-panels.js",
+    "client-chat.js",
+    "client-item-actions.js",
+    "client-tile-detail.js",
+    "client-input.js",
+    "client-editors.js",
+    "client-main.js",
+  ];
+  for (var i = 0; i < clientModules.length; i++) {
+    safeRegisterAssetRoute(
+      deps,
+      "/virtual-world/" + clientModules[i],
+      "public/" + clientModules[i],
+    );
+  }
 
   safeRegisterRoute(deps, "/virtual-world/play", "getVirtualWorldPage", "GET", {
     summary: "Virtual World (Play)",

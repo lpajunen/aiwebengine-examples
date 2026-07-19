@@ -152,8 +152,9 @@ and unload map regions.
 ### 6. Shared typed protocol module (client/server drift)
 
 **Today:** constants (`ROWS`, `COLS`, tile values) and event payload shapes
-are duplicated between server modules and the 5.4k-line `client.js`, kept in
-sync by convention (`clientTileValueForName`, the browser globals `.d.ts`).
+are duplicated between server modules and the browser client (`client-*.js`),
+kept in sync by convention (`clientTileValueForName`, the browser globals
+`.d.ts`).
 
 **Needed:** one shared module defining tile values, event types, payload
 schemas, and API request/response shapes, imported by both sides (client
@@ -173,9 +174,10 @@ on every new module until done.
 
 ### 8. Client modularization and asset pipeline
 
-**Today:** `client.js` is a single 5.4k-line plain-JS file with hardcoded
-geometry, uploaded as a static asset. No bundler, no shared modules with the
-server, no code splitting.
+**Today:** the client is split into twelve plain-JS `client-*.js` feature
+files (global scope, load order defined in `page-bootstrap.ts`) with
+hardcoded geometry, uploaded as static assets. No bundler, no shared modules
+with the server, no code splitting.
 
 **Needed:** a build step (bundler) producing the deployed client from
 modular sources, enabling the shared protocol module (item 6), region-based
@@ -304,7 +306,7 @@ refreshes on page load only, and world classes have no quotas (item 9).
 
 **Original problem:** every world was 100×100. `ROWS`/`COLS` were constants
 in `world-domain.ts`, injected into most server modules, imported directly
-by `world-map.ts`, and hardcoded again in `client.js`. World "types" were
+by `world-map.ts`, and hardcoded again in the client. World "types" were
 the four generation presets, chosen by the portal builder's four
 `build_portal_<type>` actions; `createWorldOfType` stored only
 `world_type`. A portal to a small house still opened a full 100×100 world.

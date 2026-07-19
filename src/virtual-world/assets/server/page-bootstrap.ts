@@ -545,7 +545,18 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <script src="/virtual-world/i18n.js"></script>
   <script src="/virtual-world/scene.js"></script>
   <script src="/virtual-world/tiles-and-items.js"></script>
-  <script src="/virtual-world/client.js"></script>
+  <script src="/virtual-world/client-core.js"></script>
+  <script src="/virtual-world/client-world-render.js"></script>
+  <script src="/virtual-world/client-avatars.js"></script>
+  <script src="/virtual-world/client-net.js"></script>
+  <script src="/virtual-world/client-actions.js"></script>
+  <script src="/virtual-world/client-panels.js"></script>
+  <script src="/virtual-world/client-chat.js"></script>
+  <script src="/virtual-world/client-item-actions.js"></script>
+  <script src="/virtual-world/client-tile-detail.js"></script>
+  <script src="/virtual-world/client-input.js"></script>
+  <script src="/virtual-world/client-editors.js"></script>
+  <script src="/virtual-world/client-main.js"></script>
 </body>
 </html>`;
 }

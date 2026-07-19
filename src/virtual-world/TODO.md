@@ -86,7 +86,7 @@ There should be a user interface (similar to the crafting UI) for defining new i
   - Set material properties (color, texture, etc.)
   - Support composite shapes (e.g., flower = stem + head)
 - [ ] Update the UI and MCP API to support visual customization options during item class creation
-- [ ] Ensure client.js (three.js) can render items according to their visual definitions
+- [ ] Ensure the client (`client-world-render.js`, three.js) can render items according to their visual definitions
 
 ---
 

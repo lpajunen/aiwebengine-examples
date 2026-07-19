@@ -65,8 +65,10 @@ The actual implementation lives in `src/virtual-world/assets/server/*.ts` (same 
 
 `src/virtual-world/assets/public/` is browser-side JS served as static assets:
 
-- `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in `client.js`, `scene.js`, etc.
-- `client.js`, `scene.js`, `app-state.js`, `auth.js`, `i18n.js`, `tiles-and-items.js` are plain JS with JSDoc types, referencing the globals file.
+- `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in the client `.js` files.
+- All public `.js` files are plain global scripts (no modules) with JSDoc types, referencing the globals file. They share one global scope; load order is the script-tag order in `page-bootstrap.ts`, and each file also needs a `safeRegisterAssetRoute` entry in `runtime-registration.ts`.
+- Shared foundation files: `app-state.js`, `auth.js`, `i18n.js`, `scene.js`, `tiles-and-items.js`.
+- The game client is split into `client-*.js` feature files — find code by feature: `client-core.js` (shared state, HUD pickers/toast), `client-world-render.js` (terrain/tree/house/item meshes), `client-avatars.js` (player/remote/NPC avatars), `client-net.js` (sync, heartbeat, SSE), `client-actions.js` (movement, tree actions), `client-panels.js` (inventory/crafting/players panels), `client-chat.js` (chat/DM), `client-item-actions.js` (craft/pick/drop/equip), `client-tile-detail.js` (tile inspector), `client-input.js` (keyboard/touch/joystick), `client-editors.js` (creator class editors), `client-main.js` (game loop, startup).
 
 JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsxFragmentFactory` in `tsconfig.json`), not React's default `React.createElement`.
 

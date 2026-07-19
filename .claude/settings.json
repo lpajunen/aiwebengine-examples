@@ -2,6 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(./node_modules/.bin/tsc *)",
+      "Bash(./node_modules/.bin/markdownlint *)",
+      "Bash(make fetch-types)",
+      "Bash(make fetch-types *)",
       "Bash(./node_modules/.bin/prettier *)",
       "Bash(make format *)",
       "Bash(make upload-virtual-world)",

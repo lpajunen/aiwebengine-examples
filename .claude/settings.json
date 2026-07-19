@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./node_modules/.bin/tsc *)",
+      "Bash(./node_modules/.bin/prettier *)",
+      "Bash(make format *)",
+      "Bash(make upload-virtual-world)",
+      "Bash(make upload-virtual-world *)",
+      "Bash(make upload-virtual-world-dry-run)",
+      "Bash(make upload-virtual-world-dry-run *)"
+    ]
+  }
+}

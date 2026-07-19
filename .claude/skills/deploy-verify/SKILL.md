@@ -21,7 +21,12 @@ verify; do not leave changes undeployed.
    automatically, the user must click a button in the browser — tell them
    and wait. If running it from the agent fails because it is interactive,
    ask the user to run `! make oauth-login` themselves.
-4. Verify (see below).
+4. Verify (see below). **Known server quirk:** sometimes a deploy reports
+   success but the server still serves stale content — e.g. newly added
+   asset files 404 or changed files show old content. When that happens,
+   run `make upload-virtual-world` once more and re-verify; the second
+   deploy reliably fixes it. Only escalate if it is still wrong after the
+   second deploy.
 5. On success, report what was verified and what still needs a browser check.
 
 ## Verification
@@ -55,6 +60,16 @@ TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('schemas/toke
   redirect even with a valid bearer token, and that 302 is itself the
   expected result. For UI/gameplay changes, ask the user to open
   `https://softagen.com/virtual-world/play` in their browser and confirm.
+
+## MCP server alternative
+
+`https://softagen.com/mcp` hosts an MCP server with tools for deploying,
+watching logs, and other testing. If it is connected in the current session
+(MCP tools available), prefer its log-watching tools over raw curl. It is
+not reachable via plain curl with the `schemas/token.json` bearer token —
+it requires its own MCP OAuth session, e.g.
+`claude mcp add --transport http softagen https://softagen.com/mcp` and
+authenticating via `/mcp`. The curl-based workflow above needs no MCP setup.
 
 ## If things break
 

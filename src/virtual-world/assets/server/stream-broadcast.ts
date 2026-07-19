@@ -1,6 +1,5 @@
+import { vwLog } from "./diagnostics.ts";
 import { recipientEventScope, worldEventScope } from "./event-seq.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type AllocateSeqFn = (scopeKey: string) => number;
 
@@ -9,7 +8,6 @@ export function sendVirtualWorldStreamEvent(
   type: string,
   payload: unknown,
   filter: Record<string, string>,
-  log: WorldDbLogFn,
   scope?: string,
   seq?: number,
 ): void {
@@ -37,14 +35,14 @@ export function sendVirtualWorldStreamEvent(
       typeof result === "string" &&
       (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
     ) {
-      log("stream broadcast returned error", {
+      vwLog("stream broadcast returned error", {
         type: String(type),
         filter: JSON.stringify(filter || {}),
         result: result,
       });
     }
   } catch (e) {
-    log("stream broadcast failed", {
+    vwLog("stream broadcast failed", {
       type: String(type),
       filter: JSON.stringify(filter || {}),
       error: String(e),
@@ -57,7 +55,6 @@ export function sendRecipientScopedStreamEvent(
   recipientId: string,
   type: string,
   payload: unknown,
-  log: WorldDbLogFn,
   allocateSeq?: AllocateSeqFn,
 ): void {
   if (!recipientId) return;
@@ -69,7 +66,6 @@ export function sendRecipientScopedStreamEvent(
     {
       recipient_id: String(recipientId),
     },
-    log,
     scope,
     allocateSeq ? allocateSeq(scope) : 0,
   );
@@ -80,7 +76,6 @@ export function sendWorldScopedStreamEvent(
   worldId: string,
   type: string,
   payload: unknown,
-  log: WorldDbLogFn,
   allocateSeq?: AllocateSeqFn,
 ): void {
   if (!worldId) return;
@@ -92,7 +87,6 @@ export function sendWorldScopedStreamEvent(
     {
       world_id: String(worldId),
     },
-    log,
     scope,
     allocateSeq ? allocateSeq(scope) : 0,
   );

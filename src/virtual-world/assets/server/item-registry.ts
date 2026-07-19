@@ -1,3 +1,8 @@
+import {
+  VWORLD_ACTION_CLASS_TABLE,
+  VWORLD_ITEM_CLASS_TABLE,
+} from "./runtime-config.ts";
+import { vwLog } from "./diagnostics.ts";
 import { ITEM_CHANGE_DEFINITIONS } from "./item-events.ts";
 import {
   ACTION_DEFINITIONS,
@@ -15,8 +20,6 @@ import {
   upsertActionClassRow,
   deleteActionClassRow,
 } from "./action-class-storage.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
@@ -568,11 +571,8 @@ function itemClassToDbRow(
   };
 }
 
-export function bootstrapItemClasses(
-  itemClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  const rows = loadAllItemClassRows(itemClassTable, log);
+export function bootstrapItemClasses(): void {
+  const rows = loadAllItemClassRows();
   const cache: Record<string, ItemClassRecord> = {};
   let insertedDefaults = 0;
   const now = Date.now();
@@ -590,15 +590,15 @@ export function bootstrapItemClasses(
     const defId = defKeys[i];
     if (!cache[defId]) {
       const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
-      upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
+      upsertItemClassRow(itemClassToDbRow(record, now));
       cache[record.id] = record;
       insertedDefaults++;
     }
   }
   if (rows.length === 0) {
-    log("item class repository seeded", { count: insertedDefaults });
+    vwLog("item class repository seeded", { count: insertedDefaults });
   } else if (insertedDefaults > 0) {
-    log("item class repository backfilled", {
+    vwLog("item class repository backfilled", {
       inserted_count: insertedDefaults,
       existing_count: rows.length,
     });
@@ -607,11 +607,8 @@ export function bootstrapItemClasses(
   _itemClassCache = cache;
 }
 
-export function refreshItemClassCache(
-  itemClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  const rows = loadAllItemClassRows(itemClassTable, log);
+export function refreshItemClassCache(): void {
+  const rows = loadAllItemClassRows();
   const cache: Record<string, ItemClassRecord> = {};
   let insertedDefaults = 0;
   const now = Date.now();
@@ -625,13 +622,13 @@ export function refreshItemClassCache(
     const defId = defKeys[i];
     if (!cache[defId]) {
       const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
-      upsertItemClassRow(itemClassToDbRow(record, now), itemClassTable, log);
+      upsertItemClassRow(itemClassToDbRow(record, now));
       cache[record.id] = record;
       insertedDefaults++;
     }
   }
   if (insertedDefaults > 0) {
-    log("item class repository backfilled during refresh", {
+    vwLog("item class repository backfilled during refresh", {
       inserted_count: insertedDefaults,
     });
   }
@@ -651,17 +648,12 @@ export function getItemClass(itemId: string): ItemClassRecord | null {
   return _itemClassCache[String(itemId || "")] || null;
 }
 
-export function upsertItemClass(
-  record: ItemClassRecord,
-  itemClassTable: string,
-  log: WorldDbLogFn,
-): { ok: boolean; error?: string } {
+export function upsertItemClass(record: ItemClassRecord): {
+  ok: boolean;
+  error?: string;
+} {
   const now = Date.now();
-  const writeResult = upsertItemClassRow(
-    itemClassToDbRow(record, now),
-    itemClassTable,
-    log,
-  );
+  const writeResult = upsertItemClassRow(itemClassToDbRow(record, now));
   const ok = !!writeResult && !writeResult.error;
   if (ok && _itemClassCache) {
     _itemClassCache[record.id] = record;
@@ -676,12 +668,8 @@ export function upsertItemClass(
       };
 }
 
-export function deleteItemClass(
-  classId: string,
-  itemClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  deleteItemClassRow(classId, itemClassTable, log);
+export function deleteItemClass(classId: string): void {
+  deleteItemClassRow(classId);
   if (_itemClassCache) {
     delete _itemClassCache[classId];
   }
@@ -765,11 +753,8 @@ function actionClassToDbRow(
   };
 }
 
-export function bootstrapActionClasses(
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  const rows = loadAllActionClassRows(actionClassTable, log);
+export function bootstrapActionClasses(): void {
+  const rows = loadAllActionClassRows();
   const cache: Record<string, ActionClassRecord> = {};
   let insertedDefaults = 0;
   const now = Date.now();
@@ -788,19 +773,15 @@ export function bootstrapActionClasses(
     if (!cache[defId]) {
       const def = ACTION_DEFINITIONS[defId];
       const record: ActionClassRecord = Object.assign({}, def);
-      upsertActionClassRow(
-        actionClassToDbRow(record, now),
-        actionClassTable,
-        log,
-      );
+      upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
       insertedDefaults++;
     }
   }
   if (rows.length === 0) {
-    log("action class repository seeded", { count: insertedDefaults });
+    vwLog("action class repository seeded", { count: insertedDefaults });
   } else if (insertedDefaults > 0) {
-    log("action class repository backfilled", {
+    vwLog("action class repository backfilled", {
       inserted_count: insertedDefaults,
       existing_count: rows.length,
     });
@@ -809,11 +790,8 @@ export function bootstrapActionClasses(
   _actionClassCache = cache;
 }
 
-export function refreshActionClassCache(
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  const rows = loadAllActionClassRows(actionClassTable, log);
+export function refreshActionClassCache(): void {
+  const rows = loadAllActionClassRows();
   const cache: Record<string, ActionClassRecord> = {};
   let insertedDefaults = 0;
   const now = Date.now();
@@ -828,17 +806,13 @@ export function refreshActionClassCache(
     if (!cache[defId]) {
       const def = ACTION_DEFINITIONS[defId];
       const record: ActionClassRecord = Object.assign({}, def);
-      upsertActionClassRow(
-        actionClassToDbRow(record, now),
-        actionClassTable,
-        log,
-      );
+      upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
       insertedDefaults++;
     }
   }
   if (insertedDefaults > 0) {
-    log("action class repository backfilled during refresh", {
+    vwLog("action class repository backfilled during refresh", {
       inserted_count: insertedDefaults,
     });
   }
@@ -858,17 +832,12 @@ export function getActionClass(actionId: string): ActionClassRecord | null {
   return _actionClassCache[String(actionId || "")] || null;
 }
 
-export function upsertActionClass(
-  record: ActionClassRecord,
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): { ok: boolean; error?: string } {
+export function upsertActionClass(record: ActionClassRecord): {
+  ok: boolean;
+  error?: string;
+} {
   const now = Date.now();
-  const writeResult = upsertActionClassRow(
-    actionClassToDbRow(record, now),
-    actionClassTable,
-    log,
-  );
+  const writeResult = upsertActionClassRow(actionClassToDbRow(record, now));
   const ok = !!writeResult && !writeResult.error;
   if (ok && _actionClassCache) {
     _actionClassCache[record.id] = record;
@@ -883,12 +852,8 @@ export function upsertActionClass(
       };
 }
 
-export function deleteActionClass(
-  actionId: string,
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  deleteActionClassRow(actionId, actionClassTable, log);
+export function deleteActionClass(actionId: string): void {
+  deleteActionClassRow(actionId);
   if (_actionClassCache) {
     delete _actionClassCache[actionId];
   }

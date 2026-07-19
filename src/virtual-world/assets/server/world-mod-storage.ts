@@ -1,3 +1,5 @@
+import { VWORLD_WORLD_MOD_TABLE } from "./runtime-config.ts";
+import { vwLog } from "./diagnostics.ts";
 import {
   COLS,
   fromStoredWorldTimestamp,
@@ -10,8 +12,6 @@ import {
   WORLD_TILE_PINE_TREE,
 } from "./world-domain.ts";
 import { deleteWorldRow, queryWorldRows, upsertWorldRow } from "./world-db.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type WorldModEntry = {
   row: number;
@@ -34,10 +34,7 @@ export function createEmptyWorldMods(): Record<
   return mods;
 }
 
-export function parseWorldModPayload(
-  raw: unknown,
-  log: WorldDbLogFn,
-): Record<string, unknown> {
+export function parseWorldModPayload(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "string") return {};
   try {
     const parsed = JSON.parse(raw);
@@ -45,23 +42,20 @@ export function parseWorldModPayload(
       ? (parsed as Record<string, unknown>)
       : {};
   } catch (e) {
-    log("world mod payload parse failed", { error: String(e) });
+    vwLog("world mod payload parse failed", { error: String(e) });
     return {};
   }
 }
 
 export function loadWorldMods(
   worldId: string,
-  worldModTable: string,
-  log: WorldDbLogFn,
 ): Record<string, Record<string, WorldModEntry>> {
   const rows = queryWorldRows(
-    worldModTable,
+    VWORLD_WORLD_MOD_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
     5000,
     "id",
     "asc",
-    log,
   );
   const mods = createEmptyWorldMods();
   for (let i = 0; i < rows.length; i++) {
@@ -77,7 +71,7 @@ export function loadWorldMods(
       actor_id: row.actor_id ? String(row.actor_id) : null,
       actor_type: row.actor_type ? String(row.actor_type) : null,
       timestamp: fromStoredWorldTimestamp(row.timestamp),
-      payload: parseWorldModPayload(row.payload_json, log),
+      payload: parseWorldModPayload(row.payload_json),
     };
   }
 
@@ -89,16 +83,13 @@ export function saveWorldModLayer(
   layer: string,
   sourceKind: string,
   entries: Record<string, any>,
-  worldModTable: string,
-  log: WorldDbLogFn,
 ): void {
   const rows = queryWorldRows(
-    worldModTable,
+    VWORLD_WORLD_MOD_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
     5000,
     "id",
     "desc",
-    log,
   );
   const existingByTileKey: Record<string, any> = {};
   for (let i = 0; i < rows.length; i++) {
@@ -107,8 +98,7 @@ export function saveWorldModLayer(
       row &&
       row.tile_key &&
       String(row.layer) === String(layer) &&
-      parseWorldModPayload(row.payload_json, log).source_kind ===
-        String(sourceKind)
+      parseWorldModPayload(row.payload_json).source_kind === String(sourceKind)
     ) {
       existingByTileKey[String(row.tile_key)] = row;
     }
@@ -119,7 +109,7 @@ export function saveWorldModLayer(
       const entry = entries[tileKey];
       if (!entry || typeof entry !== "object") return;
       upsertWorldRow(
-        worldModTable,
+        VWORLD_WORLD_MOD_TABLE,
         ["world_id", "tile_key", "layer"],
         {
           world_id: String(worldId),
@@ -137,7 +127,6 @@ export function saveWorldModLayer(
           ),
           payload_json: JSON.stringify(entry.payload || {}),
         },
-        log,
       );
       delete existingByTileKey[String(tileKey)];
     },
@@ -146,16 +135,12 @@ export function saveWorldModLayer(
   Object.keys(existingByTileKey).forEach(function (tileKey) {
     const row = existingByTileKey[tileKey];
     if (!row || !Number.isFinite(Number(row.id))) return;
-    deleteWorldRow(worldModTable, Number(row.id), log);
+    deleteWorldRow(VWORLD_WORLD_MOD_TABLE, Number(row.id));
   });
 }
 
-export function loadWorldTrees(
-  worldId: string,
-  worldModTable: string,
-  log: WorldDbLogFn,
-): Record<string, any> {
-  const worldMods = loadWorldMods(worldId, worldModTable, log);
+export function loadWorldTrees(worldId: string): Record<string, any> {
+  const worldMods = loadWorldMods(worldId);
   const trees: Record<string, any> = {};
   const objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
   Object.keys(objectMods).forEach(function (tileKey) {
@@ -183,8 +168,6 @@ export function loadWorldTrees(
 export function saveWorldTrees(
   worldId: string,
   trees: Record<string, any>,
-  worldModTable: string,
-  log: WorldDbLogFn,
 ): void {
   const treeMods: Record<string, any> = {};
   Object.keys(trees && typeof trees === "object" ? trees : {}).forEach(
@@ -218,22 +201,11 @@ export function saveWorldTrees(
       };
     },
   );
-  saveWorldModLayer(
-    worldId,
-    WORLD_MOD_LAYER_OBJECT,
-    "tree",
-    treeMods,
-    worldModTable,
-    log,
-  );
+  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "tree", treeMods);
 }
 
-export function loadWorldHouses(
-  worldId: string,
-  worldModTable: string,
-  log: WorldDbLogFn,
-): Record<string, any> {
-  const worldMods = loadWorldMods(worldId, worldModTable, log);
+export function loadWorldHouses(worldId: string): Record<string, any> {
+  const worldMods = loadWorldMods(worldId);
   const houses: Record<string, any> = {};
   const objectMods = worldMods[WORLD_MOD_LAYER_OBJECT] || {};
   Object.keys(objectMods).forEach(function (tileKey) {
@@ -255,8 +227,6 @@ export function loadWorldHouses(
 export function saveWorldHouses(
   worldId: string,
   houses: Record<string, any>,
-  worldModTable: string,
-  log: WorldDbLogFn,
 ): void {
   const houseMods: Record<string, any> = {};
   Object.keys(houses && typeof houses === "object" ? houses : {}).forEach(
@@ -289,12 +259,5 @@ export function saveWorldHouses(
       };
     },
   );
-  saveWorldModLayer(
-    worldId,
-    WORLD_MOD_LAYER_OBJECT,
-    "house",
-    houseMods,
-    worldModTable,
-    log,
-  );
+  saveWorldModLayer(worldId, WORLD_MOD_LAYER_OBJECT, "house", houseMods);
 }

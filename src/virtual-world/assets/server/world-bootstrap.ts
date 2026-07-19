@@ -1,3 +1,4 @@
+import { VWORLD_WORLD_TYPE_TABLE } from "./runtime-config.ts";
 import {
   COLS,
   createLivingSlotsFromDefinitions,
@@ -13,8 +14,6 @@ import {
   pickRandomNPCLivingClassId,
 } from "./living-registry.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type EffectiveMapDeps = {
   generateMap: (worldId: string) => number[][];
@@ -53,16 +52,11 @@ export function getOrCreatePlayerWorld(
   return worldId;
 }
 
-export function getWorldType(
-  worldId: string | number,
-  worldTypeTable: string,
-  log: WorldDbLogFn,
-): string {
+export function getWorldType(worldId: string | number): string {
   const normalizedWorldId = String(worldId || "");
   const row = querySingleWorldRow(
-    worldTypeTable,
+    VWORLD_WORLD_TYPE_TABLE,
     JSON.stringify({ world_id: normalizedWorldId }),
-    log,
   );
   if (row && row.world_type) return normalizeWorldType(String(row.world_type));
   return getDefaultWorldTypeForWorldId(normalizedWorldId);
@@ -71,8 +65,6 @@ export function getWorldType(
 export function saveWorldType(
   worldId: string | number,
   worldType: string | undefined | null,
-  worldTypeTable: string,
-  log: WorldDbLogFn,
   dimensions?: WorldDimensions,
 ): string {
   const normalizedWorldId = String(worldId || "");
@@ -86,7 +78,7 @@ export function saveWorldType(
     row.rows = normalizeWorldDimension(dimensions.rows, ROWS);
     row.cols = normalizeWorldDimension(dimensions.cols, COLS);
   }
-  upsertWorldRow(worldTypeTable, ["world_id"], row, log);
+  upsertWorldRow(VWORLD_WORLD_TYPE_TABLE, ["world_id"], row);
   return normalizedType;
 }
 
@@ -95,16 +87,15 @@ export type WorldDimensions = { rows: number; cols: number };
 // Reads the world's type and dimensions in one query — use this on hot paths
 // (map generation) instead of separate getWorldType + getWorldDimensions
 // calls against the same row.
-export function getWorldInfo(
-  worldId: string | number,
-  worldTypeTable: string,
-  log: WorldDbLogFn,
-): { world_type: string; rows: number; cols: number } {
+export function getWorldInfo(worldId: string | number): {
+  world_type: string;
+  rows: number;
+  cols: number;
+} {
   const normalizedWorldId = String(worldId || "");
   const row = querySingleWorldRow(
-    worldTypeTable,
+    VWORLD_WORLD_TYPE_TABLE,
     JSON.stringify({ world_id: normalizedWorldId }),
-    log,
   );
   return {
     world_type:
@@ -116,12 +107,8 @@ export function getWorldInfo(
   };
 }
 
-export function getWorldDimensions(
-  worldId: string | number,
-  worldTypeTable: string,
-  log: WorldDbLogFn,
-): WorldDimensions {
-  const info = getWorldInfo(worldId, worldTypeTable, log);
+export function getWorldDimensions(worldId: string | number): WorldDimensions {
+  const info = getWorldInfo(worldId);
   return { rows: info.rows, cols: info.cols };
 }
 

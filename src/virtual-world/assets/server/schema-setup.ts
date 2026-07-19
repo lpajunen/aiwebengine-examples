@@ -1,35 +1,31 @@
-type SchemaLogFn = (msg: string, obj?: unknown) => void;
-type ParseFn = (raw: string) => any;
+import { vwLog } from "./diagnostics.ts";
+import { parseWorldDbResult } from "./world-db.ts";
+import {
+  VWORLD_ACTION_CLASS_TABLE,
+  VWORLD_CHAT_TABLE,
+  VWORLD_DM_INDEX_TABLE,
+  VWORLD_DM_TABLE,
+  VWORLD_EVENT_SEQ_TABLE,
+  VWORLD_ITEM_CLASS_TABLE,
+  VWORLD_LIVING_CLASS_TABLE,
+  VWORLD_NPC_ACTIVE_WORLD_TABLE,
+  VWORLD_NPC_TABLE,
+  VWORLD_NPC_TICK_LEASE_TABLE,
+  VWORLD_NPC_TICK_TABLE,
+  VWORLD_ONLINE_PRESENCE_TABLE,
+  VWORLD_PLAYER_HEARTBEAT_TABLE,
+  VWORLD_PLAYER_INVENTORY_TABLE,
+  VWORLD_PLAYER_MOVE_LEASE_TABLE,
+  VWORLD_PLAYER_NICK_TABLE,
+  VWORLD_PLAYER_POSITION_TABLE,
+  VWORLD_PLAYER_WORLD_TABLE,
+  VWORLD_WORLD_CLASS_TABLE,
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+  VWORLD_WORLD_MOD_TABLE,
+  VWORLD_WORLD_TYPE_TABLE,
+} from "./runtime-config.ts";
 type SchemaCollector = Array<any> | undefined;
-
-type WorldSchemaTables = {
-  worldType: string;
-  npc: string;
-  npcActiveWorld: string;
-  npcTick: string;
-  npcTickLease: string;
-  playerHeartbeat: string;
-  playerMoveLease: string;
-  onlinePresence: string;
-  playerNick: string;
-  playerWorld: string;
-  playerPosition: string;
-  playerInventory: string;
-  worldMod: string;
-  worldItem: string;
-  worldItemMeta: string;
-  itemClass: string;
-  actionClass: string;
-  livingClass: string;
-  worldClass: string;
-  eventSeq: string;
-};
-
-type ChatSchemaTables = {
-  chat: string;
-  dm: string;
-  dmIndex: string;
-};
 
 function isBenignSchemaResult(result: any): boolean {
   if (!result || !result.error) return true;
@@ -45,10 +41,9 @@ function reportSchemaResult(
   tableName: string,
   result: any,
   columnName: string | undefined,
-  log: SchemaLogFn,
 ): void {
   if (isBenignSchemaResult(result)) return;
-  log(scope + " schema setup failed", {
+  vwLog(scope + " schema setup failed", {
     op: op,
     table: tableName,
     column: columnName || "",
@@ -63,16 +58,14 @@ function executeSchemaStep(
   run: () => string,
   columnName: string | undefined,
   collector: SchemaCollector,
-  parse: ParseFn,
-  log: SchemaLogFn,
 ): any {
   let result = null;
   try {
-    result = parse(run());
+    result = parseWorldDbResult(run());
   } catch (e) {
     result = { error: "threw: " + String(e) };
   }
-  reportSchemaResult(scope, op, tableName, result, columnName, log);
+  reportSchemaResult(scope, op, tableName, result, columnName);
   if (collector) {
     collector.push({
       scope: scope,
@@ -90,142 +83,104 @@ export function runWorldSchemaStep(
   op: string,
   tableName: string,
   run: () => string,
-  parseWorldDbResult: ParseFn,
-  log: SchemaLogFn,
   columnName?: string,
   collector?: Array<any>,
 ): any {
-  return executeSchemaStep(
-    "world",
-    op,
-    tableName,
-    run,
-    columnName,
-    collector,
-    parseWorldDbResult,
-    log,
-  );
+  return executeSchemaStep("world", op, tableName, run, columnName, collector);
 }
 
 export function runChatSchemaStep(
   op: string,
   tableName: string,
   run: () => string,
-  parseChatDbResult: ParseFn,
-  log: SchemaLogFn,
   columnName?: string,
   collector?: Array<any>,
 ): any {
-  return executeSchemaStep(
-    "chat",
-    op,
-    tableName,
-    run,
-    columnName,
-    collector,
-    parseChatDbResult,
-    log,
-  );
+  return executeSchemaStep("chat", op, tableName, run, columnName, collector);
 }
 
-export function ensureLateWorldDatabaseSchema(
-  tables: Pick<
-    WorldSchemaTables,
-    "worldType" | "npc" | "npcActiveWorld" | "npcTick" | "npcTickLease"
-  >,
-  parseWorldDbResult: ParseFn,
-  log: SchemaLogFn,
-  collector?: Array<any>,
-): void {
+export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
   runWorldSchemaStep(
     "createTable",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.createTable(tables.worldType);
+      return database.createTable(VWORLD_WORLD_TYPE_TABLE);
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
   runWorldSchemaStep(
     "addTextColumn",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.addTextColumn(tables.worldType, "world_id", false);
+      return database.addTextColumn(VWORLD_WORLD_TYPE_TABLE, "world_id", false);
     },
-    parseWorldDbResult,
-    log,
     "world_id",
     collector,
   );
   runWorldSchemaStep(
     "addTextColumn",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.addTextColumn(tables.worldType, "world_type", false);
+      return database.addTextColumn(
+        VWORLD_WORLD_TYPE_TABLE,
+        "world_type",
+        false,
+      );
     },
-    parseWorldDbResult,
-    log,
     "world_type",
     collector,
   );
   runWorldSchemaStep(
     "addIntegerColumn",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.addIntegerColumn(tables.worldType, "rows", true);
+      return database.addIntegerColumn(VWORLD_WORLD_TYPE_TABLE, "rows", true);
     },
-    parseWorldDbResult,
-    log,
     "rows",
     collector,
   );
   runWorldSchemaStep(
     "addIntegerColumn",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.addIntegerColumn(tables.worldType, "cols", true);
+      return database.addIntegerColumn(VWORLD_WORLD_TYPE_TABLE, "cols", true);
     },
-    parseWorldDbResult,
-    log,
     "cols",
     collector,
   );
   runWorldSchemaStep(
     "addIntegerColumn",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
-      return database.addIntegerColumn(tables.worldType, "updated_ts", false);
+      return database.addIntegerColumn(
+        VWORLD_WORLD_TYPE_TABLE,
+        "updated_ts",
+        false,
+      );
     },
-    parseWorldDbResult,
-    log,
     "updated_ts",
     collector,
   );
   runWorldSchemaStep(
     "addUniqueIndex",
-    tables.worldType,
+    VWORLD_WORLD_TYPE_TABLE,
     function () {
       return database.addUniqueIndex(
-        tables.worldType,
+        VWORLD_WORLD_TYPE_TABLE,
         JSON.stringify(["world_id"]),
       );
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
 
   runWorldSchemaStep(
     "createTable",
-    tables.npc,
+    VWORLD_NPC_TABLE,
     function () {
-      return database.createTable(tables.npc);
+      return database.createTable(VWORLD_NPC_TABLE);
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
@@ -245,156 +200,141 @@ export function ensureLateWorldDatabaseSchema(
   ].forEach(function (entry) {
     runWorldSchemaStep(
       String(entry[0]),
-      tables.npc,
+      VWORLD_NPC_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.npc,
+              VWORLD_NPC_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.npc,
+              VWORLD_NPC_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
       },
-      parseWorldDbResult,
-      log,
       String(entry[1]),
       collector,
     );
   });
   runWorldSchemaStep(
     "addUniqueIndex",
-    tables.npc,
+    VWORLD_NPC_TABLE,
     function () {
-      return database.addUniqueIndex(tables.npc, JSON.stringify(["npc_id"]));
+      return database.addUniqueIndex(
+        VWORLD_NPC_TABLE,
+        JSON.stringify(["npc_id"]),
+      );
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
 
   runWorldSchemaStep(
     "createTable",
-    tables.npcActiveWorld,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     function () {
-      return database.createTable(tables.npcActiveWorld);
+      return database.createTable(VWORLD_NPC_ACTIVE_WORLD_TABLE);
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
   runWorldSchemaStep(
     "addTextColumn",
-    tables.npcActiveWorld,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     function () {
-      return database.addTextColumn(tables.npcActiveWorld, "world_id", false);
+      return database.addTextColumn(
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
+        "world_id",
+        false,
+      );
     },
-    parseWorldDbResult,
-    log,
     "world_id",
     collector,
   );
   runWorldSchemaStep(
     "addIntegerColumn",
-    tables.npcActiveWorld,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.npcActiveWorld,
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
         "last_active_ts",
         false,
       );
     },
-    parseWorldDbResult,
-    log,
     "last_active_ts",
     collector,
   );
   runWorldSchemaStep(
     "addUniqueIndex",
-    tables.npcActiveWorld,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     function () {
       return database.addUniqueIndex(
-        tables.npcActiveWorld,
+        VWORLD_NPC_ACTIVE_WORLD_TABLE,
         JSON.stringify(["world_id"]),
       );
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
 
   runWorldSchemaStep(
     "createTable",
-    tables.npcTick,
+    VWORLD_NPC_TICK_TABLE,
     function () {
-      return database.createTable(tables.npcTick);
+      return database.createTable(VWORLD_NPC_TICK_TABLE);
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
   runWorldSchemaStep(
     "addTextColumn",
-    tables.npcTick,
+    VWORLD_NPC_TICK_TABLE,
     function () {
-      return database.addTextColumn(tables.npcTick, "world_id", false);
+      return database.addTextColumn(VWORLD_NPC_TICK_TABLE, "world_id", false);
     },
-    parseWorldDbResult,
-    log,
     "world_id",
     collector,
   );
   runWorldSchemaStep(
     "addIntegerColumn",
-    tables.npcTick,
+    VWORLD_NPC_TICK_TABLE,
     function () {
-      return database.addIntegerColumn(tables.npcTick, "last_tick_ts", false);
+      return database.addIntegerColumn(
+        VWORLD_NPC_TICK_TABLE,
+        "last_tick_ts",
+        false,
+      );
     },
-    parseWorldDbResult,
-    log,
     "last_tick_ts",
     collector,
   );
   runWorldSchemaStep(
     "addUniqueIndex",
-    tables.npcTick,
+    VWORLD_NPC_TICK_TABLE,
     function () {
       return database.addUniqueIndex(
-        tables.npcTick,
+        VWORLD_NPC_TICK_TABLE,
         JSON.stringify(["world_id"]),
       );
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
 
   runWorldSchemaStep(
     "createLeaseTable",
-    tables.npcTickLease,
+    VWORLD_NPC_TICK_LEASE_TABLE,
     function () {
-      return database.createLeaseTable(tables.npcTickLease);
+      return database.createLeaseTable(VWORLD_NPC_TICK_LEASE_TABLE);
     },
-    parseWorldDbResult,
-    log,
     undefined,
     collector,
   );
 }
 
-export function ensureWorldDatabaseSchema(
-  tables: WorldSchemaTables,
-  parseWorldDbResult: ParseFn,
-  log: SchemaLogFn,
-): void {
+export function ensureWorldDatabaseSchema(): void {
   const step = function (
     op: string,
     tableName: string,
@@ -408,82 +348,90 @@ export function ensureWorldDatabaseSchema(
         return { error: "threw: " + String(e) };
       }
     })();
-    reportSchemaResult("world", op, tableName, result, columnName, log);
+    reportSchemaResult("world", op, tableName, result, columnName);
   };
 
-  step("createTable", tables.playerHeartbeat, function () {
-    return database.createTable(tables.playerHeartbeat);
+  step("createTable", VWORLD_PLAYER_HEARTBEAT_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_HEARTBEAT_TABLE);
   });
   step(
     "addTextColumn",
-    tables.playerHeartbeat,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
     function () {
-      return database.addTextColumn(tables.playerHeartbeat, "user_id", false);
+      return database.addTextColumn(
+        VWORLD_PLAYER_HEARTBEAT_TABLE,
+        "user_id",
+        false,
+      );
     },
     "user_id",
   );
   step(
     "addIntegerColumn",
-    tables.playerHeartbeat,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.playerHeartbeat,
+        VWORLD_PLAYER_HEARTBEAT_TABLE,
         "heartbeat_ts",
         false,
       );
     },
     "heartbeat_ts",
   );
-  step("addUniqueIndex", tables.playerHeartbeat, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_HEARTBEAT_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerHeartbeat,
+      VWORLD_PLAYER_HEARTBEAT_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.eventSeq, function () {
-    return database.createTable(tables.eventSeq);
+  step("createTable", VWORLD_EVENT_SEQ_TABLE, function () {
+    return database.createTable(VWORLD_EVENT_SEQ_TABLE);
   });
   step(
     "addTextColumn",
-    tables.eventSeq,
+    VWORLD_EVENT_SEQ_TABLE,
     function () {
-      return database.addTextColumn(tables.eventSeq, "scope_key", false);
+      return database.addTextColumn(VWORLD_EVENT_SEQ_TABLE, "scope_key", false);
     },
     "scope_key",
   );
   step(
     "addIntegerColumn",
-    tables.eventSeq,
+    VWORLD_EVENT_SEQ_TABLE,
     function () {
-      return database.addIntegerColumn(tables.eventSeq, "seq", false);
+      return database.addIntegerColumn(VWORLD_EVENT_SEQ_TABLE, "seq", false);
     },
     "seq",
   );
-  step("addUniqueIndex", tables.eventSeq, function () {
+  step("addUniqueIndex", VWORLD_EVENT_SEQ_TABLE, function () {
     return database.addUniqueIndex(
-      tables.eventSeq,
+      VWORLD_EVENT_SEQ_TABLE,
       JSON.stringify(["scope_key"]),
     );
   });
 
-  step("createTable", tables.playerMoveLease, function () {
-    return database.createTable(tables.playerMoveLease);
+  step("createTable", VWORLD_PLAYER_MOVE_LEASE_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_MOVE_LEASE_TABLE);
   });
   step(
     "addTextColumn",
-    tables.playerMoveLease,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
     function () {
-      return database.addTextColumn(tables.playerMoveLease, "user_id", false);
+      return database.addTextColumn(
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
+        "user_id",
+        false,
+      );
     },
     "user_id",
   );
   step(
     "addTextColumn",
-    tables.playerMoveLease,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
     function () {
       return database.addTextColumn(
-        tables.playerMoveLease,
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
         "session_id",
         false,
       );
@@ -492,25 +440,25 @@ export function ensureWorldDatabaseSchema(
   );
   step(
     "addIntegerColumn",
-    tables.playerMoveLease,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.playerMoveLease,
+        VWORLD_PLAYER_MOVE_LEASE_TABLE,
         "expires_ts",
         false,
       );
     },
     "expires_ts",
   );
-  step("addUniqueIndex", tables.playerMoveLease, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_MOVE_LEASE_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerMoveLease,
+      VWORLD_PLAYER_MOVE_LEASE_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.onlinePresence, function () {
-    return database.createTable(tables.onlinePresence);
+  step("createTable", VWORLD_ONLINE_PRESENCE_TABLE, function () {
+    return database.createTable(VWORLD_ONLINE_PRESENCE_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -522,16 +470,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.onlinePresence,
+      VWORLD_ONLINE_PRESENCE_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.onlinePresence,
+              VWORLD_ONLINE_PRESENCE_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.onlinePresence,
+              VWORLD_ONLINE_PRESENCE_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -539,15 +487,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.onlinePresence, function () {
+  step("addUniqueIndex", VWORLD_ONLINE_PRESENCE_TABLE, function () {
     return database.addUniqueIndex(
-      tables.onlinePresence,
+      VWORLD_ONLINE_PRESENCE_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.playerNick, function () {
-    return database.createTable(tables.playerNick);
+  step("createTable", VWORLD_PLAYER_NICK_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_NICK_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -556,16 +504,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.playerNick,
+      VWORLD_PLAYER_NICK_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.playerNick,
+              VWORLD_PLAYER_NICK_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.playerNick,
+              VWORLD_PLAYER_NICK_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -573,15 +521,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.playerNick, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_NICK_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerNick,
+      VWORLD_PLAYER_NICK_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.playerWorld, function () {
-    return database.createTable(tables.playerWorld);
+  step("createTable", VWORLD_PLAYER_WORLD_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_WORLD_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -590,16 +538,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.playerWorld,
+      VWORLD_PLAYER_WORLD_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.playerWorld,
+              VWORLD_PLAYER_WORLD_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.playerWorld,
+              VWORLD_PLAYER_WORLD_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -607,15 +555,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.playerWorld, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_WORLD_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerWorld,
+      VWORLD_PLAYER_WORLD_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.playerPosition, function () {
-    return database.createTable(tables.playerPosition);
+  step("createTable", VWORLD_PLAYER_POSITION_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_POSITION_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -629,16 +577,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.playerPosition,
+      VWORLD_PLAYER_POSITION_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.playerPosition,
+              VWORLD_PLAYER_POSITION_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.playerPosition,
+              VWORLD_PLAYER_POSITION_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -646,15 +594,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.playerPosition, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_POSITION_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerPosition,
+      VWORLD_PLAYER_POSITION_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.playerInventory, function () {
-    return database.createTable(tables.playerInventory);
+  step("createTable", VWORLD_PLAYER_INVENTORY_TABLE, function () {
+    return database.createTable(VWORLD_PLAYER_INVENTORY_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -666,16 +614,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.playerInventory,
+      VWORLD_PLAYER_INVENTORY_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.playerInventory,
+              VWORLD_PLAYER_INVENTORY_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.playerInventory,
+              VWORLD_PLAYER_INVENTORY_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -683,15 +631,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.playerInventory, function () {
+  step("addUniqueIndex", VWORLD_PLAYER_INVENTORY_TABLE, function () {
     return database.addUniqueIndex(
-      tables.playerInventory,
+      VWORLD_PLAYER_INVENTORY_TABLE,
       JSON.stringify(["user_id"]),
     );
   });
 
-  step("createTable", tables.worldMod, function () {
-    return database.createTable(tables.worldMod);
+  step("createTable", VWORLD_WORLD_MOD_TABLE, function () {
+    return database.createTable(VWORLD_WORLD_MOD_TABLE);
   });
   [
     ["addTextColumn", "world_id", false],
@@ -707,16 +655,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.worldMod,
+      VWORLD_WORLD_MOD_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.worldMod,
+              VWORLD_WORLD_MOD_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.worldMod,
+              VWORLD_WORLD_MOD_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -724,15 +672,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.worldMod, function () {
+  step("addUniqueIndex", VWORLD_WORLD_MOD_TABLE, function () {
     return database.addUniqueIndex(
-      tables.worldMod,
+      VWORLD_WORLD_MOD_TABLE,
       JSON.stringify(["world_id", "tile_key", "layer"]),
     );
   });
 
-  step("createTable", tables.worldItem, function () {
-    return database.createTable(tables.worldItem);
+  step("createTable", VWORLD_WORLD_ITEM_TABLE, function () {
+    return database.createTable(VWORLD_WORLD_ITEM_TABLE);
   });
   [
     ["addTextColumn", "item_id", false],
@@ -747,16 +695,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.worldItem,
+      VWORLD_WORLD_ITEM_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.worldItem,
+              VWORLD_WORLD_ITEM_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.worldItem,
+              VWORLD_WORLD_ITEM_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -764,30 +712,34 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.worldItem, function () {
+  step("addUniqueIndex", VWORLD_WORLD_ITEM_TABLE, function () {
     return database.addUniqueIndex(
-      tables.worldItem,
+      VWORLD_WORLD_ITEM_TABLE,
       JSON.stringify(["item_id"]),
     );
   });
 
-  step("createTable", tables.worldItemMeta, function () {
-    return database.createTable(tables.worldItemMeta);
+  step("createTable", VWORLD_WORLD_ITEM_META_TABLE, function () {
+    return database.createTable(VWORLD_WORLD_ITEM_META_TABLE);
   });
   step(
     "addTextColumn",
-    tables.worldItemMeta,
+    VWORLD_WORLD_ITEM_META_TABLE,
     function () {
-      return database.addTextColumn(tables.worldItemMeta, "world_id", false);
+      return database.addTextColumn(
+        VWORLD_WORLD_ITEM_META_TABLE,
+        "world_id",
+        false,
+      );
     },
     "world_id",
   );
   step(
     "addIntegerColumn",
-    tables.worldItemMeta,
+    VWORLD_WORLD_ITEM_META_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.worldItemMeta,
+        VWORLD_WORLD_ITEM_META_TABLE,
         "next_item_seq",
         false,
         "0",
@@ -797,10 +749,10 @@ export function ensureWorldDatabaseSchema(
   );
   step(
     "addIntegerColumn",
-    tables.worldItemMeta,
+    VWORLD_WORLD_ITEM_META_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.worldItemMeta,
+        VWORLD_WORLD_ITEM_META_TABLE,
         "seeded",
         false,
         "0",
@@ -810,25 +762,25 @@ export function ensureWorldDatabaseSchema(
   );
   step(
     "addIntegerColumn",
-    tables.worldItemMeta,
+    VWORLD_WORLD_ITEM_META_TABLE,
     function () {
       return database.addIntegerColumn(
-        tables.worldItemMeta,
+        VWORLD_WORLD_ITEM_META_TABLE,
         "updated_ts",
         false,
       );
     },
     "updated_ts",
   );
-  step("addUniqueIndex", tables.worldItemMeta, function () {
+  step("addUniqueIndex", VWORLD_WORLD_ITEM_META_TABLE, function () {
     return database.addUniqueIndex(
-      tables.worldItemMeta,
+      VWORLD_WORLD_ITEM_META_TABLE,
       JSON.stringify(["world_id"]),
     );
   });
 
-  step("createTable", tables.itemClass, function () {
-    return database.createTable(tables.itemClass);
+  step("createTable", VWORLD_ITEM_CLASS_TABLE, function () {
+    return database.createTable(VWORLD_ITEM_CLASS_TABLE);
   });
   [
     ["addTextColumn", "class_id", false],
@@ -846,16 +798,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.itemClass,
+      VWORLD_ITEM_CLASS_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.itemClass,
+              VWORLD_ITEM_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.itemClass,
+              VWORLD_ITEM_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -863,15 +815,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.itemClass, function () {
+  step("addUniqueIndex", VWORLD_ITEM_CLASS_TABLE, function () {
     return database.addUniqueIndex(
-      tables.itemClass,
+      VWORLD_ITEM_CLASS_TABLE,
       JSON.stringify(["class_id"]),
     );
   });
 
-  step("createTable", tables.actionClass, function () {
-    return database.createTable(tables.actionClass);
+  step("createTable", VWORLD_ACTION_CLASS_TABLE, function () {
+    return database.createTable(VWORLD_ACTION_CLASS_TABLE);
   });
   [
     ["addTextColumn", "action_id", false],
@@ -888,16 +840,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.actionClass,
+      VWORLD_ACTION_CLASS_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.actionClass,
+              VWORLD_ACTION_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.actionClass,
+              VWORLD_ACTION_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -905,15 +857,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.actionClass, function () {
+  step("addUniqueIndex", VWORLD_ACTION_CLASS_TABLE, function () {
     return database.addUniqueIndex(
-      tables.actionClass,
+      VWORLD_ACTION_CLASS_TABLE,
       JSON.stringify(["action_id"]),
     );
   });
 
-  step("createTable", tables.livingClass, function () {
-    return database.createTable(tables.livingClass);
+  step("createTable", VWORLD_LIVING_CLASS_TABLE, function () {
+    return database.createTable(VWORLD_LIVING_CLASS_TABLE);
   });
   [
     ["addTextColumn", "class_id", false],
@@ -928,16 +880,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.livingClass,
+      VWORLD_LIVING_CLASS_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.livingClass,
+              VWORLD_LIVING_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.livingClass,
+              VWORLD_LIVING_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -945,15 +897,15 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.livingClass, function () {
+  step("addUniqueIndex", VWORLD_LIVING_CLASS_TABLE, function () {
     return database.addUniqueIndex(
-      tables.livingClass,
+      VWORLD_LIVING_CLASS_TABLE,
       JSON.stringify(["class_id"]),
     );
   });
 
-  step("createTable", tables.worldClass, function () {
-    return database.createTable(tables.worldClass);
+  step("createTable", VWORLD_WORLD_CLASS_TABLE, function () {
+    return database.createTable(VWORLD_WORLD_CLASS_TABLE);
   });
   [
     ["addTextColumn", "class_id", false],
@@ -967,16 +919,16 @@ export function ensureWorldDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.worldClass,
+      VWORLD_WORLD_CLASS_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.worldClass,
+              VWORLD_WORLD_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.worldClass,
+              VWORLD_WORLD_CLASS_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -984,51 +936,28 @@ export function ensureWorldDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.worldClass, function () {
+  step("addUniqueIndex", VWORLD_WORLD_CLASS_TABLE, function () {
     return database.addUniqueIndex(
-      tables.worldClass,
+      VWORLD_WORLD_CLASS_TABLE,
       JSON.stringify(["class_id"]),
     );
   });
 
-  ensureLateWorldDatabaseSchema(
-    {
-      worldType: tables.worldType,
-      npc: tables.npc,
-      npcActiveWorld: tables.npcActiveWorld,
-      npcTick: tables.npcTick,
-      npcTickLease: tables.npcTickLease,
-    },
-    parseWorldDbResult,
-    log,
-  );
+  ensureLateWorldDatabaseSchema();
 }
 
-export function ensureChatDatabaseSchema(
-  tables: ChatSchemaTables,
-  parseChatDbResult: ParseFn,
-  log: SchemaLogFn,
-  collector?: Array<any>,
-): void {
+export function ensureChatDatabaseSchema(collector?: Array<any>): void {
   const step = function (
     op: string,
     tableName: string,
     run: () => string,
     columnName?: string,
   ) {
-    runChatSchemaStep(
-      op,
-      tableName,
-      run,
-      parseChatDbResult,
-      log,
-      columnName,
-      collector,
-    );
+    runChatSchemaStep(op, tableName, run, columnName, collector);
   };
 
-  step("createTable", tables.chat, function () {
-    return database.createTable(tables.chat);
+  step("createTable", VWORLD_CHAT_TABLE, function () {
+    return database.createTable(VWORLD_CHAT_TABLE);
   });
   [
     ["addTextColumn", "message_id", false],
@@ -1040,16 +969,16 @@ export function ensureChatDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.chat,
+      VWORLD_CHAT_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.chat,
+              VWORLD_CHAT_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.chat,
+              VWORLD_CHAT_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -1057,12 +986,15 @@ export function ensureChatDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.chat, function () {
-    return database.addUniqueIndex(tables.chat, JSON.stringify(["message_id"]));
+  step("addUniqueIndex", VWORLD_CHAT_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_CHAT_TABLE,
+      JSON.stringify(["message_id"]),
+    );
   });
 
-  step("createTable", tables.dm, function () {
-    return database.createTable(tables.dm);
+  step("createTable", VWORLD_DM_TABLE, function () {
+    return database.createTable(VWORLD_DM_TABLE);
   });
   [
     ["addTextColumn", "message_id", false],
@@ -1075,16 +1007,16 @@ export function ensureChatDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.dm,
+      VWORLD_DM_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.dm,
+              VWORLD_DM_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.dm,
+              VWORLD_DM_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -1092,12 +1024,15 @@ export function ensureChatDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.dm, function () {
-    return database.addUniqueIndex(tables.dm, JSON.stringify(["message_id"]));
+  step("addUniqueIndex", VWORLD_DM_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_DM_TABLE,
+      JSON.stringify(["message_id"]),
+    );
   });
 
-  step("createTable", tables.dmIndex, function () {
-    return database.createTable(tables.dmIndex);
+  step("createTable", VWORLD_DM_INDEX_TABLE, function () {
+    return database.createTable(VWORLD_DM_INDEX_TABLE);
   });
   [
     ["addTextColumn", "user_id", false],
@@ -1106,16 +1041,16 @@ export function ensureChatDatabaseSchema(
   ].forEach(function (entry) {
     step(
       String(entry[0]),
-      tables.dmIndex,
+      VWORLD_DM_INDEX_TABLE,
       function () {
         return entry[0] === "addIntegerColumn"
           ? database.addIntegerColumn(
-              tables.dmIndex,
+              VWORLD_DM_INDEX_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             )
           : database.addTextColumn(
-              tables.dmIndex,
+              VWORLD_DM_INDEX_TABLE,
               String(entry[1]),
               Boolean(entry[2]),
             );
@@ -1123,9 +1058,9 @@ export function ensureChatDatabaseSchema(
       String(entry[1]),
     );
   });
-  step("addUniqueIndex", tables.dmIndex, function () {
+  step("addUniqueIndex", VWORLD_DM_INDEX_TABLE, function () {
     return database.addUniqueIndex(
-      tables.dmIndex,
+      VWORLD_DM_INDEX_TABLE,
       JSON.stringify(["user_id", "other_user_id"]),
     );
   });

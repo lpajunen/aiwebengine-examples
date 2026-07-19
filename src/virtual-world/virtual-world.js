@@ -265,34 +265,21 @@ import {
   VWORLD_CHAT_TABLE,
   VWORLD_DM_INDEX_TABLE,
   VWORLD_DM_TABLE,
-  VWORLD_EVENT_SEQ_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
   VWORLD_LIVING_CLASS_TABLE,
-  VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
   VWORLD_NPC_TICK_LEASE_TABLE,
   VWORLD_NPC_TICK_TABLE,
-  VWORLD_ONLINE_PRESENCE_TABLE,
-  VWORLD_PLAYER_HEARTBEAT_TABLE,
-  VWORLD_PLAYER_INVENTORY_TABLE,
-  VWORLD_PLAYER_MOVE_LEASE_TABLE,
-  VWORLD_PLAYER_NICK_TABLE,
-  VWORLD_PLAYER_POSITION_TABLE,
-  VWORLD_PLAYER_WORLD_TABLE,
   VWORLD_WORLD_CLASS_TABLE,
-  VWORLD_WORLD_ITEM_META_TABLE,
-  VWORLD_WORLD_ITEM_TABLE,
-  VWORLD_WORLD_MOD_TABLE,
-  VWORLD_WORLD_TYPE_TABLE,
   WORLD_CHAT_MAX,
   WORLD_ITEM_SPAWN_COUNT,
 } from "./server/runtime-config.ts";
 import {
   nextDiagRequestId,
+  vwLog,
   summarizeInventory,
   summarizeItems,
   vwDiag,
-  vwLog,
 } from "./server/diagnostics.ts";
 
 // Virtual World - 2.5D block world with Three.js
@@ -337,7 +324,7 @@ function isPickableWorldItem(item) {
  * @returns {number[][]}
  */
 function generateMap(worldId) {
-  var info = getWorldInfoImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
+  var info = getWorldInfoImpl(worldId);
   return generateWorldMap(worldId, info.world_type, info.rows, info.cols);
 }
 
@@ -346,7 +333,7 @@ function generateMap(worldId) {
  * @returns {string}
  */
 function getPlayerWorld(userId) {
-  return getPlayerWorldImpl(userId, VWORLD_PLAYER_WORLD_TABLE, vwLog);
+  return getPlayerWorldImpl(userId);
 }
 
 /**
@@ -355,7 +342,7 @@ function getPlayerWorld(userId) {
  * @returns {string}
  */
 function savePlayerWorld(userId, worldId) {
-  return savePlayerWorldImpl(userId, worldId, VWORLD_PLAYER_WORLD_TABLE, vwLog);
+  return savePlayerWorldImpl(userId, worldId);
 }
 
 /**
@@ -371,14 +358,14 @@ function normalizePlayerPositionRow(row) {
  * @returns {{world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number} | null}
  */
 function loadPlayerPosition(userId) {
-  return loadPlayerPositionImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
+  return loadPlayerPositionImpl(userId);
 }
 
 /**
  * @returns {Record<string, {world_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, ts: number}>}
  */
 function loadAllPlayerPositions() {
-  return loadAllPlayerPositionsImpl(VWORLD_PLAYER_POSITION_TABLE, vwLog);
+  return loadAllPlayerPositionsImpl();
 }
 
 /**
@@ -387,20 +374,14 @@ function loadAllPlayerPositions() {
  * @param {{row:number,col:number,seq:number,rotation:number,session_id?:string,ts?:number}} position
  */
 function savePlayerPosition(userId, worldId, position) {
-  savePlayerPositionImpl(
-    userId,
-    worldId,
-    position,
-    VWORLD_PLAYER_POSITION_TABLE,
-    vwLog,
-  );
+  savePlayerPositionImpl(userId, worldId, position);
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerPosition(userId) {
-  deletePlayerPositionImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
+  deletePlayerPositionImpl(userId);
 }
 
 /**
@@ -408,7 +389,7 @@ function deletePlayerPosition(userId) {
  * @returns {{session_id: string, expires_at: number} | null}
  */
 function loadPlayerMoveLease(userId) {
-  return loadPlayerMoveLeaseImpl(userId, VWORLD_PLAYER_MOVE_LEASE_TABLE, vwLog);
+  return loadPlayerMoveLeaseImpl(userId);
 }
 
 /**
@@ -417,20 +398,14 @@ function loadPlayerMoveLease(userId) {
  * @param {number} expiresAt
  */
 function savePlayerMoveLease(userId, sessionId, expiresAt) {
-  savePlayerMoveLeaseImpl(
-    userId,
-    sessionId,
-    expiresAt,
-    VWORLD_PLAYER_MOVE_LEASE_TABLE,
-    vwLog,
-  );
+  savePlayerMoveLeaseImpl(userId, sessionId, expiresAt);
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerMoveLease(userId) {
-  deletePlayerMoveLeaseImpl(userId, VWORLD_PLAYER_MOVE_LEASE_TABLE, vwLog);
+  deletePlayerMoveLeaseImpl(userId);
 }
 
 /**
@@ -438,18 +413,14 @@ function deletePlayerMoveLease(userId) {
  * @returns {number}
  */
 function loadPlayerHeartbeatTs(userId) {
-  return loadPlayerHeartbeatTsImpl(
-    userId,
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    vwLog,
-  );
+  return loadPlayerHeartbeatTsImpl(userId);
 }
 
 /**
  * @returns {Record<string, number>}
  */
 function loadPlayerHeartbeatMap() {
-  return loadPlayerHeartbeatMapImpl(VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
+  return loadPlayerHeartbeatMapImpl();
 }
 
 /**
@@ -457,26 +428,21 @@ function loadPlayerHeartbeatMap() {
  * @param {number} heartbeatTs
  */
 function savePlayerHeartbeatTs(userId, heartbeatTs) {
-  savePlayerHeartbeatTsImpl(
-    userId,
-    heartbeatTs,
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    vwLog,
-  );
+  savePlayerHeartbeatTsImpl(userId, heartbeatTs);
 }
 
 /**
  * @param {string} userId
  */
 function deletePlayerHeartbeat(userId) {
-  deletePlayerHeartbeatImpl(userId, VWORLD_PLAYER_HEARTBEAT_TABLE, vwLog);
+  deletePlayerHeartbeatImpl(userId);
 }
 
 /**
  * @param {string} userId
  */
 function markPlayerPositionInactive(userId) {
-  markPlayerPositionInactiveImpl(userId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
+  markPlayerPositionInactiveImpl(userId);
 }
 
 /**
@@ -497,7 +463,7 @@ function getOrCreatePlayerWorld(userId) {
  * @returns {string}
  */
 function getWorldType(worldId) {
-  return getWorldTypeImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
+  return getWorldTypeImpl(worldId);
 }
 
 /**
@@ -507,13 +473,7 @@ function getWorldType(worldId) {
  * @returns {string}
  */
 function saveWorldType(worldId, worldType, dimensions) {
-  return saveWorldTypeImpl(
-    worldId,
-    worldType,
-    VWORLD_WORLD_TYPE_TABLE,
-    vwLog,
-    dimensions,
-  );
+  return saveWorldTypeImpl(worldId, worldType, dimensions);
 }
 
 /**
@@ -521,7 +481,7 @@ function saveWorldType(worldId, worldType, dimensions) {
  * @returns {{rows: number, cols: number}}
  */
 function getWorldDimensions(worldId) {
-  return getWorldDimensionsImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
+  return getWorldDimensionsImpl(worldId);
 }
 
 /**
@@ -534,7 +494,7 @@ function getWorldDimensions(worldId) {
 function getWorldClassWithRefresh(classId) {
   var cls = getWorldClassImpl(classId);
   if (cls) return cls;
-  refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+  refreshWorldClassCacheImpl();
   return getWorldClassImpl(classId);
 }
 
@@ -626,7 +586,7 @@ function getAllLivingClasses() {
  * @returns {Record<string, any>}
  */
 function loadWorldPlayers(worldId) {
-  return loadWorldPlayersImpl(worldId, VWORLD_PLAYER_POSITION_TABLE, vwLog);
+  return loadWorldPlayersImpl(worldId);
 }
 
 /**
@@ -634,7 +594,7 @@ function loadWorldPlayers(worldId) {
  * @returns {Record<string, any>}
  */
 function loadWorldTrees(worldId) {
-  return loadWorldTreesImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
+  return loadWorldTreesImpl(worldId);
 }
 
 /**
@@ -642,7 +602,7 @@ function loadWorldTrees(worldId) {
  * @param {Record<string, any>} trees
  */
 function saveWorldTrees(worldId, trees) {
-  saveWorldTreesImpl(worldId, trees, VWORLD_WORLD_MOD_TABLE, vwLog);
+  saveWorldTreesImpl(worldId, trees);
 }
 
 /**
@@ -658,7 +618,7 @@ function worldHouseStorageKey(worldId) {
  * @returns {Record<string, any>}
  */
 function loadWorldHouses(worldId) {
-  return loadWorldHousesImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
+  return loadWorldHousesImpl(worldId);
 }
 
 /**
@@ -666,7 +626,7 @@ function loadWorldHouses(worldId) {
  * @param {Record<string, any>} houses
  */
 function saveWorldHouses(worldId, houses) {
-  saveWorldHousesImpl(worldId, houses, VWORLD_WORLD_MOD_TABLE, vwLog);
+  saveWorldHousesImpl(worldId, houses);
 }
 
 /**
@@ -681,7 +641,7 @@ function createEmptyWorldMods() {
  * @returns {*}
  */
 function parseWorldModPayload(raw) {
-  return parseWorldModPayloadImpl(raw, vwLog);
+  return parseWorldModPayloadImpl(raw);
 }
 
 /**
@@ -689,7 +649,7 @@ function parseWorldModPayload(raw) {
  * @returns {Record<string, Record<string, any>>}
  */
 function loadWorldMods(worldId) {
-  return loadWorldModsImpl(worldId, VWORLD_WORLD_MOD_TABLE, vwLog);
+  return loadWorldModsImpl(worldId);
 }
 
 /**
@@ -699,14 +659,7 @@ function loadWorldMods(worldId) {
  * @param {Record<string, any>} entries
  */
 function saveWorldModLayer(worldId, layer, sourceKind, entries) {
-  saveWorldModLayerImpl(
-    worldId,
-    layer,
-    sourceKind,
-    entries,
-    VWORLD_WORLD_MOD_TABLE,
-    vwLog,
-  );
+  saveWorldModLayerImpl(worldId, layer, sourceKind, entries);
 }
 
 /**
@@ -751,7 +704,7 @@ function ensureStarterKit(userId) {
  * @returns {{class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}}
  */
 function loadPlayerInventory(userId) {
-  return loadPlayerInventoryImpl(userId, VWORLD_PLAYER_INVENTORY_TABLE, vwLog);
+  return loadPlayerInventoryImpl(userId);
 }
 
 /**
@@ -759,12 +712,7 @@ function loadPlayerInventory(userId) {
  * @param {*} inventory
  */
 function savePlayerInventory(userId, inventory) {
-  savePlayerInventoryImpl(
-    userId,
-    inventory,
-    VWORLD_PLAYER_INVENTORY_TABLE,
-    vwLog,
-  );
+  savePlayerInventoryImpl(userId, inventory);
 }
 
 // ── Player nicknames ──────────────────────────────────────────────────────────
@@ -774,7 +722,7 @@ function savePlayerInventory(userId, inventory) {
  * @returns {string}
  */
 function loadPlayerNick(userId) {
-  return loadPlayerNickImpl(userId, VWORLD_PLAYER_NICK_TABLE, vwLog);
+  return loadPlayerNickImpl(userId);
 }
 
 /**
@@ -782,7 +730,7 @@ function loadPlayerNick(userId) {
  * @param {string} nick
  */
 function savePlayerNick(userId, nick) {
-  savePlayerNickImpl(userId, nick, VWORLD_PLAYER_NICK_TABLE, vwLog);
+  savePlayerNickImpl(userId, nick);
 }
 
 /**
@@ -791,7 +739,7 @@ function savePlayerNick(userId, nick) {
  * @returns {string}
  */
 function getEffectiveNick(userId) {
-  return getEffectiveNickImpl(userId, VWORLD_PLAYER_NICK_TABLE, vwLog);
+  return getEffectiveNickImpl(userId);
 }
 
 // ── Global online presence ────────────────────────────────────────────────────
@@ -837,14 +785,7 @@ function sendGlobalPresenceEvent(
  * @param {string} sessionId
  */
 function updateOnlinePresence(userId, worldId, sessionId) {
-  var result = updateOnlinePresenceImpl(
-    userId,
-    worldId,
-    sessionId,
-    VWORLD_ONLINE_PRESENCE_TABLE,
-    VWORLD_PLAYER_NICK_TABLE,
-    vwLog,
-  );
+  var result = updateOnlinePresenceImpl(userId, worldId, sessionId);
   if (result && result.changed) {
     sendGlobalPresenceEvent(
       "upsert",
@@ -862,7 +803,7 @@ function updateOnlinePresence(userId, worldId, sessionId) {
  * @param {string} userId
  */
 function deleteOnlinePresence(userId) {
-  deleteOnlinePresenceImpl(userId, VWORLD_ONLINE_PRESENCE_TABLE, vwLog);
+  deleteOnlinePresenceImpl(userId);
 }
 
 /**
@@ -870,15 +811,7 @@ function deleteOnlinePresence(userId) {
  * @returns {Array<{player_id: string, nick: string, world_id: string, login_at: number, last_active: number}>}
  */
 function buildOnlinePlayersSnapshot() {
-  return buildOnlinePlayersSnapshotImpl(
-    VWORLD_ONLINE_PRESENCE_TABLE,
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    VWORLD_PLAYER_POSITION_TABLE,
-    VWORLD_PLAYER_WORLD_TABLE,
-    VWORLD_PLAYER_NICK_TABLE,
-    vwLog,
-    90000,
-  );
+  return buildOnlinePlayersSnapshotImpl(90000);
 }
 
 // ── World chat ────────────────────────────────────────────────────────────────
@@ -902,7 +835,7 @@ function parseChatDbResult(raw) {
  * @returns {*}
  */
 function parseWorldDbResult(raw) {
-  return parseWorldDbResultImpl(raw, vwLog);
+  return parseWorldDbResultImpl(raw);
 }
 
 /**
@@ -1013,15 +946,7 @@ function executeSchemaStep(scope, op, tableName, run, columnName, collector) {
  * @returns {*}
  */
 function runWorldSchemaStep(op, tableName, run, columnName, collector) {
-  return runWorldSchemaStepImpl(
-    op,
-    tableName,
-    run,
-    parseWorldDbResult,
-    vwLog,
-    columnName,
-    collector,
-  );
+  return runWorldSchemaStepImpl(op, tableName, run, columnName, collector);
 }
 
 /**
@@ -1033,33 +958,14 @@ function runWorldSchemaStep(op, tableName, run, columnName, collector) {
  * @returns {*}
  */
 function runChatSchemaStep(op, tableName, run, columnName, collector) {
-  return runChatSchemaStepImpl(
-    op,
-    tableName,
-    run,
-    parseChatDbResult,
-    vwLog,
-    columnName,
-    collector,
-  );
+  return runChatSchemaStepImpl(op, tableName, run, columnName, collector);
 }
 
 /**
  * @param {Array<any>} [collector]
  */
 function ensureLateWorldDatabaseSchema(collector) {
-  ensureLateWorldDatabaseSchemaImpl(
-    {
-      worldType: VWORLD_WORLD_TYPE_TABLE,
-      npc: VWORLD_NPC_TABLE,
-      npcActiveWorld: VWORLD_NPC_ACTIVE_WORLD_TABLE,
-      npcTick: VWORLD_NPC_TICK_TABLE,
-      npcTickLease: VWORLD_NPC_TICK_LEASE_TABLE,
-    },
-    parseWorldDbResult,
-    vwLog,
-    collector,
-  );
+  ensureLateWorldDatabaseSchemaImpl(collector);
 }
 
 /**
@@ -1071,14 +977,7 @@ function ensureLateWorldDatabaseSchema(collector) {
  * @returns {any[]}
  */
 function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
-  return queryWorldRowsImpl(
-    tableName,
-    filters,
-    limit,
-    orderBy,
-    orderDir,
-    vwLog,
-  );
+  return queryWorldRowsImpl(tableName, filters, limit, orderBy, orderDir);
 }
 
 /**
@@ -1087,7 +986,7 @@ function queryWorldRows(tableName, filters, limit, orderBy, orderDir) {
  * @returns {*}
  */
 function insertWorldRow(tableName, data) {
-  return insertWorldRowImpl(tableName, data, vwLog);
+  return insertWorldRowImpl(tableName, data);
 }
 
 /**
@@ -1097,7 +996,7 @@ function insertWorldRow(tableName, data) {
  * @returns {*}
  */
 function upsertWorldRow(tableName, keyColumns, data) {
-  return upsertWorldRowImpl(tableName, keyColumns, data, vwLog);
+  return upsertWorldRowImpl(tableName, keyColumns, data);
 }
 
 /**
@@ -1107,7 +1006,7 @@ function upsertWorldRow(tableName, keyColumns, data) {
  * @returns {*}
  */
 function updateWorldRow(tableName, id, data) {
-  return updateWorldRowImpl(tableName, id, data, vwLog);
+  return updateWorldRowImpl(tableName, id, data);
 }
 
 /**
@@ -1115,7 +1014,7 @@ function updateWorldRow(tableName, id, data) {
  * @param {string} filters
  */
 function deleteWorldRowsWhere(tableName, filters) {
-  deleteWorldRowsWhereImpl(tableName, filters, vwLog);
+  deleteWorldRowsWhereImpl(tableName, filters);
 }
 
 /**
@@ -1123,7 +1022,7 @@ function deleteWorldRowsWhere(tableName, filters) {
  * @param {number} id
  */
 function deleteWorldRow(tableName, id) {
-  deleteWorldRowImpl(tableName, id, vwLog);
+  deleteWorldRowImpl(tableName, id);
 }
 
 /**
@@ -1132,52 +1031,18 @@ function deleteWorldRow(tableName, id) {
  * @returns {any | null}
  */
 function querySingleWorldRow(tableName, filters) {
-  return querySingleWorldRowImpl(tableName, filters, vwLog);
+  return querySingleWorldRowImpl(tableName, filters);
 }
 
 function ensureWorldDatabaseSchema() {
-  ensureWorldDatabaseSchemaImpl(
-    {
-      worldType: VWORLD_WORLD_TYPE_TABLE,
-      npc: VWORLD_NPC_TABLE,
-      npcActiveWorld: VWORLD_NPC_ACTIVE_WORLD_TABLE,
-      npcTick: VWORLD_NPC_TICK_TABLE,
-      npcTickLease: VWORLD_NPC_TICK_LEASE_TABLE,
-      playerHeartbeat: VWORLD_PLAYER_HEARTBEAT_TABLE,
-      playerMoveLease: VWORLD_PLAYER_MOVE_LEASE_TABLE,
-      onlinePresence: VWORLD_ONLINE_PRESENCE_TABLE,
-      playerNick: VWORLD_PLAYER_NICK_TABLE,
-      playerWorld: VWORLD_PLAYER_WORLD_TABLE,
-      playerPosition: VWORLD_PLAYER_POSITION_TABLE,
-      playerInventory: VWORLD_PLAYER_INVENTORY_TABLE,
-      worldMod: VWORLD_WORLD_MOD_TABLE,
-      worldItem: VWORLD_WORLD_ITEM_TABLE,
-      worldItemMeta: VWORLD_WORLD_ITEM_META_TABLE,
-      itemClass: VWORLD_ITEM_CLASS_TABLE,
-      actionClass: VWORLD_ACTION_CLASS_TABLE,
-      livingClass: VWORLD_LIVING_CLASS_TABLE,
-      worldClass: VWORLD_WORLD_CLASS_TABLE,
-      eventSeq: VWORLD_EVENT_SEQ_TABLE,
-    },
-    parseWorldDbResult,
-    vwLog,
-  );
+  ensureWorldDatabaseSchemaImpl();
 }
 
 /**
  * @param {Array<any>} [collector]
  */
 function ensureChatDatabaseSchema(collector) {
-  ensureChatDatabaseSchemaImpl(
-    {
-      chat: VWORLD_CHAT_TABLE,
-      dm: VWORLD_DM_TABLE,
-      dmIndex: VWORLD_DM_INDEX_TABLE,
-    },
-    parseChatDbResult,
-    vwLog,
-    collector,
-  );
+  ensureChatDatabaseSchemaImpl(collector);
 }
 
 /**
@@ -1333,7 +1198,7 @@ function normalizeDMRows(rows) {
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,text:string,ts:number}>}
  */
 function loadWorldChat(worldId) {
-  return loadWorldChatImpl(worldId, VWORLD_CHAT_TABLE, WORLD_CHAT_MAX, vwLog);
+  return loadWorldChatImpl(worldId);
 }
 
 /**
@@ -1341,13 +1206,7 @@ function loadWorldChat(worldId) {
  * @param {{id:string,sender_id:string,sender_nick:string,text:string,ts:number}} msg
  */
 function appendWorldChatMessage(worldId, msg) {
-  appendWorldChatMessageImpl(
-    worldId,
-    msg,
-    VWORLD_CHAT_TABLE,
-    WORLD_CHAT_MAX,
-    vwLog,
-  );
+  appendWorldChatMessageImpl(worldId, msg);
 }
 
 // ── Direct messages ───────────────────────────────────────────────────────────
@@ -1369,7 +1228,7 @@ function dmConversationKey(a, b) {
  * @returns {Array<{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}>}
  */
 function loadDMHistory(a, b) {
-  return loadDMHistoryImpl(a, b, VWORLD_DM_TABLE, DM_MAX, vwLog);
+  return loadDMHistoryImpl(a, b);
 }
 
 /**
@@ -1378,7 +1237,7 @@ function loadDMHistory(a, b) {
  * @param {{id:string,sender_id:string,sender_nick:string,recipient_id:string,text:string,ts:number}} msg
  */
 function appendDMMessage(a, b, msg) {
-  appendDMMessageImpl(a, b, msg, VWORLD_DM_TABLE, DM_MAX, vwLog);
+  appendDMMessageImpl(a, b, msg);
 }
 
 /**
@@ -1386,7 +1245,7 @@ function appendDMMessage(a, b, msg) {
  * @returns {string[]}
  */
 function loadDMIndex(userId) {
-  return loadDMIndexImpl(userId, VWORLD_DM_INDEX_TABLE, vwLog);
+  return loadDMIndexImpl(userId);
 }
 
 /**
@@ -1395,7 +1254,7 @@ function loadDMIndex(userId) {
  * @param {number} [ts]
  */
 function addToDMIndex(userId, otherUserId, ts) {
-  addToDMIndexImpl(userId, otherUserId, ts, VWORLD_DM_INDEX_TABLE, vwLog);
+  addToDMIndexImpl(userId, otherUserId, ts);
 }
 
 /**
@@ -1403,7 +1262,7 @@ function addToDMIndex(userId, otherUserId, ts) {
  * @returns {{next_item_seq: number, seeded: number, updated_ts: number}}
  */
 function loadWorldItemMeta(worldId) {
-  return loadWorldItemMetaImpl(worldId, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
+  return loadWorldItemMetaImpl(worldId);
 }
 
 /**
@@ -1411,7 +1270,7 @@ function loadWorldItemMeta(worldId) {
  * @param {{next_item_seq:number, seeded:number, updated_ts?:number}} meta
  */
 function saveWorldItemMeta(worldId, meta) {
-  saveWorldItemMetaImpl(worldId, meta, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
+  saveWorldItemMetaImpl(worldId, meta);
 }
 
 /**
@@ -1419,12 +1278,7 @@ function saveWorldItemMeta(worldId, meta) {
  * @returns {Record<string, any[]>}
  */
 function loadWorldItems(worldId) {
-  return loadWorldItemsImpl(
-    worldId,
-    VWORLD_WORLD_ITEM_TABLE,
-    vwLog,
-    resolvePortalDestinationWorldType,
-  );
+  return loadWorldItemsImpl(worldId, resolvePortalDestinationWorldType);
 }
 
 /**
@@ -1432,7 +1286,7 @@ function loadWorldItems(worldId) {
  * @param {Record<string, any[]>} items
  */
 function saveWorldItems(worldId, items) {
-  saveWorldItemsImpl(worldId, items, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  saveWorldItemsImpl(worldId, items);
 }
 
 /**
@@ -1442,7 +1296,7 @@ function saveWorldItems(worldId, items) {
  * @param {*} item
  */
 function upsertWorldItem(worldId, row, col, item) {
-  upsertWorldItemImpl(worldId, row, col, item, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  upsertWorldItemImpl(worldId, row, col, item);
 }
 
 /**
@@ -1450,7 +1304,7 @@ function upsertWorldItem(worldId, row, col, item) {
  * @returns {boolean} true when this call actually deleted the row
  */
 function deleteWorldItemById(itemId) {
-  return deleteWorldItemByIdImpl(itemId, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  return deleteWorldItemByIdImpl(itemId);
 }
 
 /**
@@ -1458,7 +1312,7 @@ function deleteWorldItemById(itemId) {
  * @returns {any[]} the subset of items this call actually claimed
  */
 function deleteWorldItems(items) {
-  return deleteWorldItemsImpl(items, VWORLD_WORLD_ITEM_TABLE, vwLog);
+  return deleteWorldItemsImpl(items);
 }
 
 /**
@@ -1468,7 +1322,7 @@ function deleteWorldItems(items) {
  * @returns {T}
  */
 function runInWorldTransaction(label, fn) {
-  return runInWorldTransactionImpl(label, vwLog, fn);
+  return runInWorldTransactionImpl(label, fn);
 }
 
 /**
@@ -1476,7 +1330,7 @@ function runInWorldTransaction(label, fn) {
  * @returns {number}
  */
 function nextWorldItemId(worldId) {
-  return nextWorldItemIdImpl(worldId, VWORLD_WORLD_ITEM_META_TABLE, vwLog);
+  return nextWorldItemIdImpl(worldId);
 }
 
 /**
@@ -1565,7 +1419,6 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
     type,
     payload,
     filter,
-    vwLog,
   );
 }
 
@@ -1574,7 +1427,7 @@ function sendVirtualWorldStreamEvent(type, payload, filter) {
  * @returns {number}
  */
 function allocateEventSeq(scopeKey) {
-  return allocateEventSeqImpl(scopeKey, VWORLD_EVENT_SEQ_TABLE, vwLog);
+  return allocateEventSeqImpl(scopeKey);
 }
 
 /**
@@ -1582,7 +1435,7 @@ function allocateEventSeq(scopeKey) {
  * @returns {number}
  */
 function getCurrentEventSeq(scopeKey) {
-  return getCurrentEventSeqImpl(scopeKey, VWORLD_EVENT_SEQ_TABLE, vwLog);
+  return getCurrentEventSeqImpl(scopeKey);
 }
 
 /**
@@ -1596,7 +1449,6 @@ function sendWorldScopedStreamEvent(worldId, type, payload) {
     worldId,
     type,
     payload,
-    vwLog,
     allocateEventSeq,
   );
 }
@@ -1612,7 +1464,6 @@ function sendRecipientScopedStreamEvent(recipientId, type, payload) {
     recipientId,
     type,
     payload,
-    vwLog,
     allocateEventSeq,
   );
 }
@@ -1622,7 +1473,7 @@ function sendRecipientScopedStreamEvent(recipientId, type, payload) {
  * @returns {Record<string, any>}
  */
 function loadWorldNPCs(worldId) {
-  return loadWorldNPCsImpl(worldId, VWORLD_NPC_TABLE, vwLog);
+  return loadWorldNPCsImpl(worldId);
 }
 
 /**
@@ -1630,28 +1481,28 @@ function loadWorldNPCs(worldId) {
  * @param {Record<string, any>} npcs
  */
 function saveWorldNPCs(worldId, npcs) {
-  saveWorldNPCsImpl(worldId, npcs, VWORLD_NPC_TABLE, vwLog);
+  saveWorldNPCsImpl(worldId, npcs);
 }
 
 /**
  * @returns {Record<string, number>}
  */
 function loadNPCActiveWorlds() {
-  return loadNPCActiveWorldsImpl(VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
+  return loadNPCActiveWorldsImpl();
 }
 
 /**
  * @param {Record<string, number>} worlds
  */
 function saveNPCActiveWorlds(worlds) {
-  saveNPCActiveWorldsImpl(worlds, VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
+  saveNPCActiveWorldsImpl(worlds);
 }
 
 /**
  * @param {string} worldId
  */
 function markNPCWorldActive(worldId) {
-  markNPCWorldActiveImpl(worldId, VWORLD_NPC_ACTIVE_WORLD_TABLE, vwLog);
+  markNPCWorldActiveImpl(worldId);
 }
 
 /**
@@ -1659,7 +1510,7 @@ function markNPCWorldActive(worldId) {
  * @returns {number}
  */
 function loadNPCLastTick(worldId) {
-  return loadNPCLastTickImpl(worldId, VWORLD_NPC_TICK_TABLE, vwLog);
+  return loadNPCLastTickImpl(worldId);
 }
 
 /**
@@ -1667,7 +1518,7 @@ function loadNPCLastTick(worldId) {
  * @param {number} lastTickTs
  */
 function saveNPCLastTick(worldId, lastTickTs) {
-  saveNPCLastTickImpl(worldId, lastTickTs, VWORLD_NPC_TICK_TABLE, vwLog);
+  saveNPCLastTickImpl(worldId, lastTickTs);
 }
 
 /**
@@ -1950,13 +1801,7 @@ function startNPCTicker() {
  * @returns {{row: number, col: number, seq: number, rotation: number}}
  */
 function getCanonicalPlayerState(worldId, userId) {
-  return getCanonicalPlayerStateImpl(
-    worldId,
-    userId,
-    VWORLD_PLAYER_POSITION_TABLE,
-    vwLog,
-    getDefaultSpawnPosition,
-  );
+  return getCanonicalPlayerStateImpl(worldId, userId, getDefaultSpawnPosition);
 }
 
 /**
@@ -2226,15 +2071,15 @@ function virtualWorldManageItemClassesToolHandler(context) {
     getAuthenticatedUserId: getAuthenticatedUserId,
     hasEditingRights: userHasCreatorStone,
     refreshItemClasses: function () {
-      refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
+      refreshItemClassCacheImpl();
     },
     getAllItemClasses: getAllItemClassesImpl,
     getItemClass: getItemClassImpl,
     upsertItemClass: function (record) {
-      return upsertItemClassImpl(record, VWORLD_ITEM_CLASS_TABLE, vwLog);
+      return upsertItemClassImpl(record);
     },
     deleteItemClass: function (id) {
-      deleteItemClassImpl(id, VWORLD_ITEM_CLASS_TABLE, vwLog);
+      deleteItemClassImpl(id);
     },
   });
 }
@@ -2248,15 +2093,15 @@ function virtualWorldManageActionClassesToolHandler(context) {
     getAuthenticatedUserId: getAuthenticatedUserId,
     hasEditingRights: userHasCreatorStone,
     refreshActionClasses: function () {
-      refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
+      refreshActionClassCacheImpl();
     },
     getAllActionClasses: getAllActionClassesImpl,
     getActionClass: getActionClassImpl,
     upsertActionClass: function (record) {
-      return upsertActionClassImpl(record, VWORLD_ACTION_CLASS_TABLE, vwLog);
+      return upsertActionClassImpl(record);
     },
     deleteActionClass: function (id) {
-      deleteActionClassImpl(id, VWORLD_ACTION_CLASS_TABLE, vwLog);
+      deleteActionClassImpl(id);
     },
   });
 }
@@ -2270,15 +2115,15 @@ function virtualWorldManageLivingClassesToolHandler(context) {
     getAuthenticatedUserId: getAuthenticatedUserId,
     hasEditingRights: userHasCreatorStone,
     refreshLivingClasses: function () {
-      refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+      refreshLivingClassCacheImpl();
     },
     getAllLivingClasses: getAllLivingClassesImpl,
     getLivingClass: getLivingClassImpl,
     upsertLivingClass: function (record) {
-      return upsertLivingClassImpl(record, VWORLD_LIVING_CLASS_TABLE, vwLog);
+      return upsertLivingClassImpl(record);
     },
     deleteLivingClass: function (id) {
-      deleteLivingClassImpl(id, VWORLD_LIVING_CLASS_TABLE, vwLog);
+      deleteLivingClassImpl(id);
     },
   });
 }
@@ -2291,15 +2136,15 @@ function virtualWorldManageWorldClassesToolHandler(context) {
     getAuthenticatedUserId: getAuthenticatedUserId,
     hasEditingRights: userHasCreatorStone,
     refreshWorldClasses: function () {
-      refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+      refreshWorldClassCacheImpl();
     },
     getAllWorldClasses: getAllWorldClassesImpl,
     getWorldClass: getWorldClassWithRefresh,
     upsertWorldClass: function (record) {
-      return upsertWorldClassImpl(record, VWORLD_WORLD_CLASS_TABLE, vwLog);
+      return upsertWorldClassImpl(record);
     },
     deleteWorldClass: function (id) {
-      deleteWorldClassImpl(id, VWORLD_WORLD_CLASS_TABLE, vwLog);
+      deleteWorldClassImpl(id);
     },
     isBuiltinWorldClassId: isBuiltinWorldClassIdImpl,
     normalizeWorldClassRecord: normalizeWorldClassRecordImpl,
@@ -2793,13 +2638,7 @@ function heartbeatHandler(context) {
  * @returns {Array<{player_id: string, row: number, col: number, seq: number, rotation: number, session_id: string, last_active: number}>}
  */
 function buildActiveWorldPlayers(worldId) {
-  return buildActiveWorldPlayersImpl(
-    worldId,
-    VWORLD_PLAYER_POSITION_TABLE,
-    VWORLD_PLAYER_HEARTBEAT_TABLE,
-    vwLog,
-    90000,
-  );
+  return buildActiveWorldPlayersImpl(worldId, 90000);
 }
 
 /**
@@ -2983,7 +2822,7 @@ function itemClassesHandler(context) {
       403,
     );
   }
-  refreshItemClassCacheImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
+  refreshItemClassCacheImpl();
   var classes = getAllItemClassesImpl();
   return ResponseBuilder.json({ ok: true, item_classes: classes });
 }
@@ -3030,11 +2869,7 @@ function createItemClassHandler(context) {
         ? body.stateTemplate
         : {},
   };
-  var itemCreateWrite = upsertItemClassImpl(
-    record,
-    VWORLD_ITEM_CLASS_TABLE,
-    vwLog,
-  );
+  var itemCreateWrite = upsertItemClassImpl(record);
   if (!itemCreateWrite || !itemCreateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3118,11 +2953,7 @@ function updateItemClassHandler(context) {
         ? body.stateTemplate
         : existing.stateTemplate,
   };
-  var itemUpdateWrite = upsertItemClassImpl(
-    record,
-    VWORLD_ITEM_CLASS_TABLE,
-    vwLog,
-  );
+  var itemUpdateWrite = upsertItemClassImpl(record);
   if (!itemUpdateWrite || !itemUpdateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3158,7 +2989,7 @@ function deleteItemClassHandler(context) {
   if (!classId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
-  deleteItemClassImpl(classId, VWORLD_ITEM_CLASS_TABLE, vwLog);
+  deleteItemClassImpl(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
@@ -3177,7 +3008,7 @@ function actionClassesHandler(context) {
       403,
     );
   }
-  refreshActionClassCacheImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
+  refreshActionClassCacheImpl();
   var classes = getAllActionClassesImpl();
   return ResponseBuilder.json({ ok: true, action_classes: classes });
 }
@@ -3219,11 +3050,7 @@ function createActionClassHandler(context) {
     validation: body && body.validation ? body.validation : undefined,
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
   };
-  var actionCreateWrite = upsertActionClassImpl(
-    record,
-    VWORLD_ACTION_CLASS_TABLE,
-    vwLog,
-  );
+  var actionCreateWrite = upsertActionClassImpl(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3303,11 +3130,7 @@ function updateActionClassHandler(context) {
         ? body.logicSpec
         : existing.logicSpec,
   };
-  var actionUpdateWrite = upsertActionClassImpl(
-    record,
-    VWORLD_ACTION_CLASS_TABLE,
-    vwLog,
-  );
+  var actionUpdateWrite = upsertActionClassImpl(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3343,7 +3166,7 @@ function deleteActionClassHandler(context) {
   if (!actionId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
-  deleteActionClassImpl(actionId, VWORLD_ACTION_CLASS_TABLE, vwLog);
+  deleteActionClassImpl(actionId);
   return ResponseBuilder.json({ ok: true, deleted_id: actionId });
 }
 
@@ -3362,7 +3185,7 @@ function livingClassesHandler(context) {
       403,
     );
   }
-  refreshLivingClassCacheImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+  refreshLivingClassCacheImpl();
   var classes = getAllLivingClassesImpl();
   return ResponseBuilder.json({ ok: true, living_classes: classes });
 }
@@ -3418,11 +3241,7 @@ function createLivingClassHandler(context) {
         ? body.valueSchema
         : undefined,
   };
-  var livingCreateWrite = upsertLivingClassImpl(
-    record,
-    VWORLD_LIVING_CLASS_TABLE,
-    vwLog,
-  );
+  var livingCreateWrite = upsertLivingClassImpl(record);
   if (!livingCreateWrite || !livingCreateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3494,11 +3313,7 @@ function updateLivingClassHandler(context) {
         ? body.valueSchema
         : existing.valueSchema,
   };
-  var livingUpdateWrite = upsertLivingClassImpl(
-    record,
-    VWORLD_LIVING_CLASS_TABLE,
-    vwLog,
-  );
+  var livingUpdateWrite = upsertLivingClassImpl(record);
   if (!livingUpdateWrite || !livingUpdateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3534,7 +3349,7 @@ function deleteLivingClassHandler(context) {
   if (!classId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
-  deleteLivingClassImpl(classId, VWORLD_LIVING_CLASS_TABLE, vwLog);
+  deleteLivingClassImpl(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
@@ -3549,7 +3364,7 @@ function worldClassesHandler(context) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
-  refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+  refreshWorldClassCacheImpl();
   return ResponseBuilder.json({
     ok: true,
     world_classes: getAllWorldClassesImpl(),
@@ -3587,11 +3402,7 @@ function createWorldClassHandler(context) {
     labelKey: body && body.labelKey,
     fallbackLabel: body && body.fallbackLabel,
   });
-  var worldCreateWrite = upsertWorldClassImpl(
-    record,
-    VWORLD_WORLD_CLASS_TABLE,
-    vwLog,
-  );
+  var worldCreateWrite = upsertWorldClassImpl(record);
   if (!worldCreateWrite || !worldCreateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3653,11 +3464,7 @@ function updateWorldClassHandler(context) {
         ? body.fallbackLabel
         : existing.fallbackLabel,
   });
-  var worldUpdateWrite = upsertWorldClassImpl(
-    record,
-    VWORLD_WORLD_CLASS_TABLE,
-    vwLog,
-  );
+  var worldUpdateWrite = upsertWorldClassImpl(record);
   if (!worldUpdateWrite || !worldUpdateWrite.ok) {
     return ResponseBuilder.json(
       {
@@ -3699,17 +3506,17 @@ function deleteWorldClassHandler(context) {
       400,
     );
   }
-  deleteWorldClassImpl(classId, VWORLD_WORLD_CLASS_TABLE, vwLog);
+  deleteWorldClassImpl(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
 function init() {
   ensureWorldDatabaseSchema();
   ensureChatDatabaseSchema();
-  bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
-  bootstrapActionClassesImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
-  bootstrapLivingClassesImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
-  bootstrapWorldClassesImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+  bootstrapItemClassesImpl();
+  bootstrapActionClassesImpl();
+  bootstrapLivingClassesImpl();
+  bootstrapWorldClassesImpl();
   vwDiag("init", {
     item_class_table: VWORLD_ITEM_CLASS_TABLE,
     action_class_table: VWORLD_ACTION_CLASS_TABLE,

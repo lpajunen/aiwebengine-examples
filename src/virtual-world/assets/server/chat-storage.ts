@@ -1,14 +1,18 @@
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
+import {
+  VWORLD_CHAT_TABLE,
+  VWORLD_DM_INDEX_TABLE,
+  VWORLD_DM_TABLE,
+  WORLD_CHAT_MAX,
+  DM_MAX,
+} from "./runtime-config.ts";
+import { vwLog } from "./diagnostics.ts";
 
-function parseChatDbResult(
-  raw: string | null | undefined,
-  log: WorldDbLogFn,
-): any {
+function parseChatDbResult(raw: string | null | undefined): any {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
   } catch (e) {
-    log("chat db parse failed", { error: String(e) });
+    vwLog("chat db parse failed", { error: String(e) });
     return null;
   }
 }
@@ -34,15 +38,13 @@ function queryChatRows(
   limit: number,
   orderBy: string,
   orderDir: "asc" | "desc",
-  log: WorldDbLogFn,
 ): any[] {
   const result = parseChatDbResult(
     database.query(tableName, filters, limit, orderBy, orderDir),
-    log,
   );
   if (!Array.isArray(result)) {
     if (result && result.error) {
-      log("chat db query failed", {
+      vwLog("chat db query failed", {
         table: tableName,
         filters: filters || "",
         error: String(result.error),
@@ -53,17 +55,12 @@ function queryChatRows(
   return result;
 }
 
-function insertChatRow(
-  tableName: string,
-  data: unknown,
-  log: WorldDbLogFn,
-): any {
+function insertChatRow(tableName: string, data: unknown): any {
   const result = parseChatDbResult(
     database.insert(tableName, JSON.stringify(data)),
-    log,
   );
   if (result && result.error) {
-    log("chat db insert failed", {
+    vwLog("chat db insert failed", {
       table: tableName,
       error: String(result.error),
     });
@@ -76,12 +73,10 @@ function upsertDMIndexEntry(
   userId: string,
   otherUserId: string,
   ts: number,
-  dmIndexTable: string,
-  log: WorldDbLogFn,
 ): void {
   const result = parseChatDbResult(
     database.upsert(
-      dmIndexTable,
+      VWORLD_DM_INDEX_TABLE,
       JSON.stringify(["user_id", "other_user_id"]),
       JSON.stringify({
         user_id: userId,
@@ -89,11 +84,10 @@ function upsertDMIndexEntry(
         last_ts: toStoredChatTimestamp(ts),
       }),
     ),
-    log,
   );
   if (result && result.error) {
-    log("chat db upsert failed", {
-      table: dmIndexTable,
+    vwLog("chat db upsert failed", {
+      table: VWORLD_DM_INDEX_TABLE,
       error: String(result.error),
     });
   }
@@ -104,18 +98,16 @@ function pruneChatRows(
   orderField: string,
   maxCount: number,
   filters: string,
-  log: WorldDbLogFn,
 ): void {
-  const rows = queryChatRows(tableName, filters, 1000, orderField, "desc", log);
+  const rows = queryChatRows(tableName, filters, 1000, orderField, "desc");
   if (rows.length <= maxCount) return;
   for (let i = maxCount; i < rows.length; i++) {
     if (!Number.isFinite(Number(rows[i] && rows[i].id))) continue;
     const result = parseChatDbResult(
       database.delete(tableName, Number(rows[i].id)),
-      log,
     );
     if (result && result.error) {
-      log("chat db prune delete failed", {
+      vwLog("chat db prune delete failed", {
         table: tableName,
         id: Number(rows[i].id),
         error: String(result.error),
@@ -170,12 +162,7 @@ function normalizeDMRows(rows: any[]): Array<{
     });
 }
 
-export function loadWorldChat(
-  worldId: string,
-  chatTable: string,
-  worldChatMax: number,
-  log: WorldDbLogFn,
-): Array<{
+export function loadWorldChat(worldId: string): Array<{
   id: string;
   sender_id: string;
   sender_nick: string;
@@ -183,12 +170,11 @@ export function loadWorldChat(
   ts: number;
 }> {
   const rows = queryChatRows(
-    chatTable,
+    VWORLD_CHAT_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
-    worldChatMax,
+    WORLD_CHAT_MAX,
     "ts",
     "desc",
-    log,
   );
   return normalizeWorldChatRows(rows).reverse();
 }
@@ -202,28 +188,20 @@ export function appendWorldChatMessage(
     text: string;
     ts: number;
   },
-  chatTable: string,
-  worldChatMax: number,
-  log: WorldDbLogFn,
 ): void {
-  insertChatRow(
-    chatTable,
-    {
-      message_id: String(msg.id),
-      world_id: String(worldId),
-      sender_id: String(msg.sender_id || ""),
-      sender_nick: String(msg.sender_nick || ""),
-      text: String(msg.text || ""),
-      ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
-    },
-    log,
-  );
+  insertChatRow(VWORLD_CHAT_TABLE, {
+    message_id: String(msg.id),
+    world_id: String(worldId),
+    sender_id: String(msg.sender_id || ""),
+    sender_nick: String(msg.sender_nick || ""),
+    text: String(msg.text || ""),
+    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
+  });
   pruneChatRows(
-    chatTable,
+    VWORLD_CHAT_TABLE,
     "ts",
-    worldChatMax,
+    WORLD_CHAT_MAX,
     JSON.stringify({ world_id: String(worldId) }),
-    log,
   );
 }
 
@@ -234,9 +212,6 @@ export function dmConversationKey(a: string, b: string): string {
 export function loadDMHistory(
   a: string,
   b: string,
-  dmTable: string,
-  dmMax: number,
-  log: WorldDbLogFn,
 ): Array<{
   id: string;
   sender_id: string;
@@ -246,12 +221,11 @@ export function loadDMHistory(
   ts: number;
 }> {
   const rows = queryChatRows(
-    dmTable,
+    VWORLD_DM_TABLE,
     JSON.stringify({ conversation_key: dmConversationKey(a, b) }),
-    dmMax,
+    DM_MAX,
     "ts",
     "desc",
-    log,
   );
   return normalizeDMRows(rows).reverse();
 }
@@ -267,45 +241,32 @@ export function appendDMMessage(
     text: string;
     ts: number;
   },
-  dmTable: string,
-  dmMax: number,
-  log: WorldDbLogFn,
 ): void {
   const conversationKey = dmConversationKey(a, b);
-  insertChatRow(
-    dmTable,
-    {
-      message_id: String(msg.id),
-      conversation_key: conversationKey,
-      sender_id: String(msg.sender_id || ""),
-      sender_nick: String(msg.sender_nick || ""),
-      recipient_id: String(msg.recipient_id || ""),
-      text: String(msg.text || ""),
-      ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
-    },
-    log,
-  );
+  insertChatRow(VWORLD_DM_TABLE, {
+    message_id: String(msg.id),
+    conversation_key: conversationKey,
+    sender_id: String(msg.sender_id || ""),
+    sender_nick: String(msg.sender_nick || ""),
+    recipient_id: String(msg.recipient_id || ""),
+    text: String(msg.text || ""),
+    ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
+  });
   pruneChatRows(
-    dmTable,
+    VWORLD_DM_TABLE,
     "ts",
-    dmMax,
+    DM_MAX,
     JSON.stringify({ conversation_key: conversationKey }),
-    log,
   );
 }
 
-export function loadDMIndex(
-  userId: string,
-  dmIndexTable: string,
-  log: WorldDbLogFn,
-): string[] {
+export function loadDMIndex(userId: string): string[] {
   const rows = queryChatRows(
-    dmIndexTable,
+    VWORLD_DM_INDEX_TABLE,
     JSON.stringify({ user_id: String(userId) }),
     1000,
     "last_ts",
     "desc",
-    log,
   );
   const seen: Record<string, boolean> = {};
   const idx: string[] = [];
@@ -322,14 +283,6 @@ export function addToDMIndex(
   userId: string,
   otherUserId: string,
   ts: number | undefined,
-  dmIndexTable: string,
-  log: WorldDbLogFn,
 ): void {
-  upsertDMIndexEntry(
-    userId,
-    otherUserId,
-    Number(ts || Date.now()),
-    dmIndexTable,
-    log,
-  );
+  upsertDMIndexEntry(userId, otherUserId, Number(ts || Date.now()));
 }

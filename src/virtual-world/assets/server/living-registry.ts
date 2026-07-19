@@ -1,3 +1,5 @@
+import { VWORLD_LIVING_CLASS_TABLE } from "./runtime-config.ts";
+import { vwLog } from "./diagnostics.ts";
 import {
   LivingClassRecord,
   LivingKind,
@@ -8,8 +10,6 @@ import {
   loadAllLivingClassRows,
   upsertLivingClassRow,
 } from "./living-class-storage.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   return [
@@ -290,11 +290,8 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
   };
 }
 
-export function bootstrapLivingClasses(
-  livingClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  const rows = loadAllLivingClassRows(livingClassTable, log);
+export function bootstrapLivingClasses(): void {
+  const rows = loadAllLivingClassRows();
   const cache: Record<string, LivingClassRecord> = {};
   const now = Date.now();
 
@@ -315,7 +312,7 @@ export function bootstrapLivingClasses(
     const cls = getBuiltInLivingClass(classId);
     if (!cls) continue;
     const existed = !!cache[classId];
-    upsertLivingClassRow(livingClassToDbRow(cls, now), livingClassTable, log);
+    upsertLivingClassRow(livingClassToDbRow(cls, now));
     cache[classId] = cls;
     if (existed) {
       resynced++;
@@ -325,9 +322,9 @@ export function bootstrapLivingClasses(
   }
 
   if (rows.length === 0) {
-    log("living class repository seeded", { count: seeded });
+    vwLog("living class repository seeded", { count: seeded });
   } else if (seeded > 0 || resynced > 0) {
-    log("living class repository backfilled", {
+    vwLog("living class repository backfilled", {
       inserted_count: seeded,
       resynced_count: resynced,
     });
@@ -336,11 +333,8 @@ export function bootstrapLivingClasses(
   _livingClassCache = cache;
 }
 
-export function refreshLivingClassCache(
-  livingClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  bootstrapLivingClasses(livingClassTable, log);
+export function refreshLivingClassCache(): void {
+  bootstrapLivingClasses();
 }
 
 export function getAllLivingClasses(): LivingClassRecord[] {
@@ -358,15 +352,12 @@ export function getLivingClass(classId: string): LivingClassRecord | null {
   return getBuiltInLivingClass(lookupId);
 }
 
-export function upsertLivingClass(
-  record: LivingClassRecord,
-  livingClassTable: string,
-  log: WorldDbLogFn,
-): { ok: boolean; error?: string } {
+export function upsertLivingClass(record: LivingClassRecord): {
+  ok: boolean;
+  error?: string;
+} {
   const writeResult = upsertLivingClassRow(
     livingClassToDbRow(record, Date.now()),
-    livingClassTable,
-    log,
   );
   const ok = !!writeResult && !writeResult.error;
   if (ok && _livingClassCache) _livingClassCache[record.id] = record;
@@ -380,12 +371,8 @@ export function upsertLivingClass(
       };
 }
 
-export function deleteLivingClass(
-  classId: string,
-  livingClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  deleteLivingClassRow(classId, livingClassTable, log);
+export function deleteLivingClass(classId: string): void {
+  deleteLivingClassRow(classId);
   if (_livingClassCache) {
     delete _livingClassCache[String(classId || "")];
   }

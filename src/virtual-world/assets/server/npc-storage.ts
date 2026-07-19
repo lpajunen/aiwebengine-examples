@@ -1,4 +1,9 @@
 import {
+  VWORLD_NPC_ACTIVE_WORLD_TABLE,
+  VWORLD_NPC_TABLE,
+  VWORLD_NPC_TICK_TABLE,
+} from "./runtime-config.ts";
+import {
   buildInventorySelectors,
   createEmptyLivingState,
   fromStoredWorldTimestamp,
@@ -18,8 +23,6 @@ import {
   queryWorldRows,
   upsertWorldRow,
 } from "./world-db.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type NPCState = {
   row?: unknown;
@@ -50,18 +53,13 @@ function normalizeSafeInt(
   return rounded;
 }
 
-export function loadWorldNPCs(
-  worldId: string,
-  npcTable: string,
-  log: WorldDbLogFn,
-): Record<string, any> {
+export function loadWorldNPCs(worldId: string): Record<string, any> {
   const rows = queryWorldRows(
-    npcTable,
+    VWORLD_NPC_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
     1000,
     "id",
     "asc",
-    log,
   );
   if (rows.length > 0) {
     const fromRows: Record<string, any> = {};
@@ -113,8 +111,6 @@ export function loadWorldNPCs(
 export function saveWorldNPCs(
   worldId: string,
   npcs: Record<string, any>,
-  npcTable: string,
-  log: WorldDbLogFn,
 ): void {
   Object.keys(npcs && typeof npcs === "object" ? npcs : {}).forEach(
     function (npcId) {
@@ -152,30 +148,25 @@ export function saveWorldNPCs(
         values_json: JSON.stringify(living.values || {}),
       };
       const existingRow = querySingleWorldRow(
-        npcTable,
+        VWORLD_NPC_TABLE,
         JSON.stringify({ npc_id: String(npcId) }),
-        log,
       );
       if (existingRow && Number.isFinite(Number(existingRow.id))) {
-        updateWorldRow(npcTable, Number(existingRow.id), rowData, log);
+        updateWorldRow(VWORLD_NPC_TABLE, Number(existingRow.id), rowData);
       } else {
-        insertWorldRow(npcTable, rowData, log);
+        insertWorldRow(VWORLD_NPC_TABLE, rowData);
       }
     },
   );
 }
 
-export function loadNPCActiveWorlds(
-  npcActiveWorldTable: string,
-  log: WorldDbLogFn,
-): Record<string, number> {
+export function loadNPCActiveWorlds(): Record<string, number> {
   const rows = queryWorldRows(
-    npcActiveWorldTable,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     JSON.stringify({}),
     1000,
     "last_active_ts",
     "desc",
-    log,
   );
   if (rows.length > 0) {
     const worlds: Record<string, number> = {};
@@ -190,18 +181,13 @@ export function loadNPCActiveWorlds(
   return {};
 }
 
-export function saveNPCActiveWorlds(
-  worlds: Record<string, number>,
-  npcActiveWorldTable: string,
-  log: WorldDbLogFn,
-): void {
+export function saveNPCActiveWorlds(worlds: Record<string, number>): void {
   const existingRows = queryWorldRows(
-    npcActiveWorldTable,
+    VWORLD_NPC_ACTIVE_WORLD_TABLE,
     JSON.stringify({}),
     1000,
     "id",
     "desc",
-    log,
   );
   const existingByWorldId: Record<string, any> = {};
   for (let i = 0; i < existingRows.length; i++) {
@@ -212,19 +198,14 @@ export function saveNPCActiveWorlds(
 
   Object.keys(worlds && typeof worlds === "object" ? worlds : {}).forEach(
     function (worldId) {
-      upsertWorldRow(
-        npcActiveWorldTable,
-        ["world_id"],
-        {
-          world_id: String(worldId),
-          last_active_ts: toStoredWorldTimestamp(
-            Number.isFinite(Number(worlds[worldId]))
-              ? Number(worlds[worldId])
-              : 0,
-          ),
-        },
-        log,
-      );
+      upsertWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, ["world_id"], {
+        world_id: String(worldId),
+        last_active_ts: toStoredWorldTimestamp(
+          Number.isFinite(Number(worlds[worldId]))
+            ? Number(worlds[worldId])
+            : 0,
+        ),
+      });
       delete existingByWorldId[worldId];
     },
   );
@@ -232,55 +213,31 @@ export function saveNPCActiveWorlds(
   Object.keys(existingByWorldId).forEach(function (worldId) {
     const row = existingByWorldId[worldId];
     if (!row || !Number.isFinite(Number(row.id))) return;
-    deleteWorldRow(npcActiveWorldTable, Number(row.id), log);
+    deleteWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, Number(row.id));
   });
 }
 
-export function markNPCWorldActive(
-  worldId: string,
-  npcActiveWorldTable: string,
-  log: WorldDbLogFn,
-): void {
-  upsertWorldRow(
-    npcActiveWorldTable,
-    ["world_id"],
-    {
-      world_id: String(worldId),
-      last_active_ts: toStoredWorldTimestamp(Date.now()),
-    },
-    log,
-  );
+export function markNPCWorldActive(worldId: string): void {
+  upsertWorldRow(VWORLD_NPC_ACTIVE_WORLD_TABLE, ["world_id"], {
+    world_id: String(worldId),
+    last_active_ts: toStoredWorldTimestamp(Date.now()),
+  });
 }
 
-export function loadNPCLastTick(
-  worldId: string,
-  npcTickTable: string,
-  log: WorldDbLogFn,
-): number {
+export function loadNPCLastTick(worldId: string): number {
   const row = querySingleWorldRow(
-    npcTickTable,
+    VWORLD_NPC_TICK_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
-    log,
   );
   if (!row) return 0;
   return fromStoredWorldTimestamp(row.last_tick_ts);
 }
 
-export function saveNPCLastTick(
-  worldId: string,
-  lastTickTs: number,
-  npcTickTable: string,
-  log: WorldDbLogFn,
-): void {
-  upsertWorldRow(
-    npcTickTable,
-    ["world_id"],
-    {
-      world_id: String(worldId),
-      last_tick_ts: toStoredWorldTimestamp(lastTickTs),
-    },
-    log,
-  );
+export function saveNPCLastTick(worldId: string, lastTickTs: number): void {
+  upsertWorldRow(VWORLD_NPC_TICK_TABLE, ["world_id"], {
+    world_id: String(worldId),
+    last_tick_ts: toStoredWorldTimestamp(lastTickTs),
+  });
 }
 
 export function buildWorldNPCSnapshot(

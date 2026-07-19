@@ -1,3 +1,5 @@
+import { VWORLD_WORLD_CLASS_TABLE } from "./runtime-config.ts";
+import { vwLog } from "./diagnostics.ts";
 import {
   COLS,
   normalizeWorldDimension,
@@ -10,8 +12,6 @@ import {
   queryWorldRows,
   upsertWorldRow,
 } from "./world-db.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 export type WorldClassRecord = {
   id: string;
@@ -99,26 +99,18 @@ function worldClassToDbRow(
   };
 }
 
-function loadAllWorldClassRows(
-  worldClassTable: string,
-  log: WorldDbLogFn,
-): any[] {
+function loadAllWorldClassRows(): any[] {
   return queryWorldRows(
-    worldClassTable,
+    VWORLD_WORLD_CLASS_TABLE,
     JSON.stringify({}),
     1000,
     "class_id",
     "asc",
-    log,
   );
 }
 
-function rebuildWorldClassCache(
-  worldClassTable: string,
-  log: WorldDbLogFn,
-  logSeed: boolean,
-): void {
-  const dbRows = loadAllWorldClassRows(worldClassTable, log);
+function rebuildWorldClassCache(logSeed: boolean): void {
+  const dbRows = loadAllWorldClassRows();
   const cache: Record<string, WorldClassRecord> = {};
   let insertedDefaults = 0;
   const now = Date.now();
@@ -134,19 +126,18 @@ function rebuildWorldClassCache(
     if (!cache[worldType]) {
       const record = builtinWorldClassRecord(worldType);
       upsertWorldRow(
-        worldClassTable,
+        VWORLD_WORLD_CLASS_TABLE,
         ["class_id"],
         worldClassToDbRow(record, now),
-        log,
       );
       cache[record.id] = record;
       insertedDefaults++;
     }
   }
   if (logSeed && dbRows.length === 0) {
-    log("world class repository seeded", { count: insertedDefaults });
+    vwLog("world class repository seeded", { count: insertedDefaults });
   } else if (insertedDefaults > 0) {
-    log("world class repository backfilled", {
+    vwLog("world class repository backfilled", {
       inserted_count: insertedDefaults,
     });
   }
@@ -154,18 +145,12 @@ function rebuildWorldClassCache(
   _worldClassCache = cache;
 }
 
-export function bootstrapWorldClasses(
-  worldClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  rebuildWorldClassCache(worldClassTable, log, true);
+export function bootstrapWorldClasses(): void {
+  rebuildWorldClassCache(true);
 }
 
-export function refreshWorldClassCache(
-  worldClassTable: string,
-  log: WorldDbLogFn,
-): void {
-  rebuildWorldClassCache(worldClassTable, log, false);
+export function refreshWorldClassCache(): void {
+  rebuildWorldClassCache(false);
 }
 
 export function getAllWorldClasses(): WorldClassRecord[] {
@@ -180,16 +165,14 @@ export function getWorldClass(classId: string): WorldClassRecord | null {
   return _worldClassCache[String(classId || "")] || null;
 }
 
-export function upsertWorldClass(
-  record: WorldClassRecord,
-  worldClassTable: string,
-  log: WorldDbLogFn,
-): { ok: boolean; error?: string } {
+export function upsertWorldClass(record: WorldClassRecord): {
+  ok: boolean;
+  error?: string;
+} {
   const writeResult = upsertWorldRow(
-    worldClassTable,
+    VWORLD_WORLD_CLASS_TABLE,
     ["class_id"],
     worldClassToDbRow(record, Date.now()),
-    log,
   );
   const ok = !!writeResult && !writeResult.error;
   if (ok && _worldClassCache) {
@@ -205,15 +188,10 @@ export function upsertWorldClass(
       };
 }
 
-export function deleteWorldClass(
-  classId: string,
-  worldClassTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deleteWorldClass(classId: string): void {
   deleteWorldRowsWhere(
-    worldClassTable,
+    VWORLD_WORLD_CLASS_TABLE,
     JSON.stringify({ class_id: String(classId) }),
-    log,
   );
   if (_worldClassCache) {
     delete _worldClassCache[classId];

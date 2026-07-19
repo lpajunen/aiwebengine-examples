@@ -1,4 +1,9 @@
 import {
+  VWORLD_PLAYER_INVENTORY_TABLE,
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+} from "./runtime-config.ts";
+import {
   createEmptyLivingState,
   isValidItem,
   LivingState,
@@ -18,7 +23,6 @@ import {
   upsertWorldRow,
 } from "./world-db.ts";
 
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 type ResolvePortalDestinationWorldType = (item?: {
   destination_world_id?: string;
   destination_world_type?: string;
@@ -42,11 +46,7 @@ type EnsureWorldItemsDeps = {
   getItemStateTemplate?: (type: string) => Record<string, unknown>;
 };
 
-export function loadPlayerInventory(
-  userId: string,
-  playerInventoryTable: string,
-  log: WorldDbLogFn,
-): LivingState {
+export function loadPlayerInventory(userId: string): LivingState {
   const normalizeRawToLiving = function (raw: unknown, classId: string) {
     const livingClass = getLivingClass(classId);
     if (!livingClass) {
@@ -56,9 +56,8 @@ export function loadPlayerInventory(
   };
 
   const row = querySingleWorldRow(
-    playerInventoryTable,
+    VWORLD_PLAYER_INVENTORY_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (row) {
     const classId =
@@ -82,12 +81,7 @@ export function loadPlayerInventory(
   return normalizeRawToLiving({}, getDefaultPlayerLivingClassId());
 }
 
-export function savePlayerInventory(
-  userId: string,
-  inventory: unknown,
-  playerInventoryTable: string,
-  log: WorldDbLogFn,
-): void {
+export function savePlayerInventory(userId: string, inventory: unknown): void {
   const incoming =
     inventory && typeof inventory === "object"
       ? (inventory as Record<string, unknown>)
@@ -101,30 +95,24 @@ export function savePlayerInventory(
     ? normalizeLivingState(incoming, livingClass)
     : createEmptyLivingState(classId);
 
-  upsertWorldRow(
-    playerInventoryTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      living_class_id: String(normalized.class_id || classId),
-      slots_json: JSON.stringify(normalized.slots || {}),
-      bag_json: JSON.stringify(normalized.bag || []),
-      values_json: JSON.stringify(normalized.values || {}),
-      updated_ts: toStoredWorldTimestamp(Date.now()),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_PLAYER_INVENTORY_TABLE, ["user_id"], {
+    user_id: String(userId),
+    living_class_id: String(normalized.class_id || classId),
+    slots_json: JSON.stringify(normalized.slots || {}),
+    bag_json: JSON.stringify(normalized.bag || []),
+    values_json: JSON.stringify(normalized.values || {}),
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  });
 }
 
-export function loadWorldItemMeta(
-  worldId: string,
-  worldItemMetaTable: string,
-  log: WorldDbLogFn,
-): { next_item_seq: number; seeded: number; updated_ts: number } {
+export function loadWorldItemMeta(worldId: string): {
+  next_item_seq: number;
+  seeded: number;
+  updated_ts: number;
+} {
   const row = querySingleWorldRow(
-    worldItemMetaTable,
+    VWORLD_WORLD_ITEM_META_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
-    log,
   );
   if (row) {
     return {
@@ -141,41 +129,31 @@ export function loadWorldItemMeta(
 export function saveWorldItemMeta(
   worldId: string,
   meta: { next_item_seq: number; seeded: number; updated_ts?: number },
-  worldItemMetaTable: string,
-  log: WorldDbLogFn,
 ): void {
-  upsertWorldRow(
-    worldItemMetaTable,
-    ["world_id"],
-    {
-      world_id: String(worldId),
-      next_item_seq: Number.isFinite(Number(meta.next_item_seq))
-        ? Number(meta.next_item_seq)
-        : 0,
-      seeded: Number.isFinite(Number(meta.seeded)) ? Number(meta.seeded) : 0,
-      updated_ts: toStoredWorldTimestamp(
-        Number.isFinite(Number(meta.updated_ts))
-          ? Number(meta.updated_ts)
-          : Date.now(),
-      ),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_WORLD_ITEM_META_TABLE, ["world_id"], {
+    world_id: String(worldId),
+    next_item_seq: Number.isFinite(Number(meta.next_item_seq))
+      ? Number(meta.next_item_seq)
+      : 0,
+    seeded: Number.isFinite(Number(meta.seeded)) ? Number(meta.seeded) : 0,
+    updated_ts: toStoredWorldTimestamp(
+      Number.isFinite(Number(meta.updated_ts))
+        ? Number(meta.updated_ts)
+        : Date.now(),
+    ),
+  });
 }
 
 export function loadWorldItems(
   worldId: string,
-  worldItemTable: string,
-  log: WorldDbLogFn,
   resolvePortalDestinationWorldType: ResolvePortalDestinationWorldType,
 ): Record<string, any[]> {
   const rows = queryWorldRows(
-    worldItemTable,
+    VWORLD_WORLD_ITEM_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
     5000,
     "id",
     "asc",
-    log,
   );
   if (rows.length > 0) {
     const fromRows: Record<string, any[]> = {};
@@ -221,8 +199,6 @@ export function loadWorldItems(
 export function saveWorldItems(
   worldId: string,
   items: Record<string, any[]>,
-  worldItemTable: string,
-  log: WorldDbLogFn,
 ): void {
   const normalized: Record<string, any[]> = {};
   if (items && typeof items === "object") {
@@ -241,35 +217,30 @@ export function saveWorldItems(
     if (!Number.isFinite(row) || !Number.isFinite(col)) return;
     normalized[tileKey].forEach(function (item) {
       if (!isValidItem(item)) return;
-      upsertWorldRow(
-        worldItemTable,
-        ["item_id"],
-        {
-          item_id: String(item.id),
-          world_id: String(worldId),
-          row: row,
-          col: col,
-          type: String(item.type),
-          created_at: toStoredWorldTimestamp(
-            Number.isFinite(Number(item.created_at))
-              ? Number(item.created_at)
-              : Date.now(),
-          ),
-          destination_world_id:
-            typeof item.destination_world_id === "string"
-              ? item.destination_world_id
-              : null,
-          destination_world_type:
-            typeof item.destination_world_type === "string"
-              ? normalizeWorldType(item.destination_world_type)
-              : null,
-          state_json:
-            item.state && typeof item.state === "object"
-              ? JSON.stringify(item.state)
-              : null,
-        },
-        log,
-      );
+      upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
+        item_id: String(item.id),
+        world_id: String(worldId),
+        row: row,
+        col: col,
+        type: String(item.type),
+        created_at: toStoredWorldTimestamp(
+          Number.isFinite(Number(item.created_at))
+            ? Number(item.created_at)
+            : Date.now(),
+        ),
+        destination_world_id:
+          typeof item.destination_world_id === "string"
+            ? item.destination_world_id
+            : null,
+        destination_world_type:
+          typeof item.destination_world_type === "string"
+            ? normalizeWorldType(item.destination_world_type)
+            : null,
+        state_json:
+          item.state && typeof item.state === "object"
+            ? JSON.stringify(item.state)
+            : null,
+      });
     });
   });
 }
@@ -279,8 +250,6 @@ export function upsertWorldItem(
   row: number,
   col: number,
   item: unknown,
-  worldItemTable: string,
-  log: WorldDbLogFn,
 ): void {
   if (
     !isValidItem(item) ||
@@ -289,35 +258,30 @@ export function upsertWorldItem(
   ) {
     return;
   }
-  upsertWorldRow(
-    worldItemTable,
-    ["item_id"],
-    {
-      item_id: String(item.id),
-      world_id: String(worldId),
-      row: Number(row),
-      col: Number(col),
-      type: String(item.type),
-      created_at: toStoredWorldTimestamp(
-        Number.isFinite(Number(item.created_at))
-          ? Number(item.created_at)
-          : Date.now(),
-      ),
-      destination_world_id:
-        typeof item.destination_world_id === "string"
-          ? item.destination_world_id
-          : null,
-      destination_world_type:
-        typeof item.destination_world_type === "string"
-          ? normalizeWorldType(item.destination_world_type)
-          : null,
-      state_json:
-        item.state && typeof item.state === "object"
-          ? JSON.stringify(item.state)
-          : null,
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
+    item_id: String(item.id),
+    world_id: String(worldId),
+    row: Number(row),
+    col: Number(col),
+    type: String(item.type),
+    created_at: toStoredWorldTimestamp(
+      Number.isFinite(Number(item.created_at))
+        ? Number(item.created_at)
+        : Date.now(),
+    ),
+    destination_world_id:
+      typeof item.destination_world_id === "string"
+        ? item.destination_world_id
+        : null,
+    destination_world_type:
+      typeof item.destination_world_type === "string"
+        ? normalizeWorldType(item.destination_world_type)
+        : null,
+    state_json:
+      item.state && typeof item.state === "object"
+        ? JSON.stringify(item.state)
+        : null,
+  });
 }
 
 /**
@@ -325,17 +289,12 @@ export function upsertWorldItem(
  * removed the row. Under concurrent pickups exactly one caller gets true —
  * that caller owns the item.
  */
-export function deleteWorldItemById(
-  itemId: string,
-  worldItemTable: string,
-  log: WorldDbLogFn,
-): boolean {
+export function deleteWorldItemById(itemId: string): boolean {
   if (!itemId) return false;
   return (
     deleteWorldRowsWhere(
-      worldItemTable,
+      VWORLD_WORLD_ITEM_TABLE,
       JSON.stringify({ item_id: String(itemId) }),
-      log,
     ) > 0
   );
 }
@@ -344,39 +303,26 @@ export function deleteWorldItemById(
  * Delete the given items and return the subset this caller actually claimed
  * (rows it deleted). Callers must only grant claimed items to inventories.
  */
-export function deleteWorldItems(
-  items: any[],
-  worldItemTable: string,
-  log: WorldDbLogFn,
-): any[] {
+export function deleteWorldItems(items: any[]): any[] {
   const claimed: any[] = [];
   if (!Array.isArray(items)) return claimed;
   for (let i = 0; i < items.length; i++) {
     if (!items[i] || typeof items[i].id !== "string") continue;
-    if (deleteWorldItemById(String(items[i].id), worldItemTable, log)) {
+    if (deleteWorldItemById(String(items[i].id))) {
       claimed.push(items[i]);
     }
   }
   return claimed;
 }
 
-export function nextWorldItemId(
-  worldId: string,
-  worldItemMetaTable: string,
-  log: WorldDbLogFn,
-): number {
-  const meta = loadWorldItemMeta(worldId, worldItemMetaTable, log);
+export function nextWorldItemId(worldId: string): number {
+  const meta = loadWorldItemMeta(worldId);
   const nextSeq = Number(meta.next_item_seq || 0) + 1;
-  saveWorldItemMeta(
-    worldId,
-    {
-      next_item_seq: nextSeq,
-      seeded: meta.seeded,
-      updated_ts: Date.now(),
-    },
-    worldItemMetaTable,
-    log,
-  );
+  saveWorldItemMeta(worldId, {
+    next_item_seq: nextSeq,
+    seeded: meta.seeded,
+    updated_ts: Date.now(),
+  });
   return nextSeq;
 }
 

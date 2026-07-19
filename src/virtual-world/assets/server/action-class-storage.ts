@@ -1,54 +1,40 @@
+import { VWORLD_ACTION_CLASS_TABLE } from "./runtime-config.ts";
 import {
   deleteWorldRowsWhere,
   queryWorldRows,
   upsertWorldRow,
 } from "./world-db.ts";
 
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
-
-export function loadAllActionClassRows(
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): any[] {
+export function loadAllActionClassRows(): any[] {
   return queryWorldRows(
-    actionClassTable,
+    VWORLD_ACTION_CLASS_TABLE,
     JSON.stringify({}),
     1000,
     "action_id",
     "asc",
-    log,
   );
 }
 
-export function upsertActionClassRow(
-  row: {
-    action_id: string;
-    label_key: string;
-    fallback_label: string;
-    target_kind: string;
-    source_item_ids_json: string;
-    canonical_id: string;
-    execution_json: string;
-    validation_json: string;
-    logic_spec_json: string;
-    created_at: number;
-    updated_at: number;
-  },
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): any | null {
-  return upsertWorldRow(actionClassTable, ["action_id"], row, log);
+export function upsertActionClassRow(row: {
+  action_id: string;
+  label_key: string;
+  fallback_label: string;
+  target_kind: string;
+  source_item_ids_json: string;
+  canonical_id: string;
+  execution_json: string;
+  validation_json: string;
+  logic_spec_json: string;
+  created_at: number;
+  updated_at: number;
+}): any | null {
+  return upsertWorldRow(VWORLD_ACTION_CLASS_TABLE, ["action_id"], row);
 }
 
-export function deleteActionClassRow(
-  actionId: string,
-  actionClassTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deleteActionClassRow(actionId: string): void {
   if (!actionId) return;
   deleteWorldRowsWhere(
-    actionClassTable,
+    VWORLD_ACTION_CLASS_TABLE,
     JSON.stringify({ action_id: String(actionId) }),
-    log,
   );
 }

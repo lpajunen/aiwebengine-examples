@@ -1,4 +1,10 @@
 import {
+  VWORLD_PLAYER_HEARTBEAT_TABLE,
+  VWORLD_PLAYER_MOVE_LEASE_TABLE,
+  VWORLD_PLAYER_POSITION_TABLE,
+  VWORLD_PLAYER_WORLD_TABLE,
+} from "./runtime-config.ts";
+import {
   deleteWorldRowsWhere,
   querySingleWorldRow,
   queryWorldRows,
@@ -9,8 +15,6 @@ import {
   fromStoredWorldTimestamp,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 export interface PlayerPositionRow {
   world_id: string;
@@ -36,36 +40,21 @@ export interface SavePlayerPositionInput {
   ts?: number;
 }
 
-export function getPlayerWorld(
-  userId: string,
-  playerWorldTable: string,
-  log: WorldDbLogFn,
-): string {
+export function getPlayerWorld(userId: string): string {
   const row = querySingleWorldRow(
-    playerWorldTable,
+    VWORLD_PLAYER_WORLD_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (row && row.world_id) return String(row.world_id);
   return "";
 }
 
-export function savePlayerWorld(
-  userId: string,
-  worldId: string,
-  playerWorldTable: string,
-  log: WorldDbLogFn,
-): string {
-  upsertWorldRow(
-    playerWorldTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      world_id: String(worldId),
-      updated_ts: toStoredWorldTimestamp(Date.now()),
-    },
-    log,
-  );
+export function savePlayerWorld(userId: string, worldId: string): string {
+  upsertWorldRow(VWORLD_PLAYER_WORLD_TABLE, ["user_id"], {
+    user_id: String(userId),
+    world_id: String(worldId),
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  });
   return String(worldId);
 }
 
@@ -93,30 +82,21 @@ export function normalizePlayerPositionRow(
   };
 }
 
-export function loadPlayerPosition(
-  userId: string,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
-): PlayerPositionRow | null {
+export function loadPlayerPosition(userId: string): PlayerPositionRow | null {
   const row = querySingleWorldRow(
-    playerPositionTable,
+    VWORLD_PLAYER_POSITION_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   return normalizePlayerPositionRow(row);
 }
 
-export function loadAllPlayerPositions(
-  playerPositionTable: string,
-  log: WorldDbLogFn,
-): Record<string, PlayerPositionRow> {
+export function loadAllPlayerPositions(): Record<string, PlayerPositionRow> {
   const rows = queryWorldRows(
-    playerPositionTable,
+    VWORLD_PLAYER_POSITION_TABLE,
     JSON.stringify({}),
     1000,
     "id",
     "desc",
-    log,
   );
   const out: Record<string, PlayerPositionRow> = {};
   for (let i = 0; i < rows.length; i++) {
@@ -134,52 +114,35 @@ export function savePlayerPosition(
   userId: string,
   worldId: string,
   position: SavePlayerPositionInput,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
 ): void {
-  upsertWorldRow(
-    playerPositionTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      world_id: String(worldId),
-      row: Number(position.row),
-      col: Number(position.col),
-      seq: Number.isFinite(Number(position.seq)) ? Number(position.seq) : 0,
-      rotation: Number.isFinite(Number(position.rotation))
-        ? Number(position.rotation)
-        : 0,
-      session_id:
-        typeof position.session_id === "string" ? position.session_id : "",
-      updated_ts: toStoredWorldTimestamp(
-        Number.isFinite(Number(position.ts)) ? Number(position.ts) : Date.now(),
-      ),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_PLAYER_POSITION_TABLE, ["user_id"], {
+    user_id: String(userId),
+    world_id: String(worldId),
+    row: Number(position.row),
+    col: Number(position.col),
+    seq: Number.isFinite(Number(position.seq)) ? Number(position.seq) : 0,
+    rotation: Number.isFinite(Number(position.rotation))
+      ? Number(position.rotation)
+      : 0,
+    session_id:
+      typeof position.session_id === "string" ? position.session_id : "",
+    updated_ts: toStoredWorldTimestamp(
+      Number.isFinite(Number(position.ts)) ? Number(position.ts) : Date.now(),
+    ),
+  });
 }
 
-export function deletePlayerPosition(
-  userId: string,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deletePlayerPosition(userId: string): void {
   deleteWorldRowsWhere(
-    playerPositionTable,
+    VWORLD_PLAYER_POSITION_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
 }
 
-export function loadPlayerMoveLease(
-  userId: string,
-  playerMoveLeaseTable: string,
-  log: WorldDbLogFn,
-): PlayerMoveLeaseRow | null {
+export function loadPlayerMoveLease(userId: string): PlayerMoveLeaseRow | null {
   const row = querySingleWorldRow(
-    playerMoveLeaseTable,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (!row) return null;
   return {
@@ -192,58 +155,37 @@ export function savePlayerMoveLease(
   userId: string,
   sessionId: string,
   expiresAt: number,
-  playerMoveLeaseTable: string,
-  log: WorldDbLogFn,
 ): void {
-  upsertWorldRow(
-    playerMoveLeaseTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      session_id: String(sessionId || ""),
-      expires_ts: toStoredWorldTimestamp(expiresAt),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_PLAYER_MOVE_LEASE_TABLE, ["user_id"], {
+    user_id: String(userId),
+    session_id: String(sessionId || ""),
+    expires_ts: toStoredWorldTimestamp(expiresAt),
+  });
 }
 
-export function deletePlayerMoveLease(
-  userId: string,
-  playerMoveLeaseTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deletePlayerMoveLease(userId: string): void {
   deleteWorldRowsWhere(
-    playerMoveLeaseTable,
+    VWORLD_PLAYER_MOVE_LEASE_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
 }
 
-export function loadPlayerHeartbeatTs(
-  userId: string,
-  playerHeartbeatTable: string,
-  log: WorldDbLogFn,
-): number {
+export function loadPlayerHeartbeatTs(userId: string): number {
   const row = querySingleWorldRow(
-    playerHeartbeatTable,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (!row) return 0;
   return fromStoredWorldTimestamp(row.heartbeat_ts);
 }
 
-export function loadPlayerHeartbeatMap(
-  playerHeartbeatTable: string,
-  log: WorldDbLogFn,
-): Record<string, number> {
+export function loadPlayerHeartbeatMap(): Record<string, number> {
   const rows = queryWorldRows(
-    playerHeartbeatTable,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
     JSON.stringify({}),
     1000,
     "id",
     "desc",
-    log,
   );
   const out: Record<string, number> = {};
   for (let i = 0; i < rows.length; i++) {
@@ -259,58 +201,34 @@ export function loadPlayerHeartbeatMap(
 export function savePlayerHeartbeatTs(
   userId: string,
   heartbeatTs: number,
-  playerHeartbeatTable: string,
-  log: WorldDbLogFn,
 ): void {
-  upsertWorldRow(
-    playerHeartbeatTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      heartbeat_ts: toStoredWorldTimestamp(heartbeatTs),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_PLAYER_HEARTBEAT_TABLE, ["user_id"], {
+    user_id: String(userId),
+    heartbeat_ts: toStoredWorldTimestamp(heartbeatTs),
+  });
 }
 
-export function deletePlayerHeartbeat(
-  userId: string,
-  playerHeartbeatTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deletePlayerHeartbeat(userId: string): void {
   deleteWorldRowsWhere(
-    playerHeartbeatTable,
+    VWORLD_PLAYER_HEARTBEAT_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
 }
 
-export function markPlayerPositionInactive(
-  userId: string,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
-): void {
+export function markPlayerPositionInactive(userId: string): void {
   const row = querySingleWorldRow(
-    playerPositionTable,
+    VWORLD_PLAYER_POSITION_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (!row || !Number.isFinite(Number(row.id))) return;
-  updateWorldRow(
-    playerPositionTable,
-    Number(row.id),
-    {
-      user_id: String(row.user_id || userId),
-      world_id: String(row.world_id || "10000"),
-      row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
-      col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
-      seq: Number.isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-      rotation: Number.isFinite(Number(row.rotation))
-        ? Number(row.rotation)
-        : 0,
-      session_id: typeof row.session_id === "string" ? row.session_id : "",
-      updated_ts: 0,
-    },
-    log,
-  );
+  updateWorldRow(VWORLD_PLAYER_POSITION_TABLE, Number(row.id), {
+    user_id: String(row.user_id || userId),
+    world_id: String(row.world_id || "10000"),
+    row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
+    col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
+    seq: Number.isFinite(Number(row.seq)) ? Number(row.seq) : 0,
+    rotation: Number.isFinite(Number(row.rotation)) ? Number(row.rotation) : 0,
+    session_id: typeof row.session_id === "string" ? row.session_id : "",
+    updated_ts: 0,
+  });
 }

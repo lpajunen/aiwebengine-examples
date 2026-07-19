@@ -1,3 +1,7 @@
+import {
+  VWORLD_PLAYER_HEARTBEAT_TABLE,
+  VWORLD_PLAYER_POSITION_TABLE,
+} from "./runtime-config.ts";
 import { fromStoredWorldTimestamp } from "./world-domain.ts";
 import {
   loadPlayerHeartbeatMap,
@@ -5,8 +9,6 @@ import {
   savePlayerPosition,
 } from "./player-persistence.ts";
 import { queryWorldRows } from "./world-db.ts";
-
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
 
 type SpawnPosition = {
   row: number;
@@ -26,16 +28,13 @@ type SnapshotPlayer = {
 
 export function loadWorldPlayers(
   worldId: string,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
 ): Record<string, SnapshotPlayer> {
   const rows = queryWorldRows(
-    playerPositionTable,
+    VWORLD_PLAYER_POSITION_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
     1000,
     "id",
     "desc",
-    log,
   );
   const players: Record<string, SnapshotPlayer> = {};
   for (let i = 0; i < rows.length; i++) {
@@ -60,40 +59,30 @@ export function loadWorldPlayers(
 export function saveWorldPlayers(
   worldId: string,
   players: Record<string, any>,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
 ): void {
   const nextPlayers = players && typeof players === "object" ? players : {};
   Object.keys(nextPlayers).forEach(function (userId) {
     const player = nextPlayers[userId] || {};
-    savePlayerPosition(
-      userId,
-      worldId,
-      {
-        row: Number.isFinite(Number(player.row)) ? Number(player.row) : 1,
-        col: Number.isFinite(Number(player.col)) ? Number(player.col) : 1,
-        seq: Number.isFinite(Number(player.seq)) ? Number(player.seq) : 0,
-        rotation: Number.isFinite(Number(player.rotation))
-          ? Number(player.rotation)
-          : 0,
-        session_id:
-          typeof player.session_id === "string" ? player.session_id : "",
-        ts: Number.isFinite(Number(player.ts)) ? Number(player.ts) : Date.now(),
-      },
-      playerPositionTable,
-      log,
-    );
+    savePlayerPosition(userId, worldId, {
+      row: Number.isFinite(Number(player.row)) ? Number(player.row) : 1,
+      col: Number.isFinite(Number(player.col)) ? Number(player.col) : 1,
+      seq: Number.isFinite(Number(player.seq)) ? Number(player.seq) : 0,
+      rotation: Number.isFinite(Number(player.rotation))
+        ? Number(player.rotation)
+        : 0,
+      session_id:
+        typeof player.session_id === "string" ? player.session_id : "",
+      ts: Number.isFinite(Number(player.ts)) ? Number(player.ts) : Date.now(),
+    });
   });
 }
 
 export function getCanonicalPlayerState(
   worldId: string,
   userId: string,
-  playerPositionTable: string,
-  log: WorldDbLogFn,
   getDefaultSpawnPosition: (worldId: string, userId: string) => SpawnPosition,
 ): SpawnPosition {
-  const players = loadWorldPlayers(worldId, playerPositionTable, log);
+  const players = loadWorldPlayers(worldId);
   const cur = players[userId];
   if (
     cur &&
@@ -109,7 +98,7 @@ export function getCanonicalPlayerState(
         : 0,
     };
   }
-  const savedPos = loadPlayerPosition(userId, playerPositionTable, log);
+  const savedPos = loadPlayerPosition(userId);
   if (!savedPos || savedPos.world_id !== String(worldId)) {
     return getDefaultSpawnPosition(worldId, userId);
   }
@@ -123,9 +112,6 @@ export function getCanonicalPlayerState(
 
 export function buildActiveWorldPlayers(
   worldId: string,
-  playerPositionTable: string,
-  playerHeartbeatTable: string,
-  log: WorldDbLogFn,
   activeWindowMs: number,
 ): Array<{
   player_id: string;
@@ -137,10 +123,10 @@ export function buildActiveWorldPlayers(
   last_active: number;
 }> {
   if (!worldId) return [];
-  const players = loadWorldPlayers(worldId, playerPositionTable, log);
+  const players = loadWorldPlayers(worldId);
   if (!players || typeof players !== "object") return [];
   const now = Date.now();
-  const heartbeatByUserId = loadPlayerHeartbeatMap(playerHeartbeatTable, log);
+  const heartbeatByUserId = loadPlayerHeartbeatMap();
   return Object.keys(players)
     .filter(function (pid) {
       if (!players[pid] || typeof players[pid] !== "object") {

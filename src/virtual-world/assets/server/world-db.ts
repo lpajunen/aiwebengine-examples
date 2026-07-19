@@ -1,11 +1,11 @@
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
+import { vwLog } from "./diagnostics.ts";
 
-export function parseWorldDbResult(raw: string, log: WorldDbLogFn): any | null {
+export function parseWorldDbResult(raw: string): any | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
   } catch (e) {
-    log("world db parse failed", { error: String(e) });
+    vwLog("world db parse failed", { error: String(e) });
     return null;
   }
 }
@@ -16,17 +16,15 @@ export function queryWorldRows(
   limit: number,
   orderBy: string,
   orderDir: "asc" | "desc",
-  log: WorldDbLogFn,
 ): any[] {
   const normalizedFilters =
     typeof filters === "string" && filters.trim() ? filters : "{}";
   const result = parseWorldDbResult(
     database.query(tableName, normalizedFilters, limit, orderBy, orderDir),
-    log,
   );
   if (!Array.isArray(result)) {
     if (result && result.error) {
-      log("world db query failed", {
+      vwLog("world db query failed", {
         table: tableName,
         filters: normalizedFilters,
         error: String(result.error),
@@ -37,17 +35,12 @@ export function queryWorldRows(
   return result;
 }
 
-export function insertWorldRow(
-  tableName: string,
-  data: unknown,
-  log: WorldDbLogFn,
-): any | null {
+export function insertWorldRow(tableName: string, data: unknown): any | null {
   const result = parseWorldDbResult(
     database.insert(tableName, JSON.stringify(data)),
-    log,
   );
   if (result && result.error) {
-    log("world db insert failed", {
+    vwLog("world db insert failed", {
       table: tableName,
       error: String(result.error),
     });
@@ -60,14 +53,12 @@ export function updateWorldRow(
   tableName: string,
   id: number,
   data: unknown,
-  log: WorldDbLogFn,
 ): any | null {
   const result = parseWorldDbResult(
     database.update(tableName, id, JSON.stringify(data)),
-    log,
   );
   if (result && result.error) {
-    log("world db update failed", {
+    vwLog("world db update failed", {
       table: tableName,
       id: id,
       error: String(result.error),
@@ -85,14 +76,10 @@ export function updateWorldRow(
 export function deleteWorldRowsWhere(
   tableName: string,
   filters: string,
-  log: WorldDbLogFn,
 ): number {
-  const result = parseWorldDbResult(
-    database.deleteWhere(tableName, filters),
-    log,
-  );
+  const result = parseWorldDbResult(database.deleteWhere(tableName, filters));
   if (result && result.error) {
-    log("world db deleteWhere failed", {
+    vwLog("world db deleteWhere failed", {
       table: tableName,
       error: String(result.error),
     });
@@ -111,20 +98,13 @@ export function deleteWorldRowsWhere(
  * commit failure is logged (the runtime has already discarded the writes and
  * clients heal via resync).
  */
-export function runInWorldTransaction<T>(
-  label: string,
-  log: WorldDbLogFn,
-  fn: () => T,
-): T {
+export function runInWorldTransaction<T>(label: string, fn: () => T): T {
   let began = false;
   try {
-    const beginResult = parseWorldDbResult(
-      database.beginTransaction(5000),
-      log,
-    );
+    const beginResult = parseWorldDbResult(database.beginTransaction(5000));
     began = !!(beginResult && beginResult.success);
     if (!began) {
-      log("transaction begin failed; running unwrapped", {
+      vwLog("transaction begin failed; running unwrapped", {
         label: label,
         error: String(
           beginResult && beginResult.error ? beginResult.error : "unknown",
@@ -132,7 +112,7 @@ export function runInWorldTransaction<T>(
       });
     }
   } catch (e) {
-    log("transaction begin threw; running unwrapped", {
+    vwLog("transaction begin threw; running unwrapped", {
       label: label,
       error: String(e),
     });
@@ -140,12 +120,9 @@ export function runInWorldTransaction<T>(
   try {
     const result = fn();
     if (began) {
-      const commitResult = parseWorldDbResult(
-        database.commitTransaction(),
-        log,
-      );
+      const commitResult = parseWorldDbResult(database.commitTransaction());
       if (commitResult && commitResult.error) {
-        log("transaction commit failed", {
+        vwLog("transaction commit failed", {
           label: label,
           error: String(commitResult.error),
         });
@@ -157,7 +134,7 @@ export function runInWorldTransaction<T>(
       try {
         database.rollbackTransaction();
       } catch (rollbackError) {
-        log("transaction rollback failed", {
+        vwLog("transaction rollback failed", {
           label: label,
           error: String(rollbackError),
         });
@@ -167,14 +144,10 @@ export function runInWorldTransaction<T>(
   }
 }
 
-export function deleteWorldRow(
-  tableName: string,
-  id: number,
-  log: WorldDbLogFn,
-): void {
-  const result = parseWorldDbResult(database.delete(tableName, id), log);
+export function deleteWorldRow(tableName: string, id: number): void {
+  const result = parseWorldDbResult(database.delete(tableName, id));
   if (result && result.error) {
-    log("world db delete failed", {
+    vwLog("world db delete failed", {
       table: tableName,
       id: id,
       error: String(result.error),
@@ -185,9 +158,8 @@ export function deleteWorldRow(
 export function querySingleWorldRow(
   tableName: string,
   filters: string,
-  log: WorldDbLogFn,
 ): any | null {
-  const rows = queryWorldRows(tableName, filters, 1, "id", "desc", log);
+  const rows = queryWorldRows(tableName, filters, 1, "id", "desc");
   return rows.length > 0 ? rows[0] : null;
 }
 
@@ -195,7 +167,6 @@ export function upsertWorldRow(
   tableName: string,
   keyColumns: string[],
   data: unknown,
-  log: WorldDbLogFn,
 ): any | null {
   const result = parseWorldDbResult(
     database.upsert(
@@ -203,10 +174,9 @@ export function upsertWorldRow(
       JSON.stringify(keyColumns),
       JSON.stringify(data),
     ),
-    log,
   );
   if (!result || result.error) {
-    log("world db upsert failed", {
+    vwLog("world db upsert failed", {
       table: tableName,
       keys: keyColumns.join(","),
       error: String(result && result.error ? result.error : "unknown"),
@@ -231,14 +201,12 @@ export function upsertWorldRow(
     const existingRow = querySingleWorldRow(
       tableName,
       JSON.stringify(keyFilters),
-      log,
     );
     if (existingRow && Number.isFinite(Number(existingRow.id))) {
       const updateResult = updateWorldRow(
         tableName,
         Number(existingRow.id),
         data,
-        log,
       );
       if (updateResult && !updateResult.error) return updateResult;
       return {
@@ -251,7 +219,7 @@ export function upsertWorldRow(
           ),
       };
     }
-    const insertResult = insertWorldRow(tableName, data, log);
+    const insertResult = insertWorldRow(tableName, data);
     if (insertResult && !insertResult.error) return insertResult;
     return {
       error:

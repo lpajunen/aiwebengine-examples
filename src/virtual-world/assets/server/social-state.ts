@@ -1,4 +1,11 @@
 import {
+  VWORLD_ONLINE_PRESENCE_TABLE,
+  VWORLD_PLAYER_HEARTBEAT_TABLE,
+  VWORLD_PLAYER_NICK_TABLE,
+  VWORLD_PLAYER_POSITION_TABLE,
+  VWORLD_PLAYER_WORLD_TABLE,
+} from "./runtime-config.ts";
+import {
   fromStoredWorldTimestamp,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
@@ -14,46 +21,25 @@ import {
   upsertWorldRow,
 } from "./world-db.ts";
 
-type WorldDbLogFn = (msg: string, obj?: unknown) => void;
-
-export function loadPlayerNick(
-  userId: string,
-  playerNickTable: string,
-  log: WorldDbLogFn,
-): string {
+export function loadPlayerNick(userId: string): string {
   const row = querySingleWorldRow(
-    playerNickTable,
+    VWORLD_PLAYER_NICK_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
   if (!row || typeof row.nick !== "string") return "";
   return row.nick;
 }
 
-export function savePlayerNick(
-  userId: string,
-  nick: string,
-  playerNickTable: string,
-  log: WorldDbLogFn,
-): void {
-  upsertWorldRow(
-    playerNickTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      nick: String(nick || ""),
-      updated_ts: toStoredWorldTimestamp(Date.now()),
-    },
-    log,
-  );
+export function savePlayerNick(userId: string, nick: string): void {
+  upsertWorldRow(VWORLD_PLAYER_NICK_TABLE, ["user_id"], {
+    user_id: String(userId),
+    nick: String(nick || ""),
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  });
 }
 
-export function getEffectiveNick(
-  userId: string,
-  playerNickTable: string,
-  log: WorldDbLogFn,
-): string {
-  const nick = loadPlayerNick(userId, playerNickTable, log);
+export function getEffectiveNick(userId: string): string {
+  const nick = loadPlayerNick(userId);
   return nick || String(userId).slice(0, 16);
 }
 
@@ -61,9 +47,6 @@ export function updateOnlinePresence(
   userId: string,
   worldId: string,
   sessionId: string,
-  onlinePresenceTable: string,
-  playerNickTable: string,
-  log: WorldDbLogFn,
 ): {
   player_id: string;
   nick: string;
@@ -74,11 +57,10 @@ export function updateOnlinePresence(
 } {
   const now = Date.now();
   const existing = querySingleWorldRow(
-    onlinePresenceTable,
+    VWORLD_ONLINE_PRESENCE_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
-  const nick = getEffectiveNick(userId, playerNickTable, log);
+  const nick = getEffectiveNick(userId);
   const loginAt =
     existing && existing.session_id === sessionId && existing.login_at
       ? fromStoredWorldTimestamp(existing.login_at)
@@ -87,19 +69,14 @@ export function updateOnlinePresence(
     !existing ||
     String(existing.world_id || "") !== String(worldId) ||
     String(existing.nick || "") !== nick;
-  upsertWorldRow(
-    onlinePresenceTable,
-    ["user_id"],
-    {
-      user_id: String(userId),
-      world_id: String(worldId),
-      nick: nick,
-      login_at: toStoredWorldTimestamp(loginAt),
-      last_active_ts: toStoredWorldTimestamp(now),
-      session_id: String(sessionId || ""),
-    },
-    log,
-  );
+  upsertWorldRow(VWORLD_ONLINE_PRESENCE_TABLE, ["user_id"], {
+    user_id: String(userId),
+    world_id: String(worldId),
+    nick: nick,
+    login_at: toStoredWorldTimestamp(loginAt),
+    last_active_ts: toStoredWorldTimestamp(now),
+    session_id: String(sessionId || ""),
+  });
   return {
     player_id: String(userId),
     nick: nick,
@@ -110,27 +87,14 @@ export function updateOnlinePresence(
   };
 }
 
-export function deleteOnlinePresence(
-  userId: string,
-  onlinePresenceTable: string,
-  log: WorldDbLogFn,
-): void {
+export function deleteOnlinePresence(userId: string): void {
   deleteWorldRowsWhere(
-    onlinePresenceTable,
+    VWORLD_ONLINE_PRESENCE_TABLE,
     JSON.stringify({ user_id: String(userId) }),
-    log,
   );
 }
 
-export function buildOnlinePlayersSnapshot(
-  onlinePresenceTable: string,
-  playerHeartbeatTable: string,
-  playerPositionTable: string,
-  playerWorldTable: string,
-  playerNickTable: string,
-  log: WorldDbLogFn,
-  ttlMs: number,
-): Array<{
+export function buildOnlinePlayersSnapshot(ttlMs: number): Array<{
   player_id: string;
   nick: string;
   world_id: string;
@@ -138,16 +102,15 @@ export function buildOnlinePlayersSnapshot(
   last_active: number;
 }> {
   const rows = queryWorldRows(
-    onlinePresenceTable,
+    VWORLD_ONLINE_PRESENCE_TABLE,
     "",
     1000,
     "last_active_ts",
     "desc",
-    log,
   );
   const now = Date.now();
-  const heartbeatByUserId = loadPlayerHeartbeatMap(playerHeartbeatTable, log);
-  const positionsByUserId = loadAllPlayerPositions(playerPositionTable, log);
+  const heartbeatByUserId = loadPlayerHeartbeatMap();
+  const positionsByUserId = loadAllPlayerPositions();
   const byUserId: Record<
     string,
     {
@@ -174,7 +137,7 @@ export function buildOnlinePlayersSnapshot(
     if (now - canonicalLastActive > ttlMs) continue;
     byUserId[userId] = {
       player_id: userId,
-      nick: row.nick || getEffectiveNick(userId, playerNickTable, log),
+      nick: row.nick || getEffectiveNick(userId),
       world_id: String(row.world_id || (pos ? pos.world_id : "") || ""),
       login_at: fromStoredWorldTimestamp(row.login_at) || canonicalLastActive,
       last_active: canonicalLastActive,
@@ -192,10 +155,8 @@ export function buildOnlinePlayersSnapshot(
     if (!byUserId[userId]) {
       byUserId[userId] = {
         player_id: userId,
-        nick: getEffectiveNick(userId, playerNickTable, log),
-        world_id: String(
-          pos.world_id || getPlayerWorld(userId, playerWorldTable, log) || "",
-        ),
+        nick: getEffectiveNick(userId),
+        world_id: String(pos.world_id || getPlayerWorld(userId) || ""),
         login_at: canonicalLastActive,
         last_active: canonicalLastActive,
       };

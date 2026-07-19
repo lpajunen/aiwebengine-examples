@@ -206,6 +206,85 @@ seq/lease logic, crafting, and especially the action-logic interpreter
 rates, tick durations, DB error rates) and some tracing story from the
 runtime.
 
+## Domain-model goals
+
+Added July 2026, from the concept description in [README.md](README.md).
+Unlike items 1–10 these are feature goals, not scalability fixes, but they
+land in the same modules and are tracked here so the two lists get
+sequenced together. Numbering continues from the list above.
+
+### 11. Container items (items inside items)
+
+**Today:** containment is one level deep and only living objects contain
+things: an item lives on a tile, in a slot, or in a bag (`slots_json` /
+`bag_json` flat structures in `item-storage.ts`). Items have no contents of
+their own.
+
+**Needed:** an item can contain other items — a chest holding a sword and a
+helmet — with contents moving along when the container is picked up,
+dropped, or transferred. Requires a recursive item representation (contents
+list on the item record), depth/count limits to keep payloads and the
+interpreter bounded, and pickup/drop/craft flows that treat a container and
+its contents as one atomic unit (extends the claim-by-delete and
+transaction work in item 3).
+
+### 12. Slot/bag visibility semantics
+
+**Today:** the storage split already exists — living classes define slot
+layouts (`living-registry.ts`) and per-living state is
+`slots + bag + values` — but visibility does not: NPC bag contents are
+shipped to every client, and slot contents only surface in the local UI's
+held-item labels, not on other players' avatars.
+
+**Needed:** slots are public and drive outside appearance (other clients
+render equipped items on the avatar); bag contents are private to the
+owning player/NPC and must be stripped from snapshots, resync payloads, and
+events sent to other parties. Server-side filtering belongs in the snapshot
+and broadcast paths (`player-snapshots.ts`, `stream-broadcast.ts`) so
+privacy does not depend on client behavior; pairs with the interest-
+management filtering of item 5.
+
+### 13. Persistence tiers and the 30-minute world reset
+
+**Today:** everything persists forever. Player inventory is already
+per-user durable (correct, keep), but world items, NPCs, and world mods
+also accumulate indefinitely — nothing expires, so worlds silt up with
+litter and depleted state.
+
+**Needed:** three explicit tiers:
+
+- **Permanent** — player data: values plus slot/bag items and those items'
+  own values and contents.
+- **Ephemeral (default)** — NPCs, world items not contained by a player,
+  and other world data reset roughly every 30 minutes back to the baseline
+  the spawn rules describe (spawn rules themselves are part of the world
+  definition, not the ephemeral state).
+- **Extended (opt-in)** — creator-marked data that survives resets, e.g. a
+  shop's sellable stock.
+
+Implies a persistence-tier marker on stored rows, a reset job (the
+scheduler tick or a dedicated cron) that clears ephemeral rows and
+re-seeds from spawn rules, and reset events so connected clients resync
+cleanly (rides on the item 1 resync path). A DB TTL/expiry primitive would
+help (add to runtime capability 9's DB asks) but a lease-guarded sweep can
+do it in game code.
+
+### 14. Timed actions (durations and started-action state)
+
+**Today:** all actions resolve instantly inside one request; action classes
+(`action-class-storage.ts`, `action-logic-interpreter.ts`) have no duration
+or cooldown fields and no in-flight state.
+
+**Needed:** an action type can declare a duration (chop a tree: one
+minute); performing one creates a **started action** — a live record whose
+values track remaining time — with effects applied on completion, progress
+observable by nearby clients, and interruption rules (mover cancels,
+target vanished, actor left). Needs a persisted started-actions store
+driven by the scheduler tick (same lease pattern as the NPC tick),
+start/progress/complete/cancel events on the versioned protocol (item 1),
+and completion effects wrapped in the item 3 transactions. Interpreter
+validation limits from item 9 apply to duration values too.
+
 ## Capabilities expected from the runtime
 
 The game-side changes above assume the aiwebengine runtime grows these

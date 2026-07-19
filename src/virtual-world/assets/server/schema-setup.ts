@@ -21,6 +21,7 @@ type WorldSchemaTables = {
   itemClass: string;
   actionClass: string;
   livingClass: string;
+  worldClass: string;
   eventSeq: string;
 };
 
@@ -947,6 +948,45 @@ export function ensureWorldDatabaseSchema(
   step("addUniqueIndex", tables.livingClass, function () {
     return database.addUniqueIndex(
       tables.livingClass,
+      JSON.stringify(["class_id"]),
+    );
+  });
+
+  step("createTable", tables.worldClass, function () {
+    return database.createTable(tables.worldClass);
+  });
+  [
+    ["addTextColumn", "class_id", false],
+    ["addTextColumn", "base_type", false],
+    ["addIntegerColumn", "rows", false],
+    ["addIntegerColumn", "cols", false],
+    ["addTextColumn", "label_key", false],
+    ["addTextColumn", "fallback_label", false],
+    ["addIntegerColumn", "created_at", false],
+    ["addIntegerColumn", "updated_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      tables.worldClass,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              tables.worldClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              tables.worldClass,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", tables.worldClass, function () {
+    return database.addUniqueIndex(
+      tables.worldClass,
       JSON.stringify(["class_id"]),
     );
   });

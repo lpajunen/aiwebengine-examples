@@ -192,6 +192,11 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
         description:
           "Optional portal destination world width in tiles for build_portal (clamped to 8-200; defaults to 100)",
       },
+      destination_world_class_id: {
+        type: "string",
+        description:
+          "Optional world class ID for build_portal; supplies the destination's base type and default size (see virtualWorldManageWorldClasses)",
+      },
     },
     required: ["action"],
   });
@@ -435,6 +440,51 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     "virtualWorldManageLivingClassesToolHandler",
   );
 
+  const virtualWorldManageWorldClassesSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "get", "create", "update", "delete"],
+        description: "Operation to perform on world class definitions",
+        default: "list",
+      },
+      id: {
+        type: "string",
+        description:
+          "World class ID (required for get, create, update, delete)",
+      },
+      baseType: {
+        type: "string",
+        enum: ["forest", "island", "cave", "building"],
+        description: "Built-in generation preset the world class is based on",
+      },
+      rows: {
+        type: "number",
+        description: "World height in tiles (clamped to 8-200)",
+      },
+      cols: {
+        type: "number",
+        description: "World width in tiles (clamped to 8-200)",
+      },
+      fallbackLabel: {
+        type: "string",
+        description: "Human-readable label for the world type",
+      },
+      labelKey: {
+        type: "string",
+        description: "i18n label key for the world type",
+      },
+    },
+  });
+  safeRegisterTool(
+    deps,
+    "virtualWorldManageWorldClasses",
+    "List, get, create, update, or delete world class definitions (world type, size) in the virtual world",
+    virtualWorldManageWorldClassesSchema,
+    "virtualWorldManageWorldClassesToolHandler",
+  );
+
   safeRegisterAssetRoute(deps, "/virtual-world", "public/welcome.html");
   safeRegisterAssetRoute(
     deps,
@@ -598,6 +648,30 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     deps,
     "/virtual-world/living-classes/:id",
     "deleteLivingClassHandler",
+    "DELETE",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/world-classes",
+    "worldClassesHandler",
+    "GET",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/world-classes",
+    "createWorldClassHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/world-classes/:id",
+    "updateWorldClassHandler",
+    "PUT",
+  );
+  safeRegisterRoute(
+    deps,
+    "/virtual-world/world-classes/:id",
+    "deleteWorldClassHandler",
     "DELETE",
   );
 }

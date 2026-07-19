@@ -20,3 +20,11 @@ declare var INIT_SEQ: number;
 declare var INIT_ROTATION: number;
 declare var ITEM_REGISTRY: any;
 declare var LIVING_REGISTRY: any;
+declare var WORLD_CLASS_REGISTRY: Array<{
+  id: string;
+  baseType: string;
+  rows: number;
+  cols: number;
+  labelKey: string;
+  fallbackLabel: string;
+}>;

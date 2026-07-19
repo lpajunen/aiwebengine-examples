@@ -46,12 +46,15 @@ var chatActiveTab = "world"; // 'world' | 'dm'
 var itemClassPanelVisible = false;
 var actionClassPanelVisible = false;
 var livingClassPanelVisible = false;
+var worldClassPanelVisible = false;
 /** @type {string | null} */
 var itemClassEditId = null;
 /** @type {string | null} */
 var actionClassEditId = null;
 /** @type {string | null} */
 var livingClassEditId = null;
+/** @type {string | null} */
+var worldClassEditId = null;
 /** @type {any[]} */
 var worldChatMessages = INITIAL_CHAT || [];
 /** @type {string[]} */
@@ -98,6 +101,35 @@ function openUsePicker(actions) {
         postTreeAction(a);
       };
     })(action);
+    container.appendChild(btn);
+  }
+  usePickerVisible = true;
+  requireElementById("hud-use-picker").style.display = "block";
+}
+
+function openPortalDestinationPicker() {
+  var container = requireElementById("use-picker-actions");
+  container.innerHTML = "";
+  var classes = Array.isArray(WORLD_CLASS_REGISTRY) ? WORLD_CLASS_REGISTRY : [];
+  for (var i = 0; i < classes.length; i++) {
+    var cls = classes[i];
+    if (!cls || !cls.id) continue;
+    var btn = document.createElement("button");
+    btn.textContent =
+      t(String(cls.labelKey || ""), String(cls.fallbackLabel || cls.id)) +
+      " (" +
+      String(cls.rows) +
+      "×" +
+      String(cls.cols) +
+      ")";
+    btn.onclick = (function (classId) {
+      return function () {
+        closeUsePicker();
+        postTreeAction("build_portal", {
+          destination_world_class_id: classId,
+        });
+      };
+    })(String(cls.id));
     container.appendChild(btn);
   }
   usePickerVisible = true;
@@ -2545,17 +2577,36 @@ function goToNewWorld() {
     });
 }
 
-/** @param {string} action */
-function postTreeAction(action) {
+/**
+ * @param {string} action
+ * @param {Record<string, any>=} extras
+ */
+function postTreeAction(action, extras) {
+  // Portal builds go through the world-type picker so the creator can choose
+  // any world class (built-in preset or custom type with its own size).
+  if (
+    !extras &&
+    String(action).indexOf("build_portal") === 0 &&
+    Array.isArray(WORLD_CLASS_REGISTRY) &&
+    WORLD_CLASS_REGISTRY.length > 0
+  ) {
+    openPortalDestinationPicker();
+    return;
+  }
   fetchWithAuth("/virtual-world/tree-action", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: action,
-      row: avatarRow,
-      col: avatarCol,
-      rotation: avatar.rotation.y,
-    }),
+    body: JSON.stringify(
+      Object.assign(
+        {
+          action: action,
+          row: avatarRow,
+          col: avatarCol,
+          rotation: avatar.rotation.y,
+        },
+        extras || {},
+      ),
+    ),
   })
     .then(function (res) {
       return res.json();
@@ -4443,10 +4494,14 @@ function updateEditingRightsUI() {
   requireElementById("btn-living-classes").style.display = hasRights
     ? ""
     : "none";
+  requireElementById("btn-world-classes").style.display = hasRights
+    ? ""
+    : "none";
   if (!hasRights) {
     if (itemClassPanelVisible) closeItemClassPanel();
     if (actionClassPanelVisible) closeActionClassPanel();
     if (livingClassPanelVisible) closeLivingClassPanel();
+    if (worldClassPanelVisible) closeWorldClassPanel();
   }
 }
 
@@ -4722,6 +4777,7 @@ function showItemClassPanel() {
   if (craftingPanelVisible) closeCraftingPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
+  if (worldClassPanelVisible) closeWorldClassPanel();
   itemClassPanelVisible = true;
   requireElementById("hud-item-class-panel").style.display = "block";
   renderItemClassList();
@@ -4986,6 +5042,7 @@ function showActionClassPanel() {
   if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
+  if (worldClassPanelVisible) closeWorldClassPanel();
   actionClassPanelVisible = true;
   requireElementById("hud-action-class-panel").style.display = "block";
   renderActionClassList();
@@ -5301,6 +5358,7 @@ function showLivingClassPanel() {
   if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
+  if (worldClassPanelVisible) closeWorldClassPanel();
   livingClassPanelVisible = true;
   requireElementById("hud-living-class-panel").style.display = "block";
   renderLivingClassList();
@@ -5314,6 +5372,259 @@ function closeLivingClassPanel() {
 function toggleLivingClassPanel() {
   if (livingClassPanelVisible) closeLivingClassPanel();
   else showLivingClassPanel();
+}
+
+// ── World class panel ────────────────────────────────────────────────────
+
+var BUILTIN_WORLD_CLASS_IDS = ["forest", "island", "cave", "building"];
+
+/** @param {string} id
+ * @returns {boolean} */
+function isBuiltinWorldClassId(id) {
+  return BUILTIN_WORLD_CLASS_IDS.indexOf(String(id)) !== -1;
+}
+
+function renderWorldClassList() {
+  var listDiv = requireElementById("world-class-list");
+  fetchWithAuth("/virtual-world/world-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.world_classes) ? data.world_classes : [];
+      if (!classes.length) {
+        listDiv.innerHTML =
+          '<div class="class-row"><em style="opacity:0.55">' +
+          escHtml(t("class_editor.no_world_types", "No world types yet.")) +
+          "</em></div>";
+        return;
+      }
+      var rows = "";
+      for (var i = 0; i < classes.length; i++) {
+        var wc = classes[i];
+        var id = escHtml(String(wc.id || ""));
+        var label = escHtml(String(wc.fallbackLabel || wc.id || "?"));
+        var summary = escHtml(
+          String(wc.baseType || "") +
+            " " +
+            String(wc.rows || "?") +
+            "×" +
+            String(wc.cols || "?"),
+        );
+        var delBtn = isBuiltinWorldClassId(String(wc.id || ""))
+          ? ""
+          : '<button data-world-class-id="' +
+            id +
+            '" onclick="deleteWorldClassUI(this.dataset.worldClassId)">' +
+            escHtml(t("class_editor.del_button", "Del")) +
+            "</button>";
+        rows +=
+          '<div class="class-row">' +
+          '<span class="class-row-id">' +
+          id +
+          "</span> " +
+          '<span class="class-row-label">' +
+          label +
+          " · " +
+          summary +
+          "</span>" +
+          '<span class="class-row-btns">' +
+          '<button data-world-class-id="' +
+          id +
+          '" onclick="editWorldClass(this.dataset.worldClassId)">' +
+          escHtml(t("class_editor.edit_button", "Edit")) +
+          "</button>" +
+          delBtn +
+          "</span></div>";
+      }
+      listDiv.innerHTML = rows;
+    })
+    .catch(function () {
+      listDiv.innerHTML =
+        '<div class="class-row" style="color:#f88">' +
+        escHtml(t("class_editor.failed_to_load_list", "Failed to load.")) +
+        "</div>";
+    });
+}
+
+/** @param {string} id */
+function editWorldClass(id) {
+  fetchWithAuth("/virtual-world/world-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.world_classes) ? data.world_classes : [];
+      var wc = null;
+      for (var i = 0; i < classes.length; i++) {
+        if (String(classes[i].id) === String(id)) {
+          wc = classes[i];
+          break;
+        }
+      }
+      if (!wc) {
+        showHudToast(
+          t("class_editor.world_not_found", "World type not found"),
+          true,
+        );
+        return;
+      }
+      worldClassEditId = String(id);
+      var idEl = /** @type {HTMLInputElement} */ (requireElementById("wc-id"));
+      idEl.value = String(wc.id || "");
+      idEl.disabled = true;
+      /** @type {HTMLInputElement} */ (requireElementById("wc-label")).value =
+        String(wc.fallbackLabel || "");
+      /** @type {HTMLSelectElement} */ (
+        requireElementById("wc-base-type")
+      ).value = String(wc.baseType || "forest");
+      /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value =
+        String(wc.rows || 100);
+      /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value =
+        String(wc.cols || 100);
+      requireElementById("world-class-form-title").textContent =
+        t("class_editor.edit_prefix", "Edit:") + " " + String(id);
+    })
+    .catch(function () {
+      showHudToast(
+        t(
+          "class_editor.failed_to_load_world_type",
+          "Failed to load world type",
+        ),
+        true,
+      );
+    });
+}
+
+function cancelWorldClassEdit() {
+  worldClassEditId = null;
+  var idEl = /** @type {HTMLInputElement} */ (requireElementById("wc-id"));
+  idEl.disabled = false;
+  idEl.value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("wc-label")).value = "";
+  /** @type {HTMLSelectElement} */ (requireElementById("wc-base-type")).value =
+    "forest";
+  /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value = "100";
+  /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value = "100";
+  requireElementById("world-class-form-title").textContent = t(
+    "class_editor.new_world_type",
+    "New world type",
+  );
+}
+
+function submitWorldClassForm() {
+  var idVal = /** @type {HTMLInputElement} */ (
+    requireElementById("wc-id")
+  ).value.trim();
+  if (!idVal) {
+    showHudToast(
+      t("class_editor.world_id_required", "World type ID is required"),
+      true,
+    );
+    return;
+  }
+  var labelVal = /** @type {HTMLInputElement} */ (
+    requireElementById("wc-label")
+  ).value.trim();
+  var baseTypeVal = /** @type {HTMLSelectElement} */ (
+    requireElementById("wc-base-type")
+  ).value;
+  var rowsVal = Number(
+    /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value,
+  );
+  var colsVal = Number(
+    /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value,
+  );
+  var record = {
+    id: idVal,
+    baseType: baseTypeVal,
+    rows: rowsVal,
+    cols: colsVal,
+    fallbackLabel: labelVal || idVal,
+  };
+  var url = worldClassEditId
+    ? "/virtual-world/world-classes/" + encodeURIComponent(worldClassEditId)
+    : "/virtual-world/world-classes";
+  var method = worldClassEditId ? "PUT" : "POST";
+  fetchWithAuth(url, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.save_failed", "Save failed"),
+          true,
+        );
+        return;
+      }
+      showHudToast(t("class_editor.saved", "Saved!"), false);
+      cancelWorldClassEdit();
+      renderWorldClassList();
+    })
+    .catch(function () {
+      showHudToast(t("class_editor.save_failed", "Save failed"), true);
+    });
+}
+
+/** @param {string} id */
+function deleteWorldClassUI(id) {
+  fetchWithAuth(
+    "/virtual-world/world-classes/" + encodeURIComponent(String(id)),
+    { method: "DELETE" },
+  )
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.delete_failed", "Delete failed"),
+          true,
+        );
+        return;
+      }
+      showHudToast(
+        t("class_editor.deleted_prefix", "Deleted") + " " + String(id),
+        false,
+      );
+      if (worldClassEditId === String(id)) cancelWorldClassEdit();
+      renderWorldClassList();
+    })
+    .catch(function () {
+      showHudToast(t("class_editor.delete_failed", "Delete failed"), true);
+    });
+}
+
+function showWorldClassPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  if (craftingPanelVisible) closeCraftingPanel();
+  if (itemClassPanelVisible) closeItemClassPanel();
+  if (actionClassPanelVisible) closeActionClassPanel();
+  if (livingClassPanelVisible) closeLivingClassPanel();
+  worldClassPanelVisible = true;
+  requireElementById("hud-world-class-panel").style.display = "block";
+  renderWorldClassList();
+}
+
+function closeWorldClassPanel() {
+  worldClassPanelVisible = false;
+  requireElementById("hud-world-class-panel").style.display = "none";
+}
+
+function toggleWorldClassPanel() {
+  if (worldClassPanelVisible) closeWorldClassPanel();
+  else showWorldClassPanel();
 }
 
 // ── Game loop ────────────────────────────────────────────────────────────

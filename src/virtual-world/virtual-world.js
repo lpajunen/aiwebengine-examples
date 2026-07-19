@@ -193,6 +193,16 @@ import {
   refreshLivingClassCache as refreshLivingClassCacheImpl,
   upsertLivingClass as upsertLivingClassImpl,
 } from "./server/living-registry.ts";
+import {
+  bootstrapWorldClasses as bootstrapWorldClassesImpl,
+  deleteWorldClass as deleteWorldClassImpl,
+  getAllWorldClasses as getAllWorldClassesImpl,
+  getWorldClass as getWorldClassImpl,
+  isBuiltinWorldClassId as isBuiltinWorldClassIdImpl,
+  normalizeWorldClassRecord as normalizeWorldClassRecordImpl,
+  refreshWorldClassCache as refreshWorldClassCacheImpl,
+  upsertWorldClass as upsertWorldClassImpl,
+} from "./server/world-class-storage.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
   virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
@@ -203,6 +213,7 @@ import {
   virtualWorldManageItemClassesToolHandler as virtualWorldManageItemClassesToolHandlerImpl,
   virtualWorldManageActionClassesToolHandler as virtualWorldManageActionClassesToolHandlerImpl,
   virtualWorldManageLivingClassesToolHandler as virtualWorldManageLivingClassesToolHandlerImpl,
+  virtualWorldManageWorldClassesToolHandler as virtualWorldManageWorldClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
   addToDMIndex as addToDMIndexImpl,
@@ -548,6 +559,7 @@ function getVirtualWorldPage(context) {
       worldTileDefs: WORLD_TILE_DEFS,
       getBootstrapRegistry: getBootstrapRegistry,
       getAllLivingClasses: getAllLivingClasses,
+      getAllWorldClasses: getAllWorldClassesImpl,
     },
   );
   return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
@@ -845,6 +857,7 @@ var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 var VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 var VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
+var VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 var VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 
 /**
@@ -1120,6 +1133,7 @@ function ensureWorldDatabaseSchema() {
       itemClass: VWORLD_ITEM_CLASS_TABLE,
       actionClass: VWORLD_ACTION_CLASS_TABLE,
       livingClass: VWORLD_LIVING_CLASS_TABLE,
+      worldClass: VWORLD_WORLD_CLASS_TABLE,
       eventSeq: VWORLD_EVENT_SEQ_TABLE,
     },
     parseWorldDbResult,
@@ -2181,6 +2195,7 @@ function performTreeActionForUserInner(userId, body) {
     broadcastItemChange: broadcastItemChange,
     getTargetTileFromRotation: getTargetTileFromRotation,
     getWorldDimensions: getWorldDimensions,
+    getWorldClass: getWorldClassImpl,
     getEffectiveMap: getEffectiveMap,
     loadWorldTrees: loadWorldTrees,
     loadWorldHouses: loadWorldHouses,
@@ -2334,6 +2349,29 @@ function virtualWorldManageLivingClassesToolHandler(context) {
     deleteLivingClass: function (id) {
       deleteLivingClassImpl(id, VWORLD_LIVING_CLASS_TABLE, vwLog);
     },
+  });
+}
+
+/**
+ * @param {*} context
+ */
+function virtualWorldManageWorldClassesToolHandler(context) {
+  return virtualWorldManageWorldClassesToolHandlerImpl(context, {
+    getAuthenticatedUserId: getAuthenticatedUserId,
+    hasEditingRights: userHasCreatorStone,
+    refreshWorldClasses: function () {
+      refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+    },
+    getAllWorldClasses: getAllWorldClassesImpl,
+    getWorldClass: getWorldClassImpl,
+    upsertWorldClass: function (record) {
+      return upsertWorldClassImpl(record, VWORLD_WORLD_CLASS_TABLE, vwLog);
+    },
+    deleteWorldClass: function (id) {
+      deleteWorldClassImpl(id, VWORLD_WORLD_CLASS_TABLE, vwLog);
+    },
+    isBuiltinWorldClassId: isBuiltinWorldClassIdImpl,
+    normalizeWorldClassRecord: normalizeWorldClassRecordImpl,
   });
 }
 
@@ -3569,16 +3607,187 @@ function deleteLivingClassHandler(context) {
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }
 
+// ── World class CRUD handlers ──────────────────────────────────────────────
+
+/**
+ * @param {*} context
+ */
+function worldClassesHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({
+    ok: true,
+    world_classes: getAllWorldClassesImpl(),
+  });
+}
+
+/**
+ * @param {*} context
+ */
+function createWorldClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
+  }
+  var id = String((body && body.id) || "").trim();
+  if (!id) {
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var record = normalizeWorldClassRecordImpl({
+    id: id,
+    baseType: body && body.baseType,
+    rows: body && body.rows,
+    cols: body && body.cols,
+    labelKey: body && body.labelKey,
+    fallbackLabel: body && body.fallbackLabel,
+  });
+  var worldCreateWrite = upsertWorldClassImpl(
+    record,
+    VWORLD_WORLD_CLASS_TABLE,
+    vwLog,
+  );
+  if (!worldCreateWrite || !worldCreateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "error.world_class_upsert_failed" +
+          (worldCreateWrite && worldCreateWrite.error
+            ? ": " + String(worldCreateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, world_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function updateWorldClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
+  }
+  var existing = getWorldClassImpl(classId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.world_class_not_found" },
+      404,
+    );
+  }
+  var record = normalizeWorldClassRecordImpl({
+    id: classId,
+    baseType:
+      body && body.baseType !== undefined ? body.baseType : existing.baseType,
+    rows: body && body.rows !== undefined ? body.rows : existing.rows,
+    cols: body && body.cols !== undefined ? body.cols : existing.cols,
+    labelKey:
+      body && body.labelKey !== undefined ? body.labelKey : existing.labelKey,
+    fallbackLabel:
+      body && body.fallbackLabel !== undefined
+        ? body.fallbackLabel
+        : existing.fallbackLabel,
+  });
+  var worldUpdateWrite = upsertWorldClassImpl(
+    record,
+    VWORLD_WORLD_CLASS_TABLE,
+    vwLog,
+  );
+  if (!worldUpdateWrite || !worldUpdateWrite.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "error.world_class_upsert_failed" +
+          (worldUpdateWrite && worldUpdateWrite.error
+            ? ": " + String(worldUpdateWrite.error)
+            : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, world_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+function deleteWorldClassHandler(context) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  if (isBuiltinWorldClassIdImpl(classId)) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.world_class_builtin" },
+      400,
+    );
+  }
+  deleteWorldClassImpl(classId, VWORLD_WORLD_CLASS_TABLE, vwLog);
+  return ResponseBuilder.json({ ok: true, deleted_id: classId });
+}
+
 function init() {
   ensureWorldDatabaseSchema();
   ensureChatDatabaseSchema();
   bootstrapItemClassesImpl(VWORLD_ITEM_CLASS_TABLE, vwLog);
   bootstrapActionClassesImpl(VWORLD_ACTION_CLASS_TABLE, vwLog);
   bootstrapLivingClassesImpl(VWORLD_LIVING_CLASS_TABLE, vwLog);
+  bootstrapWorldClassesImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
   vwDiag("init", {
     item_class_table: VWORLD_ITEM_CLASS_TABLE,
     action_class_table: VWORLD_ACTION_CLASS_TABLE,
     living_class_table: VWORLD_LIVING_CLASS_TABLE,
+    world_class_table: VWORLD_WORLD_CLASS_TABLE,
   });
   startNPCTicker();
   registerVirtualWorldRuntimeImpl({

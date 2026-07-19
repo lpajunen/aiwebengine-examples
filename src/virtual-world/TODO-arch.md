@@ -287,12 +287,27 @@ validation limits from item 9 apply to duration values too.
 
 ### 15. Per-world size and creator-defined world types
 
-**Today:** every world is 100×100. `ROWS`/`COLS` are constants in
-`world-domain.ts`, injected into most server modules, imported directly by
-`world-map.ts`, and hardcoded again in `client.js`. World "types" are the
-four generation presets, chosen by the portal builder's four
-`build_portal_<type>` actions; `createWorldOfType` stores only
-`world_type`. A portal to a small house still opens a full 100×100 world.
+**Status: implemented (July 2026).** Stage 1: worlds store `rows`/`cols`
+next to `world_type` (default 100×100, clamped 8–200 by
+`normalizeWorldDimension`); `generateWorldMap` is parameterized and scales
+features by area; server modules derive bounds from the effective map; the
+client derives dimensions from the injected `MAP`. Stage 2: world classes
+are the fourth content class (`world-class-storage.ts`, the four presets
+seeded as built-ins), managed via the creator's-stone-gated World Types
+panel, `/virtual-world/world-classes` CRUD, and the
+`virtualWorldManageWorldClasses` MCP tool; portal builds open a
+destination picker over `WORLD_CLASS_REGISTRY` and send
+`destination_world_class_id`. Remaining gaps: the world-class cache
+refreshes per-instance on CRUD/list calls only (cross-instance staleness
+until item 2's world-state story), the portal picker's registry snapshot
+refreshes on page load only, and world classes have no quotas (item 9).
+
+**Original problem:** every world was 100×100. `ROWS`/`COLS` were constants
+in `world-domain.ts`, injected into most server modules, imported directly
+by `world-map.ts`, and hardcoded again in `client.js`. World "types" were
+the four generation presets, chosen by the portal builder's four
+`build_portal_<type>` actions; `createWorldOfType` stored only
+`world_type`. A portal to a small house still opened a full 100×100 world.
 
 **Needed**, in two stages:
 

@@ -224,6 +224,7 @@ export function virtualWorldActToolHandler(
     destination_world_type: args.destination_world_type,
     destination_world_rows: args.destination_world_rows,
     destination_world_cols: args.destination_world_cols,
+    destination_world_class_id: args.destination_world_class_id,
   });
   result.payload.status = result.status;
   if (result && result.payload && result.payload.inventory) {
@@ -549,6 +550,106 @@ export function virtualWorldManageLivingClassesToolHandler(
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     deps.deleteLivingClass(id);
+    return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+}
+
+type WorldClassHandlerDeps = {
+  getAuthenticatedUserId: (context: any) => string | null;
+  hasEditingRights: (userId: string) => boolean;
+  refreshWorldClasses: () => void;
+  getAllWorldClasses: () => any[];
+  getWorldClass: (id: string) => any | null;
+  upsertWorldClass: (record: any) => { ok: boolean; error?: string };
+  deleteWorldClass: (id: string) => void;
+  isBuiltinWorldClassId: (id: string) => boolean;
+  normalizeWorldClassRecord: (record: any) => any;
+};
+
+export function virtualWorldManageWorldClassesToolHandler(
+  context: any,
+  deps: WorldClassHandlerDeps,
+): string {
+  const userId = deps.getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+  if (!deps.hasEditingRights(userId)) {
+    return JSON.stringify({ ok: false, error: "Editing rights required" });
+  }
+
+  const args = context.args || {};
+  const action = String(args.action || "list");
+
+  if (action === "list") {
+    deps.refreshWorldClasses();
+    return JSON.stringify({
+      ok: true,
+      world_classes: deps.getAllWorldClasses(),
+    });
+  }
+
+  if (action === "get") {
+    deps.refreshWorldClasses();
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const cls = deps.getWorldClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "World class not found" });
+    return JSON.stringify({ ok: true, world_class: cls });
+  }
+
+  if (action === "create" || action === "update") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    deps.refreshWorldClasses();
+    const existing = deps.getWorldClass(id);
+    if (action === "update" && !existing) {
+      return JSON.stringify({ ok: false, error: "World class not found" });
+    }
+    const record = deps.normalizeWorldClassRecord({
+      id,
+      baseType:
+        args.baseType !== undefined
+          ? args.baseType
+          : existing && existing.baseType,
+      rows: args.rows !== undefined ? args.rows : existing && existing.rows,
+      cols: args.cols !== undefined ? args.cols : existing && existing.cols,
+      labelKey:
+        args.labelKey !== undefined
+          ? args.labelKey
+          : existing && existing.labelKey,
+      fallbackLabel:
+        args.fallbackLabel !== undefined
+          ? args.fallbackLabel
+          : existing && existing.fallbackLabel,
+    });
+    const writeResult = deps.upsertWorldClass(record);
+    if (!writeResult || !writeResult.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "World class upsert failed" +
+          (writeResult && writeResult.error
+            ? ": " + String(writeResult.error)
+            : ""),
+      });
+    }
+    return JSON.stringify({ ok: true, world_class: record });
+  }
+
+  if (action === "delete") {
+    const id = String(args.id || "").trim();
+    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (deps.isBuiltinWorldClassId(id)) {
+      return JSON.stringify({
+        ok: false,
+        error: "Built-in world classes cannot be deleted",
+      });
+    }
+    deps.deleteWorldClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 

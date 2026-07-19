@@ -95,6 +95,12 @@ type TreeActionDeps = {
     col: number;
   };
   getWorldDimensions: (worldId: string) => { rows: number; cols: number };
+  getWorldClass: (classId: string) => {
+    id: string;
+    baseType: string;
+    rows: number;
+    cols: number;
+  } | null;
   getEffectiveMap: (worldId: string) => number[][];
   loadWorldTrees: (worldId: string) => Record<string, any>;
   loadWorldHouses: (worldId: string) => Record<string, any>;
@@ -135,6 +141,9 @@ export function performTreeActionForUser(
           cols: isFinite(requestedPortalCols) ? requestedPortalCols : undefined,
         }
       : undefined;
+  const requestedWorldClassId = String(
+    (body && body.destination_world_class_id) || "",
+  ).trim();
 
   if (action === "pick" || action === "drop" || action === "equip") {
     return deps.handleItemActionForUser(userId, body || {});
@@ -724,11 +733,35 @@ export function performTreeActionForUser(
 
   if (action === "build_portal") {
     const targetTileKey = targetRow + "_" + targetCol;
+    // A world class (creator-defined world type) supplies the base preset and
+    // default size; explicit rows/cols in the request still win over the class.
+    let portalWorldType = requestedPortalWorldType;
+    let portalDimensions = requestedPortalDimensions;
+    if (requestedWorldClassId) {
+      const worldClass = deps.getWorldClass(requestedWorldClassId);
+      if (!worldClass) {
+        return {
+          status: 200,
+          payload: { ok: false, error: "error.world_class_not_found" },
+        };
+      }
+      portalWorldType = worldClass.baseType;
+      portalDimensions = {
+        rows:
+          portalDimensions && portalDimensions.rows !== undefined
+            ? portalDimensions.rows
+            : worldClass.rows,
+        cols:
+          portalDimensions && portalDimensions.cols !== undefined
+            ? portalDimensions.cols
+            : worldClass.cols,
+      };
+    }
     const createdDestinationWorld = deps.createWorldOfType(
-      requestedPortalWorldType,
-      requestedPortalDimensions,
+      portalWorldType,
+      portalDimensions,
     );
-    const portalItem = {
+    const portalItem: Record<string, any> = {
       id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
       type: "portal",
       created_at: Date.now(),
@@ -737,6 +770,9 @@ export function performTreeActionForUser(
       destination_world_rows: createdDestinationWorld.rows,
       destination_world_cols: createdDestinationWorld.cols,
     };
+    if (requestedWorldClassId) {
+      portalItem.destination_world_class_id = requestedWorldClassId;
+    }
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);
     deps.upsertWorldItem(worldId, targetRow, targetCol, portalItem);

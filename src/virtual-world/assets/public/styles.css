@@ -780,10 +780,16 @@ canvas {
   border-color: rgba(80,150,220,0.55);
 }
 #btn-living-classes:hover { background: rgba(40,95,145,1); }
+#btn-world-classes {
+  background: rgba(110,80,30,0.85);
+  border-color: rgba(220,170,80,0.55);
+}
+#btn-world-classes:hover { background: rgba(145,105,40,1); }
 
 #hud-item-class-panel,
 #hud-action-class-panel,
-#hud-living-class-panel {
+#hud-living-class-panel,
+#hud-world-class-panel {
   right: 14px;
   bottom: 70px;
   width: min(400px, calc(100vw - 28px));

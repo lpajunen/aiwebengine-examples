@@ -52,6 +52,7 @@ type PageBootstrapDeps = {
   worldTileDefs: any;
   getBootstrapRegistry: () => any;
   getAllLivingClasses: () => any[];
+  getAllWorldClasses: () => any[];
 };
 
 type PageState = {
@@ -78,6 +79,7 @@ type PageState = {
   worldTileDefs: any;
   itemRegistry: any;
   livingRegistry: any;
+  worldClassRegistry: any[];
 };
 
 export function getDefaultSpawnPosition(
@@ -250,6 +252,7 @@ export function buildVirtualWorldPageState(
     worldTileDefs: deps.worldTileDefs,
     itemRegistry: deps.getBootstrapRegistry(),
     livingRegistry: livingRegistry,
+    worldClassRegistry: deps.getAllWorldClasses(),
   };
 }
 
@@ -301,6 +304,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-item-classes" onclick="toggleItemClassPanel()">📦 <span data-i18n-key="hud.item_types">Item types</span></button>
     <button id="btn-action-classes" onclick="toggleActionClassPanel()">⚡ <span data-i18n-key="hud.action_types">Action types</span></button>
     <button id="btn-living-classes" onclick="toggleLivingClassPanel()">🧬 <span data-i18n-key="hud.living_types">Living types</span></button>
+    <button id="btn-world-classes" onclick="toggleWorldClassPanel()">🌍 <span data-i18n-key="hud.world_types">World types</span></button>
   </div>
 
   <div class="hud" id="hud-use-picker">
@@ -477,6 +481,35 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     </div>
   </div>
 
+  <div class="hud" id="hud-world-class-panel">
+    <div class="panel-header">
+      <span class="panel-title" data-i18n-key="panel.world_types">World Types</span>
+      <button class="panel-close" onclick="closeWorldClassPanel()" data-i18n-title="panel.close" title="Close">×</button>
+    </div>
+    <div id="world-class-list" class="class-list"></div>
+    <div class="class-form">
+      <div class="class-form-title" id="world-class-form-title" data-i18n-key="class_editor.new_world_type">New world type</div>
+      <div class="class-form-fields">
+        <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="wc-id" type="text" placeholder="small_house" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="wc-label" type="text" placeholder="Small house" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.base_type_label">Base type</span>
+          <select id="wc-base-type">
+            <option value="forest">forest</option>
+            <option value="island">island</option>
+            <option value="cave">cave</option>
+            <option value="building">building</option>
+          </select>
+        </label>
+        <label><span data-i18n-key="class_editor.rows_label">Rows (8-200)</span> <input id="wc-rows" type="number" min="8" max="200" value="100"></label>
+        <label><span data-i18n-key="class_editor.cols_label">Cols (8-200)</span> <input id="wc-cols" type="number" min="8" max="200" value="100"></label>
+      </div>
+      <div class="class-form-actions">
+        <button onclick="submitWorldClassForm()" data-i18n-key="class_editor.save">Save</button>
+        <button onclick="cancelWorldClassEdit()" data-i18n-key="class_editor.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="joystick-container">
     <div id="joystick-base"></div>
     <div id="joystick-stick"></div>
@@ -505,6 +538,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var INIT_ROTATION = ${JSON.stringify(state.initRotation)};
     var ITEM_REGISTRY = ${JSON.stringify(state.itemRegistry)};
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
+    var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

@@ -269,8 +269,11 @@ export function normalizeWorldDimension(
   value: unknown,
   fallback: number,
 ): number {
+  // Null/absent DB values must fall back, not clamp: Number(null) is 0,
+  // which would otherwise clamp every pre-existing world to MIN_WORLD_DIM.
+  if (value === null || value === undefined || value === "") return fallback;
   const parsed = Math.floor(Number(value));
-  if (!isFinite(parsed)) return fallback;
+  if (!isFinite(parsed) || parsed <= 0) return fallback;
   return Math.max(MIN_WORLD_DIM, Math.min(MAX_WORLD_DIM, parsed));
 }
 
@@ -398,18 +401,20 @@ export function applyOakReservation(
   worldId: string | number,
 ): number[][] {
   if (!isOakWorld(worldId)) return map;
+  const mapRows = map.length;
   for (
     let row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
     row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
     row++
   ) {
-    if (row < 0 || row >= ROWS) continue;
+    if (row < 0 || row >= mapRows || !map[row]) continue;
+    const mapCols = map[row].length;
     for (
       let col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
       col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
       col++
     ) {
-      if (col < 0 || col >= COLS) continue;
+      if (col < 0 || col >= mapCols) continue;
       if (isOakCenterTile(worldId, row, col)) {
         map[row][col] = worldTileValueForName(WORLD_TILE_PINE_TREE);
       } else if (isOakClearingTile(worldId, row, col)) {

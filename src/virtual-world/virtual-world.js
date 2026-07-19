@@ -491,6 +491,20 @@ function getWorldDimensions(worldId) {
 }
 
 /**
+ * Cache-miss-tolerant world class lookup: another instance (or the editor on
+ * this one) may have created the class after this instance's cache was built,
+ * so refresh from the DB before concluding the class does not exist.
+ * @param {string} classId
+ * @returns {*}
+ */
+function getWorldClassWithRefresh(classId) {
+  var cls = getWorldClassImpl(classId);
+  if (cls) return cls;
+  refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
+  return getWorldClassImpl(classId);
+}
+
+/**
  * @param {{destination_world_id?: string, destination_world_type?: string}=} item
  * @returns {string | undefined}
  */
@@ -2195,7 +2209,7 @@ function performTreeActionForUserInner(userId, body) {
     broadcastItemChange: broadcastItemChange,
     getTargetTileFromRotation: getTargetTileFromRotation,
     getWorldDimensions: getWorldDimensions,
-    getWorldClass: getWorldClassImpl,
+    getWorldClass: getWorldClassWithRefresh,
     getEffectiveMap: getEffectiveMap,
     loadWorldTrees: loadWorldTrees,
     loadWorldHouses: loadWorldHouses,
@@ -2363,7 +2377,7 @@ function virtualWorldManageWorldClassesToolHandler(context) {
       refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
     },
     getAllWorldClasses: getAllWorldClassesImpl,
-    getWorldClass: getWorldClassImpl,
+    getWorldClass: getWorldClassWithRefresh,
     upsertWorldClass: function (record) {
       return upsertWorldClassImpl(record, VWORLD_WORLD_CLASS_TABLE, vwLog);
     },

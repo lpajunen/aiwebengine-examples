@@ -29,9 +29,17 @@ persisted per-tile overrides on the terrain and object layers.
 A world contains two kinds of entities:
 
 - **Living objects** — players and NPCs. They occupy a tile, can move, and
-  can carry items in an inventory.
-- **Items** — objects that exist either on a tile in the world or inside a
-  living object's inventory.
+  can carry items.
+- **Items** — objects that exist on a tile in the world, inside a living
+  object, or inside another item. Items can be containers: a chest can hold
+  a sword and a helmet, and picking up the chest brings its contents along.
+
+A living object carries items in two places:
+
+- **Slots** — equipped items (held tool, worn helmet, …). Slot contents are
+  visible to other parties and can affect the living object's outside
+  appearance.
+- **Bag** — general storage. Bag contents are hidden from other parties.
 
 Both living objects and items have **property values** (health, durability,
 counts, custom properties defined by their type). Properties are what
@@ -44,19 +52,20 @@ flowchart TB
             Terrain["Terrain layer<br/>(ground, water, sand, ...)"]
             Object["Object layer<br/>(trees, houses, rocks, ...)"]
         end
-        subgraph Living["Living objects"]
-            Player["Players"]
-            NPC["NPCs"]
+        subgraph Living["Living objects (players, NPCs)"]
+            Slots["Slots<br/>(equipped, visible,<br/>affect appearance)"]
+            Bag["Bag<br/>(hidden from others)"]
         end
         subgraph Items["Items"]
             WorldItem["In the world<br/>(on a tile)"]
-            CarriedItem["In an inventory<br/>(inside a living object)"]
+            Container["Container item<br/>(e.g. chest)"]
+            Contained["Contained items<br/>(e.g. sword, helmet)"]
         end
     end
-    Player -- carries --> CarriedItem
-    NPC -- carries --> CarriedItem
-    Player -- "pick / drop" --> WorldItem
-    NPC -- "pick / drop" --> WorldItem
+    Living -- "pick / drop" --> WorldItem
+    Slots -- hold --> Items
+    Bag -- holds --> Items
+    Container -- contains --> Contained
 ```
 
 ## Who controls what
@@ -100,6 +109,13 @@ Creator-defined actions are expressed as data-driven logic (checked and run
 by an interpreter, never `eval`), reading and writing the property values
 of the actor, the target, and the items involved.
 
+Like living objects and items, actions have **values** of their own. An
+action type can declare a **duration** — chopping a tree might take one
+minute — and a started action is then a live instance in the world whose
+values track progress, such as the time still needed to complete. Effects
+apply when the action completes, and an in-progress action can be observed
+(and potentially interrupted) like any other part of the world state.
+
 ```mermaid
 sequenceDiagram
     participant C as Client (browser or MCP)
@@ -108,7 +124,16 @@ sequenceDiagram
     C->>S: perform action (actor, action, target)
     S->>S: resolve action type<br/>(system, or enabled by an item)
     S->>S: validate (range, properties, cooldowns)
-    S->>W: apply effects<br/>(update properties, move/create/consume items)
+    alt instant action
+        S->>W: apply effects<br/>(update properties, move/create/consume items)
+    else timed action (type declares a duration)
+        S->>W: create started action<br/>(remaining time as a value)
+        W-->>C: action started
+        loop until remaining time reaches zero
+            S->>W: update progress
+        end
+        S->>W: apply effects on completion
+    end
     W-->>C: events to affected clients
 ```
 
@@ -144,12 +169,45 @@ flowchart TB
     WorldInst --> Players["Players join and play"]
 ```
 
+## Persistence and the reset cycle
+
+Not everything in a world lives equally long. There are three tiers:
+
+- **Player data is permanent.** A player's property values and everything
+  the player contains — slot and bag items, including those items' own
+  values and contents — are stored persistently across sessions and world
+  resets.
+- **World state is ephemeral by default.** NPCs, items lying in the world
+  or held by NPCs, and other world data normally clear after 30 minutes,
+  and the world resets to the baseline described by its spawn rules. This
+  keeps worlds fresh and self-healing: abandoned litter disappears and
+  depleted resources respawn.
+- **Extended persistence is opt-in.** A creator can mark specific data to
+  survive the reset cycle — for example a shop that keeps its sellable
+  items in stock far longer than 30 minutes.
+
+```mermaid
+flowchart LR
+    subgraph Permanent["Permanent"]
+        PD["Player data<br/>(values, slot and bag items<br/>and their values)"]
+    end
+    subgraph Extended["Extended persistence (opt-in)"]
+        Shop["e.g. shop stock,<br/>creator-marked data"]
+    end
+    subgraph Ephemeral["Ephemeral (30-minute cycle)"]
+        WD["World data, NPCs,<br/>items not contained by a player"]
+    end
+    WD -- "reset" --> Baseline["Baseline from<br/>spawn rules"]
+    Baseline --> WD
+```
+
 In the current implementation, content types are called **classes** in the
 code (`living-class-storage.ts`, `item-class-storage.ts`,
 `action-class-storage.ts`), world size is fixed at 100×100, world types are
 a fixed set of generation presets (forest, island, cave, building), and
 in-world editing is gated by the creator's stone item. The direction of
-travel — fully creator-defined world types, spawn rules, and a real
+travel — fully creator-defined world types, spawn rules, container items,
+slots and bags, timed actions, the persistence tiers above, and a real
 permission model — is tracked in [TODO-arch.md](TODO-arch.md).
 
 ## Code layout

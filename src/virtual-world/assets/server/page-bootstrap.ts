@@ -1,59 +1,38 @@
+import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
+import { WORLD_TILE_DEFS } from "./world-domain.ts";
+import { loadDMIndex, loadWorldChat } from "./chat-storage.ts";
+import {
+  ensureWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+  savePlayerInventory,
+} from "./item-storage.ts";
+import { getAllLivingClasses } from "./living-registry.ts";
+import { markNPCWorldActive } from "./npc-storage.ts";
+import {
+  loadPlayerPosition,
+  savePlayerPosition,
+} from "./player-persistence.ts";
+import { getDefaultSpawnPosition } from "./player-snapshots.ts";
+import {
+  buildOnlinePlayersSnapshot,
+  loadPlayerNick,
+  savePlayerNick,
+  updateOnlinePresence,
+} from "./social-state.ts";
+import { generateMap, getOrCreatePlayerWorld } from "./world-bootstrap.ts";
+import { getAllWorldClasses } from "./world-class-storage.ts";
+import {
+  getWorldFlavorTextByIndex,
+  getWorldFlavorTextIndex,
+} from "./world-domain.ts";
+import {
+  loadWorldHouses,
+  loadWorldMods,
+  loadWorldTrees,
+} from "./world-mod-storage.ts";
 import { getBootstrapRegistry } from "./item-registry.ts";
 import { getAllLivingItems, LivingState } from "./world-domain.ts";
-
-type SpawnDeps = {
-  isOakWorld: (worldId: string | number) => boolean;
-  getOakClearingTiles: (
-    worldId: string | number,
-  ) => Array<{ row: number; col: number }>;
-  OAK_CENTER_ROW: number;
-  OAK_CENTER_COL: number;
-  getEffectiveMap: (worldId: string) => number[][];
-  loadWorldPlayers: (worldId: string) => Record<string, any>;
-  hashString: (value: string) => number;
-  isWorldTileWalkable: (tileValue: any) => boolean;
-};
-
-type StarterKitDeps = {
-  loadPlayerInventory: (userId: string) => LivingState;
-  savePlayerInventory: (userId: string, inventory: unknown) => void;
-};
-
-type PageBootstrapDeps = {
-  getOrCreatePlayerWorld: (userId: string) => string;
-  markNPCWorldActive: (worldId: string) => void;
-  ensureStarterKit: (userId: string) => void;
-  generateMap: (worldId: string) => number[][];
-  loadWorldMods: (worldId: string) => any;
-  loadWorldTrees: (worldId: string) => any;
-  loadWorldHouses: (worldId: string) => any;
-  ensureWorldItems: (worldId: string) => void;
-  loadWorldItems: (worldId: string) => any;
-  loadPlayerInventory: (userId: string) => LivingState;
-  getWorldNPCSnapshot: (worldId: string) => any;
-  loadPlayerPosition: (userId: string) => any;
-  getDefaultSpawnPosition: (
-    worldId: string,
-    userId: string,
-  ) => { row: number; col: number; seq: number; rotation: number };
-  savePlayerPosition: (userId: string, worldId: string, position: any) => void;
-  loadPlayerNick: (userId: string) => string;
-  savePlayerNick: (userId: string, nick: string) => void;
-  updateOnlinePresence: (
-    userId: string,
-    worldId: string,
-    sessionId: string,
-  ) => void;
-  buildOnlinePlayersSnapshot: () => any[];
-  loadWorldChat: (worldId: string) => any[];
-  loadDMIndex: (userId: string) => string[];
-  getWorldFlavorTextIndex: (worldId: string) => number;
-  getWorldFlavorTextByIndex: (index: number) => string;
-  worldTileDefs: any;
-  getBootstrapRegistry: () => any;
-  getAllLivingClasses: () => any[];
-  getAllWorldClasses: () => any[];
-};
 
 type PageState = {
   map: number[][];
@@ -82,70 +61,8 @@ type PageState = {
   worldClassRegistry: any[];
 };
 
-export function getDefaultSpawnPosition(
-  worldId: string | number,
-  userId: string,
-  deps: SpawnDeps,
-): { row: number; col: number; seq: number; rotation: number } {
-  if (!deps.isOakWorld(worldId)) {
-    return { row: 1, col: 1, seq: 0, rotation: 0 };
-  }
-
-  const tiles = deps.getOakClearingTiles(worldId);
-  if (tiles.length === 0) {
-    return {
-      row: deps.OAK_CENTER_ROW + 1,
-      col: deps.OAK_CENTER_COL,
-      seq: 0,
-      rotation: 0,
-    };
-  }
-
-  const map = deps.getEffectiveMap(String(worldId));
-  const players = deps.loadWorldPlayers(String(worldId));
-  const occupied: Record<string, boolean> = {};
-  for (const playerId in players) {
-    const player = players[playerId];
-    if (!player) continue;
-    occupied[Number(player.row) + "_" + Number(player.col)] = true;
-  }
-
-  const startIndex = userId ? deps.hashString(userId) % tiles.length : 0;
-  let fallbackTile: { row: number; col: number } | null = null;
-  for (let i = 0; i < tiles.length; i++) {
-    const tile = tiles[(startIndex + i) % tiles.length];
-    if (
-      !tile ||
-      !map[tile.row] ||
-      !deps.isWorldTileWalkable(map[tile.row][tile.col])
-    ) {
-      continue;
-    }
-    if (!fallbackTile) fallbackTile = tile;
-    if (!occupied[tile.row + "_" + tile.col]) {
-      return { row: tile.row, col: tile.col, seq: 0, rotation: 0 };
-    }
-  }
-
-  if (fallbackTile) {
-    return {
-      row: fallbackTile.row,
-      col: fallbackTile.col,
-      seq: 0,
-      rotation: 0,
-    };
-  }
-
-  return {
-    row: deps.OAK_CENTER_ROW + 1,
-    col: deps.OAK_CENTER_COL,
-    seq: 0,
-    rotation: 0,
-  };
-}
-
-export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
-  const inv = deps.loadPlayerInventory(userId);
+export function ensureStarterKit(userId: string): void {
+  const inv = loadPlayerInventory(userId);
   const allItems = getAllLivingItems(inv);
   const hasKit = allItems.some(function (item) {
     return item && item.type === "starter_kit";
@@ -160,7 +77,7 @@ export function ensureStarterKit(userId: string, deps: StarterKitDeps): void {
       created_at: Date.now(),
       non_droppable: true,
     });
-    deps.savePlayerInventory(userId, inv);
+    savePlayerInventory(userId, inv);
   }
 }
 
@@ -175,26 +92,25 @@ export function escapeHtml(value: string): string {
 export function buildVirtualWorldPageState(
   userId: string,
   authName: string,
-  deps: PageBootstrapDeps,
 ): PageState {
-  const worldId = deps.getOrCreatePlayerWorld(userId);
-  deps.markNPCWorldActive(worldId);
-  deps.ensureStarterKit(userId);
-  const map = deps.generateMap(worldId);
-  const worldMods = deps.loadWorldMods(worldId);
-  const treeMods = deps.loadWorldTrees(worldId);
-  const houseMods = deps.loadWorldHouses(worldId);
-  deps.ensureWorldItems(worldId);
-  const worldItems = deps.loadWorldItems(worldId);
-  const playerInventory = deps.loadPlayerInventory(userId);
-  const npcs = deps.getWorldNPCSnapshot(worldId);
-  const savedPos = deps.loadPlayerPosition(userId);
+  const worldId = getOrCreatePlayerWorld(userId);
+  markNPCWorldActive(worldId);
+  ensureStarterKit(userId);
+  const map = generateMap(worldId);
+  const worldMods = loadWorldMods(worldId);
+  const treeMods = loadWorldTrees(worldId);
+  const houseMods = loadWorldHouses(worldId);
+  ensureWorldItems(worldId);
+  const worldItems = loadWorldItems(worldId);
+  const playerInventory = loadPlayerInventory(userId);
+  const npcs = getWorldNPCSnapshot(worldId);
+  const savedPos = loadPlayerPosition(userId);
   const hasSavedPos = savedPos && savedPos.world_id === String(worldId);
   const initialPos = hasSavedPos
     ? savedPos
-    : deps.getDefaultSpawnPosition(worldId, userId);
+    : getDefaultSpawnPosition(worldId, userId);
   if (!hasSavedPos) {
-    deps.savePlayerPosition(userId, worldId, {
+    savePlayerPosition(userId, worldId, {
       row: initialPos.row,
       col: initialPos.col,
       seq: initialPos.seq || 0,
@@ -205,15 +121,15 @@ export function buildVirtualWorldPageState(
     });
   }
 
-  let playerNick = deps.loadPlayerNick(userId);
+  let playerNick = loadPlayerNick(userId);
   if (!playerNick && authName) {
-    deps.savePlayerNick(userId, authName);
+    savePlayerNick(userId, authName);
     playerNick = authName;
   }
 
-  deps.updateOnlinePresence(userId, worldId, "");
+  updateOnlinePresence(userId, worldId, "");
 
-  const livingClasses = deps.getAllLivingClasses();
+  const livingClasses = getAllLivingClasses();
   const livingRegistry = {
     classes: Array.isArray(livingClasses)
       ? livingClasses.reduce(function (acc: Record<string, any>, cls: any) {
@@ -236,23 +152,23 @@ export function buildVirtualWorldPageState(
     userId: userId,
     playerNick: playerNick,
     authName: authName,
-    onlinePlayers: deps.buildOnlinePlayersSnapshot(),
-    initialChat: deps.loadWorldChat(worldId).slice(-50),
-    initialDmIndex: deps.loadDMIndex(userId),
+    onlinePlayers: buildOnlinePlayersSnapshot(),
+    initialChat: loadWorldChat(worldId).slice(-50),
+    initialDmIndex: loadDMIndex(userId),
     initRow: initialPos.row,
     initCol: initialPos.col,
     initSeq: initialPos.seq || 0,
     initRotation: Number.isFinite(Number(initialPos.rotation))
       ? Number(initialPos.rotation)
       : 0,
-    worldFlavorText: deps.getWorldFlavorTextByIndex(
-      deps.getWorldFlavorTextIndex(worldId),
+    worldFlavorText: getWorldFlavorTextByIndex(
+      getWorldFlavorTextIndex(worldId),
     ),
-    worldFlavorTextIndex: deps.getWorldFlavorTextIndex(worldId),
-    worldTileDefs: deps.worldTileDefs,
-    itemRegistry: deps.getBootstrapRegistry(),
+    worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
+    worldTileDefs: WORLD_TILE_DEFS,
+    itemRegistry: getBootstrapRegistry(),
     livingRegistry: livingRegistry,
-    worldClassRegistry: deps.getAllWorldClasses(),
+    worldClassRegistry: getAllWorldClasses(),
   };
 }
 

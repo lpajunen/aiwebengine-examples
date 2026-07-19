@@ -1,29 +1,20 @@
-type MoveDeps = {
-  getPlayerWorld: (userId: string) => string;
-  markNPCWorldActive: (worldId: string) => void;
-  loadPlayerMoveLease: (userId: string) => any;
-  savePlayerMoveLease: (
-    userId: string,
-    sessionId: string,
-    expiresAt: number,
-  ) => void;
-  loadWorldPlayers: (worldId: string) => Record<string, any>;
-  loadPlayerPosition: (userId: string) => any;
-  getDefaultSpawnPosition: (
-    worldId: string,
-    userId: string,
-  ) => { row: number; col: number; seq: number; rotation: number };
-  getEffectiveMap: (worldId: string) => number[][];
-  isWorldTileWalkable: (tileValue: any) => boolean;
-  savePlayerPosition: (userId: string, worldId: string, position: any) => void;
-  sendWorldScopedStreamEvent: (
-    worldId: string,
-    type: string,
-    payload: any,
-  ) => void;
-  vwLog: (msg: string, obj?: unknown) => void;
-  LEASE_TTL_MS: number;
-};
+import { vwLog } from "./diagnostics.ts";
+import { markNPCWorldActive } from "./npc-storage.ts";
+import {
+  getPlayerWorld,
+  loadPlayerMoveLease,
+  loadPlayerPosition,
+  savePlayerMoveLease,
+  savePlayerPosition,
+} from "./player-persistence.ts";
+import {
+  getDefaultSpawnPosition,
+  loadWorldPlayers,
+} from "./player-snapshots.ts";
+import { LEASE_TTL_MS } from "./runtime-config.ts";
+import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
+import { getEffectiveMap } from "./world-bootstrap.ts";
+import { isWorldTileWalkable } from "./world-domain.ts";
 
 // Hard bound on steps accepted in one batched move request. The client's
 // pending queue is capped at 40; anything larger is a malformed or abusive
@@ -72,7 +63,6 @@ function normalizeMoveSteps(body: any): MoveStep[] | null {
 export function movePlayerForUser(
   userId: string,
   body: any,
-  deps: MoveDeps,
 ): { status: number; payload: any } {
   const steps = normalizeMoveSteps(body);
   const sessionId =
@@ -85,32 +75,32 @@ export function movePlayerForUser(
     };
   }
 
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return { status: 200, payload: { ok: false, row: 1, col: 1 } };
   }
-  deps.markNPCWorldActive(worldId);
+  markNPCWorldActive(worldId);
 
-  const lease = deps.loadPlayerMoveLease(userId);
+  const lease = loadPlayerMoveLease(userId);
   const now = Date.now();
   const leaseSessionId =
     lease && typeof lease.session_id === "string" ? lease.session_id : "";
   const leaseValid = !!lease && Number(lease.expires_at || 0) > now;
   if (leaseValid && leaseSessionId !== sessionId) {
-    deps.vwLog("move taking over lease", {
+    vwLog("move taking over lease", {
       user_id: userId,
       world_id: worldId,
       previous_session: leaseSessionId,
       session_id: sessionId,
     });
   }
-  deps.savePlayerMoveLease(userId, sessionId, now + deps.LEASE_TTL_MS);
+  savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
 
-  const players = deps.loadWorldPlayers(worldId);
+  const players = loadWorldPlayers(worldId);
   let cur = players[userId];
   if (!cur) {
-    const savedPos = deps.loadPlayerPosition(userId);
-    const defaultSpawn = deps.getDefaultSpawnPosition(worldId, userId);
+    const savedPos = loadPlayerPosition(userId);
+    const defaultSpawn = getDefaultSpawnPosition(worldId, userId);
     cur = {
       row: savedPos ? savedPos.row : defaultSpawn.row,
       col: savedPos ? savedPos.col : defaultSpawn.col,
@@ -119,6 +109,7 @@ export function movePlayerForUser(
         ? Number(savedPos.rotation)
         : Number(defaultSpawn.rotation),
       session_id: savedPos ? savedPos.session_id : "",
+      ts: savedPos ? savedPos.ts : Date.now(),
     };
   }
   const fallbackRotation = Number.isFinite(Number(cur && cur.rotation))
@@ -129,7 +120,7 @@ export function movePlayerForUser(
   const clientSeq =
     body && body.seq !== undefined ? Number(body.seq) : expectedSeq;
   if (clientSeq !== expectedSeq) {
-    deps.vwLog("move rejected: stale seq", {
+    vwLog("move rejected: stale seq", {
       user_id: userId,
       world_id: worldId,
       session_id: sessionId,
@@ -156,7 +147,7 @@ export function movePlayerForUser(
   // Validate the longest applicable prefix of the batch as a unit. Each step
   // must be a single walkable in-bounds step from the previous position; the
   // effective map is built once per request instead of once per step.
-  const map = deps.getEffectiveMap(worldId);
+  const map = getEffectiveMap(worldId);
   const mapRows = map.length;
   const mapCols = map[0] ? map[0].length : 0;
   const applied: MoveStep[] = [];
@@ -174,7 +165,7 @@ export function movePlayerForUser(
     if (
       !withinBounds ||
       !singleStep ||
-      !deps.isWorldTileWalkable(map[step.row][step.col])
+      !isWorldTileWalkable(map[step.row][step.col])
     ) {
       break;
     }
@@ -184,7 +175,7 @@ export function movePlayerForUser(
   }
 
   if (applied.length === 0) {
-    deps.vwLog("move rejected: invalid step", {
+    vwLog("move rejected: invalid step", {
       user_id: userId,
       world_id: worldId,
       session_id: sessionId,
@@ -217,7 +208,7 @@ export function movePlayerForUser(
   // Only this player's row is written; rewriting the whole player map here
   // (the old behavior) could clobber other players' concurrent moves with
   // the stale positions read above.
-  deps.savePlayerPosition(userId, worldId, {
+  savePlayerPosition(userId, worldId, {
     row: posRow,
     col: posCol,
     seq: newSeq,
@@ -225,7 +216,7 @@ export function movePlayerForUser(
     session_id: sessionId,
     ts: Date.now(),
   });
-  deps.sendWorldScopedStreamEvent(String(worldId), "player_moved", {
+  sendWorldScopedStreamEvent(String(worldId), "player_moved", {
     player_id: userId,
     row: posRow,
     col: posCol,
@@ -239,7 +230,7 @@ export function movePlayerForUser(
       };
     }),
   });
-  deps.vwLog("move accepted", {
+  vwLog("move accepted", {
     user_id: userId,
     world_id: worldId,
     session_id: sessionId,

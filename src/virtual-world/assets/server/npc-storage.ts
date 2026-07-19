@@ -1,3 +1,7 @@
+import { getEffectiveMap } from "./world-bootstrap.ts";
+import { loadWorldPlayers } from "./player-snapshots.ts";
+import { pickRandomNPCLivingClassId } from "./living-registry.ts";
+import { NPC_MIN_COUNT, NPC_MAX_COUNT } from "./runtime-config.ts";
 import {
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
@@ -6,6 +10,7 @@ import {
 import {
   buildInventorySelectors,
   createEmptyLivingState,
+  createLivingSlotsFromDefinitions,
   fromStoredWorldTimestamp,
   getItemsInSlotsWithTag,
   normalizeLivingState,
@@ -298,4 +303,115 @@ export function buildWorldNPCSnapshot(
       inventory_selectors: selectors.inventory_selectors,
     };
   });
+}
+
+export function ensureWorldNPCs(worldId: string): Record<string, any> {
+  const existing = loadWorldNPCs(worldId);
+  if (existing && Object.keys(existing).length > 0) {
+    let hasNormalizationChanges = false;
+    Object.keys(existing).forEach((npcId) => {
+      const npc = existing[npcId];
+      if (!npc || typeof npc !== "object") {
+        existing[npcId] = {
+          row: 1,
+          col: 1,
+          seq: 0,
+          rotation: 0,
+          state: "idle",
+          ts: Date.now(),
+          class_id: getDefaultNPCLivingClassId(),
+          slots: {},
+          bag: [],
+          values: {},
+        };
+        hasNormalizationChanges = true;
+        return;
+      }
+
+      if (
+        typeof npc.class_id !== "string" ||
+        !npc.class_id ||
+        !npc.slots ||
+        typeof npc.slots !== "object" ||
+        !Array.isArray(npc.bag)
+      ) {
+        if (typeof npc.class_id !== "string" || !npc.class_id) {
+          npc.class_id = getDefaultNPCLivingClassId();
+        }
+        if (!npc.slots || typeof npc.slots !== "object") {
+          const cls = getLivingClass(String(npc.class_id));
+          npc.slots = cls
+            ? createLivingSlotsFromDefinitions(cls.slotDefinitions)
+            : {};
+        }
+        if (!Array.isArray(npc.bag)) npc.bag = [];
+        if (!npc.values || typeof npc.values !== "object") npc.values = {};
+        hasNormalizationChanges = true;
+      }
+    });
+
+    if (hasNormalizationChanges) {
+      saveWorldNPCs(worldId, existing);
+    }
+    return existing;
+  }
+
+  const map = getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
+  const players = loadWorldPlayers(worldId);
+  const occupied: Record<string, boolean> = {};
+  Object.keys(players).forEach((playerId) => {
+    const player = players[playerId];
+    if (
+      !player ||
+      !isFinite(Number(player.row)) ||
+      !isFinite(Number(player.col))
+    ) {
+      return;
+    }
+    occupied[player.row + "_" + player.col] = true;
+  });
+
+  const targetCount =
+    NPC_MIN_COUNT +
+    Math.floor(Math.random() * (NPC_MAX_COUNT - NPC_MIN_COUNT + 1));
+  const npcs: Record<string, any> = {};
+  let attempts = 0;
+  const maxAttempts = 4000;
+
+  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
+    attempts++;
+    const row = 1 + Math.floor(Math.random() * (mapRows - 2));
+    const col = 1 + Math.floor(Math.random() * (mapCols - 2));
+    const tileKey = row + "_" + col;
+    if (map[row][col] !== 0 || occupied[tileKey]) {
+      continue;
+    }
+    occupied[tileKey] = true;
+    const index = Object.keys(npcs).length + 1;
+    const npcId = "npc_" + worldId + "_" + index;
+    const classId = pickRandomNPCLivingClassId();
+    const livingClass = getLivingClass(classId);
+    const slots = livingClass
+      ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
+      : {};
+    npcs[npcId] = {
+      row,
+      col,
+      seq: 0,
+      rotation: 0,
+      state: "idle",
+      ts: Date.now(),
+      class_id: classId,
+      slots: slots,
+      bag: [],
+      values: livingClass
+        ? Object.assign({}, livingClass.valueTemplate || {})
+        : {},
+    };
+  }
+
+  saveWorldNPCs(worldId, npcs);
+  return npcs;
 }

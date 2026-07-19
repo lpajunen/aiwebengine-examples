@@ -197,3 +197,13 @@ export function deleteWorldClass(classId: string): void {
     delete _worldClassCache[classId];
   }
 }
+
+// Cache-miss-tolerant world class lookup: another instance (or the editor on
+// this one) may have created the class after this instance's cache was built,
+// so refresh from the DB before concluding the class does not exist.
+export function getWorldClassWithRefresh(classId: string): any {
+  const cls = getWorldClass(classId);
+  if (cls) return cls;
+  refreshWorldClassCache();
+  return getWorldClass(classId);
+}

@@ -1,3 +1,12 @@
+import { getEffectiveMap } from "./world-bootstrap.ts";
+import {
+  getOakClearingTiles,
+  hashString,
+  isOakWorld,
+  isWorldTileWalkable,
+  OAK_CENTER_COL,
+  OAK_CENTER_ROW,
+} from "./world-domain.ts";
 import {
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
@@ -80,7 +89,6 @@ export function saveWorldPlayers(
 export function getCanonicalPlayerState(
   worldId: string,
   userId: string,
-  getDefaultSpawnPosition: (worldId: string, userId: string) => SpawnPosition,
 ): SpawnPosition {
   const players = loadWorldPlayers(worldId);
   const cur = players[userId];
@@ -112,7 +120,7 @@ export function getCanonicalPlayerState(
 
 export function buildActiveWorldPlayers(
   worldId: string,
-  activeWindowMs: number,
+  activeWindowMs: number = 90000,
 ): Array<{
   player_id: string;
   row: number;
@@ -154,4 +162,65 @@ export function buildActiveWorldPlayers(
         last_active: Math.max(Number(players[pid].ts || 0), hbTs),
       };
     });
+}
+
+export function getDefaultSpawnPosition(
+  worldId: string | number,
+  userId: string,
+): { row: number; col: number; seq: number; rotation: number } {
+  if (!isOakWorld(worldId)) {
+    return { row: 1, col: 1, seq: 0, rotation: 0 };
+  }
+
+  const tiles = getOakClearingTiles(worldId);
+  if (tiles.length === 0) {
+    return {
+      row: OAK_CENTER_ROW + 1,
+      col: OAK_CENTER_COL,
+      seq: 0,
+      rotation: 0,
+    };
+  }
+
+  const map = getEffectiveMap(String(worldId));
+  const players = loadWorldPlayers(String(worldId));
+  const occupied: Record<string, boolean> = {};
+  for (const playerId in players) {
+    const player = players[playerId];
+    if (!player) continue;
+    occupied[Number(player.row) + "_" + Number(player.col)] = true;
+  }
+
+  const startIndex = userId ? hashString(userId) % tiles.length : 0;
+  let fallbackTile: { row: number; col: number } | null = null;
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[(startIndex + i) % tiles.length];
+    if (
+      !tile ||
+      !map[tile.row] ||
+      !isWorldTileWalkable(map[tile.row][tile.col])
+    ) {
+      continue;
+    }
+    if (!fallbackTile) fallbackTile = tile;
+    if (!occupied[tile.row + "_" + tile.col]) {
+      return { row: tile.row, col: tile.col, seq: 0, rotation: 0 };
+    }
+  }
+
+  if (fallbackTile) {
+    return {
+      row: fallbackTile.row,
+      col: fallbackTile.col,
+      seq: 0,
+      rotation: 0,
+    };
+  }
+
+  return {
+    row: OAK_CENTER_ROW + 1,
+    col: OAK_CENTER_COL,
+    seq: 0,
+    rotation: 0,
+  };
 }

@@ -1,3 +1,53 @@
+import { getActionDefinition } from "./action-registry.ts";
+import { appendWorldChatMessage } from "./chat-storage.ts";
+import { getTargetTileFromRotation } from "./current-world-state.ts";
+import {
+  grantAllItemsForUser,
+  handleItemActionForUser,
+} from "./item-action-helpers.ts";
+import {
+  deleteWorldItems,
+  ensureWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+  nextWorldItemId,
+  savePlayerInventory,
+  saveWorldItems,
+  upsertWorldItem,
+} from "./item-storage.ts";
+import { getPlayerWorld } from "./player-persistence.ts";
+import {
+  getCanonicalPlayerState,
+  getDefaultSpawnPosition,
+} from "./player-snapshots.ts";
+import { getEffectiveNick } from "./social-state.ts";
+import {
+  broadcastItemChange,
+  sendWorldScopedStreamEvent,
+} from "./stream-broadcast.ts";
+import {
+  createWorldOfType,
+  getEffectiveMap,
+  getWorldDimensions,
+} from "./world-bootstrap.ts";
+import { getWorldClass } from "./world-class-storage.ts";
+import {
+  OAK_WORLD_ID,
+  canInventoryUseTreeAction,
+  canTileItemsUseTreeAction,
+  canonicalTreeAction,
+  isOakCenterTile,
+  isOakClearingTile,
+  normalizeWorldType,
+  worldTypeForPortalBuildAction,
+} from "./world-domain.ts";
+import {
+  loadWorldHouses,
+  loadWorldTrees,
+  saveWorldHouses,
+  saveWorldTrees,
+} from "./world-mod-storage.ts";
+import { switchUserWorld } from "./world-switch.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
 import { getWorldEventDefinition } from "./world-events.ts";
 import {
@@ -11,127 +61,16 @@ import {
   replaceLivingItemById,
 } from "./world-domain.ts";
 
-type TreeActionDeps = {
-  canonicalTreeAction: (action: string | null | undefined) => string;
-  getActionDefinition: (action: string | null | undefined) => any;
-  worldTypeForPortalBuildAction: (
-    action: string | null | undefined,
-  ) => string | null;
-  normalizeWorldType: (worldType: string | null | undefined) => string;
-  handleItemActionForUser: (
-    userId: string,
-    body: any,
-  ) => { status: number; payload: any };
-  grantAllItemsForUser: (userId: string) => any;
-  getPlayerWorld: (userId: string) => string;
-  ensureWorldItems: (worldId: string) => void;
-  loadPlayerInventory: (userId: string) => LivingState;
-  getCanonicalPlayerState: (
-    worldId: string,
-    userId: string,
-  ) => {
-    row: number;
-    col: number;
-    seq: number;
-    rotation: number;
-  };
-  loadWorldItems: (worldId: string) => Record<string, any[]>;
-  canInventoryUseTreeAction: (
-    inventory: LivingState,
-    action: string,
-  ) => boolean;
-  canTileItemsUseTreeAction: (items: any[], action: string) => boolean;
-  switchUserWorld: (
-    userId: string,
-    targetWorldId: string,
-    spawnPosition?: {
-      row: number;
-      col: number;
-      seq?: number;
-      rotation?: number;
-    },
-  ) => void;
-  OAK_WORLD_ID: string;
-  getDefaultSpawnPosition: (
-    worldId: string,
-    userId: string,
-  ) => {
-    row: number;
-    col: number;
-    seq?: number;
-    rotation?: number;
-  };
-  getEffectiveNick: (userId: string) => string;
-  appendWorldChatMessage: (worldId: string, message: any) => void;
-  sendWorldScopedStreamEvent: (
-    worldId: string,
-    eventType: string,
-    payload: any,
-  ) => void;
-  flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
-  nextWorldItemId: (worldId: string) => number;
-  upsertWorldItem: (
-    worldId: string,
-    row: number,
-    col: number,
-    item: any,
-  ) => void;
-  saveWorldItems: (worldId: string, items: Record<string, any[]>) => void;
-  broadcastItemChange: (
-    worldId: string,
-    actorType: string,
-    actorId: string,
-    action: string,
-    row: number,
-    col: number,
-    items: any[],
-  ) => void;
-  getTargetTileFromRotation: (
-    row: number,
-    col: number,
-    rotation: number,
-  ) => {
-    row: number;
-    col: number;
-  };
-  getWorldDimensions: (worldId: string) => { rows: number; cols: number };
-  getWorldClass: (classId: string) => {
-    id: string;
-    baseType: string;
-    rows: number;
-    cols: number;
-  } | null;
-  getEffectiveMap: (worldId: string) => number[][];
-  loadWorldTrees: (worldId: string) => Record<string, any>;
-  loadWorldHouses: (worldId: string) => Record<string, any>;
-  isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
-  saveWorldHouses: (worldId: string, houses: Record<string, any>) => void;
-  createWorldOfType: (
-    worldType: string,
-    dimensions?: { rows?: number; cols?: number },
-  ) => {
-    world_id: string;
-    world_type: string;
-    rows: number;
-    cols: number;
-  };
-  deleteWorldItems: (items: any[]) => void;
-  isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
-  saveWorldTrees: (worldId: string, trees: Record<string, any>) => void;
-  savePlayerInventory: (userId: string, inventory: unknown) => void;
-};
-
 export function performTreeActionForUser(
   userId: string,
   body: any,
-  deps: TreeActionDeps,
 ): { status: number; payload: any } {
   const rawAction = body && body.action;
-  const action = deps.canonicalTreeAction(rawAction);
-  const actionDefinition = deps.getActionDefinition(action);
+  const action = canonicalTreeAction(rawAction);
+  const actionDefinition = getActionDefinition(action);
   const requestedPortalWorldType =
-    deps.worldTypeForPortalBuildAction(rawAction) ||
-    deps.normalizeWorldType(body && body.destination_world_type);
+    worldTypeForPortalBuildAction(rawAction) ||
+    normalizeWorldType(body && body.destination_world_type);
   const requestedPortalRows = Number(body && body.destination_world_rows);
   const requestedPortalCols = Number(body && body.destination_world_cols);
   const requestedPortalDimensions =
@@ -146,11 +85,11 @@ export function performTreeActionForUser(
   ).trim();
 
   if (action === "pick" || action === "drop" || action === "equip") {
-    return deps.handleItemActionForUser(userId, body || {});
+    return handleItemActionForUser(userId, body || {});
   }
 
   if (action === "cheat_grant_all") {
-    return { status: 200, payload: deps.grantAllItemsForUser(userId) };
+    return { status: 200, payload: grantAllItemsForUser(userId) };
   }
 
   if (!actionDefinition) {
@@ -160,17 +99,17 @@ export function performTreeActionForUser(
     };
   }
 
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return {
       status: 200,
       payload: { ok: false, error: "error.no_world_found" },
     };
   }
-  deps.ensureWorldItems(worldId);
+  ensureWorldItems(worldId);
 
-  const inv = deps.loadPlayerInventory(userId);
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
+  const inv = loadPlayerInventory(userId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
   const playerRow = Number.isFinite(Number(body && body.row))
     ? Number(body.row)
     : canonical.row;
@@ -181,7 +120,7 @@ export function performTreeActionForUser(
     ? Number(body.rotation)
     : canonical.rotation;
   const currentTileKey = canonical.row + "_" + canonical.col;
-  const worldItems = deps.loadWorldItems(worldId);
+  const worldItems = loadWorldItems(worldId);
   const currentTileItems = Array.isArray(worldItems[currentTileKey])
     ? worldItems[currentTileKey]
     : [];
@@ -232,12 +171,12 @@ export function performTreeActionForUser(
         "-" +
         Math.random().toString(36).slice(2),
       sender_id: userId,
-      sender_nick: deps.getEffectiveNick(userId),
+      sender_nick: getEffectiveNick(userId),
       text: execution.worldChatText,
       ts: Date.now(),
     };
-    deps.appendWorldChatMessage(worldId, tuneMsg);
-    deps.sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
+    appendWorldChatMessage(worldId, tuneMsg);
+    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
   }
 
   function withConfiguredToastMessage(payload: any): any {
@@ -296,7 +235,7 @@ export function performTreeActionForUser(
     const worldEvent = getWorldEventDefinition(execution.worldEvent.eventId);
     if (!worldEvent) return;
 
-    deps.sendWorldScopedStreamEvent(String(worldId), worldEvent.eventType, {
+    sendWorldScopedStreamEvent(String(worldId), worldEvent.eventType, {
       action: execution.worldEvent.actionId || action,
       row: row,
       col: col,
@@ -316,7 +255,7 @@ export function performTreeActionForUser(
     const itemChange = getItemChangeDefinition(execution.itemChange.eventId);
     if (!itemChange) return;
 
-    deps.broadcastItemChange(
+    broadcastItemChange(
       worldId,
       "player",
       userId,
@@ -339,13 +278,13 @@ export function performTreeActionForUser(
     if (!execution || !execution.worldMutation) return false;
 
     if (execution.worldMutation.storage === "trees") {
-      deps.saveWorldTrees(worldId, state.trees);
+      saveWorldTrees(worldId, state.trees);
       maybeSendConfiguredWorldEvent(row, col);
       return true;
     }
 
     if (execution.worldMutation.storage === "houses") {
-      deps.saveWorldHouses(worldId, state.houses);
+      saveWorldHouses(worldId, state.houses);
       maybeSendConfiguredWorldEvent(row, col);
       return true;
     }
@@ -363,7 +302,7 @@ export function performTreeActionForUser(
     if (!execution || !execution.itemMutation) return false;
 
     if (execution.itemMutation.saveWorldItems) {
-      deps.saveWorldItems(worldId, itemsState);
+      saveWorldItems(worldId, itemsState);
       maybeBroadcastConfiguredItemChange(row, col, changedItems);
       return true;
     }
@@ -384,14 +323,14 @@ export function performTreeActionForUser(
 
       if (
         blockedZone.kind === "oak_clearing" &&
-        deps.isOakClearingTile(worldId, row, col)
+        isOakClearingTile(worldId, row, col)
       ) {
         return blockedZone.errorMessage || "error.action_not_allowed_here";
       }
 
       if (
         blockedZone.kind === "oak_center" &&
-        deps.isOakCenterTile(worldId, row, col)
+        isOakCenterTile(worldId, row, col)
       ) {
         return blockedZone.errorMessage || "error.action_not_allowed_here";
       }
@@ -495,12 +434,12 @@ export function performTreeActionForUser(
       };
     }
 
-    const targetTile = deps.getTargetTileFromRotation(
+    const targetTile = getTargetTileFromRotation(
       playerRow,
       playerCol,
       rotation,
     );
-    const worldDims = deps.getWorldDimensions(worldId);
+    const worldDims = getWorldDimensions(worldId);
     return {
       row: targetTile.row,
       col: targetTile.col,
@@ -514,8 +453,8 @@ export function performTreeActionForUser(
 
   const resolvedTarget = resolveActionTarget();
   const canUseAction =
-    deps.canInventoryUseTreeAction(inv, action) ||
-    deps.canTileItemsUseTreeAction(currentTileItems, action);
+    canInventoryUseTreeAction(inv, action) ||
+    canTileItemsUseTreeAction(currentTileItems, action);
 
   function maybeApplyLogicEffects(): void {
     if (
@@ -531,7 +470,7 @@ export function performTreeActionForUser(
     if (isValidItem(updated)) {
       replaceLivingItemById(inv, String(logicSourceItem.id || ""), updated);
     }
-    deps.savePlayerInventory(userId, inv);
+    savePlayerInventory(userId, inv);
   }
 
   if (!canUseAction) {
@@ -567,16 +506,16 @@ export function performTreeActionForUser(
   }
 
   if (action === "return_home") {
-    deps.switchUserWorld(
+    switchUserWorld(
       userId,
-      deps.OAK_WORLD_ID,
-      deps.getDefaultSpawnPosition(deps.OAK_WORLD_ID, userId),
+      OAK_WORLD_ID,
+      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
     );
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
         action: "return_home",
-        world_id: deps.OAK_WORLD_ID,
+        world_id: OAK_WORLD_ID,
       }),
     };
   }
@@ -617,7 +556,7 @@ export function performTreeActionForUser(
     }
 
     const blessingItem = {
-      id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
       type: "blessing_marker",
       created_at: Date.now(),
       placed_by: userId,
@@ -625,7 +564,7 @@ export function performTreeActionForUser(
     };
     if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
     worldItems[blessingTileKey].push(blessingItem);
-    deps.upsertWorldItem(
+    upsertWorldItem(
       worldId,
       resolvedTarget.row,
       resolvedTarget.col,
@@ -655,7 +594,7 @@ export function performTreeActionForUser(
       portalEntry && portalEntry.destination_world_id
         ? String(portalEntry.destination_world_id)
         : "10000";
-    deps.switchUserWorld(userId, newWorldId);
+    switchUserWorld(userId, newWorldId);
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
@@ -682,9 +621,9 @@ export function performTreeActionForUser(
     };
   }
 
-  const map = deps.getEffectiveMap(worldId);
-  const trees = deps.loadWorldTrees(worldId);
-  const houses = deps.loadWorldHouses(worldId);
+  const map = getEffectiveMap(worldId);
+  const trees = loadWorldTrees(worldId);
+  const houses = loadWorldHouses(worldId);
   const tileKey = targetRow + "_" + targetCol;
   const actionValidationError = getActionValidationError(
     targetRow,
@@ -738,14 +677,14 @@ export function performTreeActionForUser(
     let portalWorldType = requestedPortalWorldType;
     let portalDimensions = requestedPortalDimensions;
     if (requestedWorldClassId) {
-      const worldClass = deps.getWorldClass(requestedWorldClassId);
+      const worldClass = getWorldClass(requestedWorldClassId);
       if (!worldClass) {
         return {
           status: 200,
           payload: { ok: false, error: "error.world_class_not_found" },
         };
       }
-      portalWorldType = worldClass.baseType;
+      portalWorldType = normalizeWorldType(worldClass.baseType);
       portalDimensions = {
         rows:
           portalDimensions && portalDimensions.rows !== undefined
@@ -757,12 +696,12 @@ export function performTreeActionForUser(
             : worldClass.cols,
       };
     }
-    const createdDestinationWorld = deps.createWorldOfType(
+    const createdDestinationWorld = createWorldOfType(
       portalWorldType,
       portalDimensions,
     );
     const portalItem: Record<string, any> = {
-      id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
       type: "portal",
       created_at: Date.now(),
       destination_world_id: createdDestinationWorld.world_id,
@@ -775,7 +714,7 @@ export function performTreeActionForUser(
     }
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);
-    deps.upsertWorldItem(worldId, targetRow, targetCol, portalItem);
+    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
     maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
       portalItem,
     ]);
@@ -804,7 +743,7 @@ export function performTreeActionForUser(
 
     if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
     else delete worldItems[removeTileKey];
-    deps.deleteWorldItems(removedPortals);
+    deleteWorldItems(removedPortals);
     maybePersistConfiguredItemMutation(
       targetRow,
       targetCol,

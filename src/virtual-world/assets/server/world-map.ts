@@ -20,6 +20,8 @@ import {
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,
   worldTileValueForName,
+  WORLD_MOD_LAYER_TERRAIN,
+  WORLD_MOD_LAYER_OBJECT,
 } from "./world-domain.ts";
 
 function paintWorldBorder(map: number[][], tileName: string): void {
@@ -258,5 +260,28 @@ export function generateWorldMap(
   map[1][1] = worldTileValueForName(floorTileName);
   map[1][2] = worldTileValueForName(floorTileName);
   map[2][1] = worldTileValueForName(floorTileName);
+  return map;
+}
+
+export function applyWorldModsToMap(
+  map: number[][],
+  worldMods: Record<string, Record<string, any>>,
+): number[][] {
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
+  const layerOrder = [WORLD_MOD_LAYER_TERRAIN, WORLD_MOD_LAYER_OBJECT];
+  for (let i = 0; i < layerOrder.length; i++) {
+    const layer = layerOrder[i];
+    const layerMods = worldMods[layer] || {};
+    Object.keys(layerMods).forEach(function (tileKey) {
+      const mod = layerMods[tileKey];
+      if (!mod) return;
+      const row = Number(mod.row);
+      const col = Number(mod.col);
+      if (!isFinite(row) || !isFinite(col)) return;
+      if (row < 0 || row >= mapRows || col < 0 || col >= mapCols) return;
+      map[row][col] = worldTileValueForName(mod.tile_type);
+    });
+  }
   return map;
 }

@@ -1,3 +1,4 @@
+import { sendVirtualWorldStreamEvent } from "./stream-broadcast.ts";
 import {
   VWORLD_ONLINE_PRESENCE_TABLE,
   VWORLD_PLAYER_HEARTBEAT_TABLE,
@@ -43,6 +44,29 @@ export function getEffectiveNick(userId: string): string {
   return nick || String(userId).slice(0, 16);
 }
 
+export function sendGlobalPresenceEvent(
+  action: string,
+  userId: string,
+  worldId: string,
+  nick: string,
+  loginAt?: number,
+  lastActive?: number,
+  extra?: Record<string, unknown>,
+): void {
+  const payload: Record<string, unknown> = {
+    action: String(action || "upsert"),
+    player_id: String(userId || ""),
+    nick: String(nick || getEffectiveNick(userId)),
+    world_id: String(worldId || ""),
+    login_at: Number(loginAt || Date.now()),
+    last_active: Number(lastActive || Date.now()),
+  };
+  if (extra && typeof extra === "object") {
+    Object.assign(payload, extra);
+  }
+  sendVirtualWorldStreamEvent("presence_update", payload, {});
+}
+
 export function updateOnlinePresence(
   userId: string,
   worldId: string,
@@ -77,6 +101,16 @@ export function updateOnlinePresence(
     last_active_ts: toStoredWorldTimestamp(now),
     session_id: String(sessionId || ""),
   });
+  if (changed) {
+    sendGlobalPresenceEvent(
+      "upsert",
+      String(userId),
+      String(worldId),
+      nick,
+      loginAt,
+      now,
+    );
+  }
   return {
     player_id: String(userId),
     nick: nick,
@@ -94,7 +128,7 @@ export function deleteOnlinePresence(userId: string): void {
   );
 }
 
-export function buildOnlinePlayersSnapshot(ttlMs: number): Array<{
+export function buildOnlinePlayersSnapshot(ttlMs: number = 90000): Array<{
   player_id: string;
   nick: string;
   world_id: string;

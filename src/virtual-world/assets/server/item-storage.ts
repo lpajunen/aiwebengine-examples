@@ -1,3 +1,8 @@
+import { getItemStateTemplate } from "./item-registry.ts";
+import { WORLD_ITEM_SPAWN_COUNT } from "./runtime-config.ts";
+import { getEffectiveMap } from "./world-bootstrap.ts";
+import { ITEM_TYPES } from "./world-domain.ts";
+import { resolvePortalDestinationWorldType } from "./world-bootstrap.ts";
 import {
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
@@ -22,29 +27,6 @@ import {
   queryWorldRows,
   upsertWorldRow,
 } from "./world-db.ts";
-
-type ResolvePortalDestinationWorldType = (item?: {
-  destination_world_id?: string;
-  destination_world_type?: string;
-}) => string | undefined;
-type EnsureWorldItemsDeps = {
-  loadWorldItemMeta: (worldId: string) => {
-    next_item_seq: number;
-    seeded: number;
-    updated_ts: number;
-  };
-  getEffectiveMap: (worldId: string) => number[][];
-  loadWorldItems: (worldId: string) => Record<string, any[]>;
-  nextWorldItemId: (worldId: string) => number;
-  saveWorldItems: (worldId: string, items: Record<string, any[]>) => void;
-  saveWorldItemMeta: (
-    worldId: string,
-    meta: { next_item_seq: number; seeded: number; updated_ts?: number },
-  ) => void;
-  WORLD_ITEM_SPAWN_COUNT: number;
-  ITEM_TYPES: readonly string[];
-  getItemStateTemplate?: (type: string) => Record<string, unknown>;
-};
 
 export function loadPlayerInventory(userId: string): LivingState {
   const normalizeRawToLiving = function (raw: unknown, classId: string) {
@@ -144,10 +126,7 @@ export function saveWorldItemMeta(
   });
 }
 
-export function loadWorldItems(
-  worldId: string,
-  resolvePortalDestinationWorldType: ResolvePortalDestinationWorldType,
-): Record<string, any[]> {
+export function loadWorldItems(worldId: string): Record<string, any[]> {
   const rows = queryWorldRows(
     VWORLD_WORLD_ITEM_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
@@ -326,18 +305,15 @@ export function nextWorldItemId(worldId: string): number {
   return nextSeq;
 }
 
-export function ensureWorldItems(
-  worldId: string,
-  deps: EnsureWorldItemsDeps,
-): void {
-  const meta = deps.loadWorldItemMeta(worldId);
+export function ensureWorldItems(worldId: string): void {
+  const meta = loadWorldItemMeta(worldId);
   if (meta.seeded === 1) return;
 
-  const map = deps.getEffectiveMap(worldId);
+  const map = getEffectiveMap(worldId);
   const mapRows = map.length;
   const mapCols = map[0] ? map[0].length : 0;
-  const items = deps.loadWorldItems(worldId);
-  for (let i = 0; i < deps.WORLD_ITEM_SPAWN_COUNT; i++) {
+  const items = loadWorldItems(worldId);
+  for (let i = 0; i < WORLD_ITEM_SPAWN_COUNT; i++) {
     let attempts = 0;
     while (attempts < 1000) {
       attempts++;
@@ -347,31 +323,28 @@ export function ensureWorldItems(
       const tileKey = row + "_" + col;
       if (!items[tileKey]) items[tileKey] = [];
       const spawnType =
-        deps.ITEM_TYPES[Math.floor(Math.random() * deps.ITEM_TYPES.length)];
+        ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
       items[tileKey].push({
-        id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
+        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
         type: spawnType,
         created_at: Date.now(),
-        state: deps.getItemStateTemplate
-          ? deps.getItemStateTemplate(spawnType)
+        state: getItemStateTemplate
+          ? getItemStateTemplate(spawnType)
           : undefined,
       });
       break;
     }
   }
 
-  deps.saveWorldItems(worldId, items);
-  deps.saveWorldItemMeta(worldId, {
-    next_item_seq: deps.loadWorldItemMeta(worldId).next_item_seq,
+  saveWorldItems(worldId, items);
+  saveWorldItemMeta(worldId, {
+    next_item_seq: loadWorldItemMeta(worldId).next_item_seq,
     seeded: 1,
     updated_ts: Date.now(),
   });
 }
 
-export function flattenWorldItems(
-  itemsByTile: Record<string, any[]>,
-  resolvePortalDestinationWorldType: ResolvePortalDestinationWorldType,
-): Array<{
+export function flattenWorldItems(itemsByTile: Record<string, any[]>): Array<{
   id: string;
   type: string;
   row: number;

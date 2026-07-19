@@ -1,39 +1,28 @@
+import { getTargetTileFromRotation } from "./current-world-state.ts";
+import { getItemStateTemplate } from "./item-registry.ts";
+import {
+  ensureWorldItems,
+  loadPlayerInventory,
+  nextWorldItemId,
+  savePlayerInventory,
+} from "./item-storage.ts";
+import { getPlayerWorld } from "./player-persistence.ts";
+import { getCanonicalPlayerState } from "./player-snapshots.ts";
+import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
+import { getEffectiveMap } from "./world-bootstrap.ts";
+import { isOakClearingTile } from "./world-domain.ts";
+import {
+  loadWorldHouses,
+  loadWorldTrees,
+  saveWorldHouses,
+  saveWorldTrees,
+} from "./world-mod-storage.ts";
 import { getRecipeDefinition } from "./item-registry.ts";
 import {
   consumeLivingItemsByType,
   getAllLivingItems,
   LivingState,
 } from "./world-domain.ts";
-
-type RecipeDeps = {
-  getPlayerWorld: (userId: string) => string;
-  ensureWorldItems: (worldId: string) => void;
-  loadPlayerInventory: (userId: string) => LivingState;
-  savePlayerInventory: (userId: string, inventory: unknown) => void;
-  getCanonicalPlayerState: (
-    worldId: string,
-    userId: string,
-  ) => { row: number; col: number; seq: number; rotation: number };
-  getTargetTileFromRotation: (
-    row: number,
-    col: number,
-    rotation: number,
-  ) => { row: number; col: number };
-  nextWorldItemId: (worldId: string) => number;
-  getEffectiveMap: (worldId: string) => number[][];
-  loadWorldTrees: (worldId: string) => Record<string, any>;
-  saveWorldTrees: (worldId: string, trees: Record<string, any>) => void;
-  loadWorldHouses: (worldId: string) => Record<string, any>;
-  saveWorldHouses: (worldId: string, houses: Record<string, any>) => void;
-  isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
-  isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
-  sendWorldScopedStreamEvent: (
-    worldId: string,
-    eventType: string,
-    payload: any,
-  ) => void;
-  getItemStateTemplate?: (type: string) => Record<string, unknown>;
-};
 
 function countItemsByType(inventory: LivingState): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -54,7 +43,6 @@ function makeCraftedItemId(worldId: string, itemSeq: number): string {
 export function craftRecipeForUser(
   userId: string,
   body: any,
-  deps: RecipeDeps,
 ): { status: number; payload: any } {
   const recipeId = String((body && body.recipe_id) || "");
   const recipe = getRecipeDefinition(recipeId);
@@ -65,16 +53,16 @@ export function craftRecipeForUser(
     };
   }
 
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return {
       status: 200,
       payload: { ok: false, error: "error.no_world_found" },
     };
   }
-  deps.ensureWorldItems(worldId);
+  ensureWorldItems(worldId);
 
-  const inventory = deps.loadPlayerInventory(userId);
+  const inventory = loadPlayerInventory(userId);
   const counts = countItemsByType(inventory);
   for (let i = 0; i < recipe.inputItems.length; i++) {
     const input = recipe.inputItems[i];
@@ -90,10 +78,10 @@ export function craftRecipeForUser(
     }
   }
 
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
   const target =
     recipe.targetKind === "facing_tile"
-      ? deps.getTargetTileFromRotation(
+      ? getTargetTileFromRotation(
           canonical.row,
           canonical.col,
           Number.isFinite(Number(body && body.rotation))
@@ -102,7 +90,7 @@ export function craftRecipeForUser(
         )
       : { row: canonical.row, col: canonical.col };
 
-  const map = deps.getEffectiveMap(worldId);
+  const map = getEffectiveMap(worldId);
   const mapRows = map.length;
   const mapCols = map[0] ? map[0].length : 0;
   if (
@@ -121,8 +109,8 @@ export function craftRecipeForUser(
     };
   }
 
-  const trees = deps.loadWorldTrees(worldId);
-  const houses = deps.loadWorldHouses(worldId);
+  const trees = loadWorldTrees(worldId);
+  const houses = loadWorldHouses(worldId);
   const tileKey = target.row + "_" + target.col;
 
   for (let i = 0; i < recipe.outputs.length; i++) {
@@ -131,7 +119,7 @@ export function craftRecipeForUser(
       const existingTree = trees[tileKey] && trees[tileKey].action === "plant";
       const wasCut = trees[tileKey] && trees[tileKey].action === "cut";
       const baseHasTree = map[target.row][target.col] === 2;
-      if (deps.isOakClearingTile(worldId, target.row, target.col)) {
+      if (isOakClearingTile(worldId, target.row, target.col)) {
         return {
           status: 200,
           payload: {
@@ -157,7 +145,7 @@ export function craftRecipeForUser(
       }
     }
     if (output.kind === "place_house") {
-      if (deps.isOakClearingTile(worldId, target.row, target.col)) {
+      if (isOakClearingTile(worldId, target.row, target.col)) {
         return {
           status: 200,
           payload: {
@@ -191,13 +179,13 @@ export function craftRecipeForUser(
     if (output.kind === "item") {
       for (let count = 0; count < Number(output.count || 0); count++) {
         const craftedItem = {
-          id: makeCraftedItemId(worldId, deps.nextWorldItemId(worldId)),
+          id: makeCraftedItemId(worldId, nextWorldItemId(worldId)),
           type: output.itemId,
           created_at: Date.now(),
           crafted_by: userId,
           recipe_id: recipe.id,
-          state: deps.getItemStateTemplate
-            ? deps.getItemStateTemplate(output.itemId)
+          state: getItemStateTemplate
+            ? getItemStateTemplate(output.itemId)
             : undefined,
         };
         inventory.bag.push(craftedItem);
@@ -211,8 +199,8 @@ export function craftRecipeForUser(
         planted_by: userId,
         timestamp: Date.now(),
       };
-      deps.saveWorldTrees(worldId, trees);
-      deps.sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
+      saveWorldTrees(worldId, trees);
+      sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
         action: "plant",
         row: target.row,
         col: target.col,
@@ -229,8 +217,8 @@ export function craftRecipeForUser(
         actor_type: "player",
         timestamp: Date.now(),
       };
-      deps.saveWorldHouses(worldId, houses);
-      deps.sendWorldScopedStreamEvent(String(worldId), "house_changed", {
+      saveWorldHouses(worldId, houses);
+      sendWorldScopedStreamEvent(String(worldId), "house_changed", {
         action: "build_house",
         row: target.row,
         col: target.col,
@@ -242,7 +230,7 @@ export function craftRecipeForUser(
     }
   }
 
-  deps.savePlayerInventory(userId, inventory);
+  savePlayerInventory(userId, inventory);
 
   return {
     status: 200,

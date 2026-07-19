@@ -1,120 +1,76 @@
+import {
+  refreshActionClassCache,
+  refreshItemClassCache,
+} from "./item-registry.ts";
+import { refreshLivingClassCache } from "./living-registry.ts";
+import { refreshWorldClassCache } from "./world-class-storage.ts";
+import {
+  getAuthenticatedUserId,
+  userHasCreatorStone,
+} from "./http-handler-helpers.ts";
+import {
+  getCurrentWorldStateForUser,
+  getMoveOptions,
+  normalizeMoveDirection,
+  rotationForDirection,
+} from "./current-world-state.ts";
+import {
+  grantAllItemsForUser,
+  handleItemActionForUser,
+} from "./item-action-helpers.ts";
+import {
+  deleteActionClass,
+  deleteItemClass,
+  getActionClass,
+  getAllActionClasses,
+  getAllItemClasses,
+  getItemClass,
+  upsertActionClass,
+  upsertItemClass,
+} from "./item-registry.ts";
+import {
+  deleteLivingClass,
+  getAllLivingClasses,
+  getLivingClass,
+  upsertLivingClass,
+} from "./living-registry.ts";
+import { movePlayerForUser } from "./move-player.ts";
+import { getPlayerWorld } from "./player-persistence.ts";
+import { getCanonicalPlayerState } from "./player-snapshots.ts";
+import {
+  getEffectiveNick,
+  savePlayerNick,
+  sendGlobalPresenceEvent,
+  updateOnlinePresence,
+} from "./social-state.ts";
+import { performTreeActionForUser } from "./tree-action-helpers.ts";
+import { getOrCreatePlayerWorld } from "./world-bootstrap.ts";
+import {
+  deleteWorldClass,
+  getAllWorldClasses,
+  getWorldClass,
+  isBuiltinWorldClassId,
+  normalizeWorldClassRecord,
+  upsertWorldClass,
+} from "./world-class-storage.ts";
 import { buildInventorySelectors } from "./world-domain.ts";
 
-type ItemClassHandlerDeps = {
-  getAuthenticatedUserId: (context: any) => string | null;
-  hasEditingRights: (userId: string) => boolean;
-  refreshItemClasses: () => void;
-  getAllItemClasses: () => any[];
-  getItemClass: (id: string) => any | undefined;
-  upsertItemClass: (record: any) => { ok: boolean; error?: string };
-  deleteItemClass: (id: string) => void;
-};
-
-type ActionClassHandlerDeps = {
-  getAuthenticatedUserId: (context: any) => string | null;
-  hasEditingRights: (userId: string) => boolean;
-  refreshActionClasses: () => void;
-  getAllActionClasses: () => any[];
-  getActionClass: (id: string) => any | undefined;
-  upsertActionClass: (record: any) => { ok: boolean; error?: string };
-  deleteActionClass: (id: string) => void;
-};
-
-type LivingClassHandlerDeps = {
-  getAuthenticatedUserId: (context: any) => string | null;
-  hasEditingRights: (userId: string) => boolean;
-  refreshLivingClasses: () => void;
-  getAllLivingClasses: () => any[];
-  getLivingClass: (id: string) => any | null;
-  upsertLivingClass: (record: any) => { ok: boolean; error?: string };
-  deleteLivingClass: (id: string) => void;
-};
-
-type ToolHandlerDeps = {
-  getAuthenticatedUserId: (context: any) => string | null;
-  getCurrentWorldStateForUser: (userId: string) => any;
-  normalizeMoveDirection: (direction: any) => string;
-  getOrCreatePlayerWorld: (userId: string) => string;
-  getCanonicalPlayerState: (
-    worldId: string,
-    userId: string,
-  ) => {
-    row: number;
-    col: number;
-    seq: number;
-    rotation: number;
-  };
-  getMoveOptions: (
-    worldId: string,
-    canonical: any,
-  ) => Record<string, { row: number; col: number }>;
-  rotationForDirection: (direction: string) => number | null;
-  movePlayerForUser: (
-    userId: string,
-    body: any,
-  ) => { status: number; payload: any };
-  handleItemActionForUser: (
-    userId: string,
-    body: any,
-  ) => { status: number; payload: any };
-  getPlayerWorld: (userId: string) => string;
-  savePlayerNick: (userId: string, nick: string) => void;
-  updateOnlinePresence: (
-    userId: string,
-    worldId: string,
-    sessionId: string,
-  ) => any;
-  performTreeActionForUser: (
-    userId: string,
-    body: any,
-  ) => { status: number; payload: any };
-  grantAllItemsForUser: (userId: string) => any;
-  sendGlobalPresenceEvent: (
-    action: string,
-    userId: string,
-    worldId: string,
-    nick: string,
-    loginAt?: number,
-    lastActive?: number,
-    extra?: any,
-  ) => void;
-  getEffectiveNick: (userId: string) => string;
-};
-
-export function virtualWorldGetStateToolHandler(
-  context: any,
-  deps: Pick<
-    ToolHandlerDeps,
-    "getAuthenticatedUserId" | "getCurrentWorldStateForUser"
-  >,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldGetStateToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
-  return JSON.stringify(deps.getCurrentWorldStateForUser(userId));
+  return JSON.stringify(getCurrentWorldStateForUser(userId));
 }
 
-export function virtualWorldMoveToolHandler(
-  context: any,
-  deps: Pick<
-    ToolHandlerDeps,
-    | "getAuthenticatedUserId"
-    | "normalizeMoveDirection"
-    | "getOrCreatePlayerWorld"
-    | "getCanonicalPlayerState"
-    | "getMoveOptions"
-    | "rotationForDirection"
-    | "movePlayerForUser"
-  >,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldMoveToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
 
   const args = context.args || {};
-  const direction = deps.normalizeMoveDirection(args.direction);
+  const direction = normalizeMoveDirection(args.direction);
   if (
     direction !== "north" &&
     direction !== "south" &&
@@ -127,14 +83,14 @@ export function virtualWorldMoveToolHandler(
     });
   }
 
-  const worldId = deps.getOrCreatePlayerWorld(userId);
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
-  const moveOptions = deps.getMoveOptions(String(worldId), canonical);
+  const worldId = getOrCreatePlayerWorld(userId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
+  const moveOptions = getMoveOptions(String(worldId), canonical);
   const target = moveOptions[direction];
   const rotation = Number.isFinite(Number(args.rotation))
     ? Number(args.rotation)
-    : deps.rotationForDirection(direction);
-  const result = deps.movePlayerForUser(userId, {
+    : rotationForDirection(direction);
+  const result = movePlayerForUser(userId, {
     toRow: target.row,
     toCol: target.col,
     rotation: rotation,
@@ -149,17 +105,8 @@ export function virtualWorldMoveToolHandler(
   return JSON.stringify(result.payload);
 }
 
-export function virtualWorldManageItemsToolHandler(
-  context: any,
-  deps: Pick<
-    ToolHandlerDeps,
-    | "getAuthenticatedUserId"
-    | "getCurrentWorldStateForUser"
-    | "handleItemActionForUser"
-    | "getPlayerWorld"
-  >,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldManageItemsToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
@@ -167,7 +114,7 @@ export function virtualWorldManageItemsToolHandler(
   const args = context.args || {};
   const action = String(args.action || "list");
   if (action === "list") {
-    const state = deps.getCurrentWorldStateForUser(userId);
+    const state = getCurrentWorldStateForUser(userId);
     return JSON.stringify({
       ok: true,
       world_id: state.world_id,
@@ -180,14 +127,14 @@ export function virtualWorldManageItemsToolHandler(
     });
   }
 
-  const result = deps.handleItemActionForUser(userId, {
+  const result = handleItemActionForUser(userId, {
     action: action,
     from: args.from,
     to: args.to,
     index: args.index,
   });
   result.payload.status = result.status;
-  result.payload.world_id = deps.getPlayerWorld(userId);
+  result.payload.world_id = getPlayerWorld(userId);
   if (result && result.payload && result.payload.inventory) {
     const selectors = buildInventorySelectors(result.payload.inventory);
     result.payload.inventory_slot_ids = selectors.inventory_slot_ids;
@@ -196,25 +143,16 @@ export function virtualWorldManageItemsToolHandler(
   return JSON.stringify(result.payload);
 }
 
-export function virtualWorldActToolHandler(
-  context: any,
-  deps: Pick<
-    ToolHandlerDeps,
-    | "getAuthenticatedUserId"
-    | "getOrCreatePlayerWorld"
-    | "getCanonicalPlayerState"
-    | "performTreeActionForUser"
-  >,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldActToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
 
   const args = context.args || {};
-  const worldId = deps.getOrCreatePlayerWorld(userId);
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
-  const result = deps.performTreeActionForUser(userId, {
+  const worldId = getOrCreatePlayerWorld(userId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
+  const result = performTreeActionForUser(userId, {
     action: args.action,
     row: Number.isFinite(Number(args.row)) ? Number(args.row) : canonical.row,
     col: Number.isFinite(Number(args.col)) ? Number(args.col) : canonical.col,
@@ -235,20 +173,8 @@ export function virtualWorldActToolHandler(
   return JSON.stringify(result.payload);
 }
 
-export function virtualWorldSetNicknameToolHandler(
-  context: any,
-  deps: Pick<
-    ToolHandlerDeps,
-    | "getAuthenticatedUserId"
-    | "savePlayerNick"
-    | "getPlayerWorld"
-    | "updateOnlinePresence"
-    | "grantAllItemsForUser"
-    | "sendGlobalPresenceEvent"
-    | "getEffectiveNick"
-  >,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldSetNicknameToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
@@ -262,12 +188,12 @@ export function virtualWorldSetNicknameToolHandler(
 
   const sanitized = String(nick).trim().slice(0, 24);
   if (sanitized.toLowerCase() === "cheat") {
-    const cheatResult = deps.grantAllItemsForUser(userId);
+    const cheatResult = grantAllItemsForUser(userId);
     const selectors = buildInventorySelectors(cheatResult.inventory);
-    const currentWorldId = deps.getPlayerWorld(userId);
+    const currentWorldId = getPlayerWorld(userId);
     if (currentWorldId) {
-      const existingNick = deps.getEffectiveNick(userId);
-      deps.sendGlobalPresenceEvent(
+      const existingNick = getEffectiveNick(userId);
+      sendGlobalPresenceEvent(
         "upsert",
         userId,
         String(currentWorldId),
@@ -296,15 +222,15 @@ export function virtualWorldSetNicknameToolHandler(
   }
 
   try {
-    deps.savePlayerNick(userId, sanitized);
+    savePlayerNick(userId, sanitized);
   } catch (e) {
     return JSON.stringify({ status: 500, error: "Failed to save nickname" });
   }
 
   try {
-    const currentWorldId = deps.getPlayerWorld(userId);
+    const currentWorldId = getPlayerWorld(userId);
     if (currentWorldId) {
-      deps.updateOnlinePresence(userId, String(currentWorldId), "");
+      updateOnlinePresence(userId, String(currentWorldId), "");
     }
   } catch (e) {
     // ignore presence update errors
@@ -313,15 +239,12 @@ export function virtualWorldSetNicknameToolHandler(
   return JSON.stringify({ status: 200, ok: true, nick: sanitized });
 }
 
-export function virtualWorldManageItemClassesToolHandler(
-  context: any,
-  deps: ItemClassHandlerDeps,
-): string {
-  const userId = deps.getAuthenticatedUserId(context);
+export function virtualWorldManageItemClassesToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
-  if (!deps.hasEditingRights(userId)) {
+  if (!userHasCreatorStone(userId)) {
     return JSON.stringify({ ok: false, error: "Editing rights required" });
   }
 
@@ -329,15 +252,15 @@ export function virtualWorldManageItemClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
-    deps.refreshItemClasses();
-    return JSON.stringify({ ok: true, item_classes: deps.getAllItemClasses() });
+    refreshItemClassCache();
+    return JSON.stringify({ ok: true, item_classes: getAllItemClasses() });
   }
 
   if (action === "get") {
-    deps.refreshItemClasses();
+    refreshItemClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = deps.getItemClass(id);
+    const cls = getItemClass(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Item class not found" });
     return JSON.stringify({ ok: true, item_class: cls });
@@ -346,9 +269,9 @@ export function virtualWorldManageItemClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.refreshItemClasses();
+    refreshItemClassCache();
     if (action === "update") {
-      const existing = deps.getItemClass(id);
+      const existing = getItemClass(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Item class not found" });
     }
@@ -369,7 +292,7 @@ export function virtualWorldManageItemClassesToolHandler(
           ? args.stateTemplate
           : {},
     };
-    const writeResult = deps.upsertItemClass(record);
+    const writeResult = upsertItemClass(record);
     if (!writeResult || !writeResult.ok) {
       return JSON.stringify({
         ok: false,
@@ -380,14 +303,14 @@ export function virtualWorldManageItemClassesToolHandler(
             : ""),
       });
     }
-    deps.refreshItemClasses();
+    refreshItemClassCache();
     return JSON.stringify({ ok: true, item_class: record });
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.deleteItemClass(id);
+    deleteItemClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 
@@ -396,13 +319,12 @@ export function virtualWorldManageItemClassesToolHandler(
 
 export function virtualWorldManageActionClassesToolHandler(
   context: any,
-  deps: ActionClassHandlerDeps,
 ): string {
-  const userId = deps.getAuthenticatedUserId(context);
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
-  if (!deps.hasEditingRights(userId)) {
+  if (!userHasCreatorStone(userId)) {
     return JSON.stringify({ ok: false, error: "Editing rights required" });
   }
 
@@ -410,18 +332,18 @@ export function virtualWorldManageActionClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
-    deps.refreshActionClasses();
+    refreshActionClassCache();
     return JSON.stringify({
       ok: true,
-      action_classes: deps.getAllActionClasses(),
+      action_classes: getAllActionClasses(),
     });
   }
 
   if (action === "get") {
-    deps.refreshActionClasses();
+    refreshActionClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = deps.getActionClass(id);
+    const cls = getActionClass(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Action class not found" });
     return JSON.stringify({ ok: true, action_class: cls });
@@ -430,9 +352,9 @@ export function virtualWorldManageActionClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.refreshActionClasses();
+    refreshActionClassCache();
     if (action === "update") {
-      const existing = deps.getActionClass(id);
+      const existing = getActionClass(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Action class not found" });
     }
@@ -449,7 +371,7 @@ export function virtualWorldManageActionClassesToolHandler(
       validation: args.validation ?? undefined,
       logicSpec: args.logicSpec ?? undefined,
     };
-    const writeResult = deps.upsertActionClass(record);
+    const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {
       return JSON.stringify({
         ok: false,
@@ -460,14 +382,14 @@ export function virtualWorldManageActionClassesToolHandler(
             : ""),
       });
     }
-    deps.refreshActionClasses();
+    refreshActionClassCache();
     return JSON.stringify({ ok: true, action_class: record });
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.deleteActionClass(id);
+    deleteActionClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 
@@ -476,13 +398,12 @@ export function virtualWorldManageActionClassesToolHandler(
 
 export function virtualWorldManageLivingClassesToolHandler(
   context: any,
-  deps: LivingClassHandlerDeps,
 ): string {
-  const userId = deps.getAuthenticatedUserId(context);
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
-  if (!deps.hasEditingRights(userId)) {
+  if (!userHasCreatorStone(userId)) {
     return JSON.stringify({ ok: false, error: "Editing rights required" });
   }
 
@@ -490,18 +411,18 @@ export function virtualWorldManageLivingClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
-    deps.refreshLivingClasses();
+    refreshLivingClassCache();
     return JSON.stringify({
       ok: true,
-      living_classes: deps.getAllLivingClasses(),
+      living_classes: getAllLivingClasses(),
     });
   }
 
   if (action === "get") {
-    deps.refreshLivingClasses();
+    refreshLivingClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = deps.getLivingClass(id);
+    const cls = getLivingClass(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Living class not found" });
     return JSON.stringify({ ok: true, living_class: cls });
@@ -510,15 +431,16 @@ export function virtualWorldManageLivingClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.refreshLivingClasses();
+    refreshLivingClassCache();
     if (action === "update") {
-      const existing = deps.getLivingClass(id);
+      const existing = getLivingClass(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Living class not found" });
     }
     const record = {
       id,
-      kind: String(args.kind || "creature"),
+      kind: (args.kind === "player" ? "player" : "creature") as
+        "player" | "creature",
       slotDefinitions: Array.isArray(args.slotDefinitions)
         ? args.slotDefinitions
         : [],
@@ -531,7 +453,7 @@ export function virtualWorldManageLivingClassesToolHandler(
           ? args.valueSchema
           : undefined,
     };
-    const writeResult = deps.upsertLivingClass(record);
+    const writeResult = upsertLivingClass(record);
     if (!writeResult || !writeResult.ok) {
       return JSON.stringify({
         ok: false,
@@ -542,41 +464,28 @@ export function virtualWorldManageLivingClassesToolHandler(
             : ""),
       });
     }
-    deps.refreshLivingClasses();
+    refreshLivingClassCache();
     return JSON.stringify({ ok: true, living_class: record });
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.deleteLivingClass(id);
+    deleteLivingClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 
   return JSON.stringify({ ok: false, error: "Unknown action: " + action });
 }
 
-type WorldClassHandlerDeps = {
-  getAuthenticatedUserId: (context: any) => string | null;
-  hasEditingRights: (userId: string) => boolean;
-  refreshWorldClasses: () => void;
-  getAllWorldClasses: () => any[];
-  getWorldClass: (id: string) => any | null;
-  upsertWorldClass: (record: any) => { ok: boolean; error?: string };
-  deleteWorldClass: (id: string) => void;
-  isBuiltinWorldClassId: (id: string) => boolean;
-  normalizeWorldClassRecord: (record: any) => any;
-};
-
 export function virtualWorldManageWorldClassesToolHandler(
   context: any,
-  deps: WorldClassHandlerDeps,
 ): string {
-  const userId = deps.getAuthenticatedUserId(context);
+  const userId = getAuthenticatedUserId(context);
   if (!userId) {
     return JSON.stringify({ ok: false, error: "Authentication required" });
   }
-  if (!deps.hasEditingRights(userId)) {
+  if (!userHasCreatorStone(userId)) {
     return JSON.stringify({ ok: false, error: "Editing rights required" });
   }
 
@@ -584,18 +493,18 @@ export function virtualWorldManageWorldClassesToolHandler(
   const action = String(args.action || "list");
 
   if (action === "list") {
-    deps.refreshWorldClasses();
+    refreshWorldClassCache();
     return JSON.stringify({
       ok: true,
-      world_classes: deps.getAllWorldClasses(),
+      world_classes: getAllWorldClasses(),
     });
   }
 
   if (action === "get") {
-    deps.refreshWorldClasses();
+    refreshWorldClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = deps.getWorldClass(id);
+    const cls = getWorldClass(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "World class not found" });
     return JSON.stringify({ ok: true, world_class: cls });
@@ -604,12 +513,12 @@ export function virtualWorldManageWorldClassesToolHandler(
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    deps.refreshWorldClasses();
-    const existing = deps.getWorldClass(id);
+    refreshWorldClassCache();
+    const existing = getWorldClass(id);
     if (action === "update" && !existing) {
       return JSON.stringify({ ok: false, error: "World class not found" });
     }
-    const record = deps.normalizeWorldClassRecord({
+    const record = normalizeWorldClassRecord({
       id,
       baseType:
         args.baseType !== undefined
@@ -626,7 +535,7 @@ export function virtualWorldManageWorldClassesToolHandler(
           ? args.fallbackLabel
           : existing && existing.fallbackLabel,
     });
-    const writeResult = deps.upsertWorldClass(record);
+    const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {
       return JSON.stringify({
         ok: false,
@@ -643,13 +552,13 @@ export function virtualWorldManageWorldClassesToolHandler(
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    if (deps.isBuiltinWorldClassId(id)) {
+    if (isBuiltinWorldClassId(id)) {
       return JSON.stringify({
         ok: false,
         error: "Built-in world classes cannot be deleted",
       });
     }
-    deps.deleteWorldClass(id);
+    deleteWorldClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
 

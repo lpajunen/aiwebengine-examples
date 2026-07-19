@@ -1,4 +1,24 @@
 import {
+  ensureWorldItems,
+  flattenWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+} from "./item-storage.ts";
+import { markNPCWorldActive } from "./npc-storage.ts";
+import { getCanonicalPlayerState } from "./player-snapshots.ts";
+import {
+  getEffectiveMap,
+  getOrCreatePlayerWorld,
+  getWorldDimensions,
+  getWorldType,
+} from "./world-bootstrap.ts";
+import {
+  isWorldTileWalkable,
+  getActionsForItemType,
+  WORLD_TILE_NAME_BY_VALUE,
+} from "./world-domain.ts";
+import { loadWorldHouses, loadWorldMods } from "./world-mod-storage.ts";
+import {
   buildInventorySelectors,
   getAllLivingItems,
   LivingState,
@@ -11,54 +31,9 @@ type CanonicalState = {
   rotation: number;
 };
 
-type MoveOptionsDeps = {
-  getEffectiveMap: (worldId: string) => number[][];
-  isWorldTileWalkable: (tileValue: any) => boolean;
-  worldTileNameForValue: (tileValue: number) => string;
-};
-
-type CurrentWorldStateDeps = {
-  getOrCreatePlayerWorld: (userId: string) => string;
-  markNPCWorldActive: (worldId: string) => void;
-  ensureWorldItems: (worldId: string) => void;
-  getCanonicalPlayerState: (worldId: string, userId: string) => CanonicalState;
-  loadPlayerInventory: (userId: string) => LivingState;
-  loadWorldItems: (worldId: string) => Record<string, any[]>;
-  flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
-  loadWorldMods: (worldId: string) => any;
-  loadWorldHouses: (worldId: string) => any;
-  getWorldType: (worldId: string) => string;
-  getWorldDimensions: (worldId: string) => { rows: number; cols: number };
-  getAvailableWorldActions: (
-    inventory: LivingState,
-    currentTileItems: any[],
-  ) => string[];
-  getMoveOptions: (
-    worldId: string,
-    canonical: CanonicalState,
-  ) => Record<
-    string,
-    {
-      row: number;
-      col: number;
-      walkable: boolean;
-      tile_type: string;
-      in_bounds: boolean;
-    }
-  >;
-  getTargetTileFromRotation: (
-    row: number,
-    col: number,
-    rotation: number,
-  ) => { row: number; col: number; direction: string };
-};
-
-export function worldTileNameForValue(
-  tileValue: number,
-  worldTileNameByValue: Record<number, string>,
-): string {
-  if (worldTileNameByValue[tileValue]) {
-    return worldTileNameByValue[tileValue];
+export function worldTileNameForValue(tileValue: number): string {
+  if (WORLD_TILE_NAME_BY_VALUE[tileValue]) {
+    return WORLD_TILE_NAME_BY_VALUE[tileValue];
   }
   return "unknown";
 }
@@ -66,7 +41,6 @@ export function worldTileNameForValue(
 export function getAvailableWorldActions(
   inventory: LivingState,
   currentTileItems: any[],
-  getActionsForItemType: (itemType: string) => string[],
 ): string[] {
   const actionMap: Record<string, boolean> = {};
 
@@ -144,7 +118,6 @@ export function rotationForDirection(direction: string): number | null {
 export function getMoveOptions(
   worldId: string,
   canonical: { row: number; col: number },
-  deps: MoveOptionsDeps,
 ): Record<
   string,
   {
@@ -155,7 +128,7 @@ export function getMoveOptions(
     in_bounds: boolean;
   }
 > {
-  const map = deps.getEffectiveMap(worldId);
+  const map = getEffectiveMap(worldId);
   const mapRows = map.length;
   const mapCols = map[0] ? map[0].length : 0;
   const options: Record<
@@ -189,20 +162,15 @@ export function getMoveOptions(
     options[direction] = {
       row: targetRow,
       col: targetCol,
-      walkable: inBounds && deps.isWorldTileWalkable(tileValue),
-      tile_type: inBounds
-        ? deps.worldTileNameForValue(tileValue)
-        : "out_of_bounds",
+      walkable: inBounds && isWorldTileWalkable(tileValue),
+      tile_type: inBounds ? worldTileNameForValue(tileValue) : "out_of_bounds",
       in_bounds: inBounds,
     };
   }
   return options;
 }
 
-export function getCurrentWorldStateForUser(
-  userId: string,
-  deps: CurrentWorldStateDeps,
-): {
+export function getCurrentWorldStateForUser(userId: string): {
   ok: boolean;
   world_id: string;
   world_type: string;
@@ -229,13 +197,13 @@ export function getCurrentWorldStateForUser(
   >;
   facing_tile: { row: number; col: number; direction: string };
 } {
-  const worldId = deps.getOrCreatePlayerWorld(userId);
-  deps.markNPCWorldActive(worldId);
-  deps.ensureWorldItems(worldId);
+  const worldId = getOrCreatePlayerWorld(userId);
+  markNPCWorldActive(worldId);
+  ensureWorldItems(worldId);
 
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
-  const inventory = deps.loadPlayerInventory(userId);
-  const worldItems = deps.loadWorldItems(worldId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
+  const inventory = loadPlayerInventory(userId);
+  const worldItems = loadWorldItems(worldId);
   const tileKey = canonical.row + "_" + canonical.col;
   const currentTileItems = Array.isArray(worldItems[tileKey])
     ? worldItems[tileKey]
@@ -245,11 +213,11 @@ export function getCurrentWorldStateForUser(
     inventory_selectors: inventorySelectors,
   } = buildInventorySelectors(inventory);
 
-  const worldDims = deps.getWorldDimensions(worldId);
+  const worldDims = getWorldDimensions(worldId);
   return {
     ok: true,
     world_id: String(worldId),
-    world_type: deps.getWorldType(worldId),
+    world_type: getWorldType(worldId),
     world_rows: worldDims.rows,
     world_cols: worldDims.cols,
     player: {
@@ -258,19 +226,16 @@ export function getCurrentWorldStateForUser(
       seq: canonical.seq,
       rotation: canonical.rotation,
     },
-    items: deps.flattenWorldItems(worldItems),
+    items: flattenWorldItems(worldItems),
     tile_items: currentTileItems,
     inventory: inventory,
-    world_mods: deps.loadWorldMods(worldId),
-    houses: deps.loadWorldHouses(worldId),
+    world_mods: loadWorldMods(worldId),
+    houses: loadWorldHouses(worldId),
     inventory_slot_ids: inventorySlotIds,
     inventory_selectors: inventorySelectors,
-    available_actions: deps.getAvailableWorldActions(
-      inventory,
-      currentTileItems,
-    ),
-    move_options: deps.getMoveOptions(String(worldId), canonical),
-    facing_tile: deps.getTargetTileFromRotation(
+    available_actions: getAvailableWorldActions(inventory, currentTileItems),
+    move_options: getMoveOptions(String(worldId), canonical),
+    facing_tile: getTargetTileFromRotation(
       canonical.row,
       canonical.col,
       canonical.rotation,

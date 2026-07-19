@@ -1,76 +1,52 @@
+import { findFirstLivingItemByTypes } from "./world-domain.ts";
+import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
+import {
+  addToDMIndex,
+  appendDMMessage,
+  appendWorldChatMessage,
+  loadDMHistory,
+} from "./chat-storage.ts";
+import { getCurrentWorldStateForUser } from "./current-world-state.ts";
+import { vwLog } from "./diagnostics.ts";
+import { getCurrentEventSeq } from "./event-seq.ts";
+import { grantAllItemsForUser } from "./item-action-helpers.ts";
+import {
+  ensureWorldItems,
+  flattenWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+} from "./item-storage.ts";
+import { maybeTickWorldNPCs } from "./npc-orchestration.ts";
+import { markNPCWorldActive } from "./npc-storage.ts";
+import {
+  deletePlayerHeartbeat,
+  deletePlayerMoveLease,
+  getPlayerWorld,
+  loadPlayerMoveLease,
+  loadPlayerPosition,
+  markPlayerPositionInactive,
+  savePlayerHeartbeatTs,
+  savePlayerMoveLease,
+} from "./player-persistence.ts";
+import { buildActiveWorldPlayers } from "./player-snapshots.ts";
+import { LEASE_TTL_MS } from "./runtime-config.ts";
+import {
+  buildOnlinePlayersSnapshot,
+  deleteOnlinePresence,
+  getEffectiveNick,
+  savePlayerNick,
+  sendGlobalPresenceEvent,
+  updateOnlinePresence,
+} from "./social-state.ts";
+import {
+  sendRecipientScopedStreamEvent,
+  sendWorldScopedStreamEvent,
+} from "./stream-broadcast.ts";
 import {
   buildInventorySelectors,
   createEmptyLivingState,
   LivingState,
 } from "./world-domain.ts";
-
-type HttpHandlerDeps = {
-  getPlayerWorld: (userId: string) => string;
-  ensureWorldItems: (worldId: string) => void;
-  flattenWorldItems: (itemsByTile: Record<string, any[]>) => any[];
-  loadWorldItems: (worldId: string) => Record<string, any[]>;
-  loadPlayerInventory: (userId: string) => LivingState;
-  savePlayerNick: (userId: string, nick: string) => void;
-  grantAllItemsForUser: (userId: string) => any;
-  buildOnlinePlayersSnapshot: () => any[];
-  buildActiveWorldPlayers: (worldId: string) => Array<{
-    player_id: string;
-    row: number;
-    col: number;
-    seq: number;
-    rotation: number;
-    session_id: string;
-    last_active: number;
-  }>;
-  getEffectiveNick: (userId: string) => string;
-  appendWorldChatMessage: (worldId: string, message: any) => void;
-  sendWorldScopedStreamEvent: (
-    worldId: string,
-    eventType: string,
-    payload: any,
-  ) => void;
-  appendDMMessage: (userId: string, toUserId: string, message: any) => void;
-  addToDMIndex: (userId: string, otherUserId: string, lastTs: number) => void;
-  sendRecipientScopedStreamEvent: (
-    recipientId: string,
-    eventType: string,
-    payload: any,
-  ) => void;
-  loadDMHistory: (userId: string, withUserId: string) => any[];
-  loadPlayerPosition: (userId: string) => any;
-  markPlayerPositionInactive: (userId: string) => void;
-  deletePlayerHeartbeat: (userId: string) => void;
-  deletePlayerMoveLease: (userId: string) => void;
-  deleteOnlinePresence: (userId: string) => void;
-  sendGlobalPresenceEvent: (
-    action: string,
-    userId: string,
-    worldId: string,
-    nick: string,
-    loginAt?: number,
-    lastActive?: number,
-    extra?: any,
-  ) => void;
-  vwLog: (msg: string, obj?: unknown) => void;
-  markNPCWorldActive: (worldId: string) => void;
-  maybeTickWorldNPCs: (worldId: string) => void;
-  loadPlayerMoveLease: (userId: string) => any;
-  savePlayerMoveLease: (
-    userId: string,
-    sessionId: string,
-    expiresAt: number,
-  ) => void;
-  savePlayerHeartbeatTs: (userId: string, ts: number) => void;
-  updateOnlinePresence: (
-    userId: string,
-    worldId: string,
-    sessionId: string,
-  ) => void;
-  LEASE_TTL_MS: number;
-  getCurrentWorldStateForUser: (userId: string) => any;
-  getWorldNPCSnapshot: (worldId: string) => any[];
-  getCurrentEventSeq: (scopeKey: string) => number;
-};
 
 function sanitizeText(value: any, maxLength: number): string {
   const text = String(value || "")
@@ -89,23 +65,31 @@ function buildMessageId(prefix: string): string {
   );
 }
 
-export function listItemsForUser(
-  userId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "ensureWorldItems"
-    | "flattenWorldItems"
-    | "loadWorldItems"
-    | "loadPlayerInventory"
-  >,
-): {
+export function getAuthenticatedUserId(context: any): string | null {
+  if (
+    !context ||
+    !context.request ||
+    !context.request.auth ||
+    !context.request.auth.isAuthenticated ||
+    !context.request.auth.userId
+  ) {
+    return null;
+  }
+  return String(context.request.auth.userId);
+}
+
+export function userHasCreatorStone(userId: string): boolean {
+  const inv = loadPlayerInventory(userId);
+  return !!findFirstLivingItemByTypes(inv, ["creator_stone"]);
+}
+
+export function listItemsForUser(userId: string): {
   items: any[];
   inventory: LivingState;
   inventory_slot_ids: string[];
   inventory_selectors: string[];
 } {
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     const emptyInventory = createEmptyLivingState("");
     const emptySelectors = buildInventorySelectors(emptyInventory);
@@ -116,11 +100,11 @@ export function listItemsForUser(
       inventory_selectors: emptySelectors.inventory_selectors,
     };
   }
-  deps.ensureWorldItems(worldId);
-  const inventory = deps.loadPlayerInventory(userId);
+  ensureWorldItems(worldId);
+  const inventory = loadPlayerInventory(userId);
   const selectors = buildInventorySelectors(inventory);
   return {
-    items: deps.flattenWorldItems(deps.loadWorldItems(worldId)),
+    items: flattenWorldItems(loadWorldItems(worldId)),
     inventory: inventory,
     inventory_slot_ids: selectors.inventory_slot_ids,
     inventory_selectors: selectors.inventory_selectors,
@@ -130,7 +114,6 @@ export function listItemsForUser(
 export function setNicknameForUser(
   userId: string,
   rawNick: any,
-  deps: Pick<HttpHandlerDeps, "savePlayerNick" | "grantAllItemsForUser">,
 ): { status: number; payload: any } {
   const nick = sanitizeText(rawNick, 24);
   if (!nick) {
@@ -140,7 +123,7 @@ export function setNicknameForUser(
     };
   }
   if (nick.toLowerCase() === "cheat") {
-    const cheatResult = deps.grantAllItemsForUser(userId);
+    const cheatResult = grantAllItemsForUser(userId);
     const selectors = buildInventorySelectors(cheatResult.inventory);
     return {
       status: 200,
@@ -155,35 +138,26 @@ export function setNicknameForUser(
       },
     };
   }
-  deps.savePlayerNick(userId, nick);
+  savePlayerNick(userId, nick);
   return {
     status: 200,
     payload: { ok: true, nick: nick },
   };
 }
 
-export function listOnlinePlayersForUser(
-  userId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "buildOnlinePlayersSnapshot"
-    | "getPlayerWorld"
-    | "buildActiveWorldPlayers"
-    | "getEffectiveNick"
-  >,
-): any[] {
-  const snapshot = deps.buildOnlinePlayersSnapshot();
+export function listOnlinePlayersForUser(userId: string): any[] {
+  const snapshot = buildOnlinePlayersSnapshot();
   if (snapshot.length > 0) {
     return snapshot;
   }
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return [];
   }
-  return deps.buildActiveWorldPlayers(worldId).map(function (player) {
+  return buildActiveWorldPlayers(worldId).map(function (player) {
     return {
       player_id: player.player_id,
-      nick: deps.getEffectiveNick(player.player_id),
+      nick: getEffectiveNick(player.player_id),
       world_id: String(worldId),
       login_at: player.last_active,
       last_active: player.last_active,
@@ -194,15 +168,8 @@ export function listOnlinePlayersForUser(
 export function postWorldChatForUser(
   userId: string,
   rawText: any,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "getEffectiveNick"
-    | "appendWorldChatMessage"
-    | "sendWorldScopedStreamEvent"
-  >,
 ): { status: number; payload: any } {
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return {
       status: 400,
@@ -219,12 +186,12 @@ export function postWorldChatForUser(
   const msg = {
     id: buildMessageId("wc"),
     sender_id: userId,
-    sender_nick: deps.getEffectiveNick(userId),
+    sender_nick: getEffectiveNick(userId),
     text: text,
     ts: Date.now(),
   };
-  deps.appendWorldChatMessage(worldId, msg);
-  deps.sendWorldScopedStreamEvent(String(worldId), "chat_message", msg);
+  appendWorldChatMessage(worldId, msg);
+  sendWorldScopedStreamEvent(String(worldId), "chat_message", msg);
   return {
     status: 200,
     payload: { ok: true, message: msg },
@@ -235,13 +202,6 @@ export function postDirectMessageForUser(
   userId: string,
   rawTo: any,
   rawText: any,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getEffectiveNick"
-    | "appendDMMessage"
-    | "addToDMIndex"
-    | "sendRecipientScopedStreamEvent"
-  >,
 ): { status: number; payload: any } {
   const to = String(rawTo || "").trim();
   if (!to) {
@@ -266,15 +226,15 @@ export function postDirectMessageForUser(
   const msg = {
     id: buildMessageId("dm"),
     sender_id: userId,
-    sender_nick: deps.getEffectiveNick(userId),
+    sender_nick: getEffectiveNick(userId),
     recipient_id: to,
     text: text,
     ts: Date.now(),
   };
-  deps.appendDMMessage(userId, to, msg);
-  deps.addToDMIndex(userId, to, msg.ts);
-  deps.addToDMIndex(to, userId, msg.ts);
-  deps.sendRecipientScopedStreamEvent(String(to), "direct_message", msg);
+  appendDMMessage(userId, to, msg);
+  addToDMIndex(userId, to, msg.ts);
+  addToDMIndex(to, userId, msg.ts);
+  sendRecipientScopedStreamEvent(String(to), "direct_message", msg);
   return {
     status: 200,
     payload: { ok: true, message: msg },
@@ -284,7 +244,6 @@ export function postDirectMessageForUser(
 export function getDirectMessageHistoryForUser(
   userId: string,
   withUser: any,
-  deps: Pick<HttpHandlerDeps, "loadDMHistory">,
 ): { status: number; payload: any } {
   const trimmedWithUser = String(withUser || "").trim();
   if (!trimmedWithUser) {
@@ -295,44 +254,28 @@ export function getDirectMessageHistoryForUser(
   }
   return {
     status: 200,
-    payload: deps.loadDMHistory(userId, trimmedWithUser),
+    payload: loadDMHistory(userId, trimmedWithUser),
   };
 }
 
-export function leaveWorldForUser(
-  userId: string,
-  sessionId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "loadPlayerPosition"
-    | "vwLog"
-    | "markPlayerPositionInactive"
-    | "deletePlayerHeartbeat"
-    | "deletePlayerMoveLease"
-    | "deleteOnlinePresence"
-    | "getEffectiveNick"
-    | "sendGlobalPresenceEvent"
-    | "sendWorldScopedStreamEvent"
-  >,
-): any {
-  const worldId = deps.getPlayerWorld(userId);
+export function leaveWorldForUser(userId: string, sessionId: string): any {
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return { ok: true };
   }
-  const position = deps.loadPlayerPosition(userId);
+  const position = loadPlayerPosition(userId);
   if (!position || position.world_id !== String(worldId)) {
     return { ok: true };
   }
   if (!sessionId) {
-    deps.vwLog("leave ignored: missing session id", {
+    vwLog("leave ignored: missing session id", {
       user_id: userId,
       world_id: worldId,
     });
     return { ok: true };
   }
   if (position.session_id && position.session_id !== sessionId) {
-    deps.vwLog("leave ignored: stale session", {
+    vwLog("leave ignored: stale session", {
       user_id: userId,
       world_id: worldId,
       position_session: position.session_id,
@@ -340,58 +283,43 @@ export function leaveWorldForUser(
     });
     return { ok: true };
   }
-  deps.markPlayerPositionInactive(userId);
-  deps.deletePlayerHeartbeat(userId);
-  deps.deletePlayerMoveLease(userId);
-  deps.deleteOnlinePresence(userId);
-  deps.sendWorldScopedStreamEvent(String(worldId), "player_moved", {
+  markPlayerPositionInactive(userId);
+  deletePlayerHeartbeat(userId);
+  deletePlayerMoveLease(userId);
+  deleteOnlinePresence(userId);
+  sendWorldScopedStreamEvent(String(worldId), "player_moved", {
     player_id: userId,
     leaving: true,
   });
-  deps.sendGlobalPresenceEvent(
+  sendGlobalPresenceEvent(
     "left",
     userId,
     String(worldId),
-    deps.getEffectiveNick(userId),
+    getEffectiveNick(userId),
     Number(position.ts || 0) || Date.now(),
     Date.now(),
   );
   return { ok: true };
 }
 
-export function heartbeatForUser(
-  userId: string,
-  sessionId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "markNPCWorldActive"
-    | "maybeTickWorldNPCs"
-    | "loadPlayerMoveLease"
-    | "savePlayerMoveLease"
-    | "vwLog"
-    | "savePlayerHeartbeatTs"
-    | "updateOnlinePresence"
-    | "LEASE_TTL_MS"
-  >,
-): any {
-  const worldId = deps.getPlayerWorld(userId);
+export function heartbeatForUser(userId: string, sessionId: string): any {
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return { ok: true };
   }
-  deps.markNPCWorldActive(worldId);
-  deps.maybeTickWorldNPCs(worldId);
+  markNPCWorldActive(worldId);
+  maybeTickWorldNPCs(worldId);
 
   if (sessionId) {
-    const lease = deps.loadPlayerMoveLease(userId);
+    const lease = loadPlayerMoveLease(userId);
     const now = Date.now();
     const leaseSessionId =
       lease && typeof lease.session_id === "string" ? lease.session_id : "";
     const leaseValid = !!lease && Number(lease.expires_at || 0) > now;
     if (!leaseValid || leaseSessionId === sessionId) {
-      deps.savePlayerMoveLease(userId, sessionId, now + deps.LEASE_TTL_MS);
+      savePlayerMoveLease(userId, sessionId, now + LEASE_TTL_MS);
     } else {
-      deps.vwLog("heartbeat ignored: lease owned by other session", {
+      vwLog("heartbeat ignored: lease owned by other session", {
         user_id: userId,
         world_id: worldId,
         lease_session: leaseSessionId,
@@ -400,28 +328,19 @@ export function heartbeatForUser(
     }
   }
 
-  deps.savePlayerHeartbeatTs(userId, Date.now());
-  deps.updateOnlinePresence(userId, worldId, sessionId || "");
+  savePlayerHeartbeatTs(userId, Date.now());
+  updateOnlinePresence(userId, worldId, sessionId || "");
   return { ok: true };
 }
 
-export function listPlayersForUser(
-  userId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "markNPCWorldActive"
-    | "buildActiveWorldPlayers"
-    | "loadPlayerInventory"
-  >,
-): any[] {
-  const worldId = deps.getPlayerWorld(userId);
+export function listPlayersForUser(userId: string): any[] {
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return [];
   }
-  deps.markNPCWorldActive(worldId);
-  return deps.buildActiveWorldPlayers(worldId).map(function (player) {
-    const living = deps.loadPlayerInventory(player.player_id);
+  markNPCWorldActive(worldId);
+  return buildActiveWorldPlayers(worldId).map(function (player) {
+    const living = loadPlayerInventory(player.player_id);
     return {
       player_id: player.player_id,
       row: player.row,
@@ -446,20 +365,11 @@ export function listPlayersForUser(
  * on top of the snapshot (all deltas are idempotent by id/seq) instead of
  * being silently skipped.
  */
-export function buildResyncForUser(
-  userId: string,
-  deps: Pick<
-    HttpHandlerDeps,
-    | "getPlayerWorld"
-    | "markNPCWorldActive"
-    | "buildActiveWorldPlayers"
-    | "loadPlayerInventory"
-    | "getWorldNPCSnapshot"
-    | "getCurrentWorldStateForUser"
-    | "getCurrentEventSeq"
-  >,
-): { status: number; payload: any } {
-  const worldId = deps.getPlayerWorld(userId);
+export function buildResyncForUser(userId: string): {
+  status: number;
+  payload: any;
+} {
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return {
       status: 400,
@@ -469,34 +379,28 @@ export function buildResyncForUser(
   const worldScope = "world:" + String(worldId);
   const recipientScope = "recipient:" + String(userId);
   const scopeSeqs: Record<string, number> = {};
-  scopeSeqs[worldScope] = deps.getCurrentEventSeq(worldScope);
-  scopeSeqs[recipientScope] = deps.getCurrentEventSeq(recipientScope);
+  scopeSeqs[worldScope] = getCurrentEventSeq(worldScope);
+  scopeSeqs[recipientScope] = getCurrentEventSeq(recipientScope);
   return {
     status: 200,
     payload: {
       world_id: String(worldId),
       scope_seqs: scopeSeqs,
-      players: listPlayersForUser(userId, deps),
-      npcs: listNPCsForUser(userId, deps),
-      world: deps.getCurrentWorldStateForUser(userId),
+      players: listPlayersForUser(userId),
+      npcs: listNPCsForUser(userId),
+      world: getCurrentWorldStateForUser(userId),
     },
   };
 }
 
-export function getCurrentWorldStateForHttpUser(
-  userId: string,
-  deps: Pick<HttpHandlerDeps, "getCurrentWorldStateForUser">,
-): any {
-  return deps.getCurrentWorldStateForUser(userId);
+export function getCurrentWorldStateForHttpUser(userId: string): any {
+  return getCurrentWorldStateForUser(userId);
 }
 
-export function listNPCsForUser(
-  userId: string,
-  deps: Pick<HttpHandlerDeps, "getPlayerWorld" | "getWorldNPCSnapshot">,
-): any[] {
-  const worldId = deps.getPlayerWorld(userId);
+export function listNPCsForUser(userId: string): any[] {
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return [];
   }
-  return deps.getWorldNPCSnapshot(worldId);
+  return getWorldNPCSnapshot(worldId);
 }

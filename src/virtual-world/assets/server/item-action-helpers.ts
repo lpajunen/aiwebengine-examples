@@ -1,3 +1,17 @@
+import { getItemStateTemplate, isPickableWorldItem } from "./item-registry.ts";
+import {
+  deleteWorldItems,
+  ensureWorldItems,
+  flattenWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+  savePlayerInventory,
+  upsertWorldItem,
+} from "./item-storage.ts";
+import { getPlayerWorld } from "./player-persistence.ts";
+import { getCanonicalPlayerState } from "./player-snapshots.ts";
+import { broadcastItemChange } from "./stream-broadcast.ts";
+import { getAllKnownItemTypes } from "./world-domain.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
 import {
   getDefaultPlayerLivingClassId,
@@ -8,39 +22,6 @@ import {
   getAllLivingItems,
   LivingState,
 } from "./world-domain.ts";
-
-type ItemActionDeps = {
-  getPlayerWorld: (userId: string) => string;
-  ensureWorldItems: (worldId: string) => void;
-  getCanonicalPlayerState: (
-    worldId: string,
-    userId: string,
-  ) => { row: number; col: number; seq: number; rotation: number };
-  loadPlayerInventory: (userId: string) => LivingState;
-  loadWorldItems: (worldId: string) => Record<string, any[]>;
-  isPickableWorldItem: (item: any) => boolean;
-  deleteWorldItems: (items: any[]) => any[];
-  savePlayerInventory: (userId: string, inventory: unknown) => void;
-  saveWorldItems: (worldId: string, items: Record<string, any[]>) => void;
-  broadcastItemChange: (
-    worldId: string,
-    actorType: string,
-    actorId: string,
-    action: string,
-    row: number,
-    col: number,
-    items: any[],
-  ) => void;
-  flattenWorldItems: (itemsByTile: Record<string, any[]>) => Array<any>;
-  upsertWorldItem: (
-    worldId: string,
-    row: number,
-    col: number,
-    item: any,
-  ) => void;
-  getAllKnownItemTypes: () => string[];
-  getItemStateTemplate?: (type: string) => Record<string, unknown>;
-};
 
 function isBagSelector(selector: string): boolean {
   const key = String(selector || "");
@@ -128,22 +109,21 @@ function makeCheatItemId(
 export function handleItemActionForUser(
   userId: string,
   body: any,
-  deps: ItemActionDeps,
 ): { status: number; payload: any } {
   const action = String((body && body.action) || "");
-  const worldId = deps.getPlayerWorld(userId);
+  const worldId = getPlayerWorld(userId);
   if (!worldId) {
     return {
       status: 200,
       payload: { ok: false, error: "error.no_world_found" },
     };
   }
-  deps.ensureWorldItems(worldId);
+  ensureWorldItems(worldId);
 
-  const canonical = deps.getCanonicalPlayerState(worldId, userId);
+  const canonical = getCanonicalPlayerState(worldId, userId);
   const tileKey = canonical.row + "_" + canonical.col;
-  const inv = deps.loadPlayerInventory(userId);
-  const worldItems = deps.loadWorldItems(worldId);
+  const inv = loadPlayerInventory(userId);
+  const worldItems = loadWorldItems(worldId);
 
   function getItemChangeActionId(itemChangeId: string): string {
     const itemChange = getItemChangeDefinition(itemChangeId);
@@ -160,11 +140,11 @@ export function handleItemActionForUser(
       ? worldItems[tileKey]
       : [];
     const picked = allTileItems.filter(function (item) {
-      return deps.isPickableWorldItem(item);
+      return isPickableWorldItem(item);
     });
     // Claim by delete: only items whose rows this request actually removed
     // are granted, so a concurrent pickup of the same item cannot dupe it.
-    const claimed = picked.length > 0 ? deps.deleteWorldItems(picked) : [];
+    const claimed = picked.length > 0 ? deleteWorldItems(picked) : [];
     if (claimed.length > 0) {
       const claimedIds: Record<string, boolean> = {};
       for (let i = 0; i < claimed.length; i++) {
@@ -179,8 +159,8 @@ export function handleItemActionForUser(
       } else {
         delete worldItems[tileKey];
       }
-      deps.savePlayerInventory(userId, inv);
-      deps.broadcastItemChange(
+      savePlayerInventory(userId, inv);
+      broadcastItemChange(
         worldId,
         "player",
         userId,
@@ -225,9 +205,9 @@ export function handleItemActionForUser(
     if (!worldItems[tileKey]) worldItems[tileKey] = [];
     worldItems[tileKey].push(dropItem);
 
-    deps.savePlayerInventory(userId, inv);
-    deps.upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
-    deps.broadcastItemChange(
+    savePlayerInventory(userId, inv);
+    upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
+    broadcastItemChange(
       worldId,
       "player",
       userId,
@@ -282,7 +262,7 @@ export function handleItemActionForUser(
       };
     }
 
-    deps.savePlayerInventory(userId, inv);
+    savePlayerInventory(userId, inv);
     return {
       status: 200,
       payload: {
@@ -296,29 +276,16 @@ export function handleItemActionForUser(
   return { status: 400, payload: { ok: false, error: "error.unknown_action" } };
 }
 
-export function grantAllItemsForUser(
-  userId: string,
-  deps: Pick<
-    ItemActionDeps,
-    | "getPlayerWorld"
-    | "loadPlayerInventory"
-    | "getAllKnownItemTypes"
-    | "savePlayerInventory"
-    | "ensureWorldItems"
-    | "loadWorldItems"
-    | "flattenWorldItems"
-    | "getItemStateTemplate"
-  >,
-): {
+export function grantAllItemsForUser(userId: string): {
   ok: boolean;
   action: string;
   granted_count: number;
   inventory: LivingState;
   items: Array<any>;
 } {
-  const worldId = deps.getPlayerWorld(userId) || "";
-  const inv = deps.loadPlayerInventory(userId);
-  const itemTypes = deps.getAllKnownItemTypes().filter(function (type) {
+  const worldId = getPlayerWorld(userId) || "";
+  const inv = loadPlayerInventory(userId);
+  const itemTypes = getAllKnownItemTypes().filter(function (type) {
     return type !== "portal";
   });
   const now = Date.now();
@@ -338,19 +305,19 @@ export function grantAllItemsForUser(
       id: makeCheatItemId(userId, worldId, i),
       type: itemTypes[i],
       created_at: now,
-      state: deps.getItemStateTemplate
-        ? deps.getItemStateTemplate(itemTypes[i])
+      state: getItemStateTemplate
+        ? getItemStateTemplate(itemTypes[i])
         : undefined,
     });
     grantedCount++;
   }
 
-  deps.savePlayerInventory(userId, inv);
+  savePlayerInventory(userId, inv);
 
   let itemsSnapshot: Array<any> = [];
   if (worldId) {
-    deps.ensureWorldItems(worldId);
-    itemsSnapshot = deps.flattenWorldItems(deps.loadWorldItems(worldId));
+    ensureWorldItems(worldId);
+    itemsSnapshot = flattenWorldItems(loadWorldItems(worldId));
   }
 
   return {

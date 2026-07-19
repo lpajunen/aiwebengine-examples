@@ -1,10 +1,12 @@
 import { vwLog } from "./diagnostics.ts";
-import { recipientEventScope, worldEventScope } from "./event-seq.ts";
-
-type AllocateSeqFn = (scopeKey: string) => number;
+import {
+  allocateEventSeq,
+  recipientEventScope,
+  worldEventScope,
+} from "./event-seq.ts";
+import { VIRTUAL_WORLD_EVENTS_STREAM_PATH } from "./runtime-config.ts";
 
 export function sendVirtualWorldStreamEvent(
-  streamPath: string,
   type: string,
   payload: unknown,
   filter: Record<string, string>,
@@ -25,12 +27,15 @@ export function sendVirtualWorldStreamEvent(
     const hasFilter = !!filter && Object.keys(filter).length > 0;
     const result = hasFilter
       ? routeRegistry.sendStreamMessageFiltered(
-          streamPath,
+          VIRTUAL_WORLD_EVENTS_STREAM_PATH,
           message,
           JSON.stringify(filter),
           "overlap",
         )
-      : routeRegistry.sendStreamMessage(streamPath, message);
+      : routeRegistry.sendStreamMessage(
+          VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+          message,
+        );
     if (
       typeof result === "string" &&
       (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
@@ -51,44 +56,38 @@ export function sendVirtualWorldStreamEvent(
 }
 
 export function sendRecipientScopedStreamEvent(
-  streamPath: string,
   recipientId: string,
   type: string,
   payload: unknown,
-  allocateSeq?: AllocateSeqFn,
 ): void {
   if (!recipientId) return;
   const scope = recipientEventScope(recipientId);
   sendVirtualWorldStreamEvent(
-    streamPath,
     type,
     payload,
     {
       recipient_id: String(recipientId),
     },
     scope,
-    allocateSeq ? allocateSeq(scope) : 0,
+    allocateEventSeq(scope),
   );
 }
 
 export function sendWorldScopedStreamEvent(
-  streamPath: string,
   worldId: string,
   type: string,
   payload: unknown,
-  allocateSeq?: AllocateSeqFn,
 ): void {
   if (!worldId) return;
   const scope = worldEventScope(worldId);
   sendVirtualWorldStreamEvent(
-    streamPath,
     type,
     payload,
     {
       world_id: String(worldId),
     },
     scope,
-    allocateSeq ? allocateSeq(scope) : 0,
+    allocateEventSeq(scope),
   );
 }
 
@@ -100,11 +99,6 @@ export function broadcastItemChange(
   row: number,
   col: number,
   items: any[],
-  sendWorldScopedStreamEvent: (
-    worldId: string,
-    type: string,
-    payload: unknown,
-  ) => void,
 ): void {
   sendWorldScopedStreamEvent(String(worldId), "item_changed", {
     actor_type: actorType,

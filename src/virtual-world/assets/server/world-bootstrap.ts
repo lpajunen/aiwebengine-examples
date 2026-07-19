@@ -1,5 +1,10 @@
 import { VWORLD_WORLD_TYPE_TABLE } from "./runtime-config.ts";
+import { generateWorldMap, applyWorldModsToMap } from "./world-map.ts";
+import { loadWorldMods } from "./world-mod-storage.ts";
+import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
 import {
+  applyOakReservation,
+  createWorldId,
   COLS,
   createLivingSlotsFromDefinitions,
   getDefaultWorldTypeForWorldId,
@@ -15,34 +20,7 @@ import {
 } from "./living-registry.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 
-type EffectiveMapDeps = {
-  generateMap: (worldId: string) => number[][];
-  applyWorldModsToMap: (
-    map: number[][],
-    worldMods: Record<string, any>,
-  ) => number[][];
-  loadWorldMods: (worldId: string) => Record<string, any>;
-  applyOakReservation: (map: number[][], worldId: string) => void;
-};
-
-type EnsureWorldNPCsDeps = {
-  loadWorldNPCs: (worldId: string) => Record<string, any>;
-  saveWorldNPCs: (worldId: string, npcs: Record<string, any>) => void;
-  getEffectiveMap: (worldId: string) => number[][];
-  loadWorldPlayers: (worldId: string) => Record<string, any>;
-  NPC_MIN_COUNT: number;
-  NPC_MAX_COUNT: number;
-};
-
-export function getOrCreatePlayerWorld(
-  userId: string,
-  getPlayerWorld: (userId: string) => string,
-  savePlayerWorld: (userId: string, worldId: string) => void,
-  saveWorldType: (
-    worldId: string,
-    worldType: string | undefined | null,
-  ) => string,
-): string {
+export function getOrCreatePlayerWorld(userId: string): string {
   let worldId = getPlayerWorld(userId);
   if (!worldId) {
     worldId = "10000";
@@ -116,7 +94,6 @@ export function resolvePortalDestinationWorldType(
   item:
     | { destination_world_id?: string; destination_world_type?: string }
     | undefined,
-  getWorldType: (worldId: string) => string,
 ): string | undefined {
   if (!item || typeof item !== "object") return undefined;
   if (typeof item.destination_world_type === "string") {
@@ -130,12 +107,6 @@ export function resolvePortalDestinationWorldType(
 
 export function createWorldOfType(
   worldType: string | undefined | null,
-  createWorldId: () => string,
-  saveWorldType: (
-    worldId: string,
-    worldType: string | undefined | null,
-    dimensions?: WorldDimensions,
-  ) => string,
   dimensions?: Partial<WorldDimensions>,
 ): { world_id: string; world_type: string; rows: number; cols: number } {
   const normalizedType = normalizeWorldType(worldType);
@@ -153,126 +124,14 @@ export function createWorldOfType(
   };
 }
 
-export function getEffectiveMap(
-  worldId: string,
-  deps: EffectiveMapDeps,
-): number[][] {
-  const map = deps.generateMap(worldId);
-  deps.applyWorldModsToMap(map, deps.loadWorldMods(worldId));
-  deps.applyOakReservation(map, worldId);
-  return map;
+export function generateMap(worldId: string | number): number[][] {
+  const info = getWorldInfo(worldId);
+  return generateWorldMap(worldId, info.world_type, info.rows, info.cols);
 }
 
-export function ensureWorldNPCs(
-  worldId: string,
-  deps: EnsureWorldNPCsDeps,
-): Record<string, any> {
-  const existing = deps.loadWorldNPCs(worldId);
-  if (existing && Object.keys(existing).length > 0) {
-    let hasNormalizationChanges = false;
-    Object.keys(existing).forEach((npcId) => {
-      const npc = existing[npcId];
-      if (!npc || typeof npc !== "object") {
-        existing[npcId] = {
-          row: 1,
-          col: 1,
-          seq: 0,
-          rotation: 0,
-          state: "idle",
-          ts: Date.now(),
-          class_id: getDefaultNPCLivingClassId(),
-          slots: {},
-          bag: [],
-          values: {},
-        };
-        hasNormalizationChanges = true;
-        return;
-      }
-
-      if (
-        typeof npc.class_id !== "string" ||
-        !npc.class_id ||
-        !npc.slots ||
-        typeof npc.slots !== "object" ||
-        !Array.isArray(npc.bag)
-      ) {
-        if (typeof npc.class_id !== "string" || !npc.class_id) {
-          npc.class_id = getDefaultNPCLivingClassId();
-        }
-        if (!npc.slots || typeof npc.slots !== "object") {
-          const cls = getLivingClass(String(npc.class_id));
-          npc.slots = cls
-            ? createLivingSlotsFromDefinitions(cls.slotDefinitions)
-            : {};
-        }
-        if (!Array.isArray(npc.bag)) npc.bag = [];
-        if (!npc.values || typeof npc.values !== "object") npc.values = {};
-        hasNormalizationChanges = true;
-      }
-    });
-
-    if (hasNormalizationChanges) {
-      deps.saveWorldNPCs(worldId, existing);
-    }
-    return existing;
-  }
-
-  const map = deps.getEffectiveMap(worldId);
-  const mapRows = map.length;
-  const mapCols = map[0] ? map[0].length : 0;
-  const players = deps.loadWorldPlayers(worldId);
-  const occupied: Record<string, boolean> = {};
-  Object.keys(players).forEach((playerId) => {
-    const player = players[playerId];
-    if (
-      !player ||
-      !isFinite(Number(player.row)) ||
-      !isFinite(Number(player.col))
-    ) {
-      return;
-    }
-    occupied[player.row + "_" + player.col] = true;
-  });
-
-  const targetCount =
-    deps.NPC_MIN_COUNT +
-    Math.floor(Math.random() * (deps.NPC_MAX_COUNT - deps.NPC_MIN_COUNT + 1));
-  const npcs: Record<string, any> = {};
-  let attempts = 0;
-  const maxAttempts = 4000;
-
-  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
-    attempts++;
-    const row = 1 + Math.floor(Math.random() * (mapRows - 2));
-    const col = 1 + Math.floor(Math.random() * (mapCols - 2));
-    const tileKey = row + "_" + col;
-    if (map[row][col] !== 0 || occupied[tileKey]) {
-      continue;
-    }
-    occupied[tileKey] = true;
-    const index = Object.keys(npcs).length + 1;
-    const npcId = "npc_" + worldId + "_" + index;
-    const classId = pickRandomNPCLivingClassId();
-    const livingClass = getLivingClass(classId);
-    const slots = livingClass
-      ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
-      : {};
-    npcs[npcId] = {
-      row,
-      col,
-      seq: 0,
-      rotation: 0,
-      state: "idle",
-      ts: Date.now(),
-      class_id: classId,
-      slots: slots,
-      bag: [],
-      values: livingClass
-        ? Object.assign({}, livingClass.valueTemplate || {})
-        : {},
-    };
-  }
-
-  deps.saveWorldNPCs(worldId, npcs);
-  return npcs;
+export function getEffectiveMap(worldId: string): number[][] {
+  const map = generateMap(worldId);
+  applyWorldModsToMap(map, loadWorldMods(worldId));
+  applyOakReservation(map, worldId);
+  return map;
 }

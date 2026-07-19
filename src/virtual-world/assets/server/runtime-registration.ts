@@ -1,30 +1,8 @@
+import { vwLog } from "./diagnostics.ts";
+import { VIRTUAL_WORLD_EVENTS_STREAM_PATH } from "./runtime-config.ts";
 import { getAllActionIds } from "./item-registry.ts";
 
-type RegisterDeps = {
-  routeRegistry: {
-    registerRoute: (
-      path: string,
-      handler: string,
-      method: string,
-      opts?: any,
-    ) => void;
-    registerStreamRoute: (path: string, customizationFunction?: string) => void;
-    registerAssetRoute: (path: string, assetPath: string) => void;
-  };
-  mcpRegistry: {
-    registerTool: (
-      name: string,
-      description: string,
-      schema: string,
-      handlerName: string,
-    ) => void;
-  };
-  vwLog: (msg: string, obj?: unknown) => void;
-  virtualWorldEventsStreamPath: string;
-};
-
 function safeRegisterRoute(
-  deps: RegisterDeps,
   path: string,
   handler: string,
   method: string,
@@ -32,12 +10,12 @@ function safeRegisterRoute(
 ): void {
   try {
     if (opts) {
-      deps.routeRegistry.registerRoute(path, handler, method, opts);
+      routeRegistry.registerRoute(path, handler, method, opts);
     } else {
-      deps.routeRegistry.registerRoute(path, handler, method);
+      routeRegistry.registerRoute(path, handler, method);
     }
   } catch (e) {
-    deps.vwLog("route registration skipped", {
+    vwLog("route registration skipped", {
       path: path,
       method: method,
       error: String(e),
@@ -46,18 +24,17 @@ function safeRegisterRoute(
 }
 
 function safeRegisterStreamRoute(
-  deps: RegisterDeps,
   path: string,
   customizationFunction?: string,
 ): void {
   try {
     if (customizationFunction) {
-      deps.routeRegistry.registerStreamRoute(path, customizationFunction);
+      routeRegistry.registerStreamRoute(path, customizationFunction);
     } else {
-      deps.routeRegistry.registerStreamRoute(path);
+      routeRegistry.registerStreamRoute(path);
     }
   } catch (e) {
-    deps.vwLog("stream route registration skipped", {
+    vwLog("stream route registration skipped", {
       path: path,
       error: String(e),
     });
@@ -65,16 +42,15 @@ function safeRegisterStreamRoute(
 }
 
 function safeRegisterTool(
-  deps: RegisterDeps,
   name: string,
   description: string,
   schema: string,
   handlerName: string,
 ): void {
   try {
-    deps.mcpRegistry.registerTool(name, description, schema, handlerName);
+    mcpRegistry.registerTool(name, description, schema, handlerName);
   } catch (e) {
-    deps.vwLog("mcp tool registration skipped", {
+    vwLog("mcp tool registration skipped", {
       name: name,
       handler: handlerName,
       error: String(e),
@@ -82,22 +58,18 @@ function safeRegisterTool(
   }
 }
 
-function safeRegisterAssetRoute(
-  deps: RegisterDeps,
-  path: string,
-  assetPath: string,
-): void {
+function safeRegisterAssetRoute(path: string, assetPath: string): void {
   try {
-    deps.routeRegistry.registerAssetRoute(path, assetPath);
+    routeRegistry.registerAssetRoute(path, assetPath);
   } catch (e) {
-    deps.vwLog("asset route registration skipped", {
+    vwLog("asset route registration skipped", {
       path: path,
       error: String(e),
     });
   }
 }
 
-export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
+export function registerVirtualWorldRuntime(): void {
   const virtualWorldActionIds = getAllActionIds();
   const virtualWorldStateSchema = JSON.stringify({
     type: "object",
@@ -201,37 +173,28 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     required: ["action"],
   });
 
-  safeRegisterRoute(deps, "/virtual-world/items", "itemsHandler", "GET");
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/item-action",
-    "itemActionHandler",
-    "POST",
-  );
-  safeRegisterRoute(deps, "/virtual-world/craft", "craftHandler", "POST");
+  safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
+  safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
+  safeRegisterRoute("/virtual-world/craft", "craftHandler", "POST");
   safeRegisterTool(
-    deps,
     "virtualWorldGetState",
     "Get the authenticated player's current world, position, items, inventory, available actions, and movement options",
     virtualWorldStateSchema,
     "virtualWorldGetStateToolHandler",
   );
   safeRegisterTool(
-    deps,
     "virtualWorldMove",
     "Move the authenticated player one tile in a cardinal direction",
     virtualWorldMoveSchema,
     "virtualWorldMoveToolHandler",
   );
   safeRegisterTool(
-    deps,
     "virtualWorldManageItems",
     "List, pick up, drop, or equip items for the authenticated player",
     virtualWorldManageItemsSchema,
     "virtualWorldManageItemsToolHandler",
   );
   safeRegisterTool(
-    deps,
     "virtualWorldAct",
     "Perform authenticated player world actions such as cutting, planting, building, portal use, or blessings",
     virtualWorldActSchema,
@@ -249,7 +212,6 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     required: ["nick"],
   });
   safeRegisterTool(
-    deps,
     "virtualWorldSetNickname",
     "Set the authenticated player's nickname",
     virtualWorldSetNicknameSchema,
@@ -311,7 +273,6 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     },
   });
   safeRegisterTool(
-    deps,
     "virtualWorldManageItemClasses",
     "List, get, create, update, or delete item class definitions in the virtual world",
     virtualWorldManageItemClassesSchema,
@@ -380,7 +341,6 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     },
   });
   safeRegisterTool(
-    deps,
     "virtualWorldManageActionClasses",
     "List, get, create, update, or delete action class definitions in the virtual world",
     virtualWorldManageActionClassesSchema,
@@ -433,7 +393,6 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     },
   });
   safeRegisterTool(
-    deps,
     "virtualWorldManageLivingClasses",
     "List, get, create, update, or delete living class definitions in the virtual world",
     virtualWorldManageLivingClassesSchema,
@@ -478,29 +437,19 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
     },
   });
   safeRegisterTool(
-    deps,
     "virtualWorldManageWorldClasses",
     "List, get, create, update, or delete world class definitions (world type, size) in the virtual world",
     virtualWorldManageWorldClassesSchema,
     "virtualWorldManageWorldClassesToolHandler",
   );
 
-  safeRegisterAssetRoute(deps, "/virtual-world", "public/welcome.html");
+  safeRegisterAssetRoute("/virtual-world", "public/welcome.html");
+  safeRegisterAssetRoute("/virtual-world/styles.css", "public/styles.css");
+  safeRegisterAssetRoute("/virtual-world/app-state.js", "public/app-state.js");
+  safeRegisterAssetRoute("/virtual-world/auth.js", "public/auth.js");
+  safeRegisterAssetRoute("/virtual-world/i18n.js", "public/i18n.js");
+  safeRegisterAssetRoute("/virtual-world/scene.js", "public/scene.js");
   safeRegisterAssetRoute(
-    deps,
-    "/virtual-world/styles.css",
-    "public/styles.css",
-  );
-  safeRegisterAssetRoute(
-    deps,
-    "/virtual-world/app-state.js",
-    "public/app-state.js",
-  );
-  safeRegisterAssetRoute(deps, "/virtual-world/auth.js", "public/auth.js");
-  safeRegisterAssetRoute(deps, "/virtual-world/i18n.js", "public/i18n.js");
-  safeRegisterAssetRoute(deps, "/virtual-world/scene.js", "public/scene.js");
-  safeRegisterAssetRoute(
-    deps,
     "/virtual-world/tiles-and-items.js",
     "public/tiles-and-items.js",
   );
@@ -522,176 +471,121 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
   ];
   for (var i = 0; i < clientModules.length; i++) {
     safeRegisterAssetRoute(
-      deps,
       "/virtual-world/" + clientModules[i],
       "public/" + clientModules[i],
     );
   }
 
-  safeRegisterRoute(deps, "/virtual-world/play", "getVirtualWorldPage", "GET", {
+  safeRegisterRoute("/virtual-world/play", "getVirtualWorldPage", "GET", {
     summary: "Virtual World (Play)",
     description:
       "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys. Requires authentication.",
     tags: ["Demo"],
   });
-  safeRegisterRoute(deps, "/virtual-world/move", "moveHandler", "POST");
-  safeRegisterRoute(deps, "/virtual-world/leave", "leaveHandler", "POST");
+  safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");
+  safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");
+  safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
+  safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
+  safeRegisterRoute("/virtual-world/players", "playersHandler", "GET");
+  safeRegisterRoute("/virtual-world/resync", "resyncHandler", "GET");
   safeRegisterRoute(
-    deps,
-    "/virtual-world/new-world",
-    "newWorldHandler",
-    "POST",
-  );
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/start-world",
-    "startWorldHandler",
-    "POST",
-  );
-  safeRegisterRoute(deps, "/virtual-world/players", "playersHandler", "GET");
-  safeRegisterRoute(deps, "/virtual-world/resync", "resyncHandler", "GET");
-  safeRegisterRoute(
-    deps,
     "/virtual-world/current-world",
     "currentWorldHandler",
     "GET",
   );
-  safeRegisterRoute(deps, "/virtual-world/npcs", "npcsHandler", "GET");
+  safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
+  safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
+  safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
+  safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");
   safeRegisterRoute(
-    deps,
-    "/virtual-world/heartbeat",
-    "heartbeatHandler",
-    "POST",
-  );
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/tree-action",
-    "treeActionHandler",
-    "POST",
-  );
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/cheat-items",
-    "cheatItemsHandler",
-    "POST",
-  );
-  safeRegisterRoute(
-    deps,
     "/virtual-world/set-nickname",
     "setNicknameHandler",
     "POST",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/online-players",
     "onlinePlayersHandler",
     "GET",
   );
-  safeRegisterRoute(deps, "/virtual-world/chat", "chatHandler", "POST");
-  safeRegisterRoute(deps, "/virtual-world/dm", "dmHandler", "POST");
-  safeRegisterRoute(
-    deps,
-    "/virtual-world/dm-history",
-    "dmHistoryHandler",
-    "GET",
-  );
+  safeRegisterRoute("/virtual-world/chat", "chatHandler", "POST");
+  safeRegisterRoute("/virtual-world/dm", "dmHandler", "POST");
+  safeRegisterRoute("/virtual-world/dm-history", "dmHistoryHandler", "GET");
   safeRegisterStreamRoute(
-    deps,
-    deps.virtualWorldEventsStreamPath,
+    VIRTUAL_WORLD_EVENTS_STREAM_PATH,
     "virtualWorldEventsStreamCustomizer",
   );
+  safeRegisterRoute("/virtual-world/item-classes", "itemClassesHandler", "GET");
   safeRegisterRoute(
-    deps,
-    "/virtual-world/item-classes",
-    "itemClassesHandler",
-    "GET",
-  );
-  safeRegisterRoute(
-    deps,
     "/virtual-world/item-classes",
     "createItemClassHandler",
     "POST",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/item-classes/:id",
     "updateItemClassHandler",
     "PUT",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/item-classes/:id",
     "deleteItemClassHandler",
     "DELETE",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/action-classes",
     "actionClassesHandler",
     "GET",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/action-classes",
     "createActionClassHandler",
     "POST",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/action-classes/:id",
     "updateActionClassHandler",
     "PUT",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/action-classes/:id",
     "deleteActionClassHandler",
     "DELETE",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/living-classes",
     "livingClassesHandler",
     "GET",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/living-classes",
     "createLivingClassHandler",
     "POST",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/living-classes/:id",
     "updateLivingClassHandler",
     "PUT",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/living-classes/:id",
     "deleteLivingClassHandler",
     "DELETE",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/world-classes",
     "worldClassesHandler",
     "GET",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/world-classes",
     "createWorldClassHandler",
     "POST",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/world-classes/:id",
     "updateWorldClassHandler",
     "PUT",
   );
   safeRegisterRoute(
-    deps,
     "/virtual-world/world-classes/:id",
     "deleteWorldClassHandler",
     "DELETE",

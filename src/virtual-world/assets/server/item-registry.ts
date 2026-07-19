@@ -858,3 +858,7 @@ export function deleteActionClass(actionId: string): void {
     delete _actionClassCache[actionId];
   }
 }
+
+export function isPickableWorldItem(item: any): boolean {
+  return !!item && item.type !== "portal" && item.type !== "blessing_marker";
+}

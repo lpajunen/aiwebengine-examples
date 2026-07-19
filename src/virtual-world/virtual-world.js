@@ -252,19 +252,53 @@ import {
 } from "./server/npc-orchestration.ts";
 import { registerVirtualWorldRuntime as registerVirtualWorldRuntimeImpl } from "./server/runtime-registration.ts";
 import { generateWorldMap } from "./server/world-map.ts";
+import {
+  DM_MAX,
+  LEASE_TTL_MS,
+  NPC_ACTIVE_WORLD_TTL_MS,
+  NPC_MAX_COUNT,
+  NPC_MIN_COUNT,
+  NPC_TICK_LEASE_MS,
+  NPC_TICK_MS,
+  VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+  VWORLD_ACTION_CLASS_TABLE,
+  VWORLD_CHAT_TABLE,
+  VWORLD_DM_INDEX_TABLE,
+  VWORLD_DM_TABLE,
+  VWORLD_EVENT_SEQ_TABLE,
+  VWORLD_ITEM_CLASS_TABLE,
+  VWORLD_LIVING_CLASS_TABLE,
+  VWORLD_NPC_ACTIVE_WORLD_TABLE,
+  VWORLD_NPC_TABLE,
+  VWORLD_NPC_TICK_LEASE_TABLE,
+  VWORLD_NPC_TICK_TABLE,
+  VWORLD_ONLINE_PRESENCE_TABLE,
+  VWORLD_PLAYER_HEARTBEAT_TABLE,
+  VWORLD_PLAYER_INVENTORY_TABLE,
+  VWORLD_PLAYER_MOVE_LEASE_TABLE,
+  VWORLD_PLAYER_NICK_TABLE,
+  VWORLD_PLAYER_POSITION_TABLE,
+  VWORLD_PLAYER_WORLD_TABLE,
+  VWORLD_WORLD_CLASS_TABLE,
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+  VWORLD_WORLD_MOD_TABLE,
+  VWORLD_WORLD_TYPE_TABLE,
+  WORLD_CHAT_MAX,
+  WORLD_ITEM_SPAWN_COUNT,
+} from "./server/runtime-config.ts";
+import {
+  nextDiagRequestId,
+  summarizeInventory,
+  summarizeItems,
+  vwDiag,
+  vwLog,
+} from "./server/diagnostics.ts";
 
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.
 
 // ── Server-side world generation ─────────────────────────────────────────────
-var LEASE_TTL_MS = 30000;
-var NPC_MIN_COUNT = 10;
-var NPC_MAX_COUNT = 20;
-var NPC_TICK_MS = 500;
-var NPC_TICK_LEASE_MS = 2000;
-var NPC_ACTIVE_WORLD_TTL_MS = 120000;
-var WORLD_ITEM_SPAWN_COUNT = 30;
-var VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 var npcTickerStarted = false;
 var npcTickOwnerId =
   "npc-tick-" +
@@ -849,31 +883,6 @@ function buildOnlinePlayersSnapshot() {
 
 // ── World chat ────────────────────────────────────────────────────────────────
 
-var WORLD_CHAT_MAX = 100;
-var VWORLD_CHAT_TABLE = "vworld_chat_messages";
-var VWORLD_DM_TABLE = "vworld_direct_messages";
-var VWORLD_DM_INDEX_TABLE = "vworld_dm_index";
-var VWORLD_ONLINE_PRESENCE_TABLE = "vworld_online_presence";
-var VWORLD_PLAYER_HEARTBEAT_TABLE = "vworld_player_heartbeats";
-var VWORLD_PLAYER_MOVE_LEASE_TABLE = "vworld_player_move_leases";
-var VWORLD_PLAYER_NICK_TABLE = "vworld_player_nicks";
-var VWORLD_PLAYER_WORLD_TABLE = "vworld_player_worlds";
-var VWORLD_PLAYER_POSITION_TABLE = "vworld_player_positions";
-var VWORLD_PLAYER_INVENTORY_TABLE = "vworld_player_inventory";
-var VWORLD_WORLD_TYPE_TABLE = "vworld_world_types";
-var VWORLD_WORLD_MOD_TABLE = "vworld_world_mods";
-var VWORLD_WORLD_ITEM_TABLE = "vworld_world_items";
-var VWORLD_WORLD_ITEM_META_TABLE = "vworld_world_item_meta";
-var VWORLD_NPC_TABLE = "vworld_npcs";
-var VWORLD_NPC_ACTIVE_WORLD_TABLE = "vworld_npc_active_worlds";
-var VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
-var VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
-var VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
-var VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
-var VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
-var VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
-var VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
-
 /**
  * @param {string} raw
  * @returns {*}
@@ -1342,8 +1351,6 @@ function appendWorldChatMessage(worldId, msg) {
 }
 
 // ── Direct messages ───────────────────────────────────────────────────────────
-
-var DM_MAX = 200;
 
 /**
  * Returns the storage key for a DM conversation (stable regardless of who
@@ -1935,96 +1942,6 @@ function startNPCTicker() {
   if (npcTickerStarted) return;
   npcTickerStarted = true;
   registerRecurringNPCTick();
-}
-
-var VW_DEBUG = false;
-var VW_INSTANCE_ID =
-  "inst_" +
-  Date.now().toString(36) +
-  "_" +
-  Math.random().toString(36).slice(2, 8);
-var VW_DIAG_COUNTER = 0;
-
-/**
- * @param {string} msg
- * @param {*} [obj]
- */
-function vwLog(msg, obj) {
-  if (!VW_DEBUG) return;
-  try {
-    if (obj !== undefined) {
-      console.log("[vworld] " + msg + " " + JSON.stringify(obj));
-    } else {
-      console.log("[vworld] " + msg);
-    }
-  } catch (e) {
-    console.log("[vworld] " + msg);
-  }
-}
-
-/**
- * @returns {string}
- */
-function nextDiagRequestId() {
-  VW_DIAG_COUNTER += 1;
-  return VW_INSTANCE_ID + "_" + String(VW_DIAG_COUNTER);
-}
-
-/**
- * @param {*} inventory
- * @returns {{class_id: string, slot_count: number, occupied_slots: string[], bag_count: number, bag_types: Record<string, number>}}
- */
-function summarizeInventory(inventory) {
-  var inv = inventory && typeof inventory === "object" ? inventory : {};
-  var slots = inv.slots && typeof inv.slots === "object" ? inv.slots : {};
-  var slotIds = Object.keys(slots);
-  var occupiedSlots = [];
-  for (var i = 0; i < slotIds.length; i++) {
-    var slotId = slotIds[i];
-    var item = slots[slotId];
-    if (item && item.type) occupiedSlots.push(slotId + ":" + String(item.type));
-  }
-  var bag = Array.isArray(inv.bag) ? inv.bag : [];
-  /** @type {Record<string, number>} */
-  var bagTypes = {};
-  for (var j = 0; j < bag.length; j++) {
-    var t = bag[j] && bag[j].type ? String(bag[j].type) : "unknown";
-    bagTypes[t] = Number(bagTypes[t] || 0) + 1;
-  }
-  return {
-    class_id: inv.class_id ? String(inv.class_id) : "",
-    slot_count: slotIds.length,
-    occupied_slots: occupiedSlots,
-    bag_count: bag.length,
-    bag_types: bagTypes,
-  };
-}
-
-/**
- * @param {*} items
- * @returns {{count: number, by_type: Record<string, number>}}
- */
-function summarizeItems(items) {
-  var arr = Array.isArray(items) ? items : [];
-  /** @type {Record<string, number>} */
-  var byType = {};
-  for (var i = 0; i < arr.length; i++) {
-    var type = arr[i] && arr[i].type ? String(arr[i].type) : "unknown";
-    byType[type] = Number(byType[type] || 0) + 1;
-  }
-  return { count: arr.length, by_type: byType };
-}
-
-/**
- * @param {string} eventName
- * @param {*} details
- */
-function vwDiag(eventName, details) {
-  vwLog("diag." + eventName, {
-    instance_id: VW_INSTANCE_ID,
-    ts: Date.now(),
-    details: details || {},
-  });
 }
 
 /**

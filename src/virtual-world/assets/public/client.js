@@ -107,10 +107,45 @@ function openUsePicker(actions) {
   requireElementById("hud-use-picker").style.display = "block";
 }
 
-function openPortalDestinationPicker() {
+/**
+ * Fetches the current world types and shows the portal destination picker.
+ * Falls back to the page-load snapshot, and if no world types are available
+ * at all, posts the original build action unchanged (old behavior).
+ * @param {string} originalAction
+ */
+function openPortalDestinationPicker(originalAction) {
+  var snapshot =
+    typeof WORLD_CLASS_REGISTRY !== "undefined" &&
+    Array.isArray(WORLD_CLASS_REGISTRY)
+      ? WORLD_CLASS_REGISTRY
+      : [];
+  fetchWithAuth("/virtual-world/world-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.world_classes) && data.world_classes.length
+          ? data.world_classes
+          : snapshot;
+      renderPortalDestinationPicker(originalAction, classes);
+    })
+    .catch(function () {
+      renderPortalDestinationPicker(originalAction, snapshot);
+    });
+}
+
+/**
+ * @param {string} originalAction
+ * @param {Array<{id: string, labelKey?: string, fallbackLabel?: string, rows?: number, cols?: number}>} classes
+ */
+function renderPortalDestinationPicker(originalAction, classes) {
+  if (!Array.isArray(classes) || classes.length === 0) {
+    postTreeAction(originalAction, {});
+    return;
+  }
   var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
-  var classes = Array.isArray(WORLD_CLASS_REGISTRY) ? WORLD_CLASS_REGISTRY : [];
   for (var i = 0; i < classes.length; i++) {
     var cls = classes[i];
     if (!cls || !cls.id) continue;
@@ -2584,13 +2619,8 @@ function goToNewWorld() {
 function postTreeAction(action, extras) {
   // Portal builds go through the world-type picker so the creator can choose
   // any world class (built-in preset or custom type with its own size).
-  if (
-    !extras &&
-    String(action).indexOf("build_portal") === 0 &&
-    Array.isArray(WORLD_CLASS_REGISTRY) &&
-    WORLD_CLASS_REGISTRY.length > 0
-  ) {
-    openPortalDestinationPicker();
+  if (!extras && String(action).indexOf("build_portal") === 0) {
+    openPortalDestinationPicker(action);
     return;
   }
   fetchWithAuth("/virtual-world/tree-action", {

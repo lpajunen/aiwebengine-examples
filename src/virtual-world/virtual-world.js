@@ -3613,14 +3613,10 @@ function deleteLivingClassHandler(context) {
  * @param {*} context
  */
 function worldClassesHandler(context) {
+  // Listing is not stone-gated: any player building a portal needs the world
+  // type list. Mutations below remain creator's-stone only.
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
   }
   refreshWorldClassCacheImpl(VWORLD_WORLD_CLASS_TABLE, vwLog);
   return ResponseBuilder.json({

@@ -63,6 +63,15 @@ export * from "../assets/server/chat-storage.ts";
 
 The actual implementation lives in `src/virtual-world/assets/server/*.ts` (same filenames, real content). `src/virtual-world/assets/` is uploaded as the assets directory alongside the script (`--assets-dir src/virtual-world/assets`), so the real modules must physically live under `assets/` to be deployed — the `server/` shims exist purely so `virtual-world.js`'s relative imports resolve locally/for typechecking. **When editing virtual-world server logic, edit the file under `assets/server/`, not the shim under `server/`.** Keep both directories' filenames in sync when adding a new module (add the real file under `assets/server/`, add a matching one-line re-export shim under `server/`).
 
+Server modules under `assets/server/`, by feature — go straight to the right file instead of grepping:
+
+- Wiring: `runtime-registration.ts` (all route/asset/stream/tool registration), `page-bootstrap.ts` (game page HTML + initial page state, script-tag load order), `schema-setup.ts` (DB schema creation/migration), `tool-handlers.ts` (MCP `virtualWorld*` tool handlers), `http-handler-helpers.ts` (per-route handler logic: nickname, chat/DM, presence, heartbeat)
+- Worlds: `world-domain.ts` (dimensions, tile constants/rules), `world-map.ts` (terrain generation), `world-bootstrap.ts` (create/lookup worlds, world types, portal destinations), `world-switch.ts` (moving players between worlds), `world-mod-storage.ts` (persisted trees/houses/tile mods), `world-db.ts` (low-level DB row helpers), `world-class-storage.ts` (world class records + cache), `world-events.ts` (world event definitions)
+- Players: `move-player.ts` (movement), `player-persistence.ts` (positions, move leases), `player-snapshots.ts` (per-world player lists), `social-state.ts` (nicknames, online presence), `chat-storage.ts` (world chat + DMs), `current-world-state.ts` (state snapshot for client/tools, move options)
+- Items & actions: `item-registry.ts` (item/recipe definitions + item classes), `item-class-storage.ts` (item class rows), `item-storage.ts` (inventories, world items), `item-action-helpers.ts` (pick/drop/equip/use), `crafting-helpers.ts`, `tree-action-helpers.ts`, `action-registry.ts` + `action-class-storage.ts` + `action-logic-interpreter.ts` (creator-defined action classes and their condition/effect logic), `item-events.ts` (item change definitions)
+- NPCs: `living-registry.ts` + `living-class-storage.ts` (living classes for players/NPCs), `npc-storage.ts` (NPC rows, tick bookkeeping), `npc-tick-helpers.ts` (NPC movement/item/tree behavior), `npc-orchestration.ts` (tick scheduling + lease)
+- Realtime: `stream-broadcast.ts` (SSE send/broadcast helpers), `event-seq.ts` (event sequence numbers/scopes)
+
 `src/virtual-world/assets/public/` is browser-side JS served as static assets:
 
 - `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in the client `.js` files.

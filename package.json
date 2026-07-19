@@ -10,7 +10,7 @@
     "upload-virtual-world-dry-run": "node scripts/upload-script.js --script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets --dry-run",
     "upload-import-example": "node scripts/upload-script.js --script-path src/import_example/import_example.ts --script-uri https://example.com/import-example --assets-dir src/import_example/assets",
     "outdated": "npm outdated || echo '✓ Checked for outdated packages'",
-    "format": "prettier --write \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ JavaScript files formatted'",
+    "format": "prettier --write --log-level warn \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ JavaScript files formatted'",
     "format-check": "prettier --check \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '✓ Source files match Prettier formatting'",
     "lint": "markdownlint \"**/*.md\" --ignore node_modules && echo '✓ Markdown files linted'",
     "typecheck:ts": "tsc -p tsconfig.json",

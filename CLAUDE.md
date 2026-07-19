@@ -54,7 +54,7 @@ Every deployed script is a single JS/TS entrypoint that must export `init()`. `i
 
 ### Virtual World: server/ vs assets/server/ split
 
-`src/virtual-world/virtual-world.js` is the single deployed entrypoint. It imports server-side modules from `./server/*.ts`, but **those files are one-line re-export shims**:
+`src/virtual-world/virtual-world.js` is the single deployed entrypoint, kept deliberately thin (~600 lines): imports, `init()`, and one-line named delegate functions for every route/tool/stream handler — the aiwebengine runtime resolves handlers by name string in the entrypoint's scope, so those names must stay defined there even though the bodies live in server modules. It imports server-side modules from `./server/*.ts`, but **those files are one-line re-export shims**:
 
 ```ts
 // src/virtual-world/server/chat-storage.ts
@@ -65,12 +65,14 @@ The actual implementation lives in `src/virtual-world/assets/server/*.ts` (same 
 
 Server modules under `assets/server/`, by feature — go straight to the right file instead of grepping:
 
-- Wiring: `runtime-registration.ts` (all route/asset/stream/tool registration), `page-bootstrap.ts` (game page HTML + initial page state, script-tag load order), `schema-setup.ts` (DB schema creation/migration), `tool-handlers.ts` (MCP `virtualWorld*` tool handlers), `http-handler-helpers.ts` (per-route handler logic: nickname, chat/DM, presence, heartbeat)
-- Worlds: `world-domain.ts` (dimensions, tile constants/rules), `world-map.ts` (terrain generation), `world-bootstrap.ts` (create/lookup worlds, world types, portal destinations), `world-switch.ts` (moving players between worlds), `world-mod-storage.ts` (persisted trees/houses/tile mods), `world-db.ts` (low-level DB row helpers), `world-class-storage.ts` (world class records + cache), `world-events.ts` (world event definitions)
-- Players: `move-player.ts` (movement), `player-persistence.ts` (positions, move leases), `player-snapshots.ts` (per-world player lists), `social-state.ts` (nicknames, online presence), `chat-storage.ts` (world chat + DMs), `current-world-state.ts` (state snapshot for client/tools, move options)
+- Wiring: `runtime-registration.ts` (all route/asset/stream/tool registration), `runtime-config.ts` (DB table names, tick/lease timing, stream path — shared constants imported everywhere), `diagnostics.ts` (`vwLog`/`vwDiag`, inventory/item summaries), `route-handlers.ts` (game HTTP route handlers, page handler, SSE stream customizer), `class-crud-handlers.ts` (creator class CRUD HTTP handlers), `tool-handlers.ts` (MCP `virtualWorld*` tool handlers), `http-handler-helpers.ts` (per-route handler logic: nickname, chat/DM, presence, heartbeat; auth + creator-stone checks), `page-bootstrap.ts` (game page HTML + initial page state, script-tag load order), `schema-setup.ts` (DB schema creation/migration)
+- Worlds: `world-domain.ts` (dimensions, tile constants/rules), `world-map.ts` (terrain generation, applying world mods to maps), `world-bootstrap.ts` (create/lookup worlds, world types, effective map, portal destinations), `world-switch.ts` (moving players between worlds), `world-mod-storage.ts` (persisted trees/houses/tile mods), `world-db.ts` (low-level DB row helpers, transactions), `world-class-storage.ts` (world class records + cache), `world-events.ts` (world event definitions)
+- Players: `move-player.ts` (movement), `player-persistence.ts` (positions, move leases), `player-snapshots.ts` (per-world player lists, canonical state, spawn positions), `social-state.ts` (nicknames, online presence + presence stream events), `chat-storage.ts` (world chat + DMs), `current-world-state.ts` (state snapshot for client/tools, move options)
 - Items & actions: `item-registry.ts` (item/recipe definitions + item classes), `item-class-storage.ts` (item class rows), `item-storage.ts` (inventories, world items), `item-action-helpers.ts` (pick/drop/equip/use), `crafting-helpers.ts`, `tree-action-helpers.ts`, `action-registry.ts` + `action-class-storage.ts` + `action-logic-interpreter.ts` (creator-defined action classes and their condition/effect logic), `item-events.ts` (item change definitions)
-- NPCs: `living-registry.ts` + `living-class-storage.ts` (living classes for players/NPCs), `npc-storage.ts` (NPC rows, tick bookkeeping), `npc-tick-helpers.ts` (NPC movement/item/tree behavior), `npc-orchestration.ts` (tick scheduling + lease)
+- NPCs: `living-registry.ts` + `living-class-storage.ts` (living classes for players/NPCs), `npc-storage.ts` (NPC rows, tick bookkeeping, world NPC seeding), `npc-tick-helpers.ts` (NPC movement/item/tree behavior), `npc-orchestration.ts` (tick scheduling + lease, NPC snapshots)
 - Realtime: `stream-broadcast.ts` (SSE send/broadcast helpers), `event-seq.ts` (event sequence numbers/scopes)
+
+Server modules import each other directly (no dependency injection) — table names and timing constants come from `runtime-config.ts`, logging from `diagnostics.ts`. Don't add deps-object parameters; import the sibling module instead.
 
 `src/virtual-world/assets/public/` is browser-side JS served as static assets:
 

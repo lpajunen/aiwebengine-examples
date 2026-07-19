@@ -91,6 +91,7 @@ import {
   loadPlayerNick,
   savePlayerNick,
   updateOnlinePresence,
+  sendGlobalPresenceEvent,
 } from "./server/social-state.ts";
 import {
   deleteWorldItemById,
@@ -201,15 +202,15 @@ import {
 } from "./server/world-class-storage.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./server/tree-action-helpers.ts";
 import {
-  virtualWorldActToolHandler,
-  virtualWorldGetStateToolHandler,
-  virtualWorldManageItemsToolHandler,
-  virtualWorldMoveToolHandler,
-  virtualWorldSetNicknameToolHandler,
-  virtualWorldManageItemClassesToolHandler,
-  virtualWorldManageActionClassesToolHandler,
-  virtualWorldManageLivingClassesToolHandler,
-  virtualWorldManageWorldClassesToolHandler,
+  virtualWorldActToolHandler as virtualWorldActToolHandlerImpl,
+  virtualWorldGetStateToolHandler as virtualWorldGetStateToolHandlerImpl,
+  virtualWorldManageItemsToolHandler as virtualWorldManageItemsToolHandlerImpl,
+  virtualWorldMoveToolHandler as virtualWorldMoveToolHandlerImpl,
+  virtualWorldSetNicknameToolHandler as virtualWorldSetNicknameToolHandlerImpl,
+  virtualWorldManageItemClassesToolHandler as virtualWorldManageItemClassesToolHandlerImpl,
+  virtualWorldManageActionClassesToolHandler as virtualWorldManageActionClassesToolHandlerImpl,
+  virtualWorldManageLivingClassesToolHandler as virtualWorldManageLivingClassesToolHandlerImpl,
+  virtualWorldManageWorldClassesToolHandler as virtualWorldManageWorldClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
   addToDMIndex,
@@ -244,7 +245,6 @@ import {
   registerRecurringNPCTick,
   runNPCTick,
   tickWorldNPCs,
-  tryAcquireNPCTickLease as tryAcquireNPCTickLeaseImpl,
   tryTickWorldNPCs,
 } from "./server/npc-orchestration.ts";
 import { registerVirtualWorldRuntime as registerVirtualWorldRuntimeImpl } from "./server/runtime-registration.ts";
@@ -279,6 +279,48 @@ import {
   vwDiag,
 } from "./server/diagnostics.ts";
 
+import {
+  itemClassesHandler as itemClassesHandlerImpl,
+  createItemClassHandler as createItemClassHandlerImpl,
+  updateItemClassHandler as updateItemClassHandlerImpl,
+  deleteItemClassHandler as deleteItemClassHandlerImpl,
+  actionClassesHandler as actionClassesHandlerImpl,
+  createActionClassHandler as createActionClassHandlerImpl,
+  updateActionClassHandler as updateActionClassHandlerImpl,
+  deleteActionClassHandler as deleteActionClassHandlerImpl,
+  livingClassesHandler as livingClassesHandlerImpl,
+  createLivingClassHandler as createLivingClassHandlerImpl,
+  updateLivingClassHandler as updateLivingClassHandlerImpl,
+  deleteLivingClassHandler as deleteLivingClassHandlerImpl,
+  worldClassesHandler as worldClassesHandlerImpl,
+  createWorldClassHandler as createWorldClassHandlerImpl,
+  updateWorldClassHandler as updateWorldClassHandlerImpl,
+  deleteWorldClassHandler as deleteWorldClassHandlerImpl,
+} from "./server/class-crud-handlers.ts";
+import {
+  getVirtualWorldPage as getVirtualWorldPageImpl,
+  virtualWorldEventsStreamCustomizer as virtualWorldEventsStreamCustomizerImpl,
+  itemsHandler as itemsHandlerImpl,
+  itemActionHandler as itemActionHandlerImpl,
+  craftHandler as craftHandlerImpl,
+  setNicknameHandler as setNicknameHandlerImpl,
+  onlinePlayersHandler as onlinePlayersHandlerImpl,
+  chatHandler as chatHandlerImpl,
+  dmHandler as dmHandlerImpl,
+  dmHistoryHandler as dmHistoryHandlerImpl,
+  cheatItemsHandler as cheatItemsHandlerImpl,
+  moveHandler as moveHandlerImpl,
+  leaveHandler as leaveHandlerImpl,
+  heartbeatHandler as heartbeatHandlerImpl,
+  newWorldHandler as newWorldHandlerImpl,
+  startWorldHandler as startWorldHandlerImpl,
+  playersHandler as playersHandlerImpl,
+  resyncHandler as resyncHandlerImpl,
+  currentWorldHandler as currentWorldHandlerImpl,
+  npcsHandler as npcsHandlerImpl,
+  treeActionHandler as treeActionHandlerImpl,
+} from "./server/route-handlers.ts";
+
 // Virtual World - 2.5D block world with Three.js
 // Move with WASD or arrow keys. Walls and trees block movement.
 
@@ -290,91 +332,13 @@ var npcTickOwnerId =
   "-" +
   Math.random().toString(36).slice(2);
 
-/**
- * @param {*} context
- */
-function getVirtualWorldPage(context) {
-  const req = context.request;
-  if (!req.auth || !req.auth.isAuthenticated) {
-    return ResponseBuilder.redirect(
-      "/auth/login?redirect=" + encodeURIComponent("/virtual-world/play"),
-    );
-  }
-  const state = buildVirtualWorldPageStateImpl(
-    req.auth.userId,
-    req.auth.userName || "",
-  );
-  return ResponseBuilder.html(renderVirtualWorldPageHtmlImpl(state));
-}
-
 // ── Player nicknames ──────────────────────────────────────────────────────────
 
 // ── Global online presence ────────────────────────────────────────────────────
 
-/**
- * @param {string} action
- * @param {string} userId
- * @param {string} worldId
- * @param {string} nick
- * @param {number} [loginAt]
- * @param {number} [lastActive]
- * @param {any} [extra]
- */
-function sendGlobalPresenceEvent(
-  action,
-  userId,
-  worldId,
-  nick,
-  loginAt,
-  lastActive,
-  extra = undefined,
-) {
-  var payload = {
-    action: String(action || "upsert"),
-    player_id: String(userId || ""),
-    nick: String(nick || getEffectiveNick(userId)),
-    world_id: String(worldId || ""),
-    login_at: Number(loginAt || Date.now()),
-    last_active: Number(lastActive || Date.now()),
-  };
-  if (extra && typeof extra === "object") {
-    Object.assign(payload, extra);
-  }
-  sendVirtualWorldStreamEvent("presence_update", payload, {});
-}
-
 // ── World chat ────────────────────────────────────────────────────────────────
 
 // ── Direct messages ───────────────────────────────────────────────────────────
-
-/**
- * @param {*} context
- * @returns {Record<string, string>}
- */
-function virtualWorldEventsStreamCustomizer(context) {
-  var userId =
-    context &&
-    context.request &&
-    context.request.auth &&
-    context.request.auth.userId;
-  if (!userId) return {};
-  var currentWorldId = getPlayerWorld(String(userId));
-  /** @type {Record<string, string>} */
-  var filter = { recipient_id: String(userId) };
-  if (currentWorldId) {
-    filter.world_id = String(currentWorldId);
-  }
-  return filter;
-}
-
-/**
- * @param {string} worldId
- * @param {number} now
- * @returns {boolean}
- */
-function tryAcquireNPCTickLease(worldId, now) {
-  return tryAcquireNPCTickLeaseImpl(worldId);
-}
 
 /**
  * @param {*} _context
@@ -389,498 +353,13 @@ function startNPCTicker() {
   registerRecurringNPCTick();
 }
 
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-function performTreeActionForUser(userId, body) {
-  return runInWorldTransaction("tree_action", function () {
-    return performTreeActionForUserInner(userId, body);
-  });
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-function performTreeActionForUserInner(userId, body) {
-  return performTreeActionForUserImpl(userId, body);
-}
-
-/**
- * @param {*} context
- */
-function itemsHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listItemsForUserImpl(userId));
-}
-
-/**
- * @param {any} payload
- * @returns {any}
- */
-function withInventorySelectors(payload) {
-  if (!payload || typeof payload !== "object" || !payload.inventory) {
-    return payload;
-  }
-  var selectors = buildInventorySelectors(payload.inventory);
-  payload.inventory_slot_ids = selectors.inventory_slot_ids;
-  payload.inventory_selectors = selectors.inventory_selectors;
-  return payload;
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-function handleItemActionForUser(userId, body) {
-  return runInWorldTransaction("item_action", function () {
-    return handleItemActionForUserImpl(userId, body);
-  });
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-function craftRecipeForUser(userId, body) {
-  return runInWorldTransaction("craft", function () {
-    return craftRecipeForUserInner(userId, body);
-  });
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-function craftRecipeForUserInner(userId, body) {
-  return craftRecipeForUserImpl(userId, body);
-}
-
-/**
- * @param {*} context
- */
-function itemActionHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  var itemRid = nextDiagRequestId();
-  var worldIdBefore = getPlayerWorld(userId) || "";
-  var posBefore = worldIdBefore
-    ? getCanonicalPlayerState(worldIdBefore, userId)
-    : null;
-  var invBefore = loadPlayerInventory(userId);
-  vwDiag("item_action.request", {
-    rid: itemRid,
-    user_id: userId,
-    action: body && body.action ? String(body.action) : "",
-    body: body,
-    world_id: worldIdBefore,
-    position_before: posBefore,
-    inventory_before: summarizeInventory(invBefore),
-  });
-
-  var handled = handleItemActionForUser(userId, body);
-  var worldIdAfter = getPlayerWorld(userId) || worldIdBefore;
-  var posAfter = worldIdAfter
-    ? getCanonicalPlayerState(worldIdAfter, userId)
-    : null;
-  var invAfter = loadPlayerInventory(userId);
-  var tileItemsAfter = [];
-  if (worldIdAfter && posAfter) {
-    var tileKeyAfter = String(posAfter.row) + "_" + String(posAfter.col);
-    var worldItemsAfter = loadWorldItems(worldIdAfter);
-    tileItemsAfter = Array.isArray(worldItemsAfter[tileKeyAfter])
-      ? worldItemsAfter[tileKeyAfter]
-      : [];
-  }
-  vwDiag("item_action.result", {
-    rid: itemRid,
-    user_id: userId,
-    status: handled.status,
-    ok: !!(handled.payload && handled.payload.ok),
-    error:
-      handled.payload && handled.payload.error
-        ? String(handled.payload.error)
-        : "",
-    world_id: worldIdAfter,
-    position_after: posAfter,
-    inventory_after: summarizeInventory(invAfter),
-    tile_items_after: summarizeItems(tileItemsAfter),
-  });
-  return ResponseBuilder.json(
-    withInventorySelectors(handled.payload),
-    handled.status,
-  );
-}
-
-/**
- * @param {*} context
- */
-function craftHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  var handled = craftRecipeForUser(userId, body);
-  return ResponseBuilder.json(
-    withInventorySelectors(handled.payload),
-    handled.status,
-  );
-}
-
-/**
- * @param {string} userId
- * @returns {{ok: boolean, action: string, granted_count: number, inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, items: Array<{id: string, type: string, row: number, col: number}>}}
- */
-function grantAllItemsForUser(userId) {
-  return runInWorldTransaction("cheat_grant_all", function () {
-    return grantAllItemsForUserImpl(userId);
-  });
-}
-
 // ── Nickname handler ─────────────────────────────────────────────────────────
-
-/**
- * @param {*} context
- */
-function setNicknameHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
-  }
-  var handled = setNicknameForUserImpl(userId, body.nick);
-  if (handled && handled.status === 200 && handled.payload) {
-    if (handled.payload.nick) {
-      var currentWorldId = getPlayerWorld(userId);
-      if (currentWorldId) {
-        updateOnlinePresence(userId, currentWorldId, "");
-      }
-    } else if (handled.payload.inventory && handled.payload.message) {
-      var currentWorldId = getPlayerWorld(userId);
-      if (currentWorldId) {
-        var existingNick = getEffectiveNick(userId);
-        var presenceSelectors = buildInventorySelectors(
-          handled.payload.inventory,
-        );
-        sendGlobalPresenceEvent(
-          "upsert",
-          userId,
-          currentWorldId,
-          existingNick,
-          Date.now(),
-          Date.now(),
-          {
-            inventory: handled.payload.inventory,
-            inventory_slot_ids: presenceSelectors.inventory_slot_ids,
-            inventory_selectors: presenceSelectors.inventory_selectors,
-            items: handled.payload.items,
-            message: handled.payload.message,
-          },
-        );
-      }
-    }
-  }
-  return ResponseBuilder.json(
-    withInventorySelectors(handled.payload),
-    handled.status,
-  );
-}
 
 // ── Online players handler ────────────────────────────────────────────────────
 
-/**
- * @param {*} context
- */
-function onlinePlayersHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listOnlinePlayersForUserImpl(userId));
-}
-
 // ── World chat handler ────────────────────────────────────────────────────────
 
-/**
- * @param {*} context
- */
-function chatHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
-  }
-  var handled = postWorldChatForUserImpl(userId, body.text);
-  return ResponseBuilder.json(handled.payload, handled.status);
-}
-
 // ── Direct message handlers ───────────────────────────────────────────────────
-
-/**
- * @param {*} context
- */
-function dmHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
-  }
-  var handled = postDirectMessageForUserImpl(userId, body.to, body.text);
-  return ResponseBuilder.json(handled.payload, handled.status);
-}
-
-/**
- * @param {*} context
- */
-function dmHistoryHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var handled = getDirectMessageHistoryForUserImpl(
-    userId,
-    context.request.query && context.request.query["with"],
-  );
-  return ResponseBuilder.json(handled.payload, handled.status);
-}
-
-/**
- * @param {*} context
- */
-function cheatItemsHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(
-    withInventorySelectors(grantAllItemsForUser(userId)),
-  );
-}
-
-/**
- * @param {*} context
- */
-function moveHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
-  }
-  var moveRid = nextDiagRequestId();
-  var moveWorldBefore = getPlayerWorld(userId) || "";
-  var moveBefore = moveWorldBefore
-    ? getCanonicalPlayerState(moveWorldBefore, userId)
-    : null;
-  vwDiag("move.request", {
-    rid: moveRid,
-    user_id: userId,
-    body: body,
-    world_id: moveWorldBefore,
-    position_before: moveBefore,
-  });
-  var handled = movePlayerForUser(userId, body);
-  var moveWorldAfter = getPlayerWorld(userId) || moveWorldBefore;
-  var moveAfter = moveWorldAfter
-    ? getCanonicalPlayerState(moveWorldAfter, userId)
-    : null;
-  vwDiag("move.result", {
-    rid: moveRid,
-    user_id: userId,
-    status: handled.status,
-    ok: !!(handled.payload && handled.payload.ok),
-    error:
-      handled.payload && handled.payload.error
-        ? String(handled.payload.error)
-        : "",
-    world_id: moveWorldAfter,
-    position_after: moveAfter,
-    payload: handled.payload,
-  });
-  return ResponseBuilder.json(handled.payload, handled.status);
-}
-
-/**
- * @param {*} context
- */
-function leaveHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var sessionId = "";
-  try {
-    var body = JSON.parse(context.request.body || "{}");
-    sessionId = body.session_id ? String(body.session_id) : "";
-  } catch (e) {}
-  return ResponseBuilder.json(leaveWorldForUserImpl(userId, sessionId));
-}
-
-/**
- * @param {*} context
- */
-function heartbeatHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var sessionId = "";
-  try {
-    var body = JSON.parse(context.request.body || "{}");
-    sessionId = body.session_id ? String(body.session_id) : "";
-  } catch (e) {}
-  return ResponseBuilder.json(heartbeatForUserImpl(userId, sessionId));
-}
-
-/**
- * @param {*} context
- */
-function newWorldHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(
-    switchUserToNewWorldImpl(userId, WORLD_TYPE_FOREST),
-  );
-}
-
-/**
- * @param {*} context
- */
-function startWorldHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(
-    switchUserToStartWorldImpl(userId, OAK_WORLD_ID, WORLD_TYPE_FOREST),
-  );
-}
-
-/**
- * @param {*} context
- */
-function playersHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listPlayersForUserImpl(userId));
-}
-
-/**
- * @param {*} context
- */
-function resyncHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var result = buildResyncForUserImpl(userId);
-  return ResponseBuilder.json(result.payload, result.status);
-}
-
-/**
- * @param {*} context
- */
-function currentWorldHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var worldRid = nextDiagRequestId();
-  var snapshot = getCurrentWorldStateForHttpUserImpl(userId);
-  vwDiag("current_world.snapshot", {
-    rid: worldRid,
-    user_id: userId,
-    ok: !!(snapshot && snapshot.ok),
-    world_id: snapshot && snapshot.world_id ? String(snapshot.world_id) : "",
-    player: snapshot && snapshot.player ? snapshot.player : null,
-    inventory: summarizeInventory(snapshot && snapshot.inventory),
-    tile_items: summarizeItems(snapshot && snapshot.tile_items),
-    item_count: Array.isArray(snapshot && snapshot.items)
-      ? snapshot.items.length
-      : 0,
-  });
-  return ResponseBuilder.json(snapshot);
-}
-
-/**
- * @param {*} context
- */
-function npcsHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listNPCsForUserImpl(userId));
-}
-
-/**
- * @param {*} context
- */
-function treeActionHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
-  }
-  var handled = performTreeActionForUser(userId, body);
-  return ResponseBuilder.json(
-    withInventorySelectors(handled.payload),
-    handled.status,
-  );
-}
 
 /**
  * @param {string} userId
@@ -893,706 +372,206 @@ function userHasCreatorStone(userId) {
 
 // ── Item class CRUD handlers ───────────────────────────────────────────────────
 
-/**
- * @param {*} context
- */
-function itemClassesHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  if (!userHasCreatorStone(userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  refreshItemClassCacheImpl();
-  var classes = getAllItemClassesImpl();
-  return ResponseBuilder.json({ ok: true, item_classes: classes });
-}
-
-/**
- * @param {*} context
- */
-function createItemClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var id = String((body && body.id) || "").trim();
-  if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var record = {
-    id: id,
-    kind: String((body && body.kind) || "tool"),
-    spawnable: !!(body && body.spawnable),
-    extra: !!(body && body.extra),
-    nonDroppable: !!(body && body.nonDroppable),
-    visuals: {
-      color: Number((body && body.visuals && body.visuals.color) || 0),
-      labelKey: String((body && body.visuals && body.visuals.labelKey) || ""),
-      fallbackLabel: String(
-        (body && body.visuals && body.visuals.fallbackLabel) || id,
-      ),
-    },
-    actionIds: Array.isArray(body && body.actionIds) ? body.actionIds : [],
-    stateTemplate:
-      body && body.stateTemplate && typeof body.stateTemplate === "object"
-        ? body.stateTemplate
-        : {},
-  };
-  var itemCreateWrite = upsertItemClassImpl(record);
-  if (!itemCreateWrite || !itemCreateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.item_class_upsert_failed" +
-          (itemCreateWrite && itemCreateWrite.error
-            ? ": " + String(itemCreateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, item_class: record });
-}
-
-/**
- * @param {*} context
- */
-function updateItemClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var existing = getItemClassImpl(classId);
-  if (!existing) {
-    return ResponseBuilder.json(
-      { ok: false, error: "error.item_class_not_found" },
-      404,
-    );
-  }
-  var record = {
-    id: classId,
-    kind: String((body && body.kind) || existing.kind),
-    spawnable:
-      body && body.spawnable !== undefined
-        ? !!body.spawnable
-        : existing.spawnable,
-    extra: body && body.extra !== undefined ? !!body.extra : existing.extra,
-    nonDroppable:
-      body && body.nonDroppable !== undefined
-        ? !!body.nonDroppable
-        : existing.nonDroppable,
-    visuals: {
-      color: Number(
-        body && body.visuals && body.visuals.color !== undefined
-          ? body.visuals.color
-          : existing.visuals.color,
-      ),
-      labelKey: String(
-        (body && body.visuals && body.visuals.labelKey) ||
-          existing.visuals.labelKey,
-      ),
-      fallbackLabel: String(
-        (body && body.visuals && body.visuals.fallbackLabel) ||
-          existing.visuals.fallbackLabel,
-      ),
-    },
-    actionIds: Array.isArray(body && body.actionIds)
-      ? body.actionIds
-      : existing.actionIds,
-    stateTemplate:
-      body && body.stateTemplate && typeof body.stateTemplate === "object"
-        ? body.stateTemplate
-        : existing.stateTemplate,
-  };
-  var itemUpdateWrite = upsertItemClassImpl(record);
-  if (!itemUpdateWrite || !itemUpdateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.item_class_upsert_failed" +
-          (itemUpdateWrite && itemUpdateWrite.error
-            ? ": " + String(itemUpdateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, item_class: record });
-}
-
-/**
- * @param {*} context
- */
-function deleteItemClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  deleteItemClassImpl(classId);
-  return ResponseBuilder.json({ ok: true, deleted_id: classId });
-}
-
 // ── Action class CRUD handlers ───────────────────────────────────────────
-
-/**
- * @param {*} context
- */
-function actionClassesHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  refreshActionClassCacheImpl();
-  var classes = getAllActionClassesImpl();
-  return ResponseBuilder.json({ ok: true, action_classes: classes });
-}
-
-/**
- * @param {*} context
- */
-function createActionClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var id = String((body && body.id) || "").trim();
-  if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var record = {
-    id: id,
-    labelKey: String((body && body.labelKey) || ""),
-    fallbackLabel: String((body && body.fallbackLabel) || id),
-    targetKind: String((body && body.targetKind) || "self"),
-    sourceItemIds: Array.isArray(body && body.sourceItemIds)
-      ? body.sourceItemIds
-      : [],
-    canonicalId:
-      body && body.canonicalId ? String(body.canonicalId) : undefined,
-    execution: body && body.execution ? body.execution : undefined,
-    validation: body && body.validation ? body.validation : undefined,
-    logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
-  };
-  var actionCreateWrite = upsertActionClassImpl(record);
-  if (!actionCreateWrite || !actionCreateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.action_class_upsert_failed" +
-          (actionCreateWrite && actionCreateWrite.error
-            ? ": " + String(actionCreateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, action_class: record });
-}
-
-/**
- * @param {*} context
- */
-function updateActionClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var actionId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!actionId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var existing = getActionClassImpl(actionId);
-  if (!existing) {
-    return ResponseBuilder.json(
-      { ok: false, error: "error.action_class_not_found" },
-      404,
-    );
-  }
-  var record = {
-    id: actionId,
-    labelKey: String(body && body.labelKey ? body.labelKey : existing.labelKey),
-    fallbackLabel: String(
-      body && body.fallbackLabel ? body.fallbackLabel : existing.fallbackLabel,
-    ),
-    targetKind: String(
-      body && body.targetKind ? body.targetKind : existing.targetKind,
-    ),
-    sourceItemIds: Array.isArray(body && body.sourceItemIds)
-      ? body.sourceItemIds
-      : existing.sourceItemIds,
-    canonicalId:
-      body && body.canonicalId !== undefined
-        ? body.canonicalId
-          ? String(body.canonicalId)
-          : undefined
-        : existing.canonicalId,
-    execution:
-      body && body.execution !== undefined
-        ? body.execution
-        : existing.execution,
-    validation:
-      body && body.validation !== undefined
-        ? body.validation
-        : existing.validation,
-    logicSpec:
-      body && body.logicSpec !== undefined
-        ? body.logicSpec
-        : existing.logicSpec,
-  };
-  var actionUpdateWrite = upsertActionClassImpl(record);
-  if (!actionUpdateWrite || !actionUpdateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.action_class_upsert_failed" +
-          (actionUpdateWrite && actionUpdateWrite.error
-            ? ": " + String(actionUpdateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, action_class: record });
-}
-
-/**
- * @param {*} context
- */
-function deleteActionClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var actionId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!actionId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  deleteActionClassImpl(actionId);
-  return ResponseBuilder.json({ ok: true, deleted_id: actionId });
-}
 
 // ── Living class CRUD handlers ────────────────────────────────────────────
 
-/**
- * @param {*} context
- */
-function livingClassesHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  refreshLivingClassCacheImpl();
-  var classes = getAllLivingClasses();
-  return ResponseBuilder.json({ ok: true, living_classes: classes });
-}
-
-/**
- * @param {*} value
- * @param {"player" | "npc" | "creature"} fallback
- * @returns {"player" | "npc" | "creature"}
- */
-function normalizeLivingKind(value, fallback) {
-  var kind = String(value || "");
-  if (kind === "player" || kind === "npc" || kind === "creature") return kind;
-  return fallback;
-}
-
-/**
- * @param {*} context
- */
-function createLivingClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var id = String((body && body.id) || "").trim();
-  if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var record = {
-    id: id,
-    kind: normalizeLivingKind(body && body.kind, "creature"),
-    labelKey: String((body && body.labelKey) || ""),
-    fallbackLabel: String((body && body.fallbackLabel) || id),
-    slotDefinitions: Array.isArray(body && body.slotDefinitions)
-      ? body.slotDefinitions
-      : [],
-    valueTemplate:
-      body && body.valueTemplate && typeof body.valueTemplate === "object"
-        ? body.valueTemplate
-        : {},
-    valueSchema:
-      body && body.valueSchema && typeof body.valueSchema === "object"
-        ? body.valueSchema
-        : undefined,
-  };
-  var livingCreateWrite = upsertLivingClassImpl(record);
-  if (!livingCreateWrite || !livingCreateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.living_class_upsert_failed" +
-          (livingCreateWrite && livingCreateWrite.error
-            ? ": " + String(livingCreateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, living_class: record });
-}
-
-/**
- * @param {*} context
- */
-function updateLivingClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var existing = getLivingClassImpl(classId);
-  if (!existing) {
-    return ResponseBuilder.json(
-      { ok: false, error: "error.living_class_not_found" },
-      404,
-    );
-  }
-  var record = {
-    id: classId,
-    kind: normalizeLivingKind(body && body.kind, existing.kind),
-    labelKey:
-      body && body.labelKey !== undefined
-        ? String(body.labelKey || "")
-        : existing.labelKey,
-    fallbackLabel:
-      body && body.fallbackLabel
-        ? String(body.fallbackLabel)
-        : existing.fallbackLabel,
-    slotDefinitions: Array.isArray(body && body.slotDefinitions)
-      ? body.slotDefinitions
-      : existing.slotDefinitions,
-    valueTemplate:
-      body && body.valueTemplate && typeof body.valueTemplate === "object"
-        ? body.valueTemplate
-        : existing.valueTemplate,
-    valueSchema:
-      body && body.valueSchema && typeof body.valueSchema === "object"
-        ? body.valueSchema
-        : existing.valueSchema,
-  };
-  var livingUpdateWrite = upsertLivingClassImpl(record);
-  if (!livingUpdateWrite || !livingUpdateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.living_class_upsert_failed" +
-          (livingUpdateWrite && livingUpdateWrite.error
-            ? ": " + String(livingUpdateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, living_class: record });
-}
-
-/**
- * @param {*} context
- */
-function deleteLivingClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  deleteLivingClassImpl(classId);
-  return ResponseBuilder.json({ ok: true, deleted_id: classId });
-}
-
 // ── World class CRUD handlers ──────────────────────────────────────────────
 
-/**
- * @param {*} context
- */
+// ── Named handler delegates (runtime resolves these by name) ─────────────────
+/** @param {*} context */
+function itemClassesHandler(context) {
+  return itemClassesHandlerImpl(context);
+}
+/** @param {*} context */
+function createItemClassHandler(context) {
+  return createItemClassHandlerImpl(context);
+}
+/** @param {*} context */
+function updateItemClassHandler(context) {
+  return updateItemClassHandlerImpl(context);
+}
+/** @param {*} context */
+function deleteItemClassHandler(context) {
+  return deleteItemClassHandlerImpl(context);
+}
+/** @param {*} context */
+function actionClassesHandler(context) {
+  return actionClassesHandlerImpl(context);
+}
+/** @param {*} context */
+function createActionClassHandler(context) {
+  return createActionClassHandlerImpl(context);
+}
+/** @param {*} context */
+function updateActionClassHandler(context) {
+  return updateActionClassHandlerImpl(context);
+}
+/** @param {*} context */
+function deleteActionClassHandler(context) {
+  return deleteActionClassHandlerImpl(context);
+}
+/** @param {*} context */
+function livingClassesHandler(context) {
+  return livingClassesHandlerImpl(context);
+}
+/** @param {*} context */
+function createLivingClassHandler(context) {
+  return createLivingClassHandlerImpl(context);
+}
+/** @param {*} context */
+function updateLivingClassHandler(context) {
+  return updateLivingClassHandlerImpl(context);
+}
+/** @param {*} context */
+function deleteLivingClassHandler(context) {
+  return deleteLivingClassHandlerImpl(context);
+}
+/** @param {*} context */
 function worldClassesHandler(context) {
-  // Listing is not stone-gated: any player building a portal needs the world
-  // type list. Mutations below remain creator's-stone only.
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  refreshWorldClassCacheImpl();
-  return ResponseBuilder.json({
-    ok: true,
-    world_classes: getAllWorldClassesImpl(),
-  });
+  return worldClassesHandlerImpl(context);
 }
-
-/**
- * @param {*} context
- */
+/** @param {*} context */
 function createWorldClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var id = String((body && body.id) || "").trim();
-  if (!id) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var record = normalizeWorldClassRecordImpl({
-    id: id,
-    baseType: body && body.baseType,
-    rows: body && body.rows,
-    cols: body && body.cols,
-    labelKey: body && body.labelKey,
-    fallbackLabel: body && body.fallbackLabel,
-  });
-  var worldCreateWrite = upsertWorldClassImpl(record);
-  if (!worldCreateWrite || !worldCreateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.world_class_upsert_failed" +
-          (worldCreateWrite && worldCreateWrite.error
-            ? ": " + String(worldCreateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, world_class: record });
+  return createWorldClassHandlerImpl(context);
 }
-
-/**
- * @param {*} context
- */
+/** @param {*} context */
 function updateWorldClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
-  }
-  var existing = getWorldClassImpl(classId);
-  if (!existing) {
-    return ResponseBuilder.json(
-      { ok: false, error: "error.world_class_not_found" },
-      404,
-    );
-  }
-  var record = normalizeWorldClassRecordImpl({
-    id: classId,
-    baseType:
-      body && body.baseType !== undefined ? body.baseType : existing.baseType,
-    rows: body && body.rows !== undefined ? body.rows : existing.rows,
-    cols: body && body.cols !== undefined ? body.cols : existing.cols,
-    labelKey:
-      body && body.labelKey !== undefined ? body.labelKey : existing.labelKey,
-    fallbackLabel:
-      body && body.fallbackLabel !== undefined
-        ? body.fallbackLabel
-        : existing.fallbackLabel,
-  });
-  var worldUpdateWrite = upsertWorldClassImpl(record);
-  if (!worldUpdateWrite || !worldUpdateWrite.ok) {
-    return ResponseBuilder.json(
-      {
-        ok: false,
-        error:
-          "error.world_class_upsert_failed" +
-          (worldUpdateWrite && worldUpdateWrite.error
-            ? ": " + String(worldUpdateWrite.error)
-            : ""),
-      },
-      500,
-    );
-  }
-  return ResponseBuilder.json({ ok: true, world_class: record });
+  return updateWorldClassHandlerImpl(context);
+}
+/** @param {*} context */
+function deleteWorldClassHandler(context) {
+  return deleteWorldClassHandlerImpl(context);
 }
 
-/**
- * @param {*} context
- */
-function deleteWorldClassHandler(context) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  if (!userHasCreatorStone(context.request.auth.userId)) {
-    return ResponseBuilder.json(
-      { error: "error.editing_rights_required" },
-      403,
-    );
-  }
-  var classId = String(
-    (context.request.params && context.request.params.id) || "",
-  );
-  if (!classId) {
-    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
-  }
-  if (isBuiltinWorldClassIdImpl(classId)) {
-    return ResponseBuilder.json(
-      { ok: false, error: "error.world_class_builtin" },
-      400,
-    );
-  }
-  deleteWorldClassImpl(classId);
-  return ResponseBuilder.json({ ok: true, deleted_id: classId });
+/** @param {*} context */
+function getVirtualWorldPage(context) {
+  return getVirtualWorldPageImpl(context);
+}
+/** @param {*} context */
+function virtualWorldEventsStreamCustomizer(context) {
+  return virtualWorldEventsStreamCustomizerImpl(context);
+}
+/** @param {*} context */
+function itemsHandler(context) {
+  return itemsHandlerImpl(context);
+}
+/** @param {*} context */
+function itemActionHandler(context) {
+  return itemActionHandlerImpl(context);
+}
+/** @param {*} context */
+function craftHandler(context) {
+  return craftHandlerImpl(context);
+}
+/** @param {*} context */
+function setNicknameHandler(context) {
+  return setNicknameHandlerImpl(context);
+}
+/** @param {*} context */
+function onlinePlayersHandler(context) {
+  return onlinePlayersHandlerImpl(context);
+}
+/** @param {*} context */
+function chatHandler(context) {
+  return chatHandlerImpl(context);
+}
+/** @param {*} context */
+function dmHandler(context) {
+  return dmHandlerImpl(context);
+}
+/** @param {*} context */
+function dmHistoryHandler(context) {
+  return dmHistoryHandlerImpl(context);
+}
+/** @param {*} context */
+function cheatItemsHandler(context) {
+  return cheatItemsHandlerImpl(context);
+}
+/** @param {*} context */
+function moveHandler(context) {
+  return moveHandlerImpl(context);
+}
+/** @param {*} context */
+function leaveHandler(context) {
+  return leaveHandlerImpl(context);
+}
+/** @param {*} context */
+function heartbeatHandler(context) {
+  return heartbeatHandlerImpl(context);
+}
+/** @param {*} context */
+function newWorldHandler(context) {
+  return newWorldHandlerImpl(context);
+}
+/** @param {*} context */
+function startWorldHandler(context) {
+  return startWorldHandlerImpl(context);
+}
+/** @param {*} context */
+function playersHandler(context) {
+  return playersHandlerImpl(context);
+}
+/** @param {*} context */
+function resyncHandler(context) {
+  return resyncHandlerImpl(context);
+}
+/** @param {*} context */
+function currentWorldHandler(context) {
+  return currentWorldHandlerImpl(context);
+}
+/** @param {*} context */
+function npcsHandler(context) {
+  return npcsHandlerImpl(context);
+}
+/** @param {*} context */
+function treeActionHandler(context) {
+  return treeActionHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldGetStateToolHandler(context) {
+  return virtualWorldGetStateToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldMoveToolHandler(context) {
+  return virtualWorldMoveToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldManageItemsToolHandler(context) {
+  return virtualWorldManageItemsToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldActToolHandler(context) {
+  return virtualWorldActToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldSetNicknameToolHandler(context) {
+  return virtualWorldSetNicknameToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldManageItemClassesToolHandler(context) {
+  return virtualWorldManageItemClassesToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldManageActionClassesToolHandler(context) {
+  return virtualWorldManageActionClassesToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldManageLivingClassesToolHandler(context) {
+  return virtualWorldManageLivingClassesToolHandlerImpl(context);
+}
+
+/** @param {*} context */
+function virtualWorldManageWorldClassesToolHandler(context) {
+  return virtualWorldManageWorldClassesToolHandlerImpl(context);
 }
 
 function init() {

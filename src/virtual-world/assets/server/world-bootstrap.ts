@@ -1,7 +1,10 @@
 import {
+  COLS,
   createLivingSlotsFromDefinitions,
   getDefaultWorldTypeForWorldId,
+  normalizeWorldDimension,
   normalizeWorldType,
+  ROWS,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
@@ -30,8 +33,6 @@ type EnsureWorldNPCsDeps = {
   loadWorldPlayers: (worldId: string) => Record<string, any>;
   NPC_MIN_COUNT: number;
   NPC_MAX_COUNT: number;
-  ROWS: number;
-  COLS: number;
 };
 
 export function getOrCreatePlayerWorld(
@@ -72,20 +73,56 @@ export function saveWorldType(
   worldType: string | undefined | null,
   worldTypeTable: string,
   log: WorldDbLogFn,
+  dimensions?: WorldDimensions,
 ): string {
   const normalizedWorldId = String(worldId || "");
   const normalizedType = normalizeWorldType(worldType);
-  upsertWorldRow(
+  const row: Record<string, unknown> = {
+    world_id: normalizedWorldId,
+    world_type: normalizedType,
+    updated_ts: toStoredWorldTimestamp(Date.now()),
+  };
+  if (dimensions) {
+    row.rows = normalizeWorldDimension(dimensions.rows, ROWS);
+    row.cols = normalizeWorldDimension(dimensions.cols, COLS);
+  }
+  upsertWorldRow(worldTypeTable, ["world_id"], row, log);
+  return normalizedType;
+}
+
+export type WorldDimensions = { rows: number; cols: number };
+
+// Reads the world's type and dimensions in one query — use this on hot paths
+// (map generation) instead of separate getWorldType + getWorldDimensions
+// calls against the same row.
+export function getWorldInfo(
+  worldId: string | number,
+  worldTypeTable: string,
+  log: WorldDbLogFn,
+): { world_type: string; rows: number; cols: number } {
+  const normalizedWorldId = String(worldId || "");
+  const row = querySingleWorldRow(
     worldTypeTable,
-    ["world_id"],
-    {
-      world_id: normalizedWorldId,
-      world_type: normalizedType,
-      updated_ts: toStoredWorldTimestamp(Date.now()),
-    },
+    JSON.stringify({ world_id: normalizedWorldId }),
     log,
   );
-  return normalizedType;
+  return {
+    world_type:
+      row && row.world_type
+        ? normalizeWorldType(String(row.world_type))
+        : getDefaultWorldTypeForWorldId(normalizedWorldId),
+    rows: normalizeWorldDimension(row && row.rows, ROWS),
+    cols: normalizeWorldDimension(row && row.cols, COLS),
+  };
+}
+
+export function getWorldDimensions(
+  worldId: string | number,
+  worldTypeTable: string,
+  log: WorldDbLogFn,
+): WorldDimensions {
+  const info = getWorldInfo(worldId, worldTypeTable, log);
+  return { rows: info.rows, cols: info.cols };
 }
 
 export function resolvePortalDestinationWorldType(
@@ -110,12 +147,23 @@ export function createWorldOfType(
   saveWorldType: (
     worldId: string,
     worldType: string | undefined | null,
+    dimensions?: WorldDimensions,
   ) => string,
-): { world_id: string; world_type: string } {
+  dimensions?: Partial<WorldDimensions>,
+): { world_id: string; world_type: string; rows: number; cols: number } {
   const normalizedType = normalizeWorldType(worldType);
+  const normalizedDims: WorldDimensions = {
+    rows: normalizeWorldDimension(dimensions && dimensions.rows, ROWS),
+    cols: normalizeWorldDimension(dimensions && dimensions.cols, COLS),
+  };
   const worldId = createWorldId();
-  saveWorldType(worldId, normalizedType);
-  return { world_id: worldId, world_type: normalizedType };
+  saveWorldType(worldId, normalizedType, normalizedDims);
+  return {
+    world_id: worldId,
+    world_type: normalizedType,
+    rows: normalizedDims.rows,
+    cols: normalizedDims.cols,
+  };
 }
 
 export function getEffectiveMap(
@@ -183,6 +231,8 @@ export function ensureWorldNPCs(
   }
 
   const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   const players = deps.loadWorldPlayers(worldId);
   const occupied: Record<string, boolean> = {};
   Object.keys(players).forEach((playerId) => {
@@ -206,8 +256,8 @@ export function ensureWorldNPCs(
 
   while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
     attempts++;
-    const row = 1 + Math.floor(Math.random() * (deps.ROWS - 2));
-    const col = 1 + Math.floor(Math.random() * (deps.COLS - 2));
+    const row = 1 + Math.floor(Math.random() * (mapRows - 2));
+    const col = 1 + Math.floor(Math.random() * (mapCols - 2));
     const tileKey = row + "_" + col;
     if (map[row][col] !== 0 || occupied[tileKey]) {
       continue;

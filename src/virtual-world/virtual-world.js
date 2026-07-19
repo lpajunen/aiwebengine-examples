@@ -120,6 +120,8 @@ import {
   ensureWorldNPCs as ensureWorldNPCsImpl,
   getEffectiveMap as getEffectiveMapImpl,
   getOrCreatePlayerWorld as getOrCreatePlayerWorldImpl,
+  getWorldDimensions as getWorldDimensionsImpl,
+  getWorldInfo as getWorldInfoImpl,
   getWorldType as getWorldTypeImpl,
   resolvePortalDestinationWorldType as resolvePortalDestinationWorldTypeImpl,
   saveWorldType as saveWorldTypeImpl,
@@ -244,8 +246,6 @@ import { generateWorldMap } from "./server/world-map.ts";
 // Move with WASD or arrow keys. Walls and trees block movement.
 
 // ── Server-side world generation ─────────────────────────────────────────────
-var ROWS = 100;
-var COLS = 100;
 var LEASE_TTL_MS = 30000;
 var NPC_MIN_COUNT = 10;
 var NPC_MAX_COUNT = 20;
@@ -292,7 +292,8 @@ function isPickableWorldItem(item) {
  * @returns {number[][]}
  */
 function generateMap(worldId) {
-  return generateWorldMap(worldId, getWorldType(worldId));
+  var info = getWorldInfoImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
+  return generateWorldMap(worldId, info.world_type, info.rows, info.cols);
 }
 
 /**
@@ -457,10 +458,25 @@ function getWorldType(worldId) {
 /**
  * @param {string | number} worldId
  * @param {string | undefined | null} worldType
+ * @param {{rows: number, cols: number}=} dimensions
  * @returns {string}
  */
-function saveWorldType(worldId, worldType) {
-  return saveWorldTypeImpl(worldId, worldType, VWORLD_WORLD_TYPE_TABLE, vwLog);
+function saveWorldType(worldId, worldType, dimensions) {
+  return saveWorldTypeImpl(
+    worldId,
+    worldType,
+    VWORLD_WORLD_TYPE_TABLE,
+    vwLog,
+    dimensions,
+  );
+}
+
+/**
+ * @param {string | number} worldId
+ * @returns {{rows: number, cols: number}}
+ */
+function getWorldDimensions(worldId) {
+  return getWorldDimensionsImpl(worldId, VWORLD_WORLD_TYPE_TABLE, vwLog);
 }
 
 /**
@@ -473,10 +489,16 @@ function resolvePortalDestinationWorldType(item) {
 
 /**
  * @param {string | undefined | null} worldType
- * @returns {{world_id: string, world_type: string}}
+ * @param {{rows?: number, cols?: number}=} dimensions
+ * @returns {{world_id: string, world_type: string, rows: number, cols: number}}
  */
-function createWorldOfType(worldType) {
-  return createWorldOfTypeImpl(worldType, createWorldId, saveWorldType);
+function createWorldOfType(worldType, dimensions) {
+  return createWorldOfTypeImpl(
+    worldType,
+    createWorldId,
+    saveWorldType,
+    dimensions,
+  );
 }
 
 /**
@@ -633,6 +655,8 @@ function saveWorldModLayer(worldId, layer, sourceKind, entries) {
  * @returns {number[][]}
  */
 function applyWorldModsToMap(map, worldMods) {
+  var mapRows = map.length;
+  var mapCols = map[0] ? map[0].length : 0;
   var layerOrder = [WORLD_MOD_LAYER_TERRAIN, WORLD_MOD_LAYER_OBJECT];
   for (var i = 0; i < layerOrder.length; i++) {
     var layer = layerOrder[i];
@@ -643,7 +667,7 @@ function applyWorldModsToMap(map, worldMods) {
       var row = Number(mod.row);
       var col = Number(mod.col);
       if (!isFinite(row) || !isFinite(col)) return;
-      if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+      if (row < 0 || row >= mapRows || col < 0 || col >= mapCols) return;
       map[row][col] = worldTileValueForName(mod.tile_type);
     });
   }
@@ -1432,8 +1456,6 @@ function ensureWorldItems(worldId) {
     saveWorldItems: saveWorldItems,
     saveWorldItemMeta: saveWorldItemMeta,
     WORLD_ITEM_SPAWN_COUNT: WORLD_ITEM_SPAWN_COUNT,
-    ROWS: ROWS,
-    COLS: COLS,
     ITEM_TYPES: ITEM_TYPES,
     getItemStateTemplate: getItemStateTemplateImpl,
   });
@@ -1441,7 +1463,7 @@ function ensureWorldItems(worldId) {
 
 /**
  * @param {Record<string, any[]>} itemsByTile
- * @returns {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string}>}
+ * @returns {Array<{id: string, type: string, row: number, col: number, destination_world_id?: string, destination_world_type?: string, destination_world_rows?: number, destination_world_cols?: number}>}
  */
 function flattenWorldItems(itemsByTile) {
   return flattenWorldItemsImpl(itemsByTile, resolvePortalDestinationWorldType);
@@ -1638,8 +1660,6 @@ function ensureWorldNPCs(worldId) {
     loadWorldPlayers: loadWorldPlayers,
     NPC_MIN_COUNT: NPC_MIN_COUNT,
     NPC_MAX_COUNT: NPC_MAX_COUNT,
-    ROWS: ROWS,
-    COLS: COLS,
   });
 }
 
@@ -1705,8 +1725,6 @@ function tickWorldNPCs(worldId, now) {
     deleteWorldItems: deleteWorldItems,
     upsertWorldItem: upsertWorldItem,
     broadcastItemChange: broadcastItemChange,
-    ROWS: ROWS,
-    COLS: COLS,
     shuffleDirections: shuffleDirections,
     directionToRotation: directionToRotation,
     getNPCDisplayName: getNPCDisplayName,
@@ -1754,8 +1772,6 @@ function runNPCTick() {
     deleteWorldItems: deleteWorldItems,
     upsertWorldItem: upsertWorldItem,
     broadcastItemChange: broadcastItemChange,
-    ROWS: ROWS,
-    COLS: COLS,
     shuffleDirections: shuffleDirections,
     directionToRotation: directionToRotation,
     getNPCDisplayName: getNPCDisplayName,
@@ -1818,8 +1834,6 @@ function tryTickWorldNPCs(worldId, now) {
     deleteWorldItems: deleteWorldItems,
     upsertWorldItem: upsertWorldItem,
     broadcastItemChange: broadcastItemChange,
-    ROWS: ROWS,
-    COLS: COLS,
     shuffleDirections: shuffleDirections,
     directionToRotation: directionToRotation,
     getNPCDisplayName: getNPCDisplayName,
@@ -1864,8 +1878,6 @@ function maybeTickWorldNPCs(worldId) {
     deleteWorldItems: deleteWorldItems,
     upsertWorldItem: upsertWorldItem,
     broadcastItemChange: broadcastItemChange,
-    ROWS: ROWS,
-    COLS: COLS,
     shuffleDirections: shuffleDirections,
     directionToRotation: directionToRotation,
     getNPCDisplayName: getNPCDisplayName,
@@ -2076,14 +2088,12 @@ function getMoveOptions(worldId, canonical) {
     getEffectiveMap: getEffectiveMap,
     isWorldTileWalkable: isWorldTileWalkable,
     worldTileNameForValue: worldTileNameForValue,
-    ROWS: ROWS,
-    COLS: COLS,
   });
 }
 
 /**
  * @param {string} userId
- * @returns {{ok: boolean, world_id: string, world_type: string, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
+ * @returns {{ok: boolean, world_id: string, world_type: string, world_rows: number, world_cols: number, player: {row: number, col: number, seq: number, rotation: number}, items: Array<{id: string, type: string, row: number, col: number}>, tile_items: any[], inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, world_mods: any, houses: any, available_actions: string[], move_options: Record<string, {row: number, col: number, walkable: boolean, tile_type: string, in_bounds: boolean}>, facing_tile: {row: number, col: number, direction: string}}}
  */
 function getCurrentWorldStateForUser(userId) {
   return getCurrentWorldStateForUserImpl(userId, {
@@ -2097,6 +2107,7 @@ function getCurrentWorldStateForUser(userId) {
     loadWorldMods: loadWorldMods,
     loadWorldHouses: loadWorldHouses,
     getWorldType: getWorldType,
+    getWorldDimensions: getWorldDimensions,
     getAvailableWorldActions: getAvailableWorldActions,
     getMoveOptions: getMoveOptions,
     getTargetTileFromRotation: getTargetTileFromRotation,
@@ -2123,8 +2134,6 @@ function movePlayerForUser(userId, body) {
     sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     vwLog: vwLog,
     LEASE_TTL_MS: LEASE_TTL_MS,
-    ROWS: ROWS,
-    COLS: COLS,
   });
 }
 
@@ -2171,8 +2180,7 @@ function performTreeActionForUserInner(userId, body) {
     saveWorldItems: saveWorldItems,
     broadcastItemChange: broadcastItemChange,
     getTargetTileFromRotation: getTargetTileFromRotation,
-    ROWS: ROWS,
-    COLS: COLS,
+    getWorldDimensions: getWorldDimensions,
     getEffectiveMap: getEffectiveMap,
     loadWorldTrees: loadWorldTrees,
     loadWorldHouses: loadWorldHouses,
@@ -2421,8 +2429,6 @@ function craftRecipeForUserInner(userId, body) {
     isOakClearingTile: isOakClearingTile,
     sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     getItemStateTemplate: getItemStateTemplateImpl,
-    ROWS: ROWS,
-    COLS: COLS,
   });
 }
 

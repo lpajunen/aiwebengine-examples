@@ -15,8 +15,6 @@ type MoveOptionsDeps = {
   getEffectiveMap: (worldId: string) => number[][];
   isWorldTileWalkable: (tileValue: any) => boolean;
   worldTileNameForValue: (tileValue: number) => string;
-  ROWS: number;
-  COLS: number;
 };
 
 type CurrentWorldStateDeps = {
@@ -30,6 +28,7 @@ type CurrentWorldStateDeps = {
   loadWorldMods: (worldId: string) => any;
   loadWorldHouses: (worldId: string) => any;
   getWorldType: (worldId: string) => string;
+  getWorldDimensions: (worldId: string) => { rows: number; cols: number };
   getAvailableWorldActions: (
     inventory: LivingState,
     currentTileItems: any[],
@@ -157,6 +156,8 @@ export function getMoveOptions(
   }
 > {
   const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   const options: Record<
     string,
     {
@@ -181,9 +182,9 @@ export function getMoveOptions(
     const targetCol = canonical.col + delta.col;
     const inBounds =
       targetRow >= 0 &&
-      targetRow < deps.ROWS &&
+      targetRow < mapRows &&
       targetCol >= 0 &&
-      targetCol < deps.COLS;
+      targetCol < mapCols;
     const tileValue = inBounds ? map[targetRow][targetCol] : 0;
     options[direction] = {
       row: targetRow,
@@ -205,6 +206,8 @@ export function getCurrentWorldStateForUser(
   ok: boolean;
   world_id: string;
   world_type: string;
+  world_rows: number;
+  world_cols: number;
   player: CanonicalState;
   items: any[];
   tile_items: any[];
@@ -242,10 +245,13 @@ export function getCurrentWorldStateForUser(
     inventory_selectors: inventorySelectors,
   } = buildInventorySelectors(inventory);
 
+  const worldDims = deps.getWorldDimensions(worldId);
   return {
     ok: true,
     world_id: String(worldId),
     world_type: deps.getWorldType(worldId),
+    world_rows: worldDims.rows,
+    world_cols: worldDims.cols,
     player: {
       row: canonical.row,
       col: canonical.col,

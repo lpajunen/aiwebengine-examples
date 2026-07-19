@@ -182,6 +182,16 @@ export function registerVirtualWorldRuntime(deps: RegisterDeps): void {
         enum: ["forest", "island", "cave", "building"],
         description: "Optional portal destination world type for build_portal",
       },
+      destination_world_rows: {
+        type: "number",
+        description:
+          "Optional portal destination world height in tiles for build_portal (clamped to 8-200; defaults to 100)",
+      },
+      destination_world_cols: {
+        type: "number",
+        description:
+          "Optional portal destination world width in tiles for build_portal (clamped to 8-200; defaults to 100)",
+      },
     },
     required: ["action"],
   });

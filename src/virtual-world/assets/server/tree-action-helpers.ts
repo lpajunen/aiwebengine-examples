@@ -94,16 +94,20 @@ type TreeActionDeps = {
     row: number;
     col: number;
   };
-  ROWS: number;
-  COLS: number;
+  getWorldDimensions: (worldId: string) => { rows: number; cols: number };
   getEffectiveMap: (worldId: string) => number[][];
   loadWorldTrees: (worldId: string) => Record<string, any>;
   loadWorldHouses: (worldId: string) => Record<string, any>;
   isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
   saveWorldHouses: (worldId: string, houses: Record<string, any>) => void;
-  createWorldOfType: (worldType: string) => {
+  createWorldOfType: (
+    worldType: string,
+    dimensions?: { rows?: number; cols?: number },
+  ) => {
     world_id: string;
     world_type: string;
+    rows: number;
+    cols: number;
   };
   deleteWorldItems: (items: any[]) => void;
   isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
@@ -122,6 +126,15 @@ export function performTreeActionForUser(
   const requestedPortalWorldType =
     deps.worldTypeForPortalBuildAction(rawAction) ||
     deps.normalizeWorldType(body && body.destination_world_type);
+  const requestedPortalRows = Number(body && body.destination_world_rows);
+  const requestedPortalCols = Number(body && body.destination_world_cols);
+  const requestedPortalDimensions =
+    isFinite(requestedPortalRows) || isFinite(requestedPortalCols)
+      ? {
+          rows: isFinite(requestedPortalRows) ? requestedPortalRows : undefined,
+          cols: isFinite(requestedPortalCols) ? requestedPortalCols : undefined,
+        }
+      : undefined;
 
   if (action === "pick" || action === "drop" || action === "equip") {
     return deps.handleItemActionForUser(userId, body || {});
@@ -478,14 +491,15 @@ export function performTreeActionForUser(
       playerCol,
       rotation,
     );
+    const worldDims = deps.getWorldDimensions(worldId);
     return {
       row: targetTile.row,
       col: targetTile.col,
       inBounds:
         targetTile.row >= 0 &&
-        targetTile.row < deps.ROWS &&
+        targetTile.row < worldDims.rows &&
         targetTile.col >= 0 &&
-        targetTile.col < deps.COLS,
+        targetTile.col < worldDims.cols,
     };
   }
 
@@ -712,6 +726,7 @@ export function performTreeActionForUser(
     const targetTileKey = targetRow + "_" + targetCol;
     const createdDestinationWorld = deps.createWorldOfType(
       requestedPortalWorldType,
+      requestedPortalDimensions,
     );
     const portalItem = {
       id: "w" + worldId + "_i" + deps.nextWorldItemId(worldId),
@@ -719,6 +734,8 @@ export function performTreeActionForUser(
       created_at: Date.now(),
       destination_world_id: createdDestinationWorld.world_id,
       destination_world_type: createdDestinationWorld.world_type,
+      destination_world_rows: createdDestinationWorld.rows,
+      destination_world_cols: createdDestinationWorld.cols,
     };
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
     worldItems[targetTileKey].push(portalItem);

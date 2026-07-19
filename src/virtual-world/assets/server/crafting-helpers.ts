@@ -33,8 +33,6 @@ type RecipeDeps = {
     payload: any,
   ) => void;
   getItemStateTemplate?: (type: string) => Record<string, unknown>;
-  ROWS: number;
-  COLS: number;
 };
 
 function countItemsByType(inventory: LivingState): Record<string, number> {
@@ -104,11 +102,14 @@ export function craftRecipeForUser(
         )
       : { row: canonical.row, col: canonical.col };
 
+  const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   if (
     target.row < 0 ||
-    target.row >= deps.ROWS ||
+    target.row >= mapRows ||
     target.col < 0 ||
-    target.col >= deps.COLS
+    target.col >= mapCols
   ) {
     return {
       status: 200,
@@ -120,7 +121,6 @@ export function craftRecipeForUser(
     };
   }
 
-  const map = deps.getEffectiveMap(worldId);
   const trees = deps.loadWorldTrees(worldId);
   const houses = deps.loadWorldHouses(worldId);
   const tileKey = target.row + "_" + target.col;

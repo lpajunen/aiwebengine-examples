@@ -38,8 +38,6 @@ type EnsureWorldItemsDeps = {
     meta: { next_item_seq: number; seeded: number; updated_ts?: number },
   ) => void;
   WORLD_ITEM_SPAWN_COUNT: number;
-  ROWS: number;
-  COLS: number;
   ITEM_TYPES: readonly string[];
   getItemStateTemplate?: (type: string) => Record<string, unknown>;
 };
@@ -390,13 +388,15 @@ export function ensureWorldItems(
   if (meta.seeded === 1) return;
 
   const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   const items = deps.loadWorldItems(worldId);
   for (let i = 0; i < deps.WORLD_ITEM_SPAWN_COUNT; i++) {
     let attempts = 0;
     while (attempts < 1000) {
       attempts++;
-      const row = 1 + Math.floor(Math.random() * (deps.ROWS - 2));
-      const col = 1 + Math.floor(Math.random() * (deps.COLS - 2));
+      const row = 1 + Math.floor(Math.random() * (mapRows - 2));
+      const col = 1 + Math.floor(Math.random() * (mapCols - 2));
       if (map[row][col] !== 0) continue;
       const tileKey = row + "_" + col;
       if (!items[tileKey]) items[tileKey] = [];

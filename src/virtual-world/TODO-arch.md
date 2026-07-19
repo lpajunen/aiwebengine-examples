@@ -285,6 +285,33 @@ start/progress/complete/cancel events on the versioned protocol (item 1),
 and completion effects wrapped in the item 3 transactions. Interpreter
 validation limits from item 9 apply to duration values too.
 
+### 15. Per-world size and creator-defined world types
+
+**Today:** every world is 100×100. `ROWS`/`COLS` are constants in
+`world-domain.ts`, injected into most server modules, imported directly by
+`world-map.ts`, and hardcoded again in `client.js`. World "types" are the
+four generation presets, chosen by the portal builder's four
+`build_portal_<type>` actions; `createWorldOfType` stores only
+`world_type`. A portal to a small house still opens a full 100×100 world.
+
+**Needed**, in two stages:
+
+- **Stage 1 — per-world dimensions.** Store `rows`/`cols` next to
+  `world_type` at world creation (existing worlds default to 100 via the
+  idempotent `schema-setup.ts` pattern) and make every consumer per-world:
+  parameterize `generateWorldMap`, derive bounds from the effective map (or
+  an injected dimension lookup) in movement/crafting/spawn/NPC code, and
+  ship dimensions to the client in the world-state payload instead of the
+  hardcoded 100s (overlaps the shared-protocol work, item 6). Server-side
+  min/max validation on size (map cost, NPC-tick cost, snapshot size —
+  the item 9 quota concerns apply). The oak home world stays 100×100.
+- **Stage 2 — world types as the fourth content class.** A world-class
+  store (id, base generation preset, rows×cols, appearance parameters)
+  managed in the existing creator's-stone-gated class editor, with the
+  portal builder listing the creator's world types instead of the four
+  hardcoded actions. This is the README's "creator creates a world type"
+  goal and the successor to the fixed presets.
+
 ## Capabilities expected from the runtime
 
 The game-side changes above assume the aiwebengine runtime grows these

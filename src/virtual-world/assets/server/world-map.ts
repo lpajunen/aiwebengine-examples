@@ -24,13 +24,15 @@ import {
 
 function paintWorldBorder(map: number[][], tileName: string): void {
   const tileValue = worldTileValueForName(tileName);
-  for (let r = 0; r < ROWS; r++) {
+  const rows = map.length;
+  const cols = map[0] ? map[0].length : 0;
+  for (let r = 0; r < rows; r++) {
     map[r][0] = tileValue;
-    map[r][COLS - 1] = tileValue;
+    map[r][cols - 1] = tileValue;
   }
-  for (let c = 0; c < COLS; c++) {
+  for (let c = 0; c < cols; c++) {
     map[0][c] = tileValue;
-    map[ROWS - 1][c] = tileValue;
+    map[rows - 1][c] = tileValue;
   }
 }
 
@@ -40,10 +42,12 @@ function paintWorldRing(
   inset: number,
 ): void {
   const tileValue = worldTileValueForName(tileName);
+  const rows = map.length;
+  const cols = map[0] ? map[0].length : 0;
   const minRow = Math.max(0, Number(inset) || 0);
   const minCol = minRow;
-  const maxRow = ROWS - 1 - minRow;
-  const maxCol = COLS - 1 - minCol;
+  const maxRow = rows - 1 - minRow;
+  const maxCol = cols - 1 - minCol;
   for (let row = minRow; row <= maxRow; row++) {
     map[row][minCol] = tileValue;
     map[row][maxCol] = tileValue;
@@ -57,17 +61,22 @@ function paintWorldRing(
 export function generateWorldMap(
   worldId: string | number,
   worldType: string,
+  rows: number = ROWS,
+  cols: number = COLS,
 ): number[][] {
   const seed = parseInt(String(worldId), 10);
   const rand = mulberry32(seed);
   const floorTileName = getWorldFloorTileName(worldType);
   const boundaryTileName = getWorldBoundaryTileName(worldType);
   const wallTileName = getWorldWallTileName(worldType);
+  // Feature counts below are tuned for the default 100×100 world; scale them
+  // with the map area so smaller worlds get proportionally fewer features.
+  const areaFactor = (rows * cols) / (ROWS * COLS);
   const map: number[][] = [];
 
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < rows; r++) {
     map[r] = [];
-    for (let c = 0; c < COLS; c++) {
+    for (let c = 0; c < cols; c++) {
       map[r][c] = worldTileValueForName(floorTileName);
     }
   }
@@ -79,56 +88,63 @@ export function generateWorldMap(
     paintWorldRing(map, WORLD_TILE_HOUSE, 1);
   }
 
-  for (let i = 0; i < 30; i++) {
-    const rr = 3 + Math.floor(rand() * (ROWS - 18));
-    const cc = 3 + Math.floor(rand() * (COLS - 18));
-    const rh = 4 + Math.floor(rand() * 9);
-    const rw = 4 + Math.floor(rand() * 9);
-    for (let dr = 0; dr <= rh; dr++) {
-      for (let dc = 0; dc <= rw; dc++) {
-        if (
-          (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
-          isWorldTileWalkable(map[rr + dr][cc + dc])
-        ) {
-          map[rr + dr][cc + dc] = worldTileValueForName(wallTileName);
+  // Enclosures need room for position offset 3 + max extent 12 + border.
+  if (rows >= 22 && cols >= 22) {
+    const enclosureCount = Math.round(30 * areaFactor);
+    for (let i = 0; i < enclosureCount; i++) {
+      const rr = 3 + Math.floor(rand() * (rows - 18));
+      const cc = 3 + Math.floor(rand() * (cols - 18));
+      const rh = 4 + Math.floor(rand() * 9);
+      const rw = 4 + Math.floor(rand() * 9);
+      for (let dr = 0; dr <= rh; dr++) {
+        for (let dc = 0; dc <= rw; dc++) {
+          if (
+            (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
+            isWorldTileWalkable(map[rr + dr][cc + dc])
+          ) {
+            map[rr + dr][cc + dc] = worldTileValueForName(wallTileName);
+          }
         }
       }
+      const mh = Math.floor(rh / 2);
+      const mw = Math.floor(rw / 2);
+      map[rr][cc + mw] = worldTileValueForName(floorTileName);
+      map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
+      map[rr + mh][cc] = worldTileValueForName(floorTileName);
+      map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
     }
-    const mh = Math.floor(rh / 2);
-    const mw = Math.floor(rw / 2);
-    map[rr][cc + mw] = worldTileValueForName(floorTileName);
-    map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
-    map[rr + mh][cc] = worldTileValueForName(floorTileName);
-    map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
   }
 
-  for (let i = 0; i < 40; i++) {
-    if (rand() > 0.5) {
-      const r0 = 2 + Math.floor(rand() * (ROWS - 4));
-      const c0 = 2 + Math.floor(rand() * (COLS - 20));
-      const len = 6 + Math.floor(rand() * 14);
-      const gap = Math.floor(rand() * len);
-      for (let k = 0; k < len; k++) {
-        if (
-          k !== gap &&
-          c0 + k < COLS - 1 &&
-          isWorldTileWalkable(map[r0][c0 + k])
-        ) {
-          map[r0][c0 + k] = worldTileValueForName(wallTileName);
+  if (rows >= 22 && cols >= 22) {
+    const wallSegmentCount = Math.round(40 * areaFactor);
+    for (let i = 0; i < wallSegmentCount; i++) {
+      if (rand() > 0.5) {
+        const r0 = 2 + Math.floor(rand() * (rows - 4));
+        const c0 = 2 + Math.floor(rand() * (cols - 20));
+        const len = 6 + Math.floor(rand() * 14);
+        const gap = Math.floor(rand() * len);
+        for (let k = 0; k < len; k++) {
+          if (
+            k !== gap &&
+            c0 + k < cols - 1 &&
+            isWorldTileWalkable(map[r0][c0 + k])
+          ) {
+            map[r0][c0 + k] = worldTileValueForName(wallTileName);
+          }
         }
-      }
-    } else {
-      const r0 = 2 + Math.floor(rand() * (ROWS - 20));
-      const c0 = 2 + Math.floor(rand() * (COLS - 4));
-      const len = 6 + Math.floor(rand() * 14);
-      const gap = Math.floor(rand() * len);
-      for (let k = 0; k < len; k++) {
-        if (
-          k !== gap &&
-          r0 + k < ROWS - 1 &&
-          isWorldTileWalkable(map[r0 + k][c0])
-        ) {
-          map[r0 + k][c0] = worldTileValueForName(wallTileName);
+      } else {
+        const r0 = 2 + Math.floor(rand() * (rows - 20));
+        const c0 = 2 + Math.floor(rand() * (cols - 4));
+        const len = 6 + Math.floor(rand() * 14);
+        const gap = Math.floor(rand() * len);
+        for (let k = 0; k < len; k++) {
+          if (
+            k !== gap &&
+            r0 + k < rows - 1 &&
+            isWorldTileWalkable(map[r0 + k][c0])
+          ) {
+            map[r0 + k][c0] = worldTileValueForName(wallTileName);
+          }
         }
       }
     }
@@ -142,9 +158,9 @@ export function generateWorldMap(
   ): void {
     const radiusSquared = radius * radius;
     for (let row = centerRow - radius; row <= centerRow + radius; row++) {
-      if (row <= 0 || row >= ROWS - 1) continue;
+      if (row <= 0 || row >= rows - 1) continue;
       for (let col = centerCol - radius; col <= centerCol + radius; col++) {
-        if (col <= 0 || col >= COLS - 1) continue;
+        if (col <= 0 || col >= cols - 1) continue;
         const dr = row - centerRow;
         const dc = col - centerCol;
         if (dr * dr + dc * dc > radiusSquared) continue;
@@ -153,24 +169,26 @@ export function generateWorldMap(
     }
   }
 
-  if (worldType === WORLD_TYPE_FOREST) {
+  // Coast, river, and lakes assume enough interior to leave land; skip them
+  // on small maps rather than flooding the whole world.
+  if (worldType === WORLD_TYPE_FOREST && rows >= 26 && cols >= 26) {
     const coastWidth = 7 + Math.floor(rand() * 6);
-    for (let coastRow = 1; coastRow < ROWS - 1; coastRow++) {
+    for (let coastRow = 1; coastRow < rows - 1; coastRow++) {
       const coastInset = Math.floor(rand() * 4);
       for (
-        let coastCol = COLS - 1 - coastWidth - coastInset;
-        coastCol < COLS - 1;
+        let coastCol = cols - 1 - coastWidth - coastInset;
+        coastCol < cols - 1;
         coastCol++
       ) {
-        if (coastCol <= 0 || coastCol >= COLS - 1) continue;
+        if (coastCol <= 0 || coastCol >= cols - 1) continue;
         map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
       }
     }
 
-    let riverCol = Math.floor(COLS * (0.35 + rand() * 0.3));
-    for (let riverRow = 1; riverRow < ROWS - 1; riverRow++) {
+    let riverCol = Math.floor(cols * (0.35 + rand() * 0.3));
+    for (let riverRow = 1; riverRow < rows - 1; riverRow++) {
       riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
-      riverCol = Math.max(8, Math.min(COLS - 9, riverCol));
+      riverCol = Math.max(8, Math.min(cols - 9, riverCol));
       const riverRadius = rand() < 0.2 ? 1 : 0;
       for (
         let riverOffset = -riverRadius;
@@ -184,8 +202,8 @@ export function generateWorldMap(
 
     for (let lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
       paintTerrainCircle(
-        12 + Math.floor(rand() * (ROWS - 24)),
-        12 + Math.floor(rand() * (COLS - 24)),
+        12 + Math.floor(rand() * (rows - 24)),
+        12 + Math.floor(rand() * (cols - 24)),
         2 + Math.floor(rand() * 3),
         WORLD_TILE_LAKE,
       );
@@ -193,17 +211,20 @@ export function generateWorldMap(
   }
 
   if (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_CAVE) {
-    for (let mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
-      paintTerrainCircle(
-        10 + Math.floor(rand() * (ROWS - 20)),
-        10 + Math.floor(rand() * (COLS - 20)),
-        2 + Math.floor(rand() * 3),
-        WORLD_TILE_MOUNTAIN,
-      );
+    if (rows >= 22 && cols >= 22) {
+      for (let mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
+        paintTerrainCircle(
+          10 + Math.floor(rand() * (rows - 20)),
+          10 + Math.floor(rand() * (cols - 20)),
+          2 + Math.floor(rand() * 3),
+          WORLD_TILE_MOUNTAIN,
+        );
+      }
     }
-    for (let rockIndex = 0; rockIndex < 140; rockIndex++) {
-      const rockRow = 1 + Math.floor(rand() * (ROWS - 2));
-      const rockCol = 1 + Math.floor(rand() * (COLS - 2));
+    const rockCount = Math.round(140 * areaFactor);
+    for (let rockIndex = 0; rockIndex < rockCount; rockIndex++) {
+      const rockRow = 1 + Math.floor(rand() * (rows - 2));
+      const rockCol = 1 + Math.floor(rand() * (cols - 2));
       if (
         isWorldTileWalkable(map[rockRow][rockCol]) ||
         map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)
@@ -213,16 +234,17 @@ export function generateWorldMap(
     }
   }
 
-  const treeScatterCount =
-    worldType === WORLD_TYPE_FOREST
+  const treeScatterCount = Math.round(
+    (worldType === WORLD_TYPE_FOREST
       ? 500
       : worldType === WORLD_TYPE_ISLAND
         ? 140
-        : 0;
+        : 0) * areaFactor,
+  );
   if (treeScatterCount > 0) {
     for (let i = 0; i < treeScatterCount; i++) {
-      const r = 1 + Math.floor(rand() * (ROWS - 2));
-      const c = 1 + Math.floor(rand() * (COLS - 2));
+      const r = 1 + Math.floor(rand() * (rows - 2));
+      const c = 1 + Math.floor(rand() * (cols - 2));
       if (map[r][c] === worldTileValueForName(floorTileName)) {
         map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
       }

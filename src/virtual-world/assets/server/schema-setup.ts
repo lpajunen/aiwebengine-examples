@@ -173,6 +173,28 @@ export function ensureLateWorldDatabaseSchema(
     "addIntegerColumn",
     tables.worldType,
     function () {
+      return database.addIntegerColumn(tables.worldType, "rows", true);
+    },
+    parseWorldDbResult,
+    log,
+    "rows",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    tables.worldType,
+    function () {
+      return database.addIntegerColumn(tables.worldType, "cols", true);
+    },
+    parseWorldDbResult,
+    log,
+    "cols",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    tables.worldType,
+    function () {
       return database.addIntegerColumn(tables.worldType, "updated_ts", false);
     },
     parseWorldDbResult,

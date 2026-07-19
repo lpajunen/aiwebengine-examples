@@ -222,6 +222,8 @@ export function virtualWorldActToolHandler(
       ? Number(args.rotation)
       : canonical.rotation,
     destination_world_type: args.destination_world_type,
+    destination_world_rows: args.destination_world_rows,
+    destination_world_cols: args.destination_world_cols,
   });
   result.payload.status = result.status;
   if (result && result.payload && result.payload.inventory) {

@@ -23,8 +23,6 @@ type MoveDeps = {
   ) => void;
   vwLog: (msg: string, obj?: unknown) => void;
   LEASE_TTL_MS: number;
-  ROWS: number;
-  COLS: number;
 };
 
 // Hard bound on steps accepted in one batched move request. The client's
@@ -159,6 +157,8 @@ export function movePlayerForUser(
   // must be a single walkable in-bounds step from the previous position; the
   // effective map is built once per request instead of once per step.
   const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   const applied: MoveStep[] = [];
   let posRow = cur.row;
   let posCol = cur.col;
@@ -166,9 +166,9 @@ export function movePlayerForUser(
     const step = steps[i];
     const withinBounds =
       step.row >= 0 &&
-      step.row < deps.ROWS &&
+      step.row < mapRows &&
       step.col >= 0 &&
-      step.col < deps.COLS;
+      step.col < mapCols;
     const singleStep =
       Math.abs(step.row - posRow) + Math.abs(step.col - posCol) === 1;
     if (

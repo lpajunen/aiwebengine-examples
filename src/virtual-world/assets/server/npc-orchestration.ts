@@ -40,8 +40,6 @@ type TickWorldDeps = {
     col: number,
     items: any[],
   ) => void;
-  ROWS: number;
-  COLS: number;
   shuffleDirections: (dirs: any[]) => void;
   directionToRotation: (...args: any[]) => number;
   getNPCDisplayName: (...args: any[]) => string;
@@ -111,6 +109,8 @@ export function tickWorldNPCs(
   }
 
   const map = deps.getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
   const trees = deps.loadWorldTrees(worldId);
   const worldItems = deps.loadWorldItems(worldId);
   let itemChanges = false;
@@ -136,8 +136,8 @@ export function tickWorldNPCs(
         map: map,
         occupiedPlayers: occupiedPlayers,
         occupiedNPCs: occupiedNPCs,
-        rows: deps.ROWS,
-        cols: deps.COLS,
+        rows: mapRows,
+        cols: mapCols,
         shuffleDirections: deps.shuffleDirections,
         directionToRotation: deps.directionToRotation,
         getNPCDisplayName: deps.getNPCDisplayName,
@@ -171,8 +171,8 @@ export function tickWorldNPCs(
       now: now,
       map: map,
       trees: trees,
-      rows: deps.ROWS,
-      cols: deps.COLS,
+      rows: mapRows,
+      cols: mapCols,
       shuffleDirections: deps.shuffleDirections,
       getInventoryTreeActions: deps.getInventoryTreeActions,
       isOakCenterTile: deps.isOakCenterTile,

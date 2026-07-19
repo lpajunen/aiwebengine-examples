@@ -440,8 +440,10 @@ function initLogoutTrigger() {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
-var ROWS = 100;
-var COLS = 100;
+// World dimensions come from the server-injected MAP; worlds are no longer
+// all 100×100.
+var ROWS = MAP.length;
+var COLS = MAP[0] ? MAP[0].length : 0;
 var TILE = 2; // world units per tile
 var MOVE_INTERVAL = 160; // ms between steps
 var MAX_PENDING_MOVES = 40;

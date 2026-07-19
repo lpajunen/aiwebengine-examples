@@ -1,5 +1,10 @@
+// Default dimensions for worlds without stored rows/cols (all pre-existing
+// worlds, including the oak home world, which must stay 100×100 for its
+// reserved-clearing constants below).
 export const ROWS = 100;
 export const COLS = 100;
+export const MIN_WORLD_DIM = 8;
+export const MAX_WORLD_DIM = 200;
 export const OAK_WORLD_ID = "10000";
 export const OAK_CENTER_ROW = 50;
 export const OAK_CENTER_COL = 50;
@@ -258,6 +263,15 @@ export function getNPCDisplayName(worldId: string, npcId: string): string {
       Math.floor(seed / NPC_NAME_PREFIXES.length) % NPC_NAME_SUFFIXES.length
     ];
   return prefix + " " + suffix;
+}
+
+export function normalizeWorldDimension(
+  value: unknown,
+  fallback: number,
+): number {
+  const parsed = Math.floor(Number(value));
+  if (!isFinite(parsed)) return fallback;
+  return Math.max(MIN_WORLD_DIM, Math.min(MAX_WORLD_DIM, parsed));
 }
 
 export function normalizeWorldType(

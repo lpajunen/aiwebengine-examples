@@ -308,6 +308,7 @@ function updateHeldHud() {
     ? inventoryItemLabel(rightItem)
     : "-";
   updateUseButtonState();
+  syncLocalAvatarEquippedItems();
 }
 
 var logoutClickCount = 0;

@@ -38,6 +38,19 @@ avatar.position.set(targetX, 0, targetZ);
 avatar.rotation.y = INIT_ROTATION;
 scene.add(avatar);
 
+// Tracks equip meshes attached to the local player's own avatar group, kept
+// in sync with playerInventory.slots via syncLocalAvatarEquippedItems()
+// (called from updateHeldHud() in client-core.js whenever the inventory
+// changes) for visual parity with how remote/NPC avatars render slots.
+var localAvatarEquipEntry = { group: avatar, equipMeshes: {} };
+
+function syncLocalAvatarEquippedItems() {
+  syncAvatarEquippedItems(
+    localAvatarEquipEntry,
+    playerInventory && playerInventory.slots,
+  );
+}
+
 // ── Target indicator (shows where tree actions will occur) ───────────────
 var targetIndicatorGeo = new THREE.BoxGeometry(TILE * 0.9, 0.3, TILE * 0.9);
 var targetIndicatorMat = new THREE.MeshBasicMaterial({
@@ -55,6 +68,61 @@ scene.add(targetIndicator);
 var remoteAvatars = {}; // { pid: { group, targetX, targetZ, targetRot, seq } }
 /** @type {Record<string, any>} */
 var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
+
+// ── Equipped-slot visuals ───────────────────────────────────────────────
+// Slots are public and drive outside appearance: an item equipped in a slot
+// renders as a small box near that slot's approximate body position, using
+// the same per-type color as ground/inventory item meshes (getItemMaterial,
+// defined in client-world-render.js, loaded before this file).
+var equipItemGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+/** @type {Record<string, {x: number, y: number, z: number}>} */
+var SLOT_ATTACH_POINTS = {
+  left_hand: { x: -0.32, y: 0.55, z: 0.15 },
+  right_hand: { x: 0.32, y: 0.55, z: 0.15 },
+  left_leg: { x: -0.14, y: 0.05, z: 0 },
+  right_leg: { x: 0.14, y: 0.05, z: 0 },
+  front_left_leg: { x: -0.14, y: 0.05, z: 0.15 },
+  front_right_leg: { x: 0.14, y: 0.05, z: 0.15 },
+  back_left_leg: { x: -0.14, y: 0.05, z: -0.15 },
+  back_right_leg: { x: 0.14, y: 0.05, z: -0.15 },
+};
+var DEFAULT_SLOT_ATTACH_POINT = { x: 0, y: 0.7, z: 0 };
+
+/**
+ * Adds/updates/removes small item meshes on an avatar group to reflect its
+ * currently equipped slots. Called whenever a `slots` payload is applied to
+ * a remote player, NPC, or the local player avatar.
+ * @param {any} entry - an object with a THREE.Group `group` and an
+ *   `equipMeshes` map this function owns (created on first use).
+ * @param {Record<string, any>} slots
+ */
+function syncAvatarEquippedItems(entry, slots) {
+  if (!entry || !entry.group) return;
+  if (!entry.equipMeshes) entry.equipMeshes = {};
+  var occupiedSlots =
+    slots && typeof slots === "object" ? Object.keys(slots) : [];
+  var seen = /** @type {Record<string, boolean>} */ ({});
+  for (var i = 0; i < occupiedSlots.length; i++) {
+    var slotId = occupiedSlots[i];
+    var item = slots[slotId];
+    var itemType = item && item.type ? String(item.type) : "";
+    if (!itemType) continue;
+    seen[slotId] = true;
+    var existing = entry.equipMeshes[slotId];
+    if (existing && existing.itemType === itemType) continue;
+    if (existing) entry.group.remove(existing.mesh);
+    var point = SLOT_ATTACH_POINTS[slotId] || DEFAULT_SLOT_ATTACH_POINT;
+    var mesh = new THREE.Mesh(equipItemGeo, getItemMaterial(itemType));
+    mesh.position.set(point.x, point.y, point.z);
+    entry.group.add(mesh);
+    entry.equipMeshes[slotId] = { mesh: mesh, itemType: itemType };
+  }
+  for (var knownSlotId in entry.equipMeshes) {
+    if (seen[knownSlotId]) continue;
+    entry.group.remove(entry.equipMeshes[knownSlotId].mesh);
+    delete entry.equipMeshes[knownSlotId];
+  }
+}
 
 /**
  * @param {string} pid
@@ -154,6 +222,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
       ),
       waypoints: [],
     };
+    syncAvatarEquippedItems(remoteAvatars[pid], remoteAvatars[pid].slots);
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
     // Position updates are seq-gated, but inventory payloads (e.g. from a
@@ -202,6 +271,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
       remoteAvatars[pid].slots = playerData.slots;
       remoteAvatars[pid].hasLivingData = true;
       appliedLivingData = true;
+      syncAvatarEquippedItems(remoteAvatars[pid], playerData.slots);
     }
     if (
       playerData &&
@@ -328,12 +398,12 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
         npcData && npcData.slots && typeof npcData.slots === "object"
           ? npcData.slots
           : {},
-      bag: npcData && Array.isArray(npcData.bag) ? npcData.bag : [],
       values:
         npcData && npcData.values && typeof npcData.values === "object"
           ? npcData.values
           : {},
     };
+    syncAvatarEquippedItems(npcAvatars[npcId], npcAvatars[npcId].slots);
   } else {
     var knownSeq = Number(npcAvatars[npcId].seq || 0);
     if (incomingSeq !== null && incomingSeq <= knownSeq) return;
@@ -346,9 +416,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
     if (displayName) npcAvatars[npcId].displayName = displayName;
     if (npcData && npcData.slots && typeof npcData.slots === "object") {
       npcAvatars[npcId].slots = npcData.slots;
-    }
-    if (npcData && Array.isArray(npcData.bag)) {
-      npcAvatars[npcId].bag = npcData.bag;
+      syncAvatarEquippedItems(npcAvatars[npcId], npcData.slots);
     }
     if (npcData && npcData.values && typeof npcData.values === "object") {
       npcAvatars[npcId].values = npcData.values;

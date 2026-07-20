@@ -232,19 +232,38 @@ transaction work in item 3).
 
 ### 12. Slot/bag visibility semantics
 
-**Today:** the storage split already exists — living classes define slot
-layouts (`living-registry.ts`) and per-living state is
-`slots + bag + values` — but visibility does not: NPC bag contents are
-shipped to every client, and slot contents only surface in the local UI's
+**Status: implemented (July 2026).** Server-side: `buildWorldNPCSnapshot`
+(`npc-storage.ts`) no longer includes `bag` in the per-NPC snapshot consumed
+by the NPC list route, resync, and initial page bootstrap — only `slots`
+(public) and `inventory_count` (size, not contents) ship; the player list
+path (`listPlayersForUser`) already omitted `bag` and needed no change. The
+one broadcast leak found — `setNicknameHandler`'s cheat-grant path put the
+acting player's full inventory (including bag) into a `presence_update`
+event sent via `sendGlobalPresenceEvent` with an empty (world-wide) filter —
+is now delivered via `sendRecipientScopedStreamEvent` so only the acting
+client's own SSE subscription receives it. The owner-scoped paths
+(`getCurrentWorldStateForUser`, `listItemsForUser`, item/craft/cheat HTTP
+responses) were already correctly full-bag and are unchanged. Client-side:
+`client-avatars.js` renders equipped slot items as small colored boxes
+(reusing `getItemMaterial`'s per-item-type color) attached at
+slot-appropriate positions on remote player, NPC, and the local player's own
+avatar group, via `syncAvatarEquippedItems`, hooked into
+`upsertRemoteAvatar`/`upsertNPCAvatar` (on slot changes) and
+`updateHeldHud` (for the local avatar). `client-tile-detail.js`'s NPC panel
+now shows bag count from `inventory_count` instead of reading (no longer
+present) raw bag contents.
+
+**Original problem:** the storage split already existed — living classes
+define slot layouts (`living-registry.ts`) and per-living state is
+`slots + bag + values` — but visibility did not: NPC bag contents were
+shipped to every client, and slot contents only surfaced in the local UI's
 held-item labels, not on other players' avatars.
 
-**Needed:** slots are public and drive outside appearance (other clients
-render equipped items on the avatar); bag contents are private to the
-owning player/NPC and must be stripped from snapshots, resync payloads, and
-events sent to other parties. Server-side filtering belongs in the snapshot
-and broadcast paths (`player-snapshots.ts`, `stream-broadcast.ts`) so
-privacy does not depend on client behavior; pairs with the interest-
-management filtering of item 5.
+Remaining gap: slot-to-body-position mapping is a hardcoded client-side
+table (`SLOT_ATTACH_POINTS`) mirroring `living-registry.ts`'s slot IDs
+rather than data driven from the slot definitions themselves — a
+creator-defined living class with custom slot IDs falls back to one default
+attachment point. Pairs with the interest-management filtering of item 5.
 
 ### 13. Persistence tiers and the 30-minute world reset
 

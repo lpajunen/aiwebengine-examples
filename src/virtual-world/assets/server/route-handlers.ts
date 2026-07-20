@@ -33,11 +33,8 @@ import { craftRecipeForUser as craftRecipeForUserImpl } from "./crafting-helpers
 import { movePlayerForUser } from "./move-player.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
-import {
-  getEffectiveNick,
-  sendGlobalPresenceEvent,
-  updateOnlinePresence,
-} from "./social-state.ts";
+import { getEffectiveNick, updateOnlinePresence } from "./social-state.ts";
+import { sendRecipientScopedStreamEvent } from "./stream-broadcast.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./tree-action-helpers.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import {
@@ -283,21 +280,23 @@ export function setNicknameHandler(context: any) {
         var presenceSelectors = buildInventorySelectors(
           handled.payload.inventory,
         );
-        sendGlobalPresenceEvent(
-          "upsert",
-          userId,
-          currentWorldId,
-          existingNick,
-          Date.now(),
-          Date.now(),
-          {
-            inventory: handled.payload.inventory,
-            inventory_slot_ids: presenceSelectors.inventory_slot_ids,
-            inventory_selectors: presenceSelectors.inventory_selectors,
-            items: handled.payload.items,
-            message: handled.payload.message,
-          },
-        );
+        // Recipient-scoped, not sendGlobalPresenceEvent: this delivers the
+        // cheat-grant result (including full inventory, i.e. bag contents)
+        // back to the acting client only. Broadcasting it world-wide would
+        // leak that player's private bag to every other connected client.
+        sendRecipientScopedStreamEvent(userId, "presence_update", {
+          action: "upsert",
+          player_id: String(userId),
+          nick: existingNick,
+          world_id: String(currentWorldId),
+          login_at: Date.now(),
+          last_active: Date.now(),
+          inventory: handled.payload.inventory,
+          inventory_slot_ids: presenceSelectors.inventory_slot_ids,
+          inventory_selectors: presenceSelectors.inventory_selectors,
+          items: handled.payload.items,
+          message: handled.payload.message,
+        });
       }
     }
   }

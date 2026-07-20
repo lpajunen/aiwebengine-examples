@@ -300,7 +300,9 @@ function renderTileDetailPanel() {
       var npcData = npcEntry.data || {};
       var npcSlots =
         npcData.slots && typeof npcData.slots === "object" ? npcData.slots : {};
-      var npcBag = Array.isArray(npcData.bag) ? npcData.bag : [];
+      // Bag contents are private and never sent to other clients; only the
+      // count is public (see buildWorldNPCSnapshot on the server).
+      var npcBagCount = Number(npcData.inventory_count) || 0;
       var npcValues =
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
@@ -332,12 +334,12 @@ function renderTileDetailPanel() {
           ) +
           "</div>";
       }
-      if (npcBag.length > 0) {
+      if (npcBagCount > 0) {
         html +=
           '<div class="tile-row">' +
           escHtml(t("tile.bag_items", "Bag items:")) +
           " " +
-          escHtml(String(npcBag.length)) +
+          escHtml(String(npcBagCount)) +
           "</div>";
       }
       var npcValueKeys = Object.keys(npcValues).sort();

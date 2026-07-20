@@ -259,7 +259,6 @@ export function buildWorldNPCSnapshot(
   state: string;
   class_id: string;
   slots: Record<string, any>;
-  bag: any[];
   values: Record<string, unknown>;
   left_hand: string;
   right_hand: string;
@@ -291,8 +290,10 @@ export function buildWorldNPCSnapshot(
       rotation: Number.isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
       state: typeof n.state === "string" ? n.state : "idle",
       class_id: classId,
+      // Slots are public (drive outside appearance); bag contents are
+      // private and intentionally omitted — NPCs have no owning client, so
+      // there is no "self" snapshot that legitimately needs bag data here.
       slots: slots,
-      bag: bag,
       values: values,
       left_hand:
         leftHandItem && leftHandItem.type ? String(leftHandItem.type) : "",

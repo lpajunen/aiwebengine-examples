@@ -273,6 +273,13 @@ canvas {
 #btn-craft:hover {
   background: rgba(168, 110, 38, 1);
 }
+#btn-stats {
+  background: rgba(150, 40, 40, 0.88);
+  border-color: rgba(224, 122, 122, 0.55);
+}
+#btn-stats:hover {
+  background: rgba(178, 50, 50, 1);
+}
 
 #hud-use-picker {
   right: 14px;
@@ -305,6 +312,17 @@ canvas {
 }
 
 #hud-inventory-panel {
+  right: 14px;
+  bottom: 70px;
+  width: min(340px, calc(100vw - 28px));
+  max-height: min(52vh, 460px);
+  overflow: hidden;
+  display: none;
+  pointer-events: auto;
+  padding: 10px;
+  z-index: 1001;
+}
+#hud-statistics-panel {
   right: 14px;
   bottom: 70px;
   width: min(340px, calc(100vw - 28px));
@@ -422,7 +440,8 @@ canvas {
 .inv-row button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
-#inv-list {
+#inv-list,
+#stats-list {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;

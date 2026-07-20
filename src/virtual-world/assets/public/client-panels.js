@@ -146,31 +146,6 @@ function renderInventoryPanel() {
   countDiv.textContent =
     inv.bag.length + " " + t("inventory.items_suffix", "items");
 
-  var livingValueEntries = getLivingValuesEntries(inv);
-  if (livingValueEntries.length > 0) {
-    var valueRows = "";
-    for (var lv = 0; lv < livingValueEntries.length; lv++) {
-      var entry = livingValueEntries[lv];
-      valueRows +=
-        '<div class="inv-row">' +
-        '<span class="label">' +
-        escHtml(livingValueLabel(inv.class_id || "", entry.key)) +
-        "</span>" +
-        '<span class="inv-row-actions">' +
-        renderLivingValueDisplay(
-          getLivingValueSchemaEntry(inv.class_id || "", entry.key),
-          entry.value,
-        ) +
-        "</span>" +
-        "</div>";
-    }
-    listDiv.innerHTML +=
-      '<div class="inv-row"><span class="label" style="grid-column:1/-1;font-weight:700;opacity:0.9">' +
-      escHtml(t("inventory.values", "Living values")) +
-      "</span></div>" +
-      valueRows;
-  }
-
   updateHeldHud();
 }
 
@@ -203,6 +178,54 @@ function closeInventoryPanel() {
 function toggleInventoryPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
   else showInventoryPanel(0);
+}
+
+function renderStatisticsPanel() {
+  var listDiv = requireElementById("stats-list");
+  var inv = normalizeClientInventory(playerInventory);
+  var livingValueEntries = getLivingValuesEntries(inv);
+
+  if (livingValueEntries.length === 0) {
+    listDiv.innerHTML =
+      '<div class="inv-row"><span class="label" style="grid-column:1/-1">' +
+      escHtml(t("stats.empty", "No statistics.")) +
+      "</span></div>";
+    return;
+  }
+
+  var rows = "";
+  for (var lv = 0; lv < livingValueEntries.length; lv++) {
+    var entry = livingValueEntries[lv];
+    rows +=
+      '<div class="inv-row">' +
+      '<span class="label">' +
+      escHtml(livingValueLabel(inv.class_id || "", entry.key)) +
+      "</span>" +
+      '<span class="inv-row-actions">' +
+      renderLivingValueDisplay(
+        getLivingValueSchemaEntry(inv.class_id || "", entry.key),
+        entry.value,
+      ) +
+      "</span>" +
+      "</div>";
+  }
+  listDiv.innerHTML = rows;
+}
+
+function showStatisticsPanel() {
+  statsPanelVisible = true;
+  requireElementById("hud-statistics-panel").style.display = "block";
+  renderStatisticsPanel();
+}
+
+function closeStatisticsPanel() {
+  statsPanelVisible = false;
+  requireElementById("hud-statistics-panel").style.display = "none";
+}
+
+function toggleStatisticsPanel() {
+  if (statsPanelVisible) closeStatisticsPanel();
+  else showStatisticsPanel();
 }
 
 function renderCraftingPanel() {

@@ -214,6 +214,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
     <button id="btn-pick" onclick="pickItemsOnTile()">📦 <span data-i18n-key="hud.pick">Pick</span></button>
     <button id="btn-items" onclick="toggleInventoryPanel()">🎒 <span data-i18n-key="hud.items">Items</span></button>
+    <button id="btn-stats" onclick="toggleStatisticsPanel()">📊 <span data-i18n-key="hud.stats">Stats</span></button>
     <button id="btn-craft" onclick="toggleCraftingPanel()">🛠 <span data-i18n-key="hud.craft">Craft</span></button>
     <button id="btn-players" onclick="togglePlayersPanel()">👥 <span data-i18n-key="hud.players">Players</span></button>
     <button id="btn-chat" onclick="toggleChatPanel()">💬 <span data-i18n-key="hud.chat">Chat</span><span class="unread-badge" id="chat-unread-badge"></span></button>
@@ -244,6 +245,14 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <div id="inv-footer">
       <span id="inv-count">0 items</span>
     </div>
+  </div>
+
+  <div class="hud" id="hud-statistics-panel">
+    <div class="panel-header">
+      <span class="panel-title" data-i18n-key="panel.statistics">Statistics</span>
+      <button class="panel-close" onclick="closeStatisticsPanel()" data-i18n-title="panel.close" title="Close">×</button>
+    </div>
+    <div id="stats-list"></div>
   </div>
 
   <div class="hud" id="hud-crafting-panel">

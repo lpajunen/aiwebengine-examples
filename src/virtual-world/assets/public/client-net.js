@@ -41,6 +41,7 @@ function applyWorldStatePayload(payload, requestSeq) {
   refreshTileDetailIfOpen();
   updateHeldHud();
   if (inventoryPanelVisible) renderInventoryPanel();
+  if (statsPanelVisible) renderStatisticsPanel();
 }
 
 /**
@@ -637,6 +638,7 @@ function initMultiplayer() {
         if (payload.inventory) {
           playerInventory = normalizeClientInventory(payload.inventory);
           renderInventoryPanel();
+          if (statsPanelVisible) renderStatisticsPanel();
           updateUseButtonState();
           updateEditingRightsUI();
         }

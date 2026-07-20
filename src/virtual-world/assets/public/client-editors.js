@@ -19,6 +19,7 @@ function retranslateUI() {
   renderInventoryPanel();
   refreshTileDetailIfOpen();
   updateHeldHud();
+  if (statsPanelVisible) renderStatisticsPanel();
   if (craftingPanelVisible) renderCraftingPanel();
   if (playersPanelVisible) renderPlayersPanel();
   if (itemClassPanelVisible) renderItemClassList();

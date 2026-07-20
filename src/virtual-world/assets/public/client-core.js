@@ -26,6 +26,7 @@ var appRender = virtualWorldApp.render;
 var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
+var statsPanelVisible = false;
 var craftingPanelVisible = false;
 var usePickerVisible = false;
 /** @type {number | null} */

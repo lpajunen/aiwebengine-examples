@@ -57,10 +57,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     inventory: {
       empty: "empty",
       backpack_empty: "Backpack empty",
-      values: "Living values",
       items_suffix: "items",
       drop: "Drop",
       store: "Store",
+    },
+    stats: {
+      empty: "No statistics.",
     },
     living: {
       class: {
@@ -99,6 +101,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       use: "Use",
       pick: "Pick",
       items: "Items",
+      stats: "Stats",
       craft: "Craft",
       players: "Players",
       chat: "Chat",
@@ -127,6 +130,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       close: "Close",
       choose_action: "Choose Action",
       inventory: "Inventory",
+      statistics: "Statistics",
       crafting: "Crafting",
       players_online: "Players Online",
       chat: "Chat",
@@ -373,10 +377,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     inventory: {
       empty: "tyhjä",
       backpack_empty: "Reppu on tyhjä",
-      values: "Olennon arvot",
       items_suffix: "esinettä",
       drop: "Pudota",
       store: "Säilytä",
+    },
+    stats: {
+      empty: "Ei tilastoja.",
     },
     living: {
       class: {
@@ -415,6 +421,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       use: "Käytä",
       pick: "Poimi",
       items: "Tavarat",
+      stats: "Tilastot",
       craft: "Valmista",
       players: "Pelaajat",
       chat: "Keskustelu",
@@ -443,6 +450,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       close: "Sulje",
       choose_action: "Valitse toiminto",
       inventory: "Reppu",
+      statistics: "Tilastot",
       crafting: "Valmistus",
       players_online: "Pelaajat verkossa",
       chat: "Keskustelu",

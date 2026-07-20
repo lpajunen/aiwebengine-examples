@@ -45,6 +45,7 @@ function applyItemStateFromResult(result) {
   refreshTileDetailIfOpen();
   updateHeldHud();
   renderInventoryPanel();
+  if (statsPanelVisible) renderStatisticsPanel();
   if (craftingPanelVisible) renderCraftingPanel();
   updateUseButtonState();
 }

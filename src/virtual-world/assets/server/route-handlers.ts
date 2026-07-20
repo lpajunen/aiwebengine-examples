@@ -27,7 +27,9 @@ import {
   summarizeItems,
   vwDiag,
 } from "./diagnostics.ts";
+import { handleItemActionForUser as handleItemActionForUserImpl } from "./item-action-helpers.ts";
 import { loadPlayerInventory, loadWorldItems } from "./item-storage.ts";
+import { craftRecipeForUser as craftRecipeForUserImpl } from "./crafting-helpers.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
@@ -36,6 +38,7 @@ import {
   sendGlobalPresenceEvent,
   updateOnlinePresence,
 } from "./social-state.ts";
+import { performTreeActionForUser as performTreeActionForUserImpl } from "./tree-action-helpers.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import {
   OAK_WORLD_ID,
@@ -111,7 +114,7 @@ export function withInventorySelectors(payload: any) {
  */
 export function handleItemActionForUser(userId: any, body: any): any {
   return runInWorldTransaction("item_action", function () {
-    return handleItemActionForUser(userId, body);
+    return handleItemActionForUserImpl(userId, body);
   });
 }
 
@@ -132,7 +135,7 @@ export function craftRecipeForUser(userId: any, body: any): any {
  * @returns {{status: number, payload: any}}
  */
 export function craftRecipeForUserInner(userId: any, body: any): any {
-  return craftRecipeForUser(userId, body);
+  return craftRecipeForUserImpl(userId, body);
 }
 
 /**
@@ -152,7 +155,7 @@ export function performTreeActionForUser(userId: any, body: any): any {
  * @returns {{status: number, payload: any}}
  */
 export function performTreeActionForUserInner(userId: any, body: any): any {
-  return performTreeActionForUser(userId, body);
+  return performTreeActionForUserImpl(userId, body);
 }
 
 /**

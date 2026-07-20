@@ -237,11 +237,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <span class="panel-title" data-i18n-key="panel.inventory">Inventory</span>
       <button class="panel-close" onclick="closeInventoryPanel()" data-i18n-title="panel.close" title="Close">×</button>
     </div>
-    <div class="inv-hands">
-      <div class="inv-hand" id="inv-left-hand"></div>
-      <div class="inv-hand" id="inv-right-hand"></div>
-    </div>
-    <div id="inv-list"></div>
+    <div class="inv-slots" id="inv-slots"></div>
+    <div id="inv-bag-list"></div>
     <div id="inv-footer">
       <span id="inv-count">0 items</span>
     </div>

@@ -400,13 +400,13 @@ canvas {
   font-size: 11px;
   color: #9bc3da;
 }
-.inv-hands {
+.inv-slots {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-bottom: 8px;
 }
-.inv-hand {
+.inv-slot {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;
@@ -414,7 +414,7 @@ canvas {
   font-size: 12px;
   line-height: 1.5;
 }
-.inv-hand .name {
+.inv-slot .name {
   font-weight: 700;
   color: #d2e8ff;
 }
@@ -440,7 +440,7 @@ canvas {
 .inv-row button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
-#inv-list,
+#inv-bag-list,
 #stats-list {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);

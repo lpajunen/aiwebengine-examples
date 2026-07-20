@@ -2,13 +2,11 @@
 // HUD panels: inventory, crafting, online players, nick editing.
 
 function renderInventoryPanel() {
-  var leftDiv = requireElementById("inv-left-hand");
-  var rightDiv = requireElementById("inv-right-hand");
-  var listDiv = requireElementById("inv-list");
+  var slotsDiv = requireElementById("inv-slots");
+  var listDiv = requireElementById("inv-bag-list");
   var countDiv = requireElementById("inv-count");
   var inv = normalizeClientInventory(playerInventory);
   var slotIds = getInventorySlotIds(inv);
-  var handSlotIds = getPrimaryHeldSlotIds(inv);
 
   /**
    * @param {string} title
@@ -16,7 +14,7 @@ function renderInventoryPanel() {
    * @param {ClientItem | null} item
    * @returns {string}
    */
-  function handHtml(title, slot, item) {
+  function slotHtml(title, slot, item) {
     var label = item ? inventoryItemLabel(item) : t("inventory.empty", "empty");
     var html =
       '<div class="name">' +
@@ -46,52 +44,23 @@ function renderInventoryPanel() {
     return html;
   }
 
-  leftDiv.innerHTML = handHtml(
-    inventorySlotLabel(inv, handSlotIds[0]),
-    handSlotIds[0],
-    inv.slots[handSlotIds[0]] || null,
-  );
-  rightDiv.innerHTML = handHtml(
-    inventorySlotLabel(inv, handSlotIds[1]),
-    handSlotIds[1],
-    inv.slots[handSlotIds[1]] || null,
-  );
-
-  var remainingSlotIds = slotIds.filter(function (slotId) {
-    return slotId !== handSlotIds[0] && slotId !== handSlotIds[1];
-  });
-  var rows = "";
-  for (var s = 0; s < remainingSlotIds.length; s++) {
-    var slotId = remainingSlotIds[s];
-    var slotItem = inv.slots[slotId] || null;
-    rows +=
-      '<div class="inv-row">' +
-      '<span class="label">' +
-      escHtml(inventorySlotLabel(inv, slotId)) +
-      ": " +
-      escHtml(
-        slotItem ? inventoryItemLabel(slotItem) : t("inventory.empty", "empty"),
+  var slotBoxes = "";
+  for (var s = 0; s < slotIds.length; s++) {
+    var slotId = slotIds[s];
+    slotBoxes +=
+      '<div class="inv-slot" id="inv-slot-' +
+      slotId +
+      '">' +
+      slotHtml(
+        inventorySlotLabel(inv, slotId),
+        slotId,
+        inv.slots[slotId] || null,
       ) +
-      "</span>" +
-      '<span class="inv-row-actions">' +
-      (slotItem
-        ? (slotItem.non_droppable
-            ? ""
-            : "<button onclick=\"dropFromSlot('" +
-              slotId +
-              "')\">" +
-              escHtml(t("inventory.drop", "Drop")) +
-              "</button> ") +
-          "<button onclick=\"equipToInventory('" +
-          slotId +
-          "')\">" +
-          escHtml(t("inventory.store", "Store")) +
-          "</button>"
-        : "") +
-      "</span>" +
       "</div>";
   }
+  slotsDiv.innerHTML = slotBoxes;
 
+  var rows = "";
   if (!Array.isArray(inv.bag) || inv.bag.length === 0) {
     rows +=
       '<div class="inv-row"><span class="label" style="grid-column:1/-1">' +

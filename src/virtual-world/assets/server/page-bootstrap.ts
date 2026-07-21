@@ -335,6 +335,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><input id="ic-spawnable" type="checkbox"> <span data-i18n-key="class_editor.spawnable">Spawnable</span></label>
         <label><input id="ic-extra" type="checkbox"> <span data-i18n-key="class_editor.extra">Extra</span></label>
         <label><input id="ic-non-droppable" type="checkbox"> <span data-i18n-key="class_editor.non_droppable">Non-droppable</span></label>
+        <label><input id="ic-non-pickable" type="checkbox"> <span data-i18n-key="class_editor.non_pickable">Non-pickable</span></label>
         <label><span data-i18n-key="class_editor.action_ids_label">Action IDs (comma-sep)</span> <input id="ic-action-ids" type="text" placeholder="tune,play_tune" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.state_template_label">State template (JSON)</span> <textarea id="ic-state-template" rows="3" placeholder='{"key": 0}'></textarea></label>
       </div>

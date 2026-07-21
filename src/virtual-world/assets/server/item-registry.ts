@@ -32,6 +32,7 @@ export interface ItemDefinition {
   spawnable?: boolean;
   extra?: boolean;
   nonDroppable?: boolean;
+  nonPickable?: boolean;
   visuals: {
     color: number;
     labelKey: string;
@@ -46,6 +47,7 @@ export interface ItemClassRecord {
   spawnable: boolean;
   extra: boolean;
   nonDroppable: boolean;
+  nonPickable: boolean;
   visuals: {
     color: number;
     labelKey: string;
@@ -201,6 +203,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     id: "portal",
     kind: "placeable",
     extra: true,
+    nonPickable: true,
     visuals: {
       color: 0x5ad7ff,
       labelKey: "item.portal.name",
@@ -225,6 +228,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     kind: "placeable",
     extra: true,
     nonDroppable: true,
+    nonPickable: true,
     visuals: {
       color: 0xb54434,
       labelKey: "item.blessing_marker.name",
@@ -248,6 +252,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     kind: "placeable",
     extra: true,
     nonDroppable: true,
+    nonPickable: true,
     visuals: {
       color: 0x4a3222,
       labelKey: "item.old_oak.name",
@@ -508,6 +513,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     spawnable: !!def.spawnable,
     extra: !!def.extra,
     nonDroppable: !!def.nonDroppable,
+    nonPickable: !!def.nonPickable,
     visuals: {
       color: def.visuals.color,
       labelKey: def.visuals.labelKey,
@@ -530,6 +536,7 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
     spawnable: row.spawnable === 1 || row.spawnable === true,
     extra: row.extra === 1 || row.extra === true,
     nonDroppable: row.non_droppable === 1 || row.non_droppable === true,
+    nonPickable: row.non_pickable === 1 || row.non_pickable === true,
     visuals: {
       color: Number(row.color || 0),
       labelKey: String(row.label_key || ""),
@@ -561,6 +568,7 @@ function itemClassToDbRow(
   spawnable: number;
   extra: number;
   non_droppable: number;
+  non_pickable: number;
   color: number;
   label_key: string;
   fallback_label: string;
@@ -576,6 +584,7 @@ function itemClassToDbRow(
     spawnable: record.spawnable ? 1 : 0,
     extra: record.extra ? 1 : 0,
     non_droppable: record.nonDroppable ? 1 : 0,
+    non_pickable: record.nonPickable ? 1 : 0,
     color: record.visuals.color,
     label_key: record.visuals.labelKey,
     fallback_label: record.visuals.fallbackLabel,
@@ -875,10 +884,9 @@ export function deleteActionClass(actionId: string): void {
 }
 
 export function isPickableWorldItem(item: any): boolean {
-  return (
-    !!item &&
-    item.type !== "portal" &&
-    item.type !== "blessing_marker" &&
-    item.type !== "old_oak"
-  );
+  if (!item) return false;
+  const cls = getItemClass(String(item.type || ""));
+  if (cls) return !cls.nonPickable;
+  const def = getItemDefinition(String(item.type || ""));
+  return !(def && def.nonPickable);
 }

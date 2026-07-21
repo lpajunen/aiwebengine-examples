@@ -256,6 +256,10 @@ export function registerVirtualWorldRuntime(): void {
         type: "boolean",
         description: "Whether the item cannot be dropped",
       },
+      nonPickable: {
+        type: "boolean",
+        description: "Whether the item cannot be picked up",
+      },
       color: {
         type: "number",
         description: "Hex color integer for the item (e.g. 0xffa500)",

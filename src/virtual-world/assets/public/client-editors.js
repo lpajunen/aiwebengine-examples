@@ -174,6 +174,9 @@ function editItemClass(id) {
         requireElementById("ic-non-droppable")
       ).checked = !!ic.nonDroppable;
       /** @type {HTMLInputElement} */ (
+        requireElementById("ic-non-pickable")
+      ).checked = !!ic.nonPickable;
+      /** @type {HTMLInputElement} */ (
         requireElementById("ic-action-ids")
       ).value = Array.isArray(ic.actionIds) ? ic.actionIds.join(",") : "";
       /** @type {HTMLTextAreaElement} */ (
@@ -207,6 +210,9 @@ function cancelItemClassEdit() {
     false;
   /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
+  ).checked = false;
+  /** @type {HTMLInputElement} */ (
+    requireElementById("ic-non-pickable")
   ).checked = false;
   /** @type {HTMLInputElement} */ (requireElementById("ic-action-ids")).value =
     "";
@@ -244,6 +250,9 @@ function submitItemClassForm() {
   var nonDroppableVal = /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked;
+  var nonPickableVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-non-pickable")
+  ).checked;
   var actionIdsRaw = /** @type {HTMLInputElement} */ (
     requireElementById("ic-action-ids")
   ).value;
@@ -277,6 +286,7 @@ function submitItemClassForm() {
     spawnable: spawnableVal,
     extra: extraVal,
     nonDroppable: nonDroppableVal,
+    nonPickable: nonPickableVal,
     visuals: { fallbackLabel: labelVal || idVal },
     actionIds: actionIds,
     stateTemplate: stateTemplate,

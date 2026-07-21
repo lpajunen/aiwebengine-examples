@@ -788,6 +788,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addIntegerColumn", "spawnable", false],
     ["addIntegerColumn", "extra", false],
     ["addIntegerColumn", "non_droppable", false],
+    ["addIntegerColumn", "non_pickable", false],
     ["addIntegerColumn", "color", false],
     ["addTextColumn", "label_key", false],
     ["addTextColumn", "fallback_label", false],

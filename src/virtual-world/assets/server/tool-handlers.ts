@@ -281,6 +281,7 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
       spawnable: !!args.spawnable,
       extra: !!args.extra,
       nonDroppable: !!args.nonDroppable,
+      nonPickable: !!args.nonPickable,
       visuals: {
         color: Number(args.color || 0),
         labelKey: String(args.labelKey || ""),

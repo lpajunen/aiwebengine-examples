@@ -21,6 +21,7 @@ export function upsertItemClassRow(row: {
   spawnable: number;
   extra: number;
   non_droppable: number;
+  non_pickable: number;
   color: number;
   label_key: string;
   fallback_label: string;

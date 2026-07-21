@@ -77,6 +77,7 @@ export function createItemClassHandler(context: any) {
     spawnable: !!(body && body.spawnable),
     extra: !!(body && body.extra),
     nonDroppable: !!(body && body.nonDroppable),
+    nonPickable: !!(body && body.nonPickable),
     visuals: {
       color: Number((body && body.visuals && body.visuals.color) || 0),
       labelKey: String((body && body.visuals && body.visuals.labelKey) || ""),
@@ -151,6 +152,10 @@ export function updateItemClassHandler(context: any) {
       body && body.nonDroppable !== undefined
         ? !!body.nonDroppable
         : existing.nonDroppable,
+    nonPickable:
+      body && body.nonPickable !== undefined
+        ? !!body.nonPickable
+        : existing.nonPickable,
     visuals: {
       color: Number(
         body && body.visuals && body.visuals.color !== undefined

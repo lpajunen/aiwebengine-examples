@@ -33,7 +33,7 @@ import {
   getEffectiveMap,
   getWorldDimensions,
 } from "./world-bootstrap.ts";
-import { getWorldClass } from "./world-class-storage.ts";
+import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
   OAK_WORLD_ID,
   canInventoryUseTreeAction,
@@ -803,7 +803,7 @@ export function performTreeActionForUser(
     let portalWorldType = requestedPortalWorldType;
     let portalDimensions = requestedPortalDimensions;
     if (requestedWorldClassId) {
-      const worldClass = getWorldClass(requestedWorldClassId);
+      const worldClass = getWorldClassWithRefresh(requestedWorldClassId);
       if (!worldClass) {
         return {
           status: 200,

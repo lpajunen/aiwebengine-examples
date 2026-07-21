@@ -12,6 +12,8 @@ import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
 import { isOakClearingTile } from "./world-domain.ts";
 import {
+  checkHouseBuildable,
+  checkTreePlantable,
   loadWorldHouses,
   loadWorldTrees,
   saveWorldHouses,
@@ -116,9 +118,6 @@ export function craftRecipeForUser(
   for (let i = 0; i < recipe.outputs.length; i++) {
     const output = recipe.outputs[i];
     if (output.kind === "place_tree") {
-      const existingTree = trees[tileKey] && trees[tileKey].action === "plant";
-      const wasCut = trees[tileKey] && trees[tileKey].action === "cut";
-      const baseHasTree = map[target.row][target.col] === 2;
       if (isOakClearingTile(worldId, target.row, target.col)) {
         return {
           status: 200,
@@ -129,11 +128,7 @@ export function craftRecipeForUser(
           },
         };
       }
-      if (
-        existingTree ||
-        (baseHasTree && !wasCut) ||
-        (map[target.row][target.col] !== 0 && !wasCut)
-      ) {
+      if (!checkTreePlantable(target.row, target.col, map, trees).ok) {
         return {
           status: 200,
           payload: {
@@ -155,7 +150,7 @@ export function craftRecipeForUser(
           },
         };
       }
-      if (map[target.row][target.col] !== 0 || houses[tileKey]) {
+      if (!checkHouseBuildable(target.row, target.col, map, houses).ok) {
         return {
           status: 200,
           payload: {

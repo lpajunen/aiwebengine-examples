@@ -139,6 +139,51 @@ export function saveWorldModLayer(
   });
 }
 
+export type TreePlantBlockReason = "tile_occupied" | "tree_exists";
+
+// Shared by the "plant" tree action and the grow_pine_tree recipe — both
+// need to know whether a tile can receive a newly planted tree.
+export function checkTreePlantable(
+  row: number,
+  col: number,
+  map: number[][],
+  trees: Record<string, any>,
+): { ok: true } | { ok: false; reason: TreePlantBlockReason } {
+  const tileKey = row + "_" + col;
+  const treeState = trees[tileKey];
+  const hasExistingTree = treeState && treeState.action === "plant";
+  const wasTreeCut = treeState && treeState.action === "cut";
+  const baseHasTree = map[row] && map[row][col] === 2;
+
+  if (map[row] && map[row][col] !== 0 && !wasTreeCut) {
+    return { ok: false, reason: "tile_occupied" };
+  }
+  if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
+    return { ok: false, reason: "tree_exists" };
+  }
+  return { ok: true };
+}
+
+export type HouseBuildBlockReason = "not_walkable" | "house_exists";
+
+// Shared by the "build_house" action and the (recipe-driven) place_house
+// output kind — both need to know whether a tile can receive a new house.
+export function checkHouseBuildable(
+  row: number,
+  col: number,
+  map: number[][],
+  houses: Record<string, any>,
+): { ok: true } | { ok: false; reason: HouseBuildBlockReason } {
+  const tileKey = row + "_" + col;
+  if (map[row] && map[row][col] !== 0) {
+    return { ok: false, reason: "not_walkable" };
+  }
+  if (houses[tileKey]) {
+    return { ok: false, reason: "house_exists" };
+  }
+  return { ok: true };
+}
+
 export function loadWorldTrees(worldId: string): Record<string, any> {
   const worldMods = loadWorldMods(worldId);
   const trees: Record<string, any> = {};

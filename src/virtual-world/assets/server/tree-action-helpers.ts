@@ -50,6 +50,8 @@ import {
   worldTypeForPortalBuildAction,
 } from "./world-domain.ts";
 import {
+  checkHouseBuildable,
+  checkTreePlantable,
   loadWorldHouses,
   loadWorldTrees,
   saveWorldHouses,
@@ -354,19 +356,31 @@ export function performTreeActionForUser(
     const validation = actionDefinition && actionDefinition.validation;
     if (!validation) return null;
 
-    if (validation.requireWalkableTile && map[row] && map[row][col] !== 0) {
-      return validation.requireWalkableTile.errorMessage;
-    }
-
-    const tileKey = row + "_" + col;
-
-    if (validation.requireHouseState) {
-      const hasHouse = !!houses[tileKey];
-      if (validation.requireHouseState.kind === "present" && !hasHouse) {
-        return validation.requireHouseState.errorMessage;
+    if (
+      validation.requireWalkableTile &&
+      validation.requireHouseState &&
+      validation.requireHouseState.kind === "absent"
+    ) {
+      const buildable = checkHouseBuildable(row, col, map, houses);
+      if (!buildable.ok) {
+        return buildable.reason === "not_walkable"
+          ? validation.requireWalkableTile.errorMessage
+          : validation.requireHouseState.errorMessage;
       }
-      if (validation.requireHouseState.kind === "absent" && hasHouse) {
-        return validation.requireHouseState.errorMessage;
+    } else {
+      if (validation.requireWalkableTile && map[row] && map[row][col] !== 0) {
+        return validation.requireWalkableTile.errorMessage;
+      }
+
+      if (validation.requireHouseState) {
+        const tileKey = row + "_" + col;
+        const hasHouse = !!houses[tileKey];
+        if (validation.requireHouseState.kind === "present" && !hasHouse) {
+          return validation.requireHouseState.errorMessage;
+        }
+        if (validation.requireHouseState.kind === "absent" && hasHouse) {
+          return validation.requireHouseState.errorMessage;
+        }
       }
     }
 
@@ -391,15 +405,13 @@ export function performTreeActionForUser(
       const baseHasTree = map[row] && map[row][col] === 2;
 
       if (validation.requireTreeState.kind === "plantable") {
-        if (map[row] && map[row][col] !== 0 && !wasTreeCut) {
-          return (
-            validation.requireTreeState.missingErrorMessage || "Cannot use here"
-          );
-        }
-        if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-          return (
-            validation.requireTreeState.conflictErrorMessage || "Already exists"
-          );
+        const plantable = checkTreePlantable(row, col, map, trees);
+        if (!plantable.ok) {
+          return plantable.reason === "tile_occupied"
+            ? validation.requireTreeState.missingErrorMessage ||
+                "Cannot use here"
+            : validation.requireTreeState.conflictErrorMessage ||
+                "Already exists";
         }
       }
 

@@ -786,6 +786,31 @@ export function canTileItemsUseTreeAction(
   return false;
 }
 
+function getAdjacentTileKeys(row: number, col: number): string[] {
+  return [
+    row - 1 + "_" + col,
+    row + 1 + "_" + col,
+    row + "_" + (col - 1),
+    row + "_" + (col + 1),
+  ];
+}
+
+// Items usable for an action-availability check: the living's current tile
+// plus its four cardinal neighbors, matching how far a living can reach.
+export function getNearbyTileItems(
+  worldItems: Record<string, unknown>,
+  row: number,
+  col: number,
+): unknown[] {
+  const keys = [row + "_" + col].concat(getAdjacentTileKeys(row, col));
+  let items: unknown[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    const tileItems = worldItems[keys[i]];
+    if (Array.isArray(tileItems)) items = items.concat(tileItems);
+  }
+  return items;
+}
+
 export function toStoredWorldTimestamp(tsMs: number): number {
   const numeric = Number(tsMs || 0);
   if (!isFinite(numeric) || numeric <= 0) return Math.floor(Date.now() / 1000);

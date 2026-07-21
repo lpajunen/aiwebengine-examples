@@ -39,6 +39,7 @@ import {
   canInventoryUseTreeAction,
   canTileItemsUseTreeAction,
   canonicalTreeAction,
+  getNearbyTileItems,
   isOakCenterTile,
   isOakClearingTile,
   normalizeWorldType,
@@ -123,11 +124,7 @@ export function performTreeActionForUser(
   const rotation = Number.isFinite(Number(body && body.rotation))
     ? Number(body.rotation)
     : canonical.rotation;
-  const currentTileKey = canonical.row + "_" + canonical.col;
   const worldItems = loadWorldItems(worldId);
-  const currentTileItems = Array.isArray(worldItems[currentTileKey])
-    ? worldItems[currentTileKey]
-    : [];
 
   function getTileItemsSnapshot(row: number, col: number): any[] {
     const key = row + "_" + col;
@@ -462,9 +459,14 @@ export function performTreeActionForUser(
   }
 
   const resolvedTarget = resolveActionTarget();
+  const nearbyTileItems = getNearbyTileItems(
+    worldItems,
+    canonical.row,
+    canonical.col,
+  );
   const canUseAction =
     canInventoryUseTreeAction(inv, action) ||
-    canTileItemsUseTreeAction(currentTileItems, action);
+    canTileItemsUseTreeAction(nearbyTileItems, action);
 
   function maybeApplyLogicEffects(): void {
     if (
@@ -593,15 +595,17 @@ export function performTreeActionForUser(
   }
 
   if (action === "portal_travel") {
-    const portalTileItems = getTileItemsSnapshot(
-      resolvedTarget.row,
-      resolvedTarget.col,
-    );
-    const portalEntry = portalTileItems.find(function (item) {
-      return item && item.type === "portal";
+    const portalEntry = nearbyTileItems.find(function (item) {
+      return isValidItem(item) && item.type === "portal";
     });
+    if (!portalEntry) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.missing_required_item_for_action" },
+      };
+    }
     const newWorldId =
-      portalEntry && portalEntry.destination_world_id
+      isValidItem(portalEntry) && portalEntry.destination_world_id
         ? String(portalEntry.destination_world_id)
         : "10000";
     switchUserWorld(userId, newWorldId);

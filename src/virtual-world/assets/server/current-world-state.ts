@@ -21,6 +21,7 @@ import { loadWorldHouses, loadWorldMods } from "./world-mod-storage.ts";
 import {
   buildInventorySelectors,
   getAllLivingItems,
+  getNearbyTileItems,
   LivingState,
 } from "./world-domain.ts";
 
@@ -233,7 +234,10 @@ export function getCurrentWorldStateForUser(userId: string): {
     houses: loadWorldHouses(worldId),
     inventory_slot_ids: inventorySlotIds,
     inventory_selectors: inventorySelectors,
-    available_actions: getAvailableWorldActions(inventory, currentTileItems),
+    available_actions: getAvailableWorldActions(
+      inventory,
+      getNearbyTileItems(worldItems, canonical.row, canonical.col),
+    ),
     move_options: getMoveOptions(String(worldId), canonical),
     facing_tile: getTargetTileFromRotation(
       canonical.row,

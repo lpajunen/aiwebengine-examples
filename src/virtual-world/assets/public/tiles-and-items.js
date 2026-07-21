@@ -679,9 +679,18 @@ function getOwnedTreeActions() {
     for (var b = 0; b < inv.bag.length; b++) all.push(inv.bag[b]);
   }
 
-  var tileItems = worldItemsByTile[avatarRow + "_" + avatarCol];
-  if (Array.isArray(tileItems)) {
-    for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);
+  var nearbyTileKeys = [
+    avatarRow + "_" + avatarCol,
+    avatarRow - 1 + "_" + avatarCol,
+    avatarRow + 1 + "_" + avatarCol,
+    avatarRow + "_" + (avatarCol - 1),
+    avatarRow + "_" + (avatarCol + 1),
+  ];
+  for (var t = 0; t < nearbyTileKeys.length; t++) {
+    var tileItems = worldItemsByTile[nearbyTileKeys[t]];
+    if (Array.isArray(tileItems)) {
+      for (var k = 0; k < tileItems.length; k++) all.push(tileItems[k]);
+    }
   }
   for (var j = 0; j < all.length; j++) {
     var actions = treeActionsForItemType(all[j] && all[j].type);

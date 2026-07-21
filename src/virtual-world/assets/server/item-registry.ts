@@ -653,15 +653,21 @@ export function refreshItemClassCache(): void {
 }
 
 export function getAllItemClasses(): ItemClassRecord[] {
-  if (!_itemClassCache) return [];
-  return Object.keys(_itemClassCache).map(function (id) {
-    return (_itemClassCache as Record<string, ItemClassRecord>)[id];
-  });
+  if (!_itemClassCache) refreshItemClassCache();
+  return Object.keys(_itemClassCache as Record<string, ItemClassRecord>).map(
+    function (id) {
+      return (_itemClassCache as Record<string, ItemClassRecord>)[id];
+    },
+  );
 }
 
 export function getItemClass(itemId: string): ItemClassRecord | null {
-  if (!_itemClassCache) return null;
-  return _itemClassCache[String(itemId || "")] || null;
+  if (!_itemClassCache) refreshItemClassCache();
+  return (
+    (_itemClassCache as Record<string, ItemClassRecord>)[
+      String(itemId || "")
+    ] || null
+  );
 }
 
 export function upsertItemClass(record: ItemClassRecord): {

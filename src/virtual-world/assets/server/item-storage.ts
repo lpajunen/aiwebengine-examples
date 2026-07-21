@@ -311,24 +311,31 @@ export function nextWorldItemId(worldId: string): number {
 export function ensureOldOakItem(worldId: string): void {
   if (!isOakWorld(worldId)) return;
   const items = loadWorldItems(worldId);
-  let existingId: string | null = null;
-  let existingTileKey: string | null = null;
+  const found: Array<{ item: any; tileKey: string }> = [];
   for (const tileKey of Object.keys(items)) {
-    const found = items[tileKey].find(function (item) {
-      return item && item.type === "old_oak";
-    });
-    if (found) {
-      existingId = String(found.id);
-      existingTileKey = tileKey;
-      break;
+    for (const item of items[tileKey]) {
+      if (item && item.type === "old_oak") found.push({ item, tileKey });
     }
   }
 
+  // Self-heal: concurrent requests racing to seed the singleton oak on a
+  // fresh world can each insert their own copy; keep the lowest id (oldest)
+  // and delete any others so exactly one old_oak item ever survives.
+  found.sort(function (a, b) {
+    return String(a.item.id).localeCompare(String(b.item.id));
+  });
+  const canonical = found.length > 0 ? found[0] : null;
+  for (let i = 1; i < found.length; i++) {
+    deleteWorldItemById(String(found[i].item.id));
+  }
+
   const centerTileKey = OAK_CENTER_ROW + "_" + OAK_CENTER_COL;
-  if (existingId && existingTileKey === centerTileKey) return;
+  if (canonical && canonical.tileKey === centerTileKey) return;
 
   upsertWorldItem(worldId, OAK_CENTER_ROW, OAK_CENTER_COL, {
-    id: existingId || "w" + worldId + "_i" + nextWorldItemId(worldId),
+    id: canonical
+      ? canonical.item.id
+      : "w" + worldId + "_i" + nextWorldItemId(worldId),
     type: "old_oak",
     created_at: Date.now(),
     non_droppable: true,

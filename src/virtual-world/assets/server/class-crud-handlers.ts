@@ -20,7 +20,7 @@ import {
 import {
   deleteWorldClass,
   getAllWorldClasses,
-  getWorldClass,
+  getWorldClassWithRefresh,
   isBuiltinWorldClassId,
   normalizeWorldClassRecord,
   refreshWorldClassCache,
@@ -664,7 +664,7 @@ export function updateWorldClassHandler(context: any) {
   } catch (e) {
     return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
-  var existing = getWorldClass(classId);
+  var existing = getWorldClassWithRefresh(classId);
   if (!existing) {
     return ResponseBuilder.json(
       { ok: false, error: "error.world_class_not_found" },

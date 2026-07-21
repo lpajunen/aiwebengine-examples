@@ -67,6 +67,8 @@ import {
   applyEffects,
 } from "./action-logic-interpreter.ts";
 import {
+  consumeLivingItemsByType,
+  countLivingItemsByType,
   findFirstLivingItemByTypes,
   getNPCDisplayName,
   isValidItem,
@@ -786,6 +788,29 @@ export function performTreeActionForUser(
       status: 200,
       payload: { ok: false, error: actionValidationError },
     };
+  }
+
+  if (
+    actionDefinition &&
+    actionDefinition.cost &&
+    actionDefinition.cost.length > 0
+  ) {
+    const heldCounts = countLivingItemsByType(inv);
+    const costItems = actionDefinition.cost;
+    for (let i = 0; i < costItems.length; i++) {
+      if (
+        (heldCounts[costItems[i].itemId] || 0) < Number(costItems[i].count || 0)
+      ) {
+        return {
+          status: 200,
+          payload: { ok: false, error: "error.missing_required_ingredients" },
+        };
+      }
+    }
+    for (let i = 0; i < costItems.length; i++) {
+      consumeLivingItemsByType(inv, costItems[i].itemId, costItems[i].count);
+    }
+    savePlayerInventory(userId, inv);
   }
 
   if (action === "build_house") {

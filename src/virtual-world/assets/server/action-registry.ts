@@ -13,6 +13,7 @@ export interface ActionDefinition {
     | "living"
     | "inventory";
   sourceItemIds: string[];
+  cost?: Array<{ itemId: string; count: number }>;
   canonicalId?: string;
   execution?: {
     toastMessage?: string;

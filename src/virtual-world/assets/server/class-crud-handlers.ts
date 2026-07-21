@@ -273,6 +273,7 @@ export function createActionClassHandler(context: any) {
     execution: body && body.execution ? body.execution : undefined,
     validation: body && body.validation ? body.validation : undefined,
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
+    cost: body && body.cost ? body.cost : undefined,
   };
   var actionCreateWrite = upsertActionClass(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
@@ -353,6 +354,7 @@ export function updateActionClassHandler(context: any) {
       body && body.logicSpec !== undefined
         ? body.logicSpec
         : existing.logicSpec,
+    cost: body && body.cost !== undefined ? body.cost : existing.cost,
   };
   var actionUpdateWrite = upsertActionClass(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {

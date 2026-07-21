@@ -371,6 +371,7 @@ export function virtualWorldManageActionClassesToolHandler(
       execution: args.execution ?? undefined,
       validation: args.validation ?? undefined,
       logicSpec: args.logicSpec ?? undefined,
+      cost: args.cost ?? undefined,
     };
     const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {

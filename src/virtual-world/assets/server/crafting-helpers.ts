@@ -22,21 +22,8 @@ import {
 import { getRecipeDefinition } from "./item-registry.ts";
 import {
   consumeLivingItemsByType,
-  getAllLivingItems,
-  LivingState,
+  countLivingItemsByType,
 } from "./world-domain.ts";
-
-function countItemsByType(inventory: LivingState): Record<string, number> {
-  const counts: Record<string, number> = {};
-  const items = getAllLivingItems(inventory);
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const type = item && item.type ? String(item.type) : "";
-    if (!type) continue;
-    counts[type] = (counts[type] || 0) + 1;
-  }
-  return counts;
-}
 
 function makeCraftedItemId(worldId: string, itemSeq: number): string {
   return "w" + worldId + "_i" + String(itemSeq);
@@ -65,7 +52,7 @@ export function craftRecipeForUser(
   ensureWorldItems(worldId);
 
   const inventory = loadPlayerInventory(userId);
-  const counts = countItemsByType(inventory);
+  const counts = countLivingItemsByType(inventory);
   for (let i = 0; i < recipe.inputItems.length; i++) {
     const input = recipe.inputItems[i];
     if ((counts[input.itemId] || 0) < Number(input.count || 0)) {

@@ -836,6 +836,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "execution_json", true],
     ["addTextColumn", "validation_json", true],
     ["addTextColumn", "logic_spec_json", true],
+    ["addTextColumn", "cost_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {

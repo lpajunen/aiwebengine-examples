@@ -734,6 +734,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["validation"] | undefined,
     logicSpec: parseJson(row.logic_spec_json, undefined) as
       ActionDefinition["logicSpec"] | undefined,
+    cost: parseJson(row.cost_json, undefined) as
+      ActionDefinition["cost"] | undefined,
   };
 }
 
@@ -750,6 +752,7 @@ function actionClassToDbRow(
   execution_json: string;
   validation_json: string;
   logic_spec_json: string;
+  cost_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -764,6 +767,7 @@ function actionClassToDbRow(
     execution_json: record.execution ? JSON.stringify(record.execution) : "",
     validation_json: record.validation ? JSON.stringify(record.validation) : "",
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
+    cost_json: record.cost ? JSON.stringify(record.cost) : "",
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -802,6 +806,10 @@ function backfillActionClassDefaults(
     }
     if (existing.logicSpec === undefined && def.logicSpec !== undefined) {
       existing.logicSpec = def.logicSpec;
+      changed = true;
+    }
+    if (existing.cost === undefined && def.cost !== undefined) {
+      existing.cost = def.cost;
       changed = true;
     }
     if (changed) {

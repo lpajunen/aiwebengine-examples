@@ -342,6 +342,18 @@ export function registerVirtualWorldRuntime(): void {
           },
         },
       },
+      cost: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            itemId: { type: "string" },
+            count: { type: "number" },
+          },
+        },
+        description:
+          "Optional item cost consumed from the player's inventory when the action succeeds",
+      },
     },
   });
   safeRegisterTool(

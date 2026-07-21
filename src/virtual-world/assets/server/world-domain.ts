@@ -633,6 +633,18 @@ export function getAllLivingItems(inv: unknown): InventoryItem[] {
   return getEquippedItems(inv).concat(getBagItems(inv));
 }
 
+export function countLivingItemsByType(inv: unknown): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const items = getAllLivingItems(inv);
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const type = item && item.type ? String(item.type) : "";
+    if (!type) continue;
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
 export function consumeLivingItemsByType(
   inv: unknown,
   itemId: string,

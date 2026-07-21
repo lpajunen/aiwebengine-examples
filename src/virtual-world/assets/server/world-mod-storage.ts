@@ -184,6 +184,47 @@ export function checkHouseBuildable(
   return { ok: true };
 }
 
+// Shared by the "plant"/"cut" tree action and the grow_pine_tree recipe —
+// mutates the tile entry and persists it.
+export function applyTreeAction(
+  worldId: string,
+  userId: string,
+  row: number,
+  col: number,
+  action: "plant" | "cut",
+  trees: Record<string, any>,
+): void {
+  const tileKey = row + "_" + col;
+  trees[tileKey] =
+    action === "plant"
+      ? { action: "plant", planted_by: userId, timestamp: Date.now() }
+      : { action: "cut", cut_by: userId, timestamp: Date.now() };
+  saveWorldTrees(worldId, trees);
+}
+
+// Shared by the "build_house"/"destroy_house" action and the (recipe-driven)
+// place_house output kind — mutates the tile entry and persists it.
+export function applyHouseAction(
+  worldId: string,
+  userId: string,
+  row: number,
+  col: number,
+  action: "build_house" | "destroy_house",
+  houses: Record<string, any>,
+): void {
+  const tileKey = row + "_" + col;
+  if (action === "build_house") {
+    houses[tileKey] = {
+      built_by: userId,
+      actor_type: "player",
+      timestamp: Date.now(),
+    };
+  } else {
+    delete houses[tileKey];
+  }
+  saveWorldHouses(worldId, houses);
+}
+
 export function loadWorldTrees(worldId: string): Record<string, any> {
   const worldMods = loadWorldMods(worldId);
   const trees: Record<string, any> = {};

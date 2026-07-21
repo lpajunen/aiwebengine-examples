@@ -12,12 +12,12 @@ import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
 import { isOakClearingTile } from "./world-domain.ts";
 import {
+  applyHouseAction,
+  applyTreeAction,
   checkHouseBuildable,
   checkTreePlantable,
   loadWorldHouses,
   loadWorldTrees,
-  saveWorldHouses,
-  saveWorldTrees,
 } from "./world-mod-storage.ts";
 import { getRecipeDefinition } from "./item-registry.ts";
 import {
@@ -113,7 +113,6 @@ export function craftRecipeForUser(
 
   const trees = loadWorldTrees(worldId);
   const houses = loadWorldHouses(worldId);
-  const tileKey = target.row + "_" + target.col;
 
   for (let i = 0; i < recipe.outputs.length; i++) {
     const output = recipe.outputs[i];
@@ -189,12 +188,7 @@ export function craftRecipeForUser(
       continue;
     }
     if (output.kind === "place_tree") {
-      trees[tileKey] = {
-        action: "plant",
-        planted_by: userId,
-        timestamp: Date.now(),
-      };
-      saveWorldTrees(worldId, trees);
+      applyTreeAction(worldId, userId, target.row, target.col, "plant", trees);
       sendWorldScopedStreamEvent(String(worldId), "tree_changed", {
         action: "plant",
         row: target.row,
@@ -207,12 +201,14 @@ export function craftRecipeForUser(
       continue;
     }
     if (output.kind === "place_house") {
-      houses[tileKey] = {
-        built_by: userId,
-        actor_type: "player",
-        timestamp: Date.now(),
-      };
-      saveWorldHouses(worldId, houses);
+      applyHouseAction(
+        worldId,
+        userId,
+        target.row,
+        target.col,
+        "build_house",
+        houses,
+      );
       sendWorldScopedStreamEvent(String(worldId), "house_changed", {
         action: "build_house",
         row: target.row,

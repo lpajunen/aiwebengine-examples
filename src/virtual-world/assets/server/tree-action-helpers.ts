@@ -50,6 +50,8 @@ import {
   worldTypeForPortalBuildAction,
 } from "./world-domain.ts";
 import {
+  applyHouseAction,
+  applyTreeAction,
   checkHouseBuildable,
   checkTreePlantable,
   loadWorldHouses,
@@ -771,7 +773,6 @@ export function performTreeActionForUser(
   const map = getEffectiveMap(worldId);
   const trees = loadWorldTrees(worldId);
   const houses = loadWorldHouses(worldId);
-  const tileKey = targetRow + "_" + targetCol;
   const actionValidationError = getActionValidationError(
     targetRow,
     targetCol,
@@ -788,15 +789,15 @@ export function performTreeActionForUser(
   }
 
   if (action === "build_house") {
-    houses[tileKey] = {
-      built_by: userId,
-      actor_type: "player",
-      timestamp: Date.now(),
-    };
-    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
-      trees: trees,
-      houses: houses,
-    });
+    applyHouseAction(
+      worldId,
+      userId,
+      targetRow,
+      targetCol,
+      "build_house",
+      houses,
+    );
+    maybeSendConfiguredWorldEvent(targetRow, targetCol);
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
@@ -804,18 +805,20 @@ export function performTreeActionForUser(
   }
 
   if (action === "destroy_house") {
-    delete houses[tileKey];
-    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
-      trees: trees,
-      houses: houses,
-    });
+    applyHouseAction(
+      worldId,
+      userId,
+      targetRow,
+      targetCol,
+      "destroy_house",
+      houses,
+    );
+    maybeSendConfiguredWorldEvent(targetRow, targetCol);
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
     };
   }
-
-  const treeKey = tileKey;
 
   if (action === "build_portal") {
     const targetTileKey = targetRow + "_" + targetCol;
@@ -906,24 +909,15 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "plant") {
-    trees[treeKey] = {
-      action: "plant",
-      planted_by: userId,
-      timestamp: Date.now(),
-    };
-  } else if (action === "cut") {
-    trees[treeKey] = {
-      action: "cut",
-      cut_by: userId,
-      timestamp: Date.now(),
-    };
+  if (action === "plant" || action === "cut") {
+    applyTreeAction(worldId, userId, targetRow, targetCol, action, trees);
+    maybeSendConfiguredWorldEvent(targetRow, targetCol);
+  } else {
+    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
+      trees: trees,
+      houses: houses,
+    });
   }
-
-  maybePersistConfiguredWorldMutation(targetRow, targetCol, {
-    trees: trees,
-    houses: houses,
-  });
 
   return {
     status: 200,

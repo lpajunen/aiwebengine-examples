@@ -823,6 +823,7 @@ function rebuildItemMeshes() {
     if (!Array.isArray(arr)) continue;
     for (var i = 0; i < arr.length; i++) {
       var item = arr[i];
+      if (item.type === "old_oak") continue;
       var mesh = new THREE.Mesh(itemGeo, getItemMaterial(item.type));
       var ox = ((i % 3) - 1) * 0.2;
       var oz = ((Math.floor(i / 3) % 3) - 1) * 0.2;

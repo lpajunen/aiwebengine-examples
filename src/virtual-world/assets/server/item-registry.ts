@@ -243,6 +243,18 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: [],
   },
+  old_oak: {
+    id: "old_oak",
+    kind: "placeable",
+    extra: true,
+    nonDroppable: true,
+    visuals: {
+      color: 0x4a3222,
+      labelKey: "item.old_oak.name",
+      fallbackLabel: "Old oak",
+    },
+    actionIds: ["pray"],
+  },
 };
 
 export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
@@ -863,5 +875,10 @@ export function deleteActionClass(actionId: string): void {
 }
 
 export function isPickableWorldItem(item: any): boolean {
-  return !!item && item.type !== "portal" && item.type !== "blessing_marker";
+  return (
+    !!item &&
+    item.type !== "portal" &&
+    item.type !== "blessing_marker" &&
+    item.type !== "old_oak"
+  );
 }

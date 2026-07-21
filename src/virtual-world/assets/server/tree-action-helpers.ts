@@ -617,6 +617,13 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "pray") {
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload(),
+    };
+  }
+
   if (action === "examine") {
     const targetItemId = String((body && body.target_item_id) || "");
     if (!targetItemId) {

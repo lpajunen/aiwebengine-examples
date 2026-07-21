@@ -357,6 +357,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       toastMessage: "A rowan blessing now marks this place.",
     },
   },
+  pray: {
+    id: "pray",
+    labelKey: "tree_action.pray",
+    fallbackLabel: "Pray",
+    targetKind: "current_tile",
+    sourceItemIds: ["old_oak"],
+    execution: {
+      toastMessage: "You pray hard!",
+    },
+  },
   portal_travel: {
     id: "portal_travel",
     labelKey: "tree_action.portal_travel",

@@ -10,7 +10,10 @@ import {
 } from "./runtime-config.ts";
 import {
   createEmptyLivingState,
+  isOakWorld,
   isValidItem,
+  OAK_CENTER_COL,
+  OAK_CENTER_ROW,
   LivingState,
   normalizeLivingState,
   normalizeWorldType,
@@ -305,7 +308,36 @@ export function nextWorldItemId(worldId: string): number {
   return nextSeq;
 }
 
+export function ensureOldOakItem(worldId: string): void {
+  if (!isOakWorld(worldId)) return;
+  const items = loadWorldItems(worldId);
+  let existingId: string | null = null;
+  let existingTileKey: string | null = null;
+  for (const tileKey of Object.keys(items)) {
+    const found = items[tileKey].find(function (item) {
+      return item && item.type === "old_oak";
+    });
+    if (found) {
+      existingId = String(found.id);
+      existingTileKey = tileKey;
+      break;
+    }
+  }
+
+  const centerTileKey = OAK_CENTER_ROW + "_" + OAK_CENTER_COL;
+  if (existingId && existingTileKey === centerTileKey) return;
+
+  upsertWorldItem(worldId, OAK_CENTER_ROW, OAK_CENTER_COL, {
+    id: existingId || "w" + worldId + "_i" + nextWorldItemId(worldId),
+    type: "old_oak",
+    created_at: Date.now(),
+    non_droppable: true,
+  });
+}
+
 export function ensureWorldItems(worldId: string): void {
+  ensureOldOakItem(worldId);
+
   const meta = loadWorldItemMeta(worldId);
   if (meta.seeded === 1) return;
 

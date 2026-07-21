@@ -18,6 +18,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       birch_bark_letter: { name: "Birch-bark letter" },
       blessing_marker: { name: "Rowan blessing" },
       creator_stone: { name: "Creator's stone" },
+      old_oak: { name: "Old oak" },
       unknown: { name: "Unknown item" },
     },
     tree_action: {
@@ -36,6 +37,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       place_blessing: "Place rowan blessing",
       portal_travel: "Enter rune gate",
       return_home: "Travel to the old oak",
+      pray: "Pray",
     },
     terrain: {
       wall: "Spruce thicket",
@@ -338,6 +340,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       birch_bark_letter: { name: "Tuohikirje" },
       blessing_marker: { name: "Pihlajansiunaus" },
       creator_stone: { name: "Luojan kivi" },
+      old_oak: { name: "Vanha tammi" },
       unknown: { name: "Tuntematon esine" },
     },
     tree_action: {
@@ -356,6 +359,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       place_blessing: "Aseta pihlajansiunaus",
       portal_travel: "Astu riimuporttiin",
       return_home: "Matkaa vanhalle tammelle",
+      pray: "Rukoile",
     },
     terrain: {
       wall: "Kuusitiheikkö",
@@ -805,5 +809,6 @@ function itemTypeToLabelKey(type) {
   if (type === "portal") return "item.portal.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   if (type === "creator_stone") return "item.creator_stone.name";
+  if (type === "old_oak") return "item.old_oak.name";
   return "item.unknown.name";
 }

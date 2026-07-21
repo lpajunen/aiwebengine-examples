@@ -260,6 +260,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       logout_hint: 'Triple click "You" to log out',
       changed_name_to: "Changed name to",
     },
+    poke: {
+      pokes_you: "pokes you.",
+      you_poke_prefix: "You poke",
+    },
     world_type: {
       island: "Island",
       cave: "Cave",
@@ -583,6 +587,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       redirecting_to_logout: "Ohjataan uloskirjautumiseen...",
       logout_hint: 'Kirjaudu ulos klikkaamalla "Sinä" kolmesti',
       changed_name_to: "Nimi vaihdettu:",
+    },
+    poke: {
+      pokes_you: "tökkää sinua.",
+      you_poke_prefix: "Tökkäät",
     },
     world_type: {
       island: "Saari",

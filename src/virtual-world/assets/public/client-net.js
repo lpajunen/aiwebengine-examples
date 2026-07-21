@@ -601,6 +601,14 @@ function initMultiplayer() {
   }
 
   /** @param {any} payload */
+  function handlePokedEvent(payload) {
+    if (!payload) return;
+    var pokerNick = String(payload.poker_nick || "");
+    if (!pokerNick) return;
+    showHudToast(pokerNick + " " + t("poke.pokes_you", "pokes you."), false);
+  }
+
+  /** @param {any} payload */
   function handlePresenceUpdateEvent(payload) {
     if (!payload || !payload.player_id) return;
     if (payload.action === "left") {
@@ -687,6 +695,9 @@ function initMultiplayer() {
         return;
       case "presence_update":
         handlePresenceUpdateEvent(payload);
+        return;
+      case "poked":
+        handlePokedEvent(payload);
         return;
     }
   }

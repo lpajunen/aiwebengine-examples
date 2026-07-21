@@ -26,6 +26,7 @@ import { loadWorldNPCs } from "./npc-storage.ts";
 import { getItemDefinition, getItemStateTemplate } from "./item-registry.ts";
 import {
   broadcastItemChange,
+  sendRecipientScopedStreamEvent,
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
 import {
@@ -687,6 +688,10 @@ export function performTreeActionForUser(
       ) {
         targetLivingLabel = getEffectiveNick(targetLivingId);
         targetFound = true;
+        sendRecipientScopedStreamEvent(targetLivingId, "poked", {
+          poker_id: userId,
+          poker_nick: getEffectiveNick(userId),
+        });
       } else if (
         targetLivingId === userId &&
         canonical.row === resolvedTarget.row &&
@@ -707,6 +712,7 @@ export function performTreeActionForUser(
       payload: buildConfiguredSuccessPayload({
         toast_message: "You poke " + targetLivingLabel + ".",
         target_living_id: targetLivingId,
+        target_living_label: targetLivingLabel,
       }),
     };
   }

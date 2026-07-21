@@ -202,7 +202,17 @@ function postTreeAction(action, extras) {
         updateHouseMeshes();
         refreshTileDetailIfOpen();
       }
-      if (result.toast_message) showHudToast(result.toast_message, false);
+      if (result.action === "poke" && result.target_living_label) {
+        showHudToast(
+          t("poke.you_poke_prefix", "You poke") +
+            " " +
+            result.target_living_label +
+            ".",
+          false,
+        );
+      } else if (result.toast_message) {
+        showHudToast(result.toast_message, false);
+      }
       if (result.switched_world) {
         window.location.href = "/virtual-world/play";
       }

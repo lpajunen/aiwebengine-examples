@@ -5,7 +5,13 @@ export interface ActionDefinition {
   labelKey: string;
   fallbackLabel: string;
   targetKind:
-    "self" | "current_tile" | "facing_tile" | "facing_or_current_tile";
+    | "self"
+    | "current_tile"
+    | "facing_tile"
+    | "facing_or_current_tile"
+    | "item"
+    | "living"
+    | "inventory";
   sourceItemIds: string[];
   canonicalId?: string;
   execution?: {
@@ -375,6 +381,33 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeSwitchedWorld: true,
         includeWorldId: true,
       },
+    },
+  },
+  examine: {
+    id: "examine",
+    labelKey: "tree_action.examine",
+    fallbackLabel: "Examine",
+    targetKind: "item",
+    sourceItemIds: ["starter_kit"],
+  },
+  poke: {
+    id: "poke",
+    labelKey: "tree_action.poke",
+    fallbackLabel: "Poke",
+    targetKind: "living",
+    sourceItemIds: ["starter_kit"],
+  },
+  summon_knife: {
+    id: "summon_knife",
+    labelKey: "tree_action.summon_knife",
+    fallbackLabel: "Summon knife",
+    targetKind: "inventory",
+    sourceItemIds: ["starter_kit"],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      toastMessage: "A knife appears in your bag.",
     },
   },
 };

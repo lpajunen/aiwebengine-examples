@@ -72,6 +72,7 @@ function renderInventoryPanel() {
       var itemActions = treeActionsForItemType(item.type);
       var actionBtns = "";
       for (var ai = 0; ai < itemActions.length; ai++) {
+        if (isEntityTargetedAction(itemActions[ai])) continue;
         actionBtns +=
           "<button onclick=\"postTreeAction('" +
           itemActions[ai] +

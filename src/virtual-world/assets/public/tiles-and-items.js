@@ -511,11 +511,60 @@ function getRegistryItemDef(type) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, canonical_id?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, canonical_id?: string, target_kind?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
   return ITEM_REGISTRY.actions[String(action || "")] || null;
+}
+
+/**
+ * @param {string} action
+ * @returns {boolean}
+ */
+function isEntityTargetedAction(action) {
+  var def = getRegistryActionDef(action);
+  var targetKind = def && def.target_kind;
+  return targetKind === "item" || targetKind === "living";
+}
+
+/**
+ * Actions the player can currently invoke against a nearby item or living,
+ * derived from every tool the player is carrying (slots + bag), filtered to
+ * the requested target kind ("item" or "living").
+ * @param {"item" | "living"} targetKind
+ * @returns {string[]}
+ */
+function actionsAvailableForTargetKind(targetKind) {
+  var inv = normalizeClientInventory(playerInventory);
+  /** @type {Record<string, boolean>} */
+  var seen = {};
+  /** @type {string[]} */
+  var result = [];
+
+  /** @param {ClientItem | null} item */
+  function collectFromItem(item) {
+    if (!item) return;
+    var itemActions = treeActionsForItemType(item.type);
+    for (var i = 0; i < itemActions.length; i++) {
+      var actionId = itemActions[i];
+      if (seen[actionId]) continue;
+      var def = getRegistryActionDef(actionId);
+      if (!def || def.target_kind !== targetKind) continue;
+      seen[actionId] = true;
+      result.push(actionId);
+    }
+  }
+
+  if (Array.isArray(inv.bag)) {
+    for (var b = 0; b < inv.bag.length; b++) collectFromItem(inv.bag[b]);
+  }
+  if (inv.slots && typeof inv.slots === "object") {
+    var slotIds = Object.keys(inv.slots);
+    for (var s = 0; s < slotIds.length; s++)
+      collectFromItem(inv.slots[slotIds[s]]);
+  }
+  return result;
 }
 
 /** @type {Record<string, ClientItem[]>} */
@@ -639,6 +688,7 @@ function getOwnedTreeActions() {
     if (!Array.isArray(actions)) continue;
     for (var m = 0; m < actions.length; m++) {
       if (!actions[m]) continue;
+      if (isEntityTargetedAction(actions[m])) continue;
       actionsByType[actions[m]] = true;
     }
   }

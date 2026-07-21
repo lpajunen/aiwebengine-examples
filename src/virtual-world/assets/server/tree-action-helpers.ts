@@ -19,8 +19,11 @@ import { getPlayerWorld } from "./player-persistence.ts";
 import {
   getCanonicalPlayerState,
   getDefaultSpawnPosition,
+  loadWorldPlayers,
 } from "./player-snapshots.ts";
 import { getEffectiveNick } from "./social-state.ts";
+import { loadWorldNPCs } from "./npc-storage.ts";
+import { getItemDefinition, getItemStateTemplate } from "./item-registry.ts";
 import {
   broadcastItemChange,
   sendWorldScopedStreamEvent,
@@ -56,6 +59,7 @@ import {
 } from "./action-logic-interpreter.ts";
 import {
   findFirstLivingItemByTypes,
+  getNPCDisplayName,
   isValidItem,
   LivingState,
   replaceLivingItemById,
@@ -426,7 +430,13 @@ export function performTreeActionForUser(
         ? actionDefinition.targetKind
         : "facing_tile";
 
-    if (targetKind === "self" || targetKind === "current_tile") {
+    if (
+      targetKind === "self" ||
+      targetKind === "current_tile" ||
+      targetKind === "item" ||
+      targetKind === "living" ||
+      targetKind === "inventory"
+    ) {
       return {
         row: canonical.row,
         col: canonical.col,
@@ -599,6 +609,111 @@ export function performTreeActionForUser(
       status: 200,
       payload: buildConfiguredSuccessPayload({
         world_id: newWorldId,
+      }),
+    };
+  }
+
+  if (action === "examine") {
+    const targetItemId = String((body && body.target_item_id) || "");
+    if (!targetItemId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_required" },
+      };
+    }
+    const itemsHere = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    );
+    const targetItem = itemsHere.find(function (item) {
+      return item && String(item.id) === targetItemId;
+    });
+    if (!targetItem) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    const targetItemDef = getItemDefinition(String(targetItem.type || ""));
+    const targetItemLabel = targetItemDef
+      ? targetItemDef.visuals.fallbackLabel
+      : String(targetItem.type || "item");
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You examine " + targetItemLabel + ".",
+        target_item_id: targetItemId,
+      }),
+    };
+  }
+
+  if (action === "poke") {
+    const targetLivingId = String((body && body.target_living_id) || "");
+    if (!targetLivingId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_required" },
+      };
+    }
+    const npcsHere = loadWorldNPCs(worldId);
+    const targetNpc = npcsHere[targetLivingId];
+    let targetLivingLabel = "";
+    let targetFound = false;
+    if (
+      targetNpc &&
+      targetNpc.row === resolvedTarget.row &&
+      targetNpc.col === resolvedTarget.col
+    ) {
+      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetFound = true;
+    } else {
+      const worldPlayers = loadWorldPlayers(worldId);
+      const targetPlayer = worldPlayers[targetLivingId];
+      if (
+        targetPlayer &&
+        targetPlayer.row === resolvedTarget.row &&
+        targetPlayer.col === resolvedTarget.col
+      ) {
+        targetLivingLabel = getEffectiveNick(targetLivingId);
+        targetFound = true;
+      } else if (
+        targetLivingId === userId &&
+        canonical.row === resolvedTarget.row &&
+        canonical.col === resolvedTarget.col
+      ) {
+        targetLivingLabel = getEffectiveNick(userId);
+        targetFound = true;
+      }
+    }
+    if (!targetFound) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You poke " + targetLivingLabel + ".",
+        target_living_id: targetLivingId,
+      }),
+    };
+  }
+
+  if (action === "summon_knife") {
+    const summonedItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "knife",
+      created_at: Date.now(),
+      summoned_by: userId,
+      state: getItemStateTemplate("knife"),
+    };
+    inv.bag.push(summonedItem);
+    savePlayerInventory(userId, inv);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        summoned_item: summonedItem,
       }),
     };
   }

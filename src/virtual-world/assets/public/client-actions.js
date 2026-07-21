@@ -214,6 +214,22 @@ function postTreeAction(action, extras) {
     });
 }
 
+/** @param {HTMLElement} btn */
+function postItemTargetedAction(btn) {
+  var actionId = String(btn.dataset.actionId || "");
+  var targetItemId = String(btn.dataset.targetItemId || "");
+  if (!actionId || !targetItemId) return;
+  postTreeAction(actionId, { target_item_id: targetItemId });
+}
+
+/** @param {HTMLElement} btn */
+function postLivingTargetedAction(btn) {
+  var actionId = String(btn.dataset.actionId || "");
+  var targetLivingId = String(btn.dataset.targetLivingId || "");
+  if (!actionId || !targetLivingId) return;
+  postTreeAction(actionId, { target_living_id: targetLivingId });
+}
+
 function useItem() {
   var actions = getOwnedTreeActions().sort();
   if (actions.length === 0) {

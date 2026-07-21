@@ -218,7 +218,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.starter_kit.name",
       fallbackLabel: "Wanderer's bundle",
     },
-    actionIds: ["return_home"],
+    actionIds: ["return_home", "examine", "poke", "summon_knife"],
   },
   blessing_marker: {
     id: "blessing_marker",
@@ -349,6 +349,7 @@ export function getBootstrapRegistry(): {
       label_key: string;
       fallback_label: string;
       canonical_id: string;
+      target_kind: string;
     }
   >;
   item_events: Record<
@@ -387,6 +388,7 @@ export function getBootstrapRegistry(): {
       label_key: string;
       fallback_label: string;
       canonical_id: string;
+      target_kind: string;
     }
   > = {};
   const itemEvents: Record<
@@ -442,6 +444,7 @@ export function getBootstrapRegistry(): {
       label_key: action.labelKey,
       fallback_label: action.fallbackLabel,
       canonical_id: action.canonicalId || action.id,
+      target_kind: action.targetKind,
     };
   });
 

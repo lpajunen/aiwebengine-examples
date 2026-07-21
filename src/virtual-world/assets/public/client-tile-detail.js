@@ -143,6 +143,42 @@ function renderTileDetailPanel() {
 
   var tileItems = worldItemsByTile[key] || [];
 
+  // Item/living-targeted actions only make sense against entities standing
+  // on the actor's own tile — the button set is empty when inspecting any
+  // other tile, since resolveActionTarget() on the server always resolves
+  // these target kinds to the actor's current position.
+  var isOwnTile = row === avatarRow && col === avatarCol;
+  var itemActionIds = isOwnTile ? actionsAvailableForTargetKind("item") : [];
+  var livingActionIds = isOwnTile
+    ? actionsAvailableForTargetKind("living")
+    : [];
+
+  /**
+   * @param {string[]} actionIds
+   * @param {string} datasetAttr
+   * @param {string} targetId
+   * @param {string} handlerName
+   * @returns {string}
+   */
+  function entityActionButtons(actionIds, datasetAttr, targetId, handlerName) {
+    var btns = "";
+    for (var a = 0; a < actionIds.length; a++) {
+      btns +=
+        '<button data-action-id="' +
+        escHtml(actionIds[a]) +
+        '" data-' +
+        datasetAttr +
+        '="' +
+        escHtml(targetId) +
+        '" onclick="' +
+        handlerName +
+        '(this)">' +
+        escHtml(treeActionLabel(actionIds[a])) +
+        "</button> ";
+    }
+    return btns;
+  }
+
   var playersHere = [];
   if (avatarRow === row && avatarCol === col) {
     playersHere.push({ id: playerId, isMe: true });
@@ -198,7 +234,17 @@ function renderTileDetailPanel() {
     for (var i = 0; i < tileItems.length; i++) {
       var itm = tileItems[i];
       var label = t(itemTypeToLabelKey(itm.type), humanizeType(itm.type));
-      html += '<div class="tile-row">' + escHtml(label) + "</div>";
+      html +=
+        '<div class="tile-row">' +
+        escHtml(label) +
+        " " +
+        entityActionButtons(
+          itemActionIds,
+          "target-item-id",
+          String(itm.id),
+          "postItemTargetedAction",
+        ) +
+        "</div>";
       if (itm.type === "portal") {
         html +=
           '<div class="tile-row">' +
@@ -240,6 +286,13 @@ function renderTileDetailPanel() {
             escHtml(getNickForPlayer(pp.id)) +
             ")"
           : escHtml(getNickForPlayer(pp.id))) +
+        " " +
+        entityActionButtons(
+          livingActionIds,
+          "target-living-id",
+          String(pp.id),
+          "postLivingTargetedAction",
+        ) +
         "</div>";
       if (ppData.class_id) {
         html +=
@@ -311,6 +364,13 @@ function renderTileDetailPanel() {
       html +=
         '<div class="tile-living-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
+        " " +
+        entityActionButtons(
+          livingActionIds,
+          "target-living-id",
+          String(npcEntry.id),
+          "postLivingTargetedAction",
+        ) +
         "</div>";
       if (npcData.class_id) {
         html +=

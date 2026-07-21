@@ -421,13 +421,3 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     },
   },
 };
-
-export function getActionDefinition(
-  actionId: string | null | undefined,
-): ActionDefinition | null {
-  return ACTION_DEFINITIONS[String(actionId || "")] || null;
-}
-
-export function getAllActionIds(): string[] {
-  return Object.keys(ACTION_DEFINITIONS);
-}

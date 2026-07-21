@@ -4,11 +4,7 @@ import {
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import { ITEM_CHANGE_DEFINITIONS } from "./item-events.ts";
-import {
-  ACTION_DEFINITIONS,
-  getActionDefinition as getActionDefinitionImpl,
-  getAllActionIds as getAllActionIdsImpl,
-} from "./action-registry.ts";
+import { ACTION_DEFINITIONS } from "./action-registry.ts";
 import { ActionDefinition } from "./action-registry.ts";
 import {
   loadAllItemClassRows,
@@ -298,16 +294,12 @@ export function getRecipeDefinition(recipeId: string): RecipeDefinition | null {
 }
 
 export function getActionDefinition(actionId: string | null | undefined) {
-  const cached = _actionClassCache
-    ? _actionClassCache[String(actionId || "")] || null
-    : null;
-  if (cached) return cached;
-  return getActionDefinitionImpl(actionId);
+  return getActionClass(String(actionId || ""));
 }
 
 export function getAllActionIds(): string[] {
-  if (_actionClassCache) return Object.keys(_actionClassCache);
-  return getAllActionIdsImpl();
+  if (!_actionClassCache) refreshActionClassCache();
+  return Object.keys(_actionClassCache as Record<string, ActionClassRecord>);
 }
 
 export function getActionsForItemType(itemId: string): string[] {
@@ -777,36 +769,66 @@ function actionClassToDbRow(
   };
 }
 
-export function bootstrapActionClasses(): void {
-  const rows = loadAllActionClassRows();
-  const cache: Record<string, ActionClassRecord> = {};
-  let insertedDefaults = 0;
-  const now = Date.now();
-
-  if (rows.length > 0) {
-    for (let i = 0; i < rows.length; i++) {
-      const record = actionClassFromDbRow(rows[i]);
-      if (record.id) cache[record.id] = record;
-    }
-  }
-
-  // Backfill missing built-ins without overwriting existing dynamic/custom rows.
+// Seeds missing built-in action rows from ACTION_DEFINITIONS, and patches
+// rows that already exist but predate a field's DB column (e.g. rows seeded
+// before logic_spec_json existed never got a logicSpec) — without touching
+// fields a creator has since customized via the editor.
+function backfillActionClassDefaults(
+  cache: Record<string, ActionClassRecord>,
+  now: number,
+): { inserted: number; patched: number } {
   const defKeys = Object.keys(ACTION_DEFINITIONS);
+  let inserted = 0;
+  let patched = 0;
   for (let i = 0; i < defKeys.length; i++) {
     const defId = defKeys[i];
-    if (!cache[defId]) {
-      const def = ACTION_DEFINITIONS[defId];
+    const def = ACTION_DEFINITIONS[defId];
+    const existing = cache[defId];
+    if (!existing) {
       const record: ActionClassRecord = Object.assign({}, def);
       upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
-      insertedDefaults++;
+      inserted++;
+      continue;
+    }
+    let changed = false;
+    if (existing.execution === undefined && def.execution !== undefined) {
+      existing.execution = def.execution;
+      changed = true;
+    }
+    if (existing.validation === undefined && def.validation !== undefined) {
+      existing.validation = def.validation;
+      changed = true;
+    }
+    if (existing.logicSpec === undefined && def.logicSpec !== undefined) {
+      existing.logicSpec = def.logicSpec;
+      changed = true;
+    }
+    if (changed) {
+      upsertActionClassRow(actionClassToDbRow(existing, now));
+      patched++;
     }
   }
+  return { inserted: inserted, patched: patched };
+}
+
+export function bootstrapActionClasses(): void {
+  const rows = loadAllActionClassRows();
+  const cache: Record<string, ActionClassRecord> = {};
+  const now = Date.now();
+
+  for (let i = 0; i < rows.length; i++) {
+    const record = actionClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+
+  const { inserted, patched } = backfillActionClassDefaults(cache, now);
   if (rows.length === 0) {
-    vwLog("action class repository seeded", { count: insertedDefaults });
-  } else if (insertedDefaults > 0) {
+    vwLog("action class repository seeded", { count: inserted });
+  } else if (inserted > 0 || patched > 0) {
     vwLog("action class repository backfilled", {
-      inserted_count: insertedDefaults,
+      inserted_count: inserted,
+      patched_count: patched,
       existing_count: rows.length,
     });
   }
@@ -817,27 +839,17 @@ export function bootstrapActionClasses(): void {
 export function refreshActionClassCache(): void {
   const rows = loadAllActionClassRows();
   const cache: Record<string, ActionClassRecord> = {};
-  let insertedDefaults = 0;
   const now = Date.now();
   for (let i = 0; i < rows.length; i++) {
     const record = actionClassFromDbRow(rows[i]);
     if (record.id) cache[record.id] = record;
   }
 
-  const defKeys = Object.keys(ACTION_DEFINITIONS);
-  for (let i = 0; i < defKeys.length; i++) {
-    const defId = defKeys[i];
-    if (!cache[defId]) {
-      const def = ACTION_DEFINITIONS[defId];
-      const record: ActionClassRecord = Object.assign({}, def);
-      upsertActionClassRow(actionClassToDbRow(record, now));
-      cache[record.id] = record;
-      insertedDefaults++;
-    }
-  }
-  if (insertedDefaults > 0) {
+  const { inserted, patched } = backfillActionClassDefaults(cache, now);
+  if (inserted > 0 || patched > 0) {
     vwLog("action class repository backfilled during refresh", {
-      inserted_count: insertedDefaults,
+      inserted_count: inserted,
+      patched_count: patched,
     });
   }
 
@@ -845,15 +857,21 @@ export function refreshActionClassCache(): void {
 }
 
 export function getAllActionClasses(): ActionClassRecord[] {
-  if (!_actionClassCache) return [];
-  return Object.keys(_actionClassCache).map(function (id) {
+  if (!_actionClassCache) refreshActionClassCache();
+  return Object.keys(
+    _actionClassCache as Record<string, ActionClassRecord>,
+  ).map(function (id) {
     return (_actionClassCache as Record<string, ActionClassRecord>)[id];
   });
 }
 
 export function getActionClass(actionId: string): ActionClassRecord | null {
-  if (!_actionClassCache) return null;
-  return _actionClassCache[String(actionId || "")] || null;
+  if (!_actionClassCache) refreshActionClassCache();
+  return (
+    (_actionClassCache as Record<string, ActionClassRecord>)[
+      String(actionId || "")
+    ] || null
+  );
 }
 
 export function upsertActionClass(record: ActionClassRecord): {

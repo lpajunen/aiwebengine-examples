@@ -1,4 +1,3 @@
-import { getActionDefinition } from "./action-registry.ts";
 import { appendWorldChatMessage } from "./chat-storage.ts";
 import { getTargetTileFromRotation } from "./current-world-state.ts";
 import {
@@ -23,7 +22,11 @@ import {
 } from "./player-snapshots.ts";
 import { getEffectiveNick } from "./social-state.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
-import { getItemDefinition, getItemStateTemplate } from "./item-registry.ts";
+import {
+  getActionDefinition,
+  getItemDefinition,
+  getItemStateTemplate,
+} from "./item-registry.ts";
 import {
   broadcastItemChange,
   sendRecipientScopedStreamEvent,

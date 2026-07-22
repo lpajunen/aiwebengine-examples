@@ -13,6 +13,7 @@ import {
   VWORLD_NPC_TICK_LEASE_TABLE,
   VWORLD_NPC_TICK_TABLE,
   VWORLD_ONLINE_PRESENCE_TABLE,
+  VWORLD_PENDING_ACTION_TABLE,
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
@@ -839,6 +840,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "cost_json", true],
     ["addTextColumn", "produces_json", true],
     ["addIntegerColumn", "fatigue_cost", true],
+    ["addIntegerColumn", "duration_ms", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -865,6 +867,37 @@ export function ensureWorldDatabaseSchema(): void {
     return database.addUniqueIndex(
       VWORLD_ACTION_CLASS_TABLE,
       JSON.stringify(["action_id"]),
+    );
+  });
+
+  step("createTable", VWORLD_PENDING_ACTION_TABLE, function () {
+    return database.createTable(VWORLD_PENDING_ACTION_TABLE);
+  });
+  [
+    ["addTextColumn", "world_id", false],
+    ["addTextColumn", "user_id", false],
+    ["addTextColumn", "action", false],
+    ["addTextColumn", "body_json", false],
+    ["addIntegerColumn", "ready_at", false],
+    ["addIntegerColumn", "created_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_PENDING_ACTION_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_PENDING_ACTION_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_PENDING_ACTION_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
     );
   });
 

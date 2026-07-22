@@ -17,6 +17,11 @@ import {
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import {
+  addPendingAction,
+  deletePendingAction,
+  loadDuePendingActions,
+} from "./pending-action-storage.ts";
+import {
   getCanonicalPlayerState,
   getDefaultSpawnPosition,
   loadWorldPlayers,
@@ -62,6 +67,7 @@ import {
   saveWorldTrees,
 } from "./world-mod-storage.ts";
 import { switchUserWorld } from "./world-switch.ts";
+import { runInWorldTransaction } from "./world-db.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
 import { getWorldEventDefinition } from "./world-events.ts";
 import {
@@ -81,6 +87,7 @@ import {
 export function performTreeActionForUser(
   userId: string,
   body: any,
+  options?: { resuming?: boolean },
 ): { status: number; payload: any } {
   const rawAction = body && body.action;
   const action = canonicalTreeAction(rawAction);
@@ -579,6 +586,54 @@ export function performTreeActionForUser(
     return null;
   }
 
+  // Wraps applyActionStartCosts(): on a fresh (non-resumed) call to a
+  // durationMs action, charges costs/fatigue immediately, persists a pending
+  // action to be replayed later, and returns a "started" response instead of
+  // letting the caller proceed to apply effects/produces right away. On a
+  // resumed call (options.resuming), costs were already charged at start, so
+  // this is a no-op and the caller proceeds straight to effects/produces —
+  // the same code path instant actions already use.
+  function applyActionStartCostsOrDefer(): {
+    status: number;
+    payload: any;
+  } | null {
+    if (options && options.resuming) return null;
+
+    const costError = applyActionStartCosts();
+    if (costError) return costError;
+
+    if (actionDefinition && Number(actionDefinition.durationMs || 0) > 0) {
+      const readyAt = Date.now() + Number(actionDefinition.durationMs);
+      addPendingAction(
+        worldId,
+        userId,
+        action,
+        {
+          ...body,
+          row: resolvedTarget.row,
+          col: resolvedTarget.col,
+          rotation: rotation,
+        },
+        readyAt,
+      );
+      const startMessage =
+        actionDefinition.execution &&
+        actionDefinition.execution.startToastMessage;
+      return {
+        status: 200,
+        payload: {
+          ok: true,
+          action: action,
+          started: true,
+          ready_at: readyAt,
+          ...(startMessage ? { toast_message: startMessage } : {}),
+        },
+      };
+    }
+
+    return null;
+  }
+
   if (!canUseAction) {
     return {
       status: 200,
@@ -627,7 +682,7 @@ export function performTreeActionForUser(
   }
 
   if (action === "tune") {
-    const tuneCostError = applyActionStartCosts();
+    const tuneCostError = applyActionStartCostsOrDefer();
     if (tuneCostError) return tuneCostError;
     maybeApplyLogicEffects();
     return {
@@ -637,7 +692,7 @@ export function performTreeActionForUser(
   }
 
   if (action === "play_tune") {
-    const playTuneCostError = applyActionStartCosts();
+    const playTuneCostError = applyActionStartCostsOrDefer();
     if (playTuneCostError) return playTuneCostError;
     maybeAppendConfiguredWorldChatMessage();
     maybeApplyLogicEffects();
@@ -868,7 +923,7 @@ export function performTreeActionForUser(
     };
   }
 
-  const actionStartCostError = applyActionStartCosts();
+  const actionStartCostError = applyActionStartCostsOrDefer();
   if (actionStartCostError) return actionStartCostError;
 
   if (action === "build_house") {
@@ -1015,4 +1070,40 @@ export function performTreeActionForUser(
     status: 200,
     payload: buildConfiguredSuccessPayload(),
   };
+}
+
+// Called from the NPC tick loop (npc-orchestration.ts), which already runs
+// on a lease-guarded per-world cadence — reused here so only one server
+// instance ever resolves a given world's due pending (durationMs) actions.
+export function resolvePendingActionsForWorld(
+  worldId: string,
+  now: number,
+): void {
+  const due = loadDuePendingActions(worldId, now);
+  due.forEach(function (row) {
+    let body: any = {};
+    try {
+      body = JSON.parse(row.body_json || "{}");
+    } catch (e) {
+      body = {};
+    }
+    if (getPlayerWorld(row.user_id) !== worldId) {
+      // Player left this world before the action resolved; drop it rather
+      // than resolve it somewhere the player no longer is.
+      deletePendingAction(row.id);
+      return;
+    }
+    const result = runInWorldTransaction(
+      "pending_action:" + String(row.id),
+      function () {
+        return performTreeActionForUser(row.user_id, body, { resuming: true });
+      },
+    );
+    deletePendingAction(row.id);
+    sendRecipientScopedStreamEvent(
+      row.user_id,
+      "action_completed",
+      result.payload,
+    );
+  });
 }

@@ -375,6 +375,8 @@ export function virtualWorldManageActionClassesToolHandler(
       produces: args.produces ?? undefined,
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
+      durationMs:
+        args.durationMs !== undefined ? Number(args.durationMs) : undefined,
     };
     const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {

@@ -16,8 +16,15 @@ export interface ActionDefinition {
   cost?: Array<{ itemId: string; count: number }>;
   produces?: Array<{ itemId: string; count: number }>;
   fatigueCost?: number;
+  // Optional real-time delay (ms) between the action starting and its
+  // effects/produces resolving — see execution.startToastMessage.
+  durationMs?: number;
   canonicalId?: string;
   execution?: {
+    // Shown immediately when a durationMs action starts. toastMessage below
+    // remains the finish/success message (shown immediately for instant
+    // actions, or when a durationMs action resolves).
+    startToastMessage?: string;
     toastMessage?: string;
     worldChatText?: string;
     successPayload?: {
@@ -476,10 +483,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       { itemId: "rune_stone", count: 1 },
     ],
     produces: [{ itemId: "kantele", count: 1 }],
+    durationMs: 5000,
     execution: {
       successPayload: {
         includeInventory: true,
       },
+      startToastMessage: "You start crafting a Kantele.",
+      toastMessage: "You finished crafting a Kantele.",
     },
   },
 };

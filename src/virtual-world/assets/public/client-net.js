@@ -652,6 +652,23 @@ function initMultiplayer() {
     showHudToast(pokerNick + " " + t("poke.pokes_you", "pokes you."), false);
   }
 
+  /**
+   * A durationMs action (e.g. crafting) that was started earlier has now
+   * resolved server-side (see tree-action-helpers.ts resolvePendingActionsForWorld).
+   * The payload has the same shape as a normal instant tree-action response.
+   * @param {any} payload
+   */
+  function handleActionCompletedEvent(payload) {
+    if (!payload) return;
+    if (payload.ok === false) {
+      if (payload.error)
+        showHudToast(translateServerMessage(payload.error), true);
+      return;
+    }
+    applyItemStateFromResult(payload);
+    if (payload.toast_message) showHudToast(payload.toast_message, false);
+  }
+
   /** @param {any} payload */
   function handlePresenceUpdateEvent(payload) {
     if (!payload || !payload.player_id) return;
@@ -748,6 +765,9 @@ function initMultiplayer() {
         return;
       case "poked":
         handlePokedEvent(payload);
+        return;
+      case "action_completed":
+        handleActionCompletedEvent(payload);
         return;
     }
   }

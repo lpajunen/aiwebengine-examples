@@ -279,6 +279,10 @@ export function createActionClassHandler(context: any) {
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
         : undefined,
+    durationMs:
+      body && body.durationMs !== undefined
+        ? Number(body.durationMs)
+        : undefined,
   };
   var actionCreateWrite = upsertActionClass(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
@@ -366,6 +370,10 @@ export function updateActionClassHandler(context: any) {
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
         : existing.fatigueCost,
+    durationMs:
+      body && body.durationMs !== undefined
+        ? Number(body.durationMs)
+        : existing.durationMs,
   };
   var actionUpdateWrite = upsertActionClass(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {

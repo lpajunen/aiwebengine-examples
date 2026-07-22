@@ -373,6 +373,11 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Optional Fatigue added to the player when the action starts",
       },
+      durationMs: {
+        type: "number",
+        description:
+          "Optional delay in milliseconds between the action starting and its effects/produces resolving. Costs and fatigue are charged at the start; execution.startToastMessage is shown then, and execution.toastMessage is shown when it finishes.",
+      },
     },
   });
   safeRegisterTool(

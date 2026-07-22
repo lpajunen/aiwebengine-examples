@@ -8,6 +8,9 @@ export const NPC_TICK_MS = 500;
 export const NPC_TICK_LEASE_MS = 2000;
 export const NPC_ACTIVE_WORLD_TTL_MS = 120000;
 export const WORLD_ITEM_SPAWN_COUNT = 30;
+// Idle fatigue recovery rate shared by players and NPCs so both take the
+// same calendar time to idle from a given fatigue value down to 0.
+export const FATIGUE_RECOVERY_PER_SECOND = 0.5;
 export const VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 
 export const WORLD_CHAT_MAX = 100;
@@ -33,6 +36,7 @@ export const VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
 export const VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
 export const VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
+export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";

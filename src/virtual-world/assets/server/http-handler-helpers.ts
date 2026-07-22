@@ -31,7 +31,7 @@ import {
   savePlayerMoveLease,
 } from "./player-persistence.ts";
 import { buildActiveWorldPlayers } from "./player-snapshots.ts";
-import { LEASE_TTL_MS } from "./runtime-config.ts";
+import { FATIGUE_RECOVERY_PER_SECOND, LEASE_TTL_MS } from "./runtime-config.ts";
 import {
   buildOnlinePlayersSnapshot,
   deleteOnlinePresence,
@@ -334,13 +334,20 @@ export function heartbeatForUser(userId: string, sessionId: string): any {
   // Idle-tick fatigue recovery: only when the player hasn't moved since the
   // previous heartbeat (a "tick" for players, mirroring the NPC tick) do we
   // recover fatigue, so actively moving players don't recover mid-stride.
+  // Recovery is scaled by actual elapsed time (not a flat per-heartbeat
+  // amount) so pacing matches NPCs' idle recovery in npc-orchestration.ts,
+  // even though players and NPCs tick at very different cadences.
   const previousHeartbeatTs = loadPlayerHeartbeatTs(userId);
   const position = loadPlayerPosition(userId);
   const lastMoveTs = position ? Number(position.ts || 0) : 0;
   const inv = loadPlayerInventory(userId);
   if (previousHeartbeatTs > 0 && lastMoveTs <= previousHeartbeatTs) {
+    const elapsedMs = Date.now() - previousHeartbeatTs;
     const fatigueBefore = Number(inv.values.fatigue || 0);
-    const fatigueAfter = Math.max(0, fatigueBefore - 1);
+    const fatigueAfter = Math.max(
+      0,
+      fatigueBefore - (elapsedMs / 1000) * FATIGUE_RECOVERY_PER_SECOND,
+    );
     if (fatigueAfter !== fatigueBefore) {
       inv.values.fatigue = fatigueAfter;
       savePlayerInventory(userId, inv);

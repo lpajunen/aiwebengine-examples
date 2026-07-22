@@ -679,6 +679,10 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
         : Number(row.fatigue_cost),
+    durationMs:
+      row.duration_ms === null || row.duration_ms === undefined
+        ? undefined
+        : Number(row.duration_ms),
   };
 }
 
@@ -698,6 +702,7 @@ function actionClassToDbRow(
   cost_json: string;
   produces_json: string;
   fatigue_cost: number | null;
+  duration_ms: number | null;
   created_at: number;
   updated_at: number;
 } {
@@ -716,6 +721,8 @@ function actionClassToDbRow(
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
     fatigue_cost:
       record.fatigueCost === undefined ? null : Number(record.fatigueCost),
+    duration_ms:
+      record.durationMs === undefined ? null : Number(record.durationMs),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -744,9 +751,37 @@ function backfillActionClassDefaults(
       continue;
     }
     let changed = false;
-    if (existing.execution === undefined && def.execution !== undefined) {
-      existing.execution = def.execution;
-      changed = true;
+    if (def.execution !== undefined) {
+      if (existing.execution === undefined) {
+        existing.execution = def.execution;
+        changed = true;
+      } else {
+        // execution already exists (e.g. seeded by an older version of this
+        // built-in action) — shallow-merge only keys missing from it, so a
+        // creator's customization of an existing key is preserved but a new
+        // key added to the built-in definition later (e.g. a duration
+        // action's startToastMessage) still reaches an already-seeded row.
+        const mergedExecution: Record<string, unknown> = Object.assign(
+          {},
+          existing.execution,
+        );
+        let executionChanged = false;
+        Object.keys(def.execution).forEach(function (key) {
+          const defExecution = def.execution as Record<string, unknown>;
+          if (
+            mergedExecution[key] === undefined &&
+            defExecution[key] !== undefined
+          ) {
+            mergedExecution[key] = defExecution[key];
+            executionChanged = true;
+          }
+        });
+        if (executionChanged) {
+          existing.execution =
+            mergedExecution as ActionClassRecord["execution"];
+          changed = true;
+        }
+      }
     }
     if (existing.validation === undefined && def.validation !== undefined) {
       existing.validation = def.validation;
@@ -766,6 +801,10 @@ function backfillActionClassDefaults(
     }
     if (existing.fatigueCost === undefined && def.fatigueCost !== undefined) {
       existing.fatigueCost = def.fatigueCost;
+      changed = true;
+    }
+    if (existing.durationMs === undefined && def.durationMs !== undefined) {
+      existing.durationMs = def.durationMs;
       changed = true;
     }
     if (changed) {

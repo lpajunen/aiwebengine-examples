@@ -26,6 +26,7 @@ import {
 } from "./npc-tick-helpers.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
 import {
+  FATIGUE_RECOVERY_PER_SECOND,
   NPC_ACTIVE_WORLD_TTL_MS,
   NPC_TICK_LEASE_MS,
   NPC_TICK_MS,
@@ -33,6 +34,7 @@ import {
   VWORLD_NPC_TICK_LEASE_TABLE,
   VWORLD_NPC_TICK_TABLE,
 } from "./runtime-config.ts";
+import { resolvePendingActionsForWorld } from "./tree-action-helpers.ts";
 import {
   broadcastItemChange,
   broadcastNPCValuesChanged,
@@ -76,7 +78,11 @@ function shuffleDirections(dirs: Array<{ dr: number; dc: number }>): void {
   }
 }
 
-export function tickWorldNPCs(worldId: string, now: number): void {
+export function tickWorldNPCs(
+  worldId: string,
+  now: number,
+  elapsedMs: number,
+): void {
   ensureWorldItems(worldId);
   const npcs = ensureWorldNPCs(worldId);
   const npcIds = Object.keys(npcs);
@@ -122,9 +128,14 @@ export function tickWorldNPCs(worldId: string, now: number): void {
       hasChanges = true;
     } else {
       // Idled this tick (no step taken): recover fatigue instead of the
-      // per-step gain movement would have applied.
+      // per-step gain movement would have applied. Recovery is scaled by
+      // actual elapsed time (not a flat per-tick amount) so idle recovery
+      // pacing matches players' heartbeat-driven recovery in http-handler-helpers.ts.
       const fatigueBeforeTick = Number(npc.values.fatigue || 0);
-      const fatigueAfterTick = Math.max(0, fatigueBeforeTick - 1);
+      const fatigueAfterTick = Math.max(
+        0,
+        fatigueBeforeTick - (elapsedMs / 1000) * FATIGUE_RECOVERY_PER_SECOND,
+      );
       if (fatigueAfterTick !== fatigueBeforeTick) {
         npc.values.fatigue = fatigueAfterTick;
         hasChanges = true;
@@ -226,9 +237,12 @@ export function tryTickWorldNPCs(worldId: string, now: number): boolean {
   // The lease was acquired outside the transaction on purpose: its
   // visibility to other instances must not wait for this tick's commit.
   runInWorldTransaction("npc_tick:" + String(worldId), function () {
-    tickWorldNPCs(worldId, now);
+    tickWorldNPCs(worldId, now, now - lastTick);
   });
   saveNPCLastTick(worldId, now);
+  // Reuses this same lease-guarded, cadence-gated tick to also resolve any
+  // durationMs player actions that have come due for this world.
+  resolvePendingActionsForWorld(worldId, now);
   return true;
 }
 

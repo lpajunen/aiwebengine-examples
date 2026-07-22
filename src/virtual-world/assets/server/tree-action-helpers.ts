@@ -531,6 +531,54 @@ export function performTreeActionForUser(
     savePlayerInventory(userId, inv);
   }
 
+  // Consumes actionDefinition.cost/fatigueCost when the action is about to
+  // execute. Callers must invoke this exactly once per action, right before
+  // the action's effects — tile-targeted actions call it after tile
+  // validation (below); self/inventory-targeted actions with a dedicated
+  // early-return branch call it for themselves since they never reach that
+  // shared call site.
+  function applyActionStartCosts(): { status: number; payload: any } | null {
+    let inventoryMutatedByCost = false;
+
+    if (
+      actionDefinition &&
+      actionDefinition.cost &&
+      actionDefinition.cost.length > 0
+    ) {
+      const heldCounts = countLivingItemsByType(inv);
+      const costItems = actionDefinition.cost;
+      for (let i = 0; i < costItems.length; i++) {
+        if (
+          (heldCounts[costItems[i].itemId] || 0) <
+          Number(costItems[i].count || 0)
+        ) {
+          return {
+            status: 200,
+            payload: { ok: false, error: "error.missing_required_ingredients" },
+          };
+        }
+      }
+      for (let i = 0; i < costItems.length; i++) {
+        consumeLivingItemsByType(inv, costItems[i].itemId, costItems[i].count);
+      }
+      inventoryMutatedByCost = true;
+    }
+
+    if (actionDefinition && Number(actionDefinition.fatigueCost || 0) > 0) {
+      inv.values.fatigue = Math.max(
+        0,
+        Number(inv.values.fatigue || 0) + Number(actionDefinition.fatigueCost),
+      );
+      inventoryMutatedByCost = true;
+    }
+
+    if (inventoryMutatedByCost) {
+      savePlayerInventory(userId, inv);
+      broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    }
+    return null;
+  }
+
   if (!canUseAction) {
     return {
       status: 200,
@@ -579,6 +627,8 @@ export function performTreeActionForUser(
   }
 
   if (action === "tune") {
+    const tuneCostError = applyActionStartCosts();
+    if (tuneCostError) return tuneCostError;
     maybeApplyLogicEffects();
     return {
       status: 200,
@@ -587,6 +637,8 @@ export function performTreeActionForUser(
   }
 
   if (action === "play_tune") {
+    const playTuneCostError = applyActionStartCosts();
+    if (playTuneCostError) return playTuneCostError;
     maybeAppendConfiguredWorldChatMessage();
     maybeApplyLogicEffects();
     return {
@@ -816,43 +868,8 @@ export function performTreeActionForUser(
     };
   }
 
-  let inventoryMutatedByCost = false;
-
-  if (
-    actionDefinition &&
-    actionDefinition.cost &&
-    actionDefinition.cost.length > 0
-  ) {
-    const heldCounts = countLivingItemsByType(inv);
-    const costItems = actionDefinition.cost;
-    for (let i = 0; i < costItems.length; i++) {
-      if (
-        (heldCounts[costItems[i].itemId] || 0) < Number(costItems[i].count || 0)
-      ) {
-        return {
-          status: 200,
-          payload: { ok: false, error: "error.missing_required_ingredients" },
-        };
-      }
-    }
-    for (let i = 0; i < costItems.length; i++) {
-      consumeLivingItemsByType(inv, costItems[i].itemId, costItems[i].count);
-    }
-    inventoryMutatedByCost = true;
-  }
-
-  if (actionDefinition && Number(actionDefinition.fatigueCost || 0) > 0) {
-    inv.values.fatigue = Math.max(
-      0,
-      Number(inv.values.fatigue || 0) + Number(actionDefinition.fatigueCost),
-    );
-    inventoryMutatedByCost = true;
-  }
-
-  if (inventoryMutatedByCost) {
-    savePlayerInventory(userId, inv);
-    broadcastPlayerValuesChanged(worldId, userId, inv.values);
-  }
+  const actionStartCostError = applyActionStartCosts();
+  if (actionStartCostError) return actionStartCostError;
 
   if (action === "build_house") {
     applyHouseAction(

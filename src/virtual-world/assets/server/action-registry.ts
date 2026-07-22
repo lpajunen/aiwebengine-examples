@@ -327,6 +327,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Tune kantele",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    fatigueCost: 10,
     execution: {
       successPayload: {
         includeInventory: true,

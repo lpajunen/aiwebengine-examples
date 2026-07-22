@@ -20,7 +20,6 @@ function retranslateUI() {
   refreshTileDetailIfOpen();
   updateHeldHud();
   if (statsPanelVisible) renderStatisticsPanel();
-  if (craftingPanelVisible) renderCraftingPanel();
   if (playersPanelVisible) renderPlayersPanel();
   if (itemClassPanelVisible) renderItemClassList();
   if (actionClassPanelVisible) renderActionClassList();
@@ -355,7 +354,6 @@ function deleteItemClassUI(id) {
 
 function showItemClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
-  if (craftingPanelVisible) closeCraftingPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
@@ -620,7 +618,6 @@ function deleteActionClassUI(id) {
 
 function showActionClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
-  if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
@@ -936,7 +933,6 @@ function deleteLivingClassUI(id) {
 
 function showLivingClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
-  if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
@@ -1189,7 +1185,6 @@ function deleteWorldClassUI(id) {
 
 function showWorldClassPanel() {
   if (inventoryPanelVisible) closeInventoryPanel();
-  if (craftingPanelVisible) closeCraftingPanel();
   if (itemClassPanelVisible) closeItemClassPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();

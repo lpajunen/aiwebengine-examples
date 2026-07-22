@@ -1,5 +1,5 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
-// Item actions: apply action results, craft, pick/drop/equip.
+// Item actions: apply action results, pick/drop/equip.
 
 /** @param {any} result */
 function applyItemStateFromResult(result) {
@@ -46,50 +46,7 @@ function applyItemStateFromResult(result) {
   updateHeldHud();
   renderInventoryPanel();
   if (statsPanelVisible) renderStatisticsPanel();
-  if (craftingPanelVisible) renderCraftingPanel();
   updateUseButtonState();
-}
-
-/** @param {string} recipeId */
-function craftRecipeById(recipeId) {
-  fetchWithAuth("/virtual-world/craft", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipe_id: recipeId }),
-  })
-    .then(function (res) {
-      return res.json();
-    })
-    .then(function (result) {
-      if (!result || !result.ok) {
-        showHudToast(
-          result && result.error
-            ? translateServerMessage(result.error)
-            : t("crafting.failed", "Crafting failed"),
-          true,
-        );
-        return;
-      }
-      applyItemStateFromResult(result);
-      requestHeartbeatSoon();
-      if (result.recipe_id) {
-        showHudToast(
-          t("crafting.crafted_prefix", "Crafted:") +
-            " " +
-            recipeLabel(getBootstrappedRecipeDefs()[result.recipe_id]),
-          false,
-        );
-      }
-    })
-    .catch(function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
-        return;
-      console.error("Craft request failed:", err);
-      showHudToast(
-        t("crafting.request_failed", "Crafting request failed"),
-        true,
-      );
-    });
 }
 
 /**

@@ -103,14 +103,6 @@ requireElementById("hud-inventory-panel").addEventListener(
   { passive: true },
 );
 
-requireElementById("hud-crafting-panel").addEventListener(
-  "wheel",
-  function (e) {
-    e.stopPropagation();
-  },
-  { passive: true },
-);
-
 document.addEventListener(
   "wheel",
   function (e) {
@@ -167,18 +159,6 @@ function isTouchOnButtons(touch) {
       touch.clientX <= invRect.right &&
       touch.clientY >= invRect.top &&
       touch.clientY <= invRect.bottom
-    ) {
-      return true;
-    }
-  }
-  var craftingDiv = document.getElementById("hud-crafting-panel");
-  if (craftingDiv && craftingDiv.style.display !== "none") {
-    var craftingRect = craftingDiv.getBoundingClientRect();
-    if (
-      touch.clientX >= craftingRect.left &&
-      touch.clientX <= craftingRect.right &&
-      touch.clientY >= craftingRect.top &&
-      touch.clientY <= craftingRect.bottom
     ) {
       return true;
     }

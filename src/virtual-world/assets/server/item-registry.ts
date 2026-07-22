@@ -53,19 +53,6 @@ export interface ItemClassRecord {
   stateTemplate: Record<string, unknown>;
 }
 
-export interface RecipeDefinition {
-  id: string;
-  labelKey: string;
-  fallbackLabel: string;
-  targetKind: "inventory" | "current_tile" | "facing_tile";
-  inputItems: Array<{ itemId: string; count: number }>;
-  outputs: Array<
-    | { kind: "item"; itemId: string; count: number }
-    | { kind: "place_tree"; count: number }
-    | { kind: "place_house"; count: number }
-  >;
-}
-
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   saw: {
     id: "saw",
@@ -264,16 +251,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   },
 };
 
-// craft_kantele and grow_pine_tree have been migrated to
-// ACTION_DEFINITIONS (action-registry.ts) — see cost/produces there.
-export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {};
-
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
-}
-
-export function getRecipeDefinition(recipeId: string): RecipeDefinition | null {
-  return RECIPE_DEFINITIONS[String(recipeId || "")] || null;
 }
 
 export function getActionDefinition(actionId: string | null | undefined) {
@@ -352,20 +331,6 @@ export function getBootstrapRegistry(): {
       delta_kind: BootstrapItemChangeDeltaKind;
     }
   >;
-  recipes: Record<
-    string,
-    {
-      label_key: string;
-      fallback_label: string;
-      target_kind: string;
-      input_items: Array<{ item_id: string; count: number }>;
-      outputs: Array<
-        | { kind: "item"; item_id: string; count: number }
-        | { kind: "place_tree"; count: number }
-        | { kind: "place_house"; count: number }
-      >;
-    }
-  >;
 } {
   const items: Record<
     string,
@@ -393,21 +358,6 @@ export function getBootstrapRegistry(): {
       delta_kind: BootstrapItemChangeDeltaKind;
     }
   > = {};
-  const recipes: Record<
-    string,
-    {
-      label_key: string;
-      fallback_label: string;
-      target_kind: string;
-      input_items: Array<{ item_id: string; count: number }>;
-      outputs: Array<
-        | { kind: "item"; item_id: string; count: number }
-        | { kind: "place_tree"; count: number }
-        | { kind: "place_house"; count: number }
-      >;
-    }
-  > = {};
-
   const itemSource = _itemClassCache ? _itemClassCache : null;
   if (itemSource) {
     Object.keys(itemSource).forEach(function (itemId) {
@@ -454,33 +404,10 @@ export function getBootstrapRegistry(): {
     };
   });
 
-  Object.keys(RECIPE_DEFINITIONS).forEach(function (recipeId) {
-    const recipe = RECIPE_DEFINITIONS[recipeId];
-    recipes[recipeId] = {
-      label_key: recipe.labelKey,
-      fallback_label: recipe.fallbackLabel,
-      target_kind: recipe.targetKind,
-      input_items: recipe.inputItems.map(function (input) {
-        return { item_id: input.itemId, count: input.count };
-      }),
-      outputs: recipe.outputs.map(function (output) {
-        if (output.kind === "item") {
-          return {
-            kind: output.kind,
-            item_id: output.itemId,
-            count: output.count,
-          };
-        }
-        return { kind: output.kind, count: output.count };
-      }),
-    };
-  });
-
   return {
     items: items,
     actions: actions,
     item_events: itemEvents,
-    recipes: recipes,
   };
 }
 

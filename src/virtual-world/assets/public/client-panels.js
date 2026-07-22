@@ -1,5 +1,5 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
-// HUD panels: inventory, crafting, online players, nick editing.
+// HUD panels: inventory, online players, nick editing.
 
 function renderInventoryPanel() {
   var slotsDiv = requireElementById("inv-slots");
@@ -121,7 +121,6 @@ function renderInventoryPanel() {
 
 /** @param {number} autoHideMs */
 function showInventoryPanel(autoHideMs) {
-  if (craftingPanelVisible) closeCraftingPanel();
   inventoryPanelVisible = true;
   requireElementById("hud-inventory-panel").style.display = "block";
   renderInventoryPanel();
@@ -196,79 +195,6 @@ function closeStatisticsPanel() {
 function toggleStatisticsPanel() {
   if (statsPanelVisible) closeStatisticsPanel();
   else showStatisticsPanel();
-}
-
-function renderCraftingPanel() {
-  var listDiv = requireElementById("crafting-list");
-  var recipes = getBootstrappedRecipeDefs();
-  var recipeIds = Object.keys(recipes).sort();
-  if (recipeIds.length === 0) {
-    listDiv.innerHTML =
-      '<div class="craft-row"><div class="craft-status">' +
-      escHtml(t("crafting.no_recipes", "No recipes available.")) +
-      "</div></div>";
-    return;
-  }
-  var rows = "";
-  for (var i = 0; i < recipeIds.length; i++) {
-    var recipeId = recipeIds[i];
-    var recipe = recipes[recipeId];
-    var craftable = recipeIsCraftable(recipe);
-    rows +=
-      '<div class="craft-row">' +
-      '<div class="name">' +
-      escHtml(recipeLabel(recipe)) +
-      "</div>" +
-      '<div class="craft-meta">' +
-      escHtml(recipeTargetLabel(recipe)) +
-      "</div>" +
-      '<div class="craft-ingredients">' +
-      escHtml(t("crafting.ingredients", "Ingredients:")) +
-      " " +
-      escHtml(recipeIngredientsLabel(recipe)) +
-      "</div>" +
-      '<div class="craft-result">' +
-      escHtml(t("crafting.result", "Result:")) +
-      " " +
-      escHtml(recipeResultLabel(recipe)) +
-      "</div>" +
-      '<div class="craft-actions">' +
-      '<span class="craft-status">' +
-      escHtml(
-        craftable
-          ? t("crafting.ready", "Ready")
-          : t("crafting.missing_ingredients", "Missing ingredients"),
-      ) +
-      "</span>" +
-      "<button onclick=\"craftRecipeById('" +
-      recipeId +
-      "')\"" +
-      (craftable ? "" : " disabled") +
-      ">" +
-      escHtml(t("hud.craft", "Craft")) +
-      "</button>" +
-      "</div>" +
-      "</div>";
-  }
-  listDiv.className = "crafting-list";
-  listDiv.innerHTML = rows;
-}
-
-function showCraftingPanel() {
-  if (inventoryPanelVisible) closeInventoryPanel();
-  craftingPanelVisible = true;
-  requireElementById("hud-crafting-panel").style.display = "block";
-  renderCraftingPanel();
-}
-
-function closeCraftingPanel() {
-  craftingPanelVisible = false;
-  requireElementById("hud-crafting-panel").style.display = "none";
-}
-
-function toggleCraftingPanel() {
-  if (craftingPanelVisible) closeCraftingPanel();
-  else showCraftingPanel();
 }
 
 // ── Players panel ────────────────────────────────────────────────────────

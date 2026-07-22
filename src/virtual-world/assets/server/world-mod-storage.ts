@@ -141,8 +141,8 @@ export function saveWorldModLayer(
 
 export type TreePlantBlockReason = "tile_occupied" | "tree_exists";
 
-// Shared by the "plant" tree action and the grow_pine_tree recipe — both
-// need to know whether a tile can receive a newly planted tree.
+// Shared by any action that plants a tree (e.g. "plant", "grow_pine_tree") —
+// checks whether a tile can receive a newly planted tree.
 export function checkTreePlantable(
   row: number,
   col: number,
@@ -166,8 +166,8 @@ export function checkTreePlantable(
 
 export type HouseBuildBlockReason = "not_walkable" | "house_exists";
 
-// Shared by the "build_house" action and the (recipe-driven) place_house
-// output kind — both need to know whether a tile can receive a new house.
+// Shared by any action that builds a house (e.g. "build_house") — checks
+// whether a tile can receive a new house.
 export function checkHouseBuildable(
   row: number,
   col: number,
@@ -184,8 +184,8 @@ export function checkHouseBuildable(
   return { ok: true };
 }
 
-// Shared by the "plant"/"cut" tree action and the grow_pine_tree recipe —
-// mutates the tile entry and persists it.
+// Shared by any tree-planting/cutting action (e.g. "plant", "cut",
+// "grow_pine_tree") — mutates the tile entry and persists it.
 export function applyTreeAction(
   worldId: string,
   userId: string,
@@ -202,8 +202,8 @@ export function applyTreeAction(
   saveWorldTrees(worldId, trees);
 }
 
-// Shared by the "build_house"/"destroy_house" action and the (recipe-driven)
-// place_house output kind — mutates the tile entry and persists it.
+// Shared by any house-building/destroying action (e.g. "build_house",
+// "destroy_house") — mutates the tile entry and persists it.
 export function applyHouseAction(
   worldId: string,
   userId: string,

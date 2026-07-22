@@ -29,7 +29,6 @@ import {
 } from "./diagnostics.ts";
 import { handleItemActionForUser as handleItemActionForUserImpl } from "./item-action-helpers.ts";
 import { loadPlayerInventory, loadWorldItems } from "./item-storage.ts";
-import { craftRecipeForUser as craftRecipeForUserImpl } from "./crafting-helpers.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
@@ -120,26 +119,6 @@ export function handleItemActionForUser(userId: any, body: any): any {
  * @param {*} body
  * @returns {{status: number, payload: any}}
  */
-export function craftRecipeForUser(userId: any, body: any): any {
-  return runInWorldTransaction("craft", function () {
-    return craftRecipeForUserInner(userId, body);
-  });
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
-export function craftRecipeForUserInner(userId: any, body: any): any {
-  return craftRecipeForUserImpl(userId, body);
-}
-
-/**
- * @param {string} userId
- * @param {*} body
- * @returns {{status: number, payload: any}}
- */
 export function performTreeActionForUser(userId: any, body: any): any {
   return runInWorldTransaction("tree_action", function () {
     return performTreeActionForUserInner(userId, body);
@@ -221,25 +200,13 @@ export function itemActionHandler(context: any) {
 }
 
 /**
+ * Crafting was migrated to the action system (see tree-action-helpers.ts) —
+ * this route is kept registered (the platform has no route-unregister API)
+ * but now just tells callers where to go instead of crashing.
  * @param {*} context
  */
 export function craftHandler(context: any) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  var body;
-  try {
-    body = JSON.parse(context.request.body || "{}");
-  } catch (e) {
-    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  var handled = craftRecipeForUser(userId, body);
-  return ResponseBuilder.json(
-    withInventorySelectors(handled.payload),
-    handled.status,
-  );
+  return ResponseBuilder.json({ error: "error.crafting_removed" }, 410);
 }
 
 /**

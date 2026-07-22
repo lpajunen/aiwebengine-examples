@@ -1,5 +1,5 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
-// Client core: shared typedefs, UI state, HUD pickers/toast, recipes, logout.
+// Client core: shared typedefs, UI state, HUD pickers/toast, logout.
 
 /**
  * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef
@@ -27,7 +27,6 @@ var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
 var statsPanelVisible = false;
-var craftingPanelVisible = false;
 var usePickerVisible = false;
 /** @type {number | null} */
 var heartbeatTimer = null;
@@ -337,121 +336,6 @@ function showHudToast(message, isError) {
     },
     isError ? 2600 : 1800,
   );
-}
-
-function getBootstrappedRecipeDefs() {
-  if (!ITEM_REGISTRY || !ITEM_REGISTRY.recipes) return {};
-  return ITEM_REGISTRY.recipes;
-}
-
-function getInventoryItemCounts() {
-  var counts = /** @type {Record<string, number>} */ ({});
-  var inv = normalizeClientInventory(playerInventory);
-  var all = [];
-  var slotIds = getInventorySlotIds(inv);
-  for (var i = 0; i < slotIds.length; i++) {
-    var slotItem = inv.slots && inv.slots[slotIds[i]];
-    if (slotItem) all.push(slotItem);
-  }
-  if (Array.isArray(inv.bag)) {
-    for (var b = 0; b < inv.bag.length; b++) all.push(inv.bag[b]);
-  }
-  for (var j = 0; j < all.length; j++) {
-    var item = all[j];
-    var type = item && item.type ? String(item.type) : "";
-    if (!type) continue;
-    counts[type] = (counts[type] || 0) + 1;
-  }
-  return counts;
-}
-
-/** @param {any} recipe */
-function recipeIsCraftable(recipe) {
-  if (!recipe || !Array.isArray(recipe.input_items)) return false;
-  var counts = getInventoryItemCounts();
-  for (var i = 0; i < recipe.input_items.length; i++) {
-    var input = recipe.input_items[i];
-    var itemId = String(input && input.item_id ? input.item_id : "");
-    var required = Number(input && input.count ? input.count : 0);
-    if (!itemId || required <= 0) return false;
-    if ((counts[itemId] || 0) < required) return false;
-  }
-  return true;
-}
-
-/** @param {any} recipe */
-function recipeLabel(recipe) {
-  if (!recipe) return t("recipe.unknown", "Unknown recipe");
-  return t(
-    String(recipe.label_key || ""),
-    String(recipe.fallback_label || t("recipe.unknown", "Unknown recipe")),
-  );
-}
-
-/** @param {string} itemId */
-function itemLabelForRecipe(itemId) {
-  return t(itemTypeToLabelKey(itemId), humanizeType(itemId));
-}
-
-/** @param {any} recipe */
-function recipeIngredientsLabel(recipe) {
-  if (
-    !recipe ||
-    !Array.isArray(recipe.input_items) ||
-    recipe.input_items.length === 0
-  ) {
-    return t("recipe.no_ingredients", "No ingredients");
-  }
-  var parts = [];
-  for (var i = 0; i < recipe.input_items.length; i++) {
-    var input = recipe.input_items[i];
-    parts.push(
-      String(input.count || 0) +
-        "x " +
-        itemLabelForRecipe(String(input.item_id || "")),
-    );
-  }
-  return parts.join(", ");
-}
-
-/** @param {any} recipe */
-function recipeResultLabel(recipe) {
-  if (
-    !recipe ||
-    !Array.isArray(recipe.outputs) ||
-    recipe.outputs.length === 0
-  ) {
-    return t("recipe.no_outputs", "No outputs");
-  }
-  var parts = [];
-  for (var i = 0; i < recipe.outputs.length; i++) {
-    var output = recipe.outputs[i];
-    if (!output) continue;
-    if (output.kind === "item") {
-      parts.push(
-        String(output.count || 0) +
-          "x " +
-          itemLabelForRecipe(String(output.item_id || "")),
-      );
-    } else if (output.kind === "place_tree") {
-      parts.push(t("recipe.place_pine_tree", "place pine tree"));
-    } else if (output.kind === "place_house") {
-      parts.push(t("recipe.place_house", "place house"));
-    }
-  }
-  return parts.join(", ");
-}
-
-/** @param {any} recipe */
-function recipeTargetLabel(recipe) {
-  var targetKind = String(
-    recipe && recipe.target_kind ? recipe.target_kind : "inventory",
-  );
-  if (targetKind === "facing_tile")
-    return t("recipe.target_facing_tile", "Target: facing tile");
-  if (targetKind === "current_tile")
-    return t("recipe.target_current_tile", "Target: current tile");
-  return t("recipe.target_inventory", "Target: inventory");
 }
 
 function triggerLogout() {

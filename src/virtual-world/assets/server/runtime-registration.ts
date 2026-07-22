@@ -175,6 +175,8 @@ export function registerVirtualWorldRuntime(): void {
 
   safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
   safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
+  // Kept registered (no route-unregister API) but now just returns 410 —
+  // crafting was migrated to the action system, see tree-action-helpers.ts.
   safeRegisterRoute("/virtual-world/craft", "craftHandler", "POST");
   safeRegisterTool(
     "virtualWorldGetState",

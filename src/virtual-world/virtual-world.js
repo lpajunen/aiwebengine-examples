@@ -111,7 +111,6 @@ import {
   grantAllItemsForUser as grantAllItemsForUserImpl,
   handleItemActionForUser as handleItemActionForUserImpl,
 } from "./server/item-action-helpers.ts";
-import { craftRecipeForUser as craftRecipeForUserImpl } from "./server/crafting-helpers.ts";
 import {
   switchUserToNewWorld as switchUserToNewWorldImpl,
   switchUserToStartWorld as switchUserToStartWorldImpl,

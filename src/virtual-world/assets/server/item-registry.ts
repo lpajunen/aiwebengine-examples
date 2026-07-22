@@ -109,7 +109,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.tree_planter.name",
       fallbackLabel: "Pine sapling",
     },
-    actionIds: ["plant"],
+    actionIds: ["plant", "grow_pine_tree"],
   },
   portal_builder: {
     id: "portal_builder",
@@ -217,7 +217,13 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.starter_kit.name",
       fallbackLabel: "Wanderer's bundle",
     },
-    actionIds: ["return_home", "examine", "poke", "summon_knife"],
+    actionIds: [
+      "return_home",
+      "examine",
+      "poke",
+      "summon_knife",
+      "craft_kantele",
+    ],
   },
   blessing_marker: {
     id: "blessing_marker",
@@ -258,32 +264,9 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   },
 };
 
-export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {
-  craft_kantele: {
-    id: "craft_kantele",
-    labelKey: "recipe.craft_kantele",
-    fallbackLabel: "Craft kantele",
-    targetKind: "inventory",
-    inputItems: [
-      { itemId: "birch_bark_letter", count: 1 },
-      { itemId: "juniper_bundle", count: 1 },
-      { itemId: "rune_stone", count: 1 },
-    ],
-    outputs: [{ kind: "item", itemId: "kantele", count: 1 }],
-  },
-  grow_pine_tree: {
-    id: "grow_pine_tree",
-    labelKey: "recipe.grow_pine_tree",
-    fallbackLabel: "Grow pine tree",
-    targetKind: "facing_tile",
-    inputItems: [
-      { itemId: "flower", count: 1 },
-      { itemId: "juniper_bundle", count: 1 },
-      { itemId: "tree_planter", count: 1 },
-    ],
-    outputs: [{ kind: "place_tree", count: 1 }],
-  },
-};
+// craft_kantele and grow_pine_tree have been migrated to
+// ACTION_DEFINITIONS (action-registry.ts) — see cost/produces there.
+export const RECIPE_DEFINITIONS: Record<string, RecipeDefinition> = {};
 
 export function getItemDefinition(itemId: string): ItemDefinition | null {
   return ITEM_DEFINITIONS[String(itemId || "")] || null;
@@ -587,35 +570,58 @@ function itemClassToDbRow(
   };
 }
 
+// Seeds missing built-in item rows from ITEM_DEFINITIONS, and patches
+// actionIds on rows that already exist but predate a static definition
+// change (e.g. tree_planter gaining "grow_pine_tree") — union-merges
+// missing static action ids in without dropping any a creator added.
+function backfillItemClassDefaults(
+  cache: Record<string, ItemClassRecord>,
+  now: number,
+): { inserted: number; patched: number } {
+  const defKeys = Object.keys(ITEM_DEFINITIONS);
+  let inserted = 0;
+  let patched = 0;
+  for (let i = 0; i < defKeys.length; i++) {
+    const defId = defKeys[i];
+    const def = ITEM_DEFINITIONS[defId];
+    const existing = cache[defId];
+    if (!existing) {
+      const record = itemClassFromDefinition(def);
+      upsertItemClassRow(itemClassToDbRow(record, now));
+      cache[record.id] = record;
+      inserted++;
+      continue;
+    }
+    const defActionIds = Array.isArray(def.actionIds) ? def.actionIds : [];
+    const missingActionIds = defActionIds.filter(function (id) {
+      return existing.actionIds.indexOf(id) === -1;
+    });
+    if (missingActionIds.length > 0) {
+      existing.actionIds = existing.actionIds.concat(missingActionIds);
+      upsertItemClassRow(itemClassToDbRow(existing, now));
+      patched++;
+    }
+  }
+  return { inserted: inserted, patched: patched };
+}
+
 export function bootstrapItemClasses(): void {
   const rows = loadAllItemClassRows();
   const cache: Record<string, ItemClassRecord> = {};
-  let insertedDefaults = 0;
   const now = Date.now();
 
-  if (rows.length > 0) {
-    for (let i = 0; i < rows.length; i++) {
-      const record = itemClassFromDbRow(rows[i]);
-      if (record.id) cache[record.id] = record;
-    }
+  for (let i = 0; i < rows.length; i++) {
+    const record = itemClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
   }
 
-  // Backfill missing built-ins without overwriting existing dynamic/custom rows.
-  const defKeys = Object.keys(ITEM_DEFINITIONS);
-  for (let i = 0; i < defKeys.length; i++) {
-    const defId = defKeys[i];
-    if (!cache[defId]) {
-      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
-      upsertItemClassRow(itemClassToDbRow(record, now));
-      cache[record.id] = record;
-      insertedDefaults++;
-    }
-  }
+  const { inserted, patched } = backfillItemClassDefaults(cache, now);
   if (rows.length === 0) {
-    vwLog("item class repository seeded", { count: insertedDefaults });
-  } else if (insertedDefaults > 0) {
+    vwLog("item class repository seeded", { count: inserted });
+  } else if (inserted > 0 || patched > 0) {
     vwLog("item class repository backfilled", {
-      inserted_count: insertedDefaults,
+      inserted_count: inserted,
+      patched_count: patched,
       existing_count: rows.length,
     });
   }
@@ -626,26 +632,17 @@ export function bootstrapItemClasses(): void {
 export function refreshItemClassCache(): void {
   const rows = loadAllItemClassRows();
   const cache: Record<string, ItemClassRecord> = {};
-  let insertedDefaults = 0;
   const now = Date.now();
   for (let i = 0; i < rows.length; i++) {
     const record = itemClassFromDbRow(rows[i]);
     if (record.id) cache[record.id] = record;
   }
 
-  const defKeys = Object.keys(ITEM_DEFINITIONS);
-  for (let i = 0; i < defKeys.length; i++) {
-    const defId = defKeys[i];
-    if (!cache[defId]) {
-      const record = itemClassFromDefinition(ITEM_DEFINITIONS[defId]);
-      upsertItemClassRow(itemClassToDbRow(record, now));
-      cache[record.id] = record;
-      insertedDefaults++;
-    }
-  }
-  if (insertedDefaults > 0) {
+  const { inserted, patched } = backfillItemClassDefaults(cache, now);
+  if (inserted > 0 || patched > 0) {
     vwLog("item class repository backfilled during refresh", {
-      inserted_count: insertedDefaults,
+      inserted_count: inserted,
+      patched_count: patched,
     });
   }
 
@@ -742,6 +739,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["logicSpec"] | undefined,
     cost: parseJson(row.cost_json, undefined) as
       ActionDefinition["cost"] | undefined,
+    produces: parseJson(row.produces_json, undefined) as
+      ActionDefinition["produces"] | undefined,
   };
 }
 
@@ -759,6 +758,7 @@ function actionClassToDbRow(
   validation_json: string;
   logic_spec_json: string;
   cost_json: string;
+  produces_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -774,6 +774,7 @@ function actionClassToDbRow(
     validation_json: record.validation ? JSON.stringify(record.validation) : "",
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
+    produces_json: record.produces ? JSON.stringify(record.produces) : "",
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -816,6 +817,10 @@ function backfillActionClassDefaults(
     }
     if (existing.cost === undefined && def.cost !== undefined) {
       existing.cost = def.cost;
+      changed = true;
+    }
+    if (existing.produces === undefined && def.produces !== undefined) {
+      existing.produces = def.produces;
       changed = true;
     }
     if (changed) {

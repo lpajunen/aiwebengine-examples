@@ -14,6 +14,7 @@ export interface ActionDefinition {
     | "inventory";
   sourceItemIds: string[];
   cost?: Array<{ itemId: string; count: number }>;
+  produces?: Array<{ itemId: string; count: number }>;
   canonicalId?: string;
   execution?: {
     toastMessage?: string;
@@ -31,6 +32,8 @@ export interface ActionDefinition {
     };
     worldMutation?: {
       storage: "trees" | "houses";
+      treeAction?: "plant" | "cut";
+      houseAction?: "build_house" | "destroy_house";
     };
     worldEvent?: {
       eventId: string;
@@ -126,6 +129,44 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         {
           kind: "oak_center",
           errorMessage: "The old oak stands firm",
+        },
+      ],
+    },
+  },
+  grow_pine_tree: {
+    id: "grow_pine_tree",
+    labelKey: "recipe.grow_pine_tree",
+    fallbackLabel: "Grow pine tree",
+    targetKind: "facing_tile",
+    sourceItemIds: ["tree_planter"],
+    cost: [
+      { itemId: "flower", count: 1 },
+      { itemId: "juniper_bundle", count: 1 },
+      { itemId: "tree_planter", count: 1 },
+    ],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      worldMutation: {
+        storage: "trees",
+        treeAction: "plant",
+      },
+      worldEvent: {
+        eventId: "tree_changed",
+      },
+    },
+    validation: {
+      requireTreeState: {
+        kind: "plantable",
+        missingErrorMessage: "Cannot plant here",
+        conflictErrorMessage: "Tree already exists",
+      },
+      blockedZones: [
+        {
+          kind: "oak_clearing",
+          errorMessage: "The oak clearing must remain open",
         },
       ],
     },
@@ -419,6 +460,24 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeInventory: true,
       },
       toastMessage: "A knife appears in your bag.",
+    },
+  },
+  craft_kantele: {
+    id: "craft_kantele",
+    labelKey: "recipe.craft_kantele",
+    fallbackLabel: "Craft kantele",
+    targetKind: "inventory",
+    sourceItemIds: ["starter_kit"],
+    cost: [
+      { itemId: "birch_bark_letter", count: 1 },
+      { itemId: "juniper_bundle", count: 1 },
+      { itemId: "rune_stone", count: 1 },
+    ],
+    produces: [{ itemId: "kantele", count: 1 }],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
     },
   },
 };

@@ -12,6 +12,7 @@ import {
   nextWorldItemId,
   savePlayerInventory,
   saveWorldItems,
+  spawnItemsForUser,
   upsertWorldItem,
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
@@ -157,6 +158,8 @@ export function performTreeActionForUser(
     };
     worldMutation?: {
       storage: "trees" | "houses";
+      treeAction?: "plant" | "cut";
+      houseAction?: "build_house" | "destroy_house";
     };
     worldEvent?: {
       eventId: string;
@@ -289,13 +292,35 @@ export function performTreeActionForUser(
     if (!execution || !execution.worldMutation) return false;
 
     if (execution.worldMutation.storage === "trees") {
-      saveWorldTrees(worldId, state.trees);
+      if (execution.worldMutation.treeAction) {
+        applyTreeAction(
+          worldId,
+          userId,
+          row,
+          col,
+          execution.worldMutation.treeAction,
+          state.trees,
+        );
+      } else {
+        saveWorldTrees(worldId, state.trees);
+      }
       maybeSendConfiguredWorldEvent(row, col);
       return true;
     }
 
     if (execution.worldMutation.storage === "houses") {
-      saveWorldHouses(worldId, state.houses);
+      if (execution.worldMutation.houseAction) {
+        applyHouseAction(
+          worldId,
+          userId,
+          row,
+          col,
+          execution.worldMutation.houseAction,
+          state.houses,
+        );
+      } else {
+        saveWorldHouses(worldId, state.houses);
+      }
       maybeSendConfiguredWorldEvent(row, col);
       return true;
     }
@@ -942,6 +967,15 @@ export function performTreeActionForUser(
       trees: trees,
       houses: houses,
     });
+  }
+
+  if (
+    actionDefinition &&
+    actionDefinition.produces &&
+    actionDefinition.produces.length > 0
+  ) {
+    spawnItemsForUser(worldId, userId, inv, actionDefinition.produces);
+    savePlayerInventory(userId, inv);
   }
 
   return {

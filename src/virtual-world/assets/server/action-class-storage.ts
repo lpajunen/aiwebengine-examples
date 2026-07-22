@@ -26,6 +26,7 @@ export function upsertActionClassRow(row: {
   validation_json: string;
   logic_spec_json: string;
   cost_json: string;
+  produces_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

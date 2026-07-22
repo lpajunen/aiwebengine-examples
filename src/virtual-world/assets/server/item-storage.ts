@@ -308,6 +308,32 @@ export function nextWorldItemId(worldId: string): number {
   return nextSeq;
 }
 
+// Shared by any action with a `produces` effect (e.g. craft_kantele) —
+// creates the listed items and adds them to the user's bag.
+export function spawnItemsForUser(
+  worldId: string,
+  userId: string,
+  inv: LivingState,
+  produces: Array<{ itemId: string; count: number }>,
+): any[] {
+  const createdItems: any[] = [];
+  for (let i = 0; i < produces.length; i++) {
+    const entry = produces[i];
+    for (let count = 0; count < Number(entry.count || 0); count++) {
+      const newItem = {
+        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+        type: entry.itemId,
+        created_at: Date.now(),
+        crafted_by: userId,
+        state: getItemStateTemplate(entry.itemId),
+      };
+      inv.bag.push(newItem);
+      createdItems.push(newItem);
+    }
+  }
+  return createdItems;
+}
+
 export function ensureOldOakItem(worldId: string): void {
   if (!isOakWorld(worldId)) return;
   const items = loadWorldItems(worldId);

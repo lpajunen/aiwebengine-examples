@@ -342,6 +342,8 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       canonical_id: string;
       target_kind: string;
+      tree_action?: "plant" | "cut";
+      house_action?: "build_house" | "destroy_house";
     }
   >;
   item_events: Record<
@@ -381,6 +383,8 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       canonical_id: string;
       target_kind: string;
+      tree_action?: "plant" | "cut";
+      house_action?: "build_house" | "destroy_house";
     }
   > = {};
   const itemEvents: Record<
@@ -432,11 +436,14 @@ export function getBootstrapRegistry(): {
     : ACTION_DEFINITIONS;
   Object.keys(actionSource).forEach(function (actionId) {
     const action = actionSource[actionId];
+    const worldMutation = action.execution && action.execution.worldMutation;
     actions[actionId] = {
       label_key: action.labelKey,
       fallback_label: action.fallbackLabel,
       canonical_id: action.canonicalId || action.id,
       target_kind: action.targetKind,
+      tree_action: worldMutation ? worldMutation.treeAction : undefined,
+      house_action: worldMutation ? worldMutation.houseAction : undefined,
     };
   });
 

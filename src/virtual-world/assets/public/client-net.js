@@ -520,8 +520,10 @@ function initMultiplayer() {
   /** @param {any} payload */
   function handleTreeChangedEvent(payload) {
     if (!payload) return;
+    var resolvedTreeAction = resolveTreeActionKind(payload.action);
+    if (!resolvedTreeAction) return;
     applyTreeAction(
-      payload.action,
+      resolvedTreeAction,
       payload.row,
       payload.col,
       payload.actor_type || "player",
@@ -535,8 +537,10 @@ function initMultiplayer() {
   /** @param {any} payload */
   function handleHouseChangedEvent(payload) {
     if (!payload) return;
+    var resolvedHouseAction = resolveHouseActionKind(payload.action);
+    if (!resolvedHouseAction) return;
     applyHouseAction(
-      payload.action,
+      resolvedHouseAction,
       payload.row,
       payload.col,
       payload.actor_type || "player",

@@ -171,13 +171,14 @@ function postTreeAction(action, extras) {
       }
       applyItemStateFromResult(result);
       requestHeartbeatSoon();
+      var resolvedTreeAction = resolveTreeActionKind(result.action);
       if (
-        (result.action === "plant" || result.action === "cut") &&
+        resolvedTreeAction &&
         typeof result.row === "number" &&
         typeof result.col === "number"
       ) {
         applyTreeAction(
-          result.action,
+          resolvedTreeAction,
           result.row,
           result.col,
           "player",
@@ -186,14 +187,14 @@ function postTreeAction(action, extras) {
         updateTreeInstances();
         refreshTileDetailIfOpen();
       }
+      var resolvedHouseAction = resolveHouseActionKind(result.action);
       if (
-        (result.action === "build_house" ||
-          result.action === "destroy_house") &&
+        resolvedHouseAction &&
         typeof result.row === "number" &&
         typeof result.col === "number"
       ) {
         applyHouseAction(
-          result.action,
+          resolvedHouseAction,
           result.row,
           result.col,
           "player",

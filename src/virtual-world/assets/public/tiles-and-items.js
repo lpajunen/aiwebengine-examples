@@ -198,6 +198,34 @@ applyWorldModsToClientMap();
 rebuildLegacyDynamicViews();
 
 /**
+ * Resolves a (possibly custom, config-driven) action id to the underlying
+ * tree mutation it performs, so the client can render it the same way as
+ * the built-in "plant"/"cut" actions.
+ * @param {string} action
+ * @returns {"plant"|"cut"|null}
+ */
+function resolveTreeActionKind(action) {
+  if (action === "plant" || action === "cut") return action;
+  var actionDef =
+    ITEM_REGISTRY && ITEM_REGISTRY.actions && ITEM_REGISTRY.actions[action];
+  return (actionDef && actionDef.tree_action) || null;
+}
+
+/**
+ * Resolves a (possibly custom, config-driven) action id to the underlying
+ * house mutation it performs, so the client can render it the same way as
+ * the built-in "build_house"/"destroy_house" actions.
+ * @param {string} action
+ * @returns {"build_house"|"destroy_house"|null}
+ */
+function resolveHouseActionKind(action) {
+  if (action === "build_house" || action === "destroy_house") return action;
+  var actionDef =
+    ITEM_REGISTRY && ITEM_REGISTRY.actions && ITEM_REGISTRY.actions[action];
+  return (actionDef && actionDef.house_action) || null;
+}
+
+/**
  * @param {string} action
  * @param {number} row
  * @param {number} col

@@ -63,7 +63,7 @@ var touchTapStartX = 0,
 
 // Mouse controls (desktop)
 document.addEventListener("mousedown", function (e) {
-  if (e.button === 0) {
+  if (e.button === 0 && !isClickOnHUD(e)) {
     isDragging = true;
     lastMouseX = e.clientX;
     lastMouseY = e.clientY;

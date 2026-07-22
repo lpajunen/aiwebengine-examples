@@ -91,6 +91,28 @@ export function sendWorldScopedStreamEvent(
   );
 }
 
+export function broadcastPlayerValuesChanged(
+  worldId: string,
+  userId: string,
+  values: Record<string, unknown>,
+): void {
+  sendWorldScopedStreamEvent(String(worldId), "player_values_changed", {
+    player_id: String(userId),
+    values: values,
+  });
+}
+
+export function broadcastNPCValuesChanged(
+  worldId: string,
+  npcId: string,
+  values: Record<string, unknown>,
+): void {
+  sendWorldScopedStreamEvent(String(worldId), "npc_values_changed", {
+    npc_id: String(npcId),
+    values: values,
+  });
+}
+
 export function broadcastItemChange(
   worldId: string,
   actorType: string,

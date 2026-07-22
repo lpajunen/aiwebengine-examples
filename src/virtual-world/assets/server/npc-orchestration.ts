@@ -35,6 +35,7 @@ import {
 } from "./runtime-config.ts";
 import {
   broadcastItemChange,
+  broadcastNPCValuesChanged,
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
@@ -102,24 +103,33 @@ export function tickWorldNPCs(worldId: string, now: number): void {
     }
     normalizeNPCInventoryState(npc);
 
-    if (
-      tickNPCMovement({
-        worldId: worldId,
-        npcId: npcId,
-        npc: npc,
-        now: now,
-        map: map,
-        occupiedPlayers: occupiedPlayers,
-        occupiedNPCs: occupiedNPCs,
-        rows: mapRows,
-        cols: mapCols,
-        shuffleDirections: shuffleDirections,
-        directionToRotation: directionToRotation,
-        getNPCDisplayName: getNPCDisplayName,
-        sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
-      })
-    ) {
+    const npcMoved = tickNPCMovement({
+      worldId: worldId,
+      npcId: npcId,
+      npc: npc,
+      now: now,
+      map: map,
+      occupiedPlayers: occupiedPlayers,
+      occupiedNPCs: occupiedNPCs,
+      rows: mapRows,
+      cols: mapCols,
+      shuffleDirections: shuffleDirections,
+      directionToRotation: directionToRotation,
+      getNPCDisplayName: getNPCDisplayName,
+      sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
+    });
+    if (npcMoved) {
       hasChanges = true;
+    } else {
+      // Idled this tick (no step taken): recover fatigue instead of the
+      // per-step gain movement would have applied.
+      const fatigueBeforeTick = Number(npc.values.fatigue || 0);
+      const fatigueAfterTick = Math.max(0, fatigueBeforeTick - 1);
+      if (fatigueAfterTick !== fatigueBeforeTick) {
+        npc.values.fatigue = fatigueAfterTick;
+        hasChanges = true;
+        broadcastNPCValuesChanged(worldId, npcId, npc.values);
+      }
     }
 
     const itemResult = tickNPCItemInteractions({

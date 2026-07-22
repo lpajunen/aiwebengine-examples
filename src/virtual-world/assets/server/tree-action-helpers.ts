@@ -30,6 +30,7 @@ import {
 } from "./item-registry.ts";
 import {
   broadcastItemChange,
+  broadcastPlayerValuesChanged,
   sendRecipientScopedStreamEvent,
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
@@ -815,6 +816,8 @@ export function performTreeActionForUser(
     };
   }
 
+  let inventoryMutatedByCost = false;
+
   if (
     actionDefinition &&
     actionDefinition.cost &&
@@ -835,7 +838,20 @@ export function performTreeActionForUser(
     for (let i = 0; i < costItems.length; i++) {
       consumeLivingItemsByType(inv, costItems[i].itemId, costItems[i].count);
     }
+    inventoryMutatedByCost = true;
+  }
+
+  if (actionDefinition && Number(actionDefinition.fatigueCost || 0) > 0) {
+    inv.values.fatigue = Math.max(
+      0,
+      Number(inv.values.fatigue || 0) + Number(actionDefinition.fatigueCost),
+    );
+    inventoryMutatedByCost = true;
+  }
+
+  if (inventoryMutatedByCost) {
     savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
   }
 
   if (action === "build_house") {

@@ -275,6 +275,10 @@ export function createActionClassHandler(context: any) {
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
     cost: body && body.cost ? body.cost : undefined,
     produces: body && body.produces ? body.produces : undefined,
+    fatigueCost:
+      body && body.fatigueCost !== undefined
+        ? Number(body.fatigueCost)
+        : undefined,
   };
   var actionCreateWrite = upsertActionClass(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
@@ -358,6 +362,10 @@ export function updateActionClassHandler(context: any) {
     cost: body && body.cost !== undefined ? body.cost : existing.cost,
     produces:
       body && body.produces !== undefined ? body.produces : existing.produces,
+    fatigueCost:
+      body && body.fatigueCost !== undefined
+        ? Number(body.fatigueCost)
+        : existing.fatigueCost,
   };
   var actionUpdateWrite = upsertActionClass(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {

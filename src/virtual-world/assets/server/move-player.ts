@@ -1,4 +1,5 @@
 import { vwLog } from "./diagnostics.ts";
+import { loadPlayerInventory, savePlayerInventory } from "./item-storage.ts";
 import { markNPCWorldActive } from "./npc-storage.ts";
 import {
   getPlayerWorld,
@@ -216,6 +217,12 @@ export function movePlayerForUser(
     session_id: sessionId,
     ts: Date.now(),
   });
+  const inv = loadPlayerInventory(userId);
+  inv.values.fatigue = Math.max(
+    0,
+    Number(inv.values.fatigue || 0) + applied.length,
+  );
+  savePlayerInventory(userId, inv);
   sendWorldScopedStreamEvent(String(worldId), "player_moved", {
     player_id: userId,
     row: posRow,
@@ -229,6 +236,7 @@ export function movePlayerForUser(
         rotation: Number.isFinite(step.rotation) ? step.rotation : rotation,
       };
     }),
+    values: inv.values,
   });
   vwLog("move accepted", {
     user_id: userId,
@@ -250,6 +258,7 @@ export function movePlayerForUser(
       rotation: rotation,
       applied_count: applied.length,
       requested_count: steps.length,
+      inventory: inv,
       world_id: String(worldId),
     },
   };

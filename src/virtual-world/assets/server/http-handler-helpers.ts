@@ -15,6 +15,7 @@ import {
   flattenWorldItems,
   loadPlayerInventory,
   loadWorldItems,
+  savePlayerInventory,
 } from "./item-storage.ts";
 import { maybeTickWorldNPCs } from "./npc-orchestration.ts";
 import { markNPCWorldActive } from "./npc-storage.ts";
@@ -22,6 +23,7 @@ import {
   deletePlayerHeartbeat,
   deletePlayerMoveLease,
   getPlayerWorld,
+  loadPlayerHeartbeatTs,
   loadPlayerMoveLease,
   loadPlayerPosition,
   markPlayerPositionInactive,
@@ -39,6 +41,7 @@ import {
   updateOnlinePresence,
 } from "./social-state.ts";
 import {
+  broadcastPlayerValuesChanged,
   sendRecipientScopedStreamEvent,
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
@@ -328,9 +331,26 @@ export function heartbeatForUser(userId: string, sessionId: string): any {
     }
   }
 
+  // Idle-tick fatigue recovery: only when the player hasn't moved since the
+  // previous heartbeat (a "tick" for players, mirroring the NPC tick) do we
+  // recover fatigue, so actively moving players don't recover mid-stride.
+  const previousHeartbeatTs = loadPlayerHeartbeatTs(userId);
+  const position = loadPlayerPosition(userId);
+  const lastMoveTs = position ? Number(position.ts || 0) : 0;
+  const inv = loadPlayerInventory(userId);
+  if (previousHeartbeatTs > 0 && lastMoveTs <= previousHeartbeatTs) {
+    const fatigueBefore = Number(inv.values.fatigue || 0);
+    const fatigueAfter = Math.max(0, fatigueBefore - 1);
+    if (fatigueAfter !== fatigueBefore) {
+      inv.values.fatigue = fatigueAfter;
+      savePlayerInventory(userId, inv);
+      broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    }
+  }
+
   savePlayerHeartbeatTs(userId, Date.now());
   updateOnlinePresence(userId, worldId, sessionId || "");
-  return { ok: true };
+  return { ok: true, inventory: inv };
 }
 
 export function listPlayersForUser(userId: string): any[] {

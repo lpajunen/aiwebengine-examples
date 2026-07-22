@@ -368,6 +368,11 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Optional items added to the player's inventory when the action succeeds",
       },
+      fatigueCost: {
+        type: "number",
+        description:
+          "Optional Fatigue added to the player when the action starts",
+      },
     },
   });
   safeRegisterTool(

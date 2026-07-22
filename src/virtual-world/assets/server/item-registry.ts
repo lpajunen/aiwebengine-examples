@@ -675,6 +675,10 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["cost"] | undefined,
     produces: parseJson(row.produces_json, undefined) as
       ActionDefinition["produces"] | undefined,
+    fatigueCost:
+      row.fatigue_cost === null || row.fatigue_cost === undefined
+        ? undefined
+        : Number(row.fatigue_cost),
   };
 }
 
@@ -693,6 +697,7 @@ function actionClassToDbRow(
   logic_spec_json: string;
   cost_json: string;
   produces_json: string;
+  fatigue_cost: number | null;
   created_at: number;
   updated_at: number;
 } {
@@ -709,6 +714,8 @@ function actionClassToDbRow(
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
+    fatigue_cost:
+      record.fatigueCost === undefined ? null : Number(record.fatigueCost),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -755,6 +762,10 @@ function backfillActionClassDefaults(
     }
     if (existing.produces === undefined && def.produces !== undefined) {
       existing.produces = def.produces;
+      changed = true;
+    }
+    if (existing.fatigueCost === undefined && def.fatigueCost !== undefined) {
+      existing.fatigueCost = def.fatigueCost;
       changed = true;
     }
     if (changed) {

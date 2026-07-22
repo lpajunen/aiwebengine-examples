@@ -15,6 +15,7 @@ export interface ActionDefinition {
   sourceItemIds: string[];
   cost?: Array<{ itemId: string; count: number }>;
   produces?: Array<{ itemId: string; count: number }>;
+  fatigueCost?: number;
   canonicalId?: string;
   execution?: {
     toastMessage?: string;

@@ -242,6 +242,9 @@ function flushMove() {
           // position and snap local prediction back to it.
           rebasePendingMovesFrom(result.row, result.col);
         }
+        if (result.inventory) {
+          applyItemStateFromResult(result);
+        }
       }
       flushMove(); // drain any moves queued while the batch was in flight
     })
@@ -316,17 +319,24 @@ function sendHeartbeat(force) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),
-  }).then(
-    function () {
-      scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
-    },
-    function (err) {
-      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED")) {
-        return;
-      }
-      scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
-    },
-  );
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(
+      function (result) {
+        if (result && result.inventory) {
+          applyItemStateFromResult(result);
+        }
+        scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
+      },
+      function (err) {
+        if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED")) {
+          return;
+        }
+        scheduleHeartbeat(HEARTBEAT_VISIBLE_MS);
+      },
+    );
 }
 
 function requestHeartbeatSoon() {
@@ -512,9 +522,24 @@ function initMultiplayer() {
       payload.col,
       payload.seq,
       payload.rotation,
-      undefined,
+      payload.values ? { values: payload.values } : undefined,
       payload.path,
     );
+  }
+
+  /**
+   * Living-value-only update (e.g. idle-tick fatigue recovery, action
+   * fatigue cost) for a player who didn't move — no row/col/seq involved.
+   * @param {any} payload
+   */
+  function handlePlayerValuesChangedEvent(payload) {
+    if (!payload || !payload.player_id) return;
+    if (payload.player_id === playerId) return;
+    if (!payload.values || typeof payload.values !== "object") return;
+    if (remoteAvatars[payload.player_id]) {
+      remoteAvatars[payload.player_id].values = payload.values;
+      refreshTileDetailIfOpen();
+    }
   }
 
   /** @param {any} payload */
@@ -566,6 +591,21 @@ function initMultiplayer() {
       payload.display_name,
       payload,
     );
+  }
+
+  /**
+   * Living-value-only update (idle-tick fatigue recovery) for an NPC that
+   * didn't move this tick — upsertNPCAvatar's seq gate would otherwise drop
+   * this since only movement advances an NPC's seq.
+   * @param {any} payload
+   */
+  function handleNpcValuesChangedEvent(payload) {
+    if (!payload || typeof payload.npc_id !== "string") return;
+    if (!payload.values || typeof payload.values !== "object") return;
+    if (npcAvatars[payload.npc_id]) {
+      npcAvatars[payload.npc_id].values = payload.values;
+      refreshTileDetailIfOpen();
+    }
   }
 
   /** @param {any} msg */
@@ -679,6 +719,9 @@ function initMultiplayer() {
       case "player_moved":
         handlePlayerMovedEvent(payload);
         return;
+      case "player_values_changed":
+        handlePlayerValuesChangedEvent(payload);
+        return;
       case "tree_changed":
         handleTreeChangedEvent(payload);
         return;
@@ -687,6 +730,9 @@ function initMultiplayer() {
         return;
       case "npc_moved":
         handleNpcMovedEvent(payload);
+        return;
+      case "npc_values_changed":
+        handleNpcValuesChangedEvent(payload);
         return;
       case "item_changed":
         applyItemDeltaFromEvent(payload);

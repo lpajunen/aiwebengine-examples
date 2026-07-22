@@ -137,6 +137,9 @@ export function tickNPCMovement(params: {
     n.seq = Number(n.seq || 0) + 1;
     n.state = "walking";
     n.ts = params.now;
+    if (n.values && typeof n.values === "object") {
+      n.values.fatigue = Math.max(0, Number(n.values.fatigue || 0) + 1);
+    }
     moved = true;
     params.occupiedNPCs[key] = params.npcId;
 
@@ -148,6 +151,7 @@ export function tickNPCMovement(params: {
       seq: n.seq,
       rotation: n.rotation,
       state: n.state,
+      values: n.values,
     });
     break;
   }

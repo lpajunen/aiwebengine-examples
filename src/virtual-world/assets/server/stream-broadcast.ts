@@ -135,6 +135,7 @@ export function broadcastItemChange(
             type: item.type,
             destination_world_id: item.destination_world_id,
             destination_world_type: item.destination_world_type,
+            state: item.state,
           };
         })
       : [],

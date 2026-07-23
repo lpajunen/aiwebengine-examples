@@ -419,6 +419,7 @@ export function flattenWorldItems(itemsByTile: Record<string, any[]>): Array<{
   col: number;
   destination_world_id?: string;
   destination_world_type?: string;
+  state?: Record<string, unknown>;
 }> {
   const out: Array<{
     id: string;
@@ -427,6 +428,7 @@ export function flattenWorldItems(itemsByTile: Record<string, any[]>): Array<{
     col: number;
     destination_world_id?: string;
     destination_world_type?: string;
+    state?: Record<string, unknown>;
   }> = [];
   if (!itemsByTile || typeof itemsByTile !== "object") return out;
   Object.keys(itemsByTile).forEach(function (tileKey) {
@@ -448,6 +450,7 @@ export function flattenWorldItems(itemsByTile: Record<string, any[]>): Array<{
             ? item.destination_world_id
             : undefined,
         destination_world_type: resolvePortalDestinationWorldType(item),
+        state: item.state,
       });
     });
   });

@@ -207,6 +207,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     actionIds: [
       "return_home",
       "examine",
+      "break",
       "poke",
       "follow",
       "stop_follow",

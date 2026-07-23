@@ -5,6 +5,7 @@ import {
   handleItemActionForUser,
 } from "./item-action-helpers.ts";
 import {
+  deleteWorldItemById,
   deleteWorldItems,
   ensureWorldItems,
   loadPlayerInventory,
@@ -808,6 +809,127 @@ export function performTreeActionForUser(
       payload: buildConfiguredSuccessPayload({
         toast_message: "You examine " + targetItemLabel + ".",
         target_item_id: targetItemId,
+      }),
+    };
+  }
+
+  if (action === "break") {
+    const targetItemId = String((body && body.target_item_id) || "");
+    if (!targetItemId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_required" },
+      };
+    }
+    const breakTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
+    const itemsHere = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    );
+    const targetItem = itemsHere.find(function (item) {
+      return item && String(item.id) === targetItemId;
+    });
+    if (!targetItem) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    const targetItemDef = getItemDefinition(String(targetItem.type || ""));
+    const targetItemLabel = targetItemDef
+      ? targetItemDef.visuals.fallbackLabel
+      : String(targetItem.type || "item");
+    const itemState =
+      targetItem.state && typeof targetItem.state === "object"
+        ? targetItem.state
+        : {};
+    const armorClass = Number(itemState.armorClass) || 0;
+
+    // d20 attack roll: 1 always misses, 20 always hits, otherwise a hit
+    // requires beating (not just matching) the item's armor class.
+    const attackRoll = 1 + Math.floor(Math.random() * 20);
+    const isHit =
+      attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+
+    if (!isHit) {
+      return {
+        status: 200,
+        payload: buildConfiguredSuccessPayload({
+          toast_message: "You missed.",
+          target_item_id: targetItemId,
+        }),
+      };
+    }
+
+    const attackerWeaponClass = Math.max(
+      1,
+      Number((inv.values && inv.values.weaponClass) || 0),
+    );
+    const damage = 1 + Math.floor(Math.random() * attackerWeaponClass);
+    const currentHitPoints = Number(itemState.currentHitPoints) || 0;
+    const nextHitPoints = Math.max(0, currentHitPoints - damage);
+
+    if (nextHitPoints <= 0) {
+      if (Array.isArray(worldItems[breakTileKey])) {
+        worldItems[breakTileKey] = worldItems[breakTileKey].filter(function (
+          item: any,
+        ) {
+          return item && String(item.id) !== targetItemId;
+        });
+        if (worldItems[breakTileKey].length === 0) {
+          delete worldItems[breakTileKey];
+        }
+      }
+      deleteWorldItemById(String(targetItem.id));
+      broadcastItemChange(
+        worldId,
+        "player",
+        userId,
+        "item_break_destroy",
+        resolvedTarget.row,
+        resolvedTarget.col,
+        [targetItem],
+      );
+      return {
+        status: 200,
+        payload: buildConfiguredSuccessPayload({
+          toast_message: "You hit. You destroyed " + targetItemLabel + ".",
+          target_item_id: targetItemId,
+          tile_items: getTileItemsSnapshot(
+            resolvedTarget.row,
+            resolvedTarget.col,
+          ),
+        }),
+      };
+    }
+
+    targetItem.state = Object.assign({}, itemState, {
+      currentHitPoints: nextHitPoints,
+    });
+    upsertWorldItem(
+      worldId,
+      resolvedTarget.row,
+      resolvedTarget.col,
+      targetItem,
+    );
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "item_break_damage",
+      resolvedTarget.row,
+      resolvedTarget.col,
+      getTileItemsSnapshot(resolvedTarget.row, resolvedTarget.col),
+    );
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You hit.",
+        target_item_id: targetItemId,
+        tile_items: getTileItemsSnapshot(
+          resolvedTarget.row,
+          resolvedTarget.col,
+        ),
       }),
     };
   }

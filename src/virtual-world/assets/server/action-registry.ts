@@ -451,6 +451,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
   },
+  break: {
+    id: "break",
+    labelKey: "tree_action.break",
+    fallbackLabel: "Break",
+    targetKind: "item",
+    sourceItemIds: ["starter_kit"],
+  },
   poke: {
     id: "poke",
     labelKey: "tree_action.poke",

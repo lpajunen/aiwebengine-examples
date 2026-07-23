@@ -26,6 +26,14 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "blessing_place",
     deltaKind: "add",
   },
+  item_break_destroy: {
+    id: "item_break_destroy",
+    deltaKind: "remove",
+  },
+  item_break_damage: {
+    id: "item_break_damage",
+    deltaKind: "snapshot",
+  },
 };
 
 export function getItemChangeDefinition(

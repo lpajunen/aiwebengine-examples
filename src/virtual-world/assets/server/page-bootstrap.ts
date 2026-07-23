@@ -1,6 +1,7 @@
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
-import { WORLD_TILE_DEFS } from "./world-domain.ts";
+import { getNPCDisplayName, WORLD_TILE_DEFS } from "./world-domain.ts";
 import { loadDMIndex, loadWorldChat } from "./chat-storage.ts";
+import { loadFollowState } from "./follow-storage.ts";
 import {
   ensureWorldItems,
   loadPlayerInventory,
@@ -16,6 +17,7 @@ import {
 import { getDefaultSpawnPosition } from "./player-snapshots.ts";
 import {
   buildOnlinePlayersSnapshot,
+  getEffectiveNick,
   loadPlayerNick,
   savePlayerNick,
   updateOnlinePresence,
@@ -59,6 +61,7 @@ type PageState = {
   itemRegistry: any;
   livingRegistry: any;
   worldClassRegistry: any[];
+  activeFollow: { target_id: string; target_label: string } | null;
 };
 
 export function ensureStarterKit(userId: string): void {
@@ -129,6 +132,17 @@ export function buildVirtualWorldPageState(
 
   updateOnlinePresence(userId, worldId, "");
 
+  const followState = loadFollowState(userId);
+  const activeFollow = followState
+    ? {
+        target_id: followState.target_id,
+        target_label:
+          followState.target_type === "npc"
+            ? getNPCDisplayName(worldId, followState.target_id)
+            : getEffectiveNick(followState.target_id),
+      }
+    : null;
+
   const livingClasses = getAllLivingClasses();
   const livingRegistry = {
     classes: Array.isArray(livingClasses)
@@ -169,6 +183,7 @@ export function buildVirtualWorldPageState(
     itemRegistry: getBootstrapRegistry(),
     livingRegistry: livingRegistry,
     worldClassRegistry: getAllWorldClasses(),
+    activeFollow: activeFollow,
   };
 }
 
@@ -461,6 +476,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var ITEM_REGISTRY = ${JSON.stringify(state.itemRegistry)};
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
     var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
+    var INITIAL_FOLLOW = ${JSON.stringify(state.activeFollow)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

@@ -351,6 +351,10 @@ function hideFollowBanner() {
   requireElementById("hud-follow-banner").style.display = "none";
 }
 
+if (INITIAL_FOLLOW) {
+  showFollowBanner(INITIAL_FOLLOW.target_label);
+}
+
 function stopFollowing() {
   hideFollowBanner();
   postTreeAction("stop_follow", {});

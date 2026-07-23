@@ -28,3 +28,4 @@ declare var WORLD_CLASS_REGISTRY: Array<{
   labelKey: string;
   fallbackLabel: string;
 }>;
+declare var INITIAL_FOLLOW: { target_id: string; target_label: string } | null;

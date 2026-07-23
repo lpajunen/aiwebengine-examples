@@ -25,6 +25,7 @@ import {
   tickNPCTreeActions,
 } from "./npc-tick-helpers.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
+import { tickFollowForWorld } from "./follow-helpers.ts";
 import {
   FATIGUE_RECOVERY_PER_SECOND,
   NPC_ACTIVE_WORLD_TTL_MS,
@@ -243,6 +244,9 @@ export function tryTickWorldNPCs(worldId: string, now: number): boolean {
   // Reuses this same lease-guarded, cadence-gated tick to also resolve any
   // durationMs player actions that have come due for this world.
   resolvePendingActionsForWorld(worldId, now);
+  // ...and to advance any active "follow" actions one tile toward their
+  // target (see follow-helpers.ts).
+  tickFollowForWorld(worldId, now);
   return true;
 }
 

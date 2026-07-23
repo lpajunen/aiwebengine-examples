@@ -211,6 +211,12 @@ function postTreeAction(action, extras) {
             ".",
           false,
         );
+      } else if (result.action === "follow" && result.target_living_label) {
+        showFollowBanner(result.target_living_label);
+        showHudToast(result.toast_message || "", false);
+      } else if (result.action === "stop_follow") {
+        hideFollowBanner();
+        showHudToast(result.toast_message || "", false);
       } else if (result.toast_message) {
         showHudToast(result.toast_message, false);
       }

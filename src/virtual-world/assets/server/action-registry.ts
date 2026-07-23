@@ -458,6 +458,20 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "living",
     sourceItemIds: ["starter_kit"],
   },
+  follow: {
+    id: "follow",
+    labelKey: "tree_action.follow",
+    fallbackLabel: "Follow",
+    targetKind: "living",
+    sourceItemIds: ["starter_kit"],
+  },
+  stop_follow: {
+    id: "stop_follow",
+    labelKey: "tree_action.stop_follow",
+    fallbackLabel: "Stop following",
+    targetKind: "self",
+    sourceItemIds: ["starter_kit"],
+  },
   summon_knife: {
     id: "summon_knife",
     labelKey: "tree_action.summon_knife",

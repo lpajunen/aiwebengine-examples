@@ -210,6 +210,11 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 
   <div class="hud" id="hud-toast" aria-live="polite"></div>
 
+  <div class="hud" id="hud-follow-banner" style="display:none;">
+    <span id="follow-banner-text"></span>
+    <button onclick="stopFollowing()" data-i18n-key="hud.stop_following">Stop</button>
+  </div>
+
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
     <button id="btn-pick" onclick="pickItemsOnTile()">📦 <span data-i18n-key="hud.pick">Pick</span></button>

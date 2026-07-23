@@ -16,6 +16,7 @@ import {
   upsertWorldItem,
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
+import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import {
   addPendingAction,
   deletePendingAction,
@@ -865,6 +866,64 @@ export function performTreeActionForUser(
         toast_message: "You poke " + targetLivingLabel + ".",
         target_living_id: targetLivingId,
         target_living_label: targetLivingLabel,
+      }),
+    };
+  }
+
+  if (action === "follow") {
+    const targetLivingId = String((body && body.target_living_id) || "");
+    if (!targetLivingId || targetLivingId === userId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_required" },
+      };
+    }
+    const npcsHere = loadWorldNPCs(worldId);
+    const targetNpc = npcsHere[targetLivingId];
+    let targetLivingLabel = "";
+    let targetKind: "player" | "npc" | null = null;
+    if (
+      targetNpc &&
+      targetNpc.row === resolvedTarget.row &&
+      targetNpc.col === resolvedTarget.col
+    ) {
+      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetKind = "npc";
+    } else {
+      const worldPlayers = loadWorldPlayers(worldId);
+      const targetPlayer = worldPlayers[targetLivingId];
+      if (
+        targetPlayer &&
+        targetPlayer.row === resolvedTarget.row &&
+        targetPlayer.col === resolvedTarget.col
+      ) {
+        targetLivingLabel = getEffectiveNick(targetLivingId);
+        targetKind = "player";
+      }
+    }
+    if (!targetKind) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    saveFollowState(userId, worldId, targetLivingId, targetKind);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You start following " + targetLivingLabel + ".",
+        target_living_id: targetLivingId,
+        target_living_label: targetLivingLabel,
+      }),
+    };
+  }
+
+  if (action === "stop_follow") {
+    deleteFollowState(userId);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You stop following.",
       }),
     };
   }

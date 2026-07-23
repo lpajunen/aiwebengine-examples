@@ -652,6 +652,14 @@ function initMultiplayer() {
     showHudToast(pokerNick + " " + t("poke.pokes_you", "pokes you."), false);
   }
 
+  /** @param {any} payload */
+  function handleFollowEndedEvent(payload) {
+    hideFollowBanner();
+    if (payload && payload.reason === "target_gone") {
+      showHudToast(t("follow.target_gone", "Lost track of them."), false);
+    }
+  }
+
   /**
    * A durationMs action (e.g. crafting) that was started earlier has now
    * resolved server-side (see tree-action-helpers.ts resolvePendingActionsForWorld).
@@ -765,6 +773,9 @@ function initMultiplayer() {
         return;
       case "poked":
         handlePokedEvent(payload);
+        return;
+      case "follow_ended":
+        handleFollowEndedEvent(payload);
         return;
       case "action_completed":
         handleActionCompletedEvent(payload);

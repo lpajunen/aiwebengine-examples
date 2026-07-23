@@ -159,6 +159,32 @@ canvas {
   background: rgba(120, 35, 25, 0.92);
 }
 
+#hud-follow-banner {
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  pointer-events: auto;
+  z-index: 1020;
+}
+#hud-follow-banner button {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  background: rgba(150, 40, 40, 0.88);
+}
+#hud-follow-banner button:hover {
+  background: rgba(178, 50, 50, 1);
+}
+
 #hud-legend {
   top: 14px;
   right: 14px;

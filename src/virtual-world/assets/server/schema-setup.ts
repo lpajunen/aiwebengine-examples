@@ -6,6 +6,7 @@ import {
   VWORLD_DM_INDEX_TABLE,
   VWORLD_DM_TABLE,
   VWORLD_EVENT_SEQ_TABLE,
+  VWORLD_FOLLOW_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
   VWORLD_LIVING_CLASS_TABLE,
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
@@ -977,6 +978,42 @@ export function ensureWorldDatabaseSchema(): void {
     return database.addUniqueIndex(
       VWORLD_WORLD_CLASS_TABLE,
       JSON.stringify(["class_id"]),
+    );
+  });
+
+  step("createTable", VWORLD_FOLLOW_TABLE, function () {
+    return database.createTable(VWORLD_FOLLOW_TABLE);
+  });
+  [
+    ["addTextColumn", "follower_id", false],
+    ["addTextColumn", "world_id", false],
+    ["addTextColumn", "target_id", false],
+    ["addTextColumn", "target_type", false],
+    ["addIntegerColumn", "created_ts", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_FOLLOW_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_FOLLOW_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_FOLLOW_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_FOLLOW_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_FOLLOW_TABLE,
+      JSON.stringify(["follower_id"]),
     );
   });
 

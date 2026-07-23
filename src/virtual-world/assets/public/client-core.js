@@ -338,6 +338,24 @@ function showHudToast(message, isError) {
   );
 }
 
+/**
+ * @param {string} label
+ */
+function showFollowBanner(label) {
+  requireElementById("follow-banner-text").textContent =
+    t("hud.following_prefix", "Following") + " " + label;
+  requireElementById("hud-follow-banner").style.display = "block";
+}
+
+function hideFollowBanner() {
+  requireElementById("hud-follow-banner").style.display = "none";
+}
+
+function stopFollowing() {
+  hideFollowBanner();
+  postTreeAction("stop_follow", {});
+}
+
 function triggerLogout() {
   showHudToast(
     t("nick.redirecting_to_logout", "Redirecting to logout..."),

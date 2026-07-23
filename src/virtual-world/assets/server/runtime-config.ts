@@ -40,3 +40,4 @@ export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
+export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";

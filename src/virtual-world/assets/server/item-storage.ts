@@ -1,4 +1,4 @@
-import { getItemStateTemplate } from "./item-registry.ts";
+import { getItemStateTemplate, normalizeItemState } from "./item-registry.ts";
 import { WORLD_ITEM_SPAWN_COUNT } from "./runtime-config.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
 import { ITEM_TYPES } from "./world-domain.ts";
@@ -162,15 +162,18 @@ export function loadWorldItems(worldId: string): Record<string, any[]> {
               ? row.destination_world_type
               : undefined,
         }),
-        state: (function () {
-          if (typeof row.state_json !== "string" || !row.state_json)
-            return undefined;
-          try {
-            return JSON.parse(row.state_json);
-          } catch (e) {
-            return undefined;
-          }
-        })(),
+        state: normalizeItemState(
+          String(row.type || ""),
+          (function () {
+            if (typeof row.state_json !== "string" || !row.state_json)
+              return undefined;
+            try {
+              return JSON.parse(row.state_json);
+            } catch (e) {
+              return undefined;
+            }
+          })(),
+        ),
       });
     }
     return fromRows;

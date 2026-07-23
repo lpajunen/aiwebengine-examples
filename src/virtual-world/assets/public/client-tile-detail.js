@@ -253,6 +253,22 @@ function renderTileDetailPanel() {
           escHtml(portalDestinationLabel(itm)) +
           "</div>";
       }
+      var itmState =
+        itm.state && typeof itm.state === "object" ? itm.state : {};
+      for (var isk = 0; isk < ITEM_STATE_STAT_KEYS.length; isk++) {
+        var itmStateKey = ITEM_STATE_STAT_KEYS[isk];
+        if (!(itmStateKey in itmState)) continue;
+        html +=
+          '<div class="tile-row">' +
+          escHtml(itemStateValueLabel(itmStateKey)) +
+          ": " +
+          renderItemStateValueDisplay(
+            itmStateKey,
+            itmState[itmStateKey],
+            itmState,
+          ) +
+          "</div>";
+      }
     }
   }
   html += "</div>";

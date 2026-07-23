@@ -20,6 +20,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       creator_stone: { name: "Creator's stone" },
       old_oak: { name: "Old oak" },
       unknown: { name: "Unknown item" },
+      value: {
+        max_hit_points: "Max hit points",
+        current_hit_points: "Hit points",
+        armor_class: "Armor class",
+        weapon_class: "Weapon class",
+      },
     },
     tree_action: {
       plant: "Plant pine sapling",
@@ -88,6 +94,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       value: {
         fatigue: "Fatigue",
         warmth: "Warmth",
+        max_hit_points: "Max hit points",
+        current_hit_points: "Hit points",
+        armor_class: "Armor class",
+        weapon_class: "Weapon class",
       },
     },
     hud: {
@@ -323,6 +333,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       creator_stone: { name: "Luojan kivi" },
       old_oak: { name: "Vanha tammi" },
       unknown: { name: "Tuntematon esine" },
+      value: {
+        max_hit_points: "Suurin osumapisteet",
+        current_hit_points: "Osumapisteet",
+        armor_class: "Panssariluokka",
+        weapon_class: "Aseluokka",
+      },
     },
     tree_action: {
       plant: "Istuta männyn taimi",
@@ -391,6 +407,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       value: {
         fatigue: "Väsymys",
         warmth: "Lämpö",
+        max_hit_points: "Suurin osumapisteet",
+        current_hit_points: "Osumapisteet",
+        armor_class: "Panssariluokka",
+        weapon_class: "Aseluokka",
       },
     },
     hud: {

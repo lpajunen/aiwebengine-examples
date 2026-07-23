@@ -630,12 +630,43 @@ export function deleteItemClass(classId: string): void {
   }
 }
 
+// Every item instance gets these combat stats even if its class's
+// stateTemplate doesn't declare them. currentHitPoints defaults to whatever
+// maxHitPoints resolves to, so a class that only customizes maxHitPoints
+// still spawns instances at full health.
+function applyItemStateDefaults(
+  merged: Record<string, unknown>,
+): Record<string, unknown> {
+  if (merged.maxHitPoints === undefined) merged.maxHitPoints = 10;
+  if (merged.currentHitPoints === undefined) {
+    merged.currentHitPoints = merged.maxHitPoints;
+  }
+  if (merged.armorClass === undefined) merged.armorClass = 10;
+  if (merged.weaponClass === undefined) merged.weaponClass = 0;
+  return merged;
+}
+
 export function getItemStateTemplate(itemId: string): Record<string, unknown> {
   const cls = getItemClass(itemId);
-  if (cls && cls.stateTemplate && Object.keys(cls.stateTemplate).length > 0) {
-    return Object.assign({}, cls.stateTemplate);
+  const classTemplate = cls && cls.stateTemplate ? cls.stateTemplate : {};
+  return applyItemStateDefaults(Object.assign({}, classTemplate));
+}
+
+// Merges stored item state over the class's current state template, so an
+// item created before a stat was added (or before a class's stateTemplate
+// was edited) still reads with the up-to-date defaults — the same backfill
+// normalizeLivingValues does for living values on every load/save.
+export function normalizeItemState(
+  itemId: string,
+  state: unknown,
+): Record<string, unknown> {
+  const out = getItemStateTemplate(itemId);
+  if (state && typeof state === "object") {
+    Object.keys(state as Record<string, unknown>).forEach(function (key) {
+      out[key] = (state as Record<string, unknown>)[key];
+    });
   }
-  return {};
+  return out;
 }
 
 // ── Action class repository (dynamic, DB-backed) ─────────────────────────────

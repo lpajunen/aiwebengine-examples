@@ -73,6 +73,10 @@ function defaultFatigueValueTemplate(): Record<string, unknown> {
   return { fatigue: 0 };
 }
 
+// Combat stats (maxHitPoints/currentHitPoints/armorClass/weaponClass) are not
+// listed here — every living gets them regardless of class via the shared
+// defaulting in normalizeLivingValues (world-domain.ts). This schema only
+// adds display metadata (labels, meter ranges) for the built-in classes.
 function defaultFatigueValueSchema(): LivingValueSchema {
   return {
     fatigue: {
@@ -81,6 +85,28 @@ function defaultFatigueValueSchema(): LivingValueSchema {
       max: 100,
       labelKey: "living.value.fatigue",
       fallbackLabel: "Fatigue",
+    },
+    maxHitPoints: {
+      kind: "number",
+      labelKey: "living.value.max_hit_points",
+      fallbackLabel: "Max hit points",
+    },
+    currentHitPoints: {
+      kind: "number",
+      min: 0,
+      max: 10,
+      labelKey: "living.value.current_hit_points",
+      fallbackLabel: "Hit points",
+    },
+    armorClass: {
+      kind: "number",
+      labelKey: "living.value.armor_class",
+      fallbackLabel: "Armor class",
+    },
+    weaponClass: {
+      kind: "number",
+      labelKey: "living.value.weapon_class",
+      fallbackLabel: "Weapon class",
     },
   };
 }

@@ -32,6 +32,7 @@ function applyWorldStatePayload(payload, requestSeq) {
         type: it.type,
         destination_world_id: it.destination_world_id,
         destination_world_type: it.destination_world_type,
+        state: it.state,
       });
     }
     worldItemsByTile = next;
@@ -60,6 +61,7 @@ function normalizeClientTileItems(items) {
             type: it.type,
             destination_world_id: it.destination_world_id,
             destination_world_type: it.destination_world_type,
+            state: it.state,
           };
         })
     : [];

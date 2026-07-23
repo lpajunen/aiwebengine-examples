@@ -3,7 +3,7 @@
 
 /**
  * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef
- * @typedef {{ id: string, type: string, destination_world_id?: string | number, destination_world_type?: string, non_droppable?: boolean }} ClientItem
+ * @typedef {{ id: string, type: string, destination_world_id?: string | number, destination_world_type?: string, non_droppable?: boolean, state?: Record<string, unknown> }} ClientItem
  * @typedef {{ class_id: string, slots: Record<string, ClientItem | null>, bag: ClientItem[], values: Record<string, unknown>, left_hand: ClientItem | null, right_hand: ClientItem | null, inventory: ClientItem[] }} ClientInventory
  * @typedef {{ row: number, col: number, tile_type: string, actor_id: string, actor_type: string, payload: Record<string, any> }} ClientWorldMod
  * @typedef {{ terrain: Record<string, ClientWorldMod>, object: Record<string, ClientWorldMod> }} ClientWorldMods
@@ -235,6 +235,53 @@ function formatLivingValue(value) {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (value == null) return "-";
   return String(value);
+}
+
+// Fixed set of combat-stat keys every item's state carries (see
+// getItemStateTemplate on the server) — unlike living values, items have no
+// per-class valueSchema, so labels are looked up under a static "item.value."
+// i18n namespace instead.
+var ITEM_STATE_STAT_KEYS = [
+  "maxHitPoints",
+  "currentHitPoints",
+  "armorClass",
+  "weaponClass",
+];
+
+/** @param {string} key */
+function camelToSnakeCase(key) {
+  return String(key || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+/**
+ * @param {string} key
+ * @returns {string}
+ */
+function itemStateValueLabel(key) {
+  var snakeKey = camelToSnakeCase(key);
+  return t("item.value." + snakeKey, humanizeType(snakeKey));
+}
+
+/**
+ * @param {string} key
+ * @param {unknown} value
+ * @param {Record<string, unknown>} state
+ * @returns {string}
+ */
+function renderItemStateValueDisplay(key, value, state) {
+  if (
+    key === "currentHitPoints" &&
+    typeof value === "number" &&
+    typeof state.maxHitPoints === "number"
+  ) {
+    return renderLivingValueDisplay(
+      { kind: "number", min: 0, max: state.maxHitPoints },
+      value,
+    );
+  }
+  return renderLivingValueDisplay(null, value);
 }
 
 /**

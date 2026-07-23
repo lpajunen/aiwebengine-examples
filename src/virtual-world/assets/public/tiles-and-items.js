@@ -460,6 +460,7 @@ function normalizeClientWorldItems(items) {
           type: it.type,
           destination_world_id: it.destination_world_id,
           destination_world_type: it.destination_world_type,
+          state: it.state,
         };
       });
     if (filtered.length > 0) out[tileKey] = filtered;

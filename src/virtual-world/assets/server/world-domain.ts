@@ -54,6 +54,7 @@ import {
   getExtraItemTypes,
   getPrimaryActionForItemType,
   getSpawnableItemTypes,
+  normalizeItemState,
 } from "./item-registry.ts";
 
 export {
@@ -559,16 +560,43 @@ export function getItemsInSlotsWithTag(
   return out;
 }
 
+// Every living (built-in or creator-defined) gets these combat stats even if
+// its class doesn't declare them in valueTemplate. currentHitPoints defaults
+// to whatever maxHitPoints resolves to, so a class that only customizes
+// maxHitPoints still spawns instances at full health.
+function applyLivingValueDefaults(
+  merged: Record<string, unknown>,
+): Record<string, unknown> {
+  if (merged.maxHitPoints === undefined) merged.maxHitPoints = 10;
+  if (merged.currentHitPoints === undefined) {
+    merged.currentHitPoints = merged.maxHitPoints;
+  }
+  if (merged.armorClass === undefined) merged.armorClass = 10;
+  if (merged.weaponClass === undefined) merged.weaponClass = 1;
+  return merged;
+}
+
 export function normalizeLivingValues(
   values: unknown,
   valueTemplate: Record<string, unknown>,
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = Object.assign({}, valueTemplate || {});
+  const out: Record<string, unknown> = applyLivingValueDefaults(
+    Object.assign({}, valueTemplate || {}),
+  );
   if (!isRecordLike(values)) return out;
   Object.keys(values).forEach(function (key) {
     out[key] = values[key];
   });
   return out;
+}
+
+// Backfills an item's stat defaults (see normalizeItemState) the same way
+// for items held by a living, so a bag/slot item created before a stat
+// existed still reads with it once loaded/saved through normalizeLivingState.
+function normalizeInventoryItem(item: InventoryItem): InventoryItem {
+  return Object.assign({}, item, {
+    state: normalizeItemState(item.type, item.state),
+  });
 }
 
 export function normalizeLivingState(
@@ -587,12 +615,14 @@ export function normalizeLivingState(
     const stateSlots = state.slots as Record<string, unknown>;
     Object.keys(defaultSlots).forEach(function (slotId) {
       const candidate = stateSlots[slotId];
-      out.slots[slotId] = isValidItem(candidate) ? candidate : null;
+      out.slots[slotId] = isValidItem(candidate)
+        ? normalizeInventoryItem(candidate)
+        : null;
     });
   }
 
   if (Array.isArray(state.bag)) {
-    out.bag = state.bag.filter(isValidItem);
+    out.bag = state.bag.filter(isValidItem).map(normalizeInventoryItem);
   }
 
   out.values = normalizeLivingValues(

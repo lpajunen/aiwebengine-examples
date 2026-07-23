@@ -934,6 +934,79 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "fix") {
+    const targetItemId = String((body && body.target_item_id) || "");
+    if (!targetItemId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_required" },
+      };
+    }
+    const itemsHere = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    );
+    const targetItem = itemsHere.find(function (item) {
+      return item && String(item.id) === targetItemId;
+    });
+    if (!targetItem) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    const targetItemDef = getItemDefinition(String(targetItem.type || ""));
+    const targetItemLabel = targetItemDef
+      ? targetItemDef.visuals.fallbackLabel
+      : String(targetItem.type || "item");
+    const itemState =
+      targetItem.state && typeof targetItem.state === "object"
+        ? targetItem.state
+        : {};
+    const maxHitPoints = Number(itemState.maxHitPoints) || 0;
+    const currentHitPoints = Number(itemState.currentHitPoints) || 0;
+
+    if (currentHitPoints >= maxHitPoints) {
+      return {
+        status: 200,
+        payload: buildConfiguredSuccessPayload({
+          toast_message: targetItemLabel + " is already at full health.",
+          target_item_id: targetItemId,
+        }),
+      };
+    }
+
+    targetItem.state = Object.assign({}, itemState, {
+      currentHitPoints: currentHitPoints + 1,
+    });
+    upsertWorldItem(
+      worldId,
+      resolvedTarget.row,
+      resolvedTarget.col,
+      targetItem,
+    );
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "item_fix",
+      resolvedTarget.row,
+      resolvedTarget.col,
+      getTileItemsSnapshot(resolvedTarget.row, resolvedTarget.col),
+    );
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You fix " + targetItemLabel + ".",
+        target_item_id: targetItemId,
+        tile_items: getTileItemsSnapshot(
+          resolvedTarget.row,
+          resolvedTarget.col,
+        ),
+      }),
+    };
+  }
+
   if (action === "poke") {
     const targetLivingId = String((body && body.target_living_id) || "");
     if (!targetLivingId) {

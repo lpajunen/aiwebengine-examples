@@ -34,6 +34,10 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "item_break_damage",
     deltaKind: "snapshot",
   },
+  item_fix: {
+    id: "item_fix",
+    deltaKind: "snapshot",
+  },
 };
 
 export function getItemChangeDefinition(

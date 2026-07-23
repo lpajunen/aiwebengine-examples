@@ -208,6 +208,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "return_home",
       "examine",
       "break",
+      "fix",
       "poke",
       "follow",
       "stop_follow",

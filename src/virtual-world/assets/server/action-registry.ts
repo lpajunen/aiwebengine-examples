@@ -458,6 +458,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
   },
+  fix: {
+    id: "fix",
+    labelKey: "tree_action.fix",
+    fallbackLabel: "Fix",
+    targetKind: "item",
+    sourceItemIds: ["starter_kit"],
+  },
   poke: {
     id: "poke",
     labelKey: "tree_action.poke",

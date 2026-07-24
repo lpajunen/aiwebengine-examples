@@ -233,7 +233,7 @@ function renderTileDetailPanel() {
   } else {
     for (var i = 0; i < tileItems.length; i++) {
       var itm = tileItems[i];
-      var label = t(itemTypeToLabelKey(itm.type), humanizeType(itm.type));
+      var label = inventoryItemLabel(itm);
       html +=
         '<div class="tile-row">' +
         escHtml(label) +

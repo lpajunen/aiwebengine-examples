@@ -179,6 +179,13 @@ function renderPortalDestinationPicker(originalAction, classes) {
 function inventoryItemLabel(item) {
   if (!item || !item.type) return t("inventory.empty", "empty");
   var type = String(item.type);
+  var registryItem = getRegistryItemDef(type);
+  if (registryItem && registryItem.label_key) {
+    return t(
+      registryItem.label_key,
+      registryItem.fallback_label || humanizeType(type),
+    );
+  }
   return t(itemTypeToLabelKey(type), humanizeType(type));
 }
 

@@ -355,6 +355,7 @@ function updateHeldHud() {
     : "-";
   updateUseButtonState();
   syncLocalAvatarEquippedItems();
+  syncLocalAvatarGhostVisual();
 }
 
 var logoutClickCount = 0;

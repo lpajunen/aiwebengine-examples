@@ -12,14 +12,20 @@ var avatar = new THREE.Group();
  * @param {number} px
  * @param {number} py
  * @param {number} pz
+ * @param {boolean} [isEye] tags this mesh for setAvatarGhostly's eye-glow treatment
  * @returns {any}
  */
-function makePart(w, h, d, color, px, py, pz) {
+function makePart(w, h, d, color, px, py, pz, isEye) {
   var geo = new THREE.BoxGeometry(w, h, d);
   var mat = new THREE.MeshLambertMaterial({ color: color });
   var mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(px, py, pz);
   mesh.castShadow = true;
+  // Tags this as a body-part mesh (as opposed to an equip-item mesh added
+  // later by syncAvatarEquippedItems) so setAvatarGhostly knows which
+  // children to recolor and how to restore the original color.
+  mesh.userData.baseColor = new THREE.Color(color);
+  mesh.userData.isEye = !!isEye;
   return mesh;
 }
 
@@ -31,8 +37,8 @@ avatar.add(makePart(0.55, 0.65, 0.4, 0x2980b9, 0, 0.525, 0));
 // Head
 avatar.add(makePart(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
 // Eyes (on +Z face of head)
-avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
+avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225, true));
+avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225, true));
 
 avatar.position.set(targetX, 0, targetZ);
 avatar.rotation.y = INIT_ROTATION;
@@ -48,6 +54,20 @@ function syncLocalAvatarEquippedItems() {
   syncAvatarEquippedItems(
     localAvatarEquipEntry,
     playerInventory && playerInventory.slots,
+  );
+}
+
+/**
+ * Applies the ghost look to the local avatar when the player's living
+ * class is player_ghost (see fight-helpers.ts resolvePlayerDeath /
+ * tree-action-helpers.ts's "pray" revival). Called from updateHeldHud()
+ * alongside syncLocalAvatarEquippedItems(), the shared "playerInventory
+ * changed" hook.
+ */
+function syncLocalAvatarGhostVisual() {
+  setAvatarGhostly(
+    avatar,
+    !!(playerInventory && playerInventory.class_id === "player_ghost"),
   );
 }
 
@@ -124,6 +144,47 @@ function syncAvatarEquippedItems(entry, slots) {
   }
 }
 
+var GHOST_BODY_COLOR = 0xdbeeff;
+var GHOST_EYE_COLOR = 0xffffff;
+var GHOST_EYE_GLOW = 0xaee4ff;
+var GHOST_OPACITY = 0.45;
+
+/**
+ * Toggles a humanoid avatar group (local player or remote player — NPCs are
+ * never ghosts, see AGGRESSIVE_NPC_LIVING_CLASS_IDS/DEFAULT_LIVING_CLASSES in
+ * living-registry.ts, where player_ghost is a player-only living class)
+ * between its normal opaque look and a translucent pale "ghost" look.
+ * Only touches body-part meshes tagged with userData.baseColor at creation
+ * (makePart/rp) — equip-item meshes added by syncAvatarEquippedItems are
+ * left untouched.
+ * @param {any} group
+ * @param {boolean} isGhost
+ */
+function setAvatarGhostly(group, isGhost) {
+  if (!group) return;
+  for (var i = 0; i < group.children.length; i++) {
+    var child = group.children[i];
+    if (!child || !child.userData || !child.userData.baseColor) continue;
+    var mat = child.material;
+    if (!mat) continue;
+    if (isGhost) {
+      mat.color.set(child.userData.isEye ? GHOST_EYE_COLOR : GHOST_BODY_COLOR);
+      if (child.userData.isEye) {
+        if (!mat.emissive) mat.emissive = new THREE.Color(0);
+        mat.emissive.set(GHOST_EYE_GLOW);
+      }
+      mat.transparent = true;
+      mat.opacity = GHOST_OPACITY;
+    } else {
+      mat.color.copy(child.userData.baseColor);
+      if (mat.emissive) mat.emissive.set(0x000000);
+      mat.transparent = false;
+      mat.opacity = 1;
+    }
+    mat.needsUpdate = true;
+  }
+}
+
 /**
  * @param {string} pid
  * @returns {any}
@@ -152,15 +213,18 @@ function makeRemoteAvatar(pid) {
    * @param {number} px
    * @param {number} py
    * @param {number} pz
+   * @param {boolean} [isEye] tags this mesh for setAvatarGhostly's eye-glow treatment
    * @returns {any}
    */
-  function rp(w, h, d, color, px, py, pz) {
+  function rp(w, h, d, color, px, py, pz, isEye) {
     var mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
       new THREE.MeshLambertMaterial({ color: color }),
     );
     mesh.position.set(px, py, pz);
     mesh.castShadow = true;
+    mesh.userData.baseColor = new THREE.Color(color);
+    mesh.userData.isEye = !!isEye;
     return mesh;
   }
   var bc = avatarBodyColor(pid);
@@ -168,8 +232,8 @@ function makeRemoteAvatar(pid) {
   g.add(rp(0.2, 0.35, 0.22, 0x1a252f, 0.14, 0.175, 0));
   g.add(rp(0.55, 0.65, 0.4, bc, 0, 0.525, 0));
   g.add(rp(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
-  g.add(rp(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-  g.add(rp(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
+  g.add(rp(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225, true));
+  g.add(rp(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225, true));
   return g;
 }
 
@@ -223,6 +287,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
       waypoints: [],
     };
     syncAvatarEquippedItems(remoteAvatars[pid], remoteAvatars[pid].slots);
+    setAvatarGhostly(g, remoteAvatars[pid].class_id === "player_ghost");
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
     // Position updates are seq-gated, but inventory payloads (e.g. from a
@@ -281,9 +346,17 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
       remoteAvatars[pid].values = playerData.values;
       appliedLivingData = true;
     }
-    if (playerData && typeof playerData.class_id === "string") {
+    if (
+      playerData &&
+      typeof playerData.class_id === "string" &&
+      playerData.class_id !== remoteAvatars[pid].class_id
+    ) {
       remoteAvatars[pid].class_id = playerData.class_id;
       appliedLivingData = true;
+      setAvatarGhostly(
+        remoteAvatars[pid].group,
+        playerData.class_id === "player_ghost",
+      );
     }
     if (seqAdvanced || appliedLivingData) refreshTileDetailIfOpen();
   }
@@ -318,7 +391,7 @@ function npcBodyColor(npcId) {
  * @param {string} npcId
  * @returns {any}
  */
-function makeNPCAvatar(npcId) {
+function makeHumanoidNPCAvatar(npcId) {
   var g = new THREE.Group();
   /**
    * @param {number} w
@@ -347,6 +420,188 @@ function makeNPCAvatar(npcId) {
   g.add(np(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
   g.add(np(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
   return g;
+}
+
+/**
+ * Builds a four-legged animal silhouette (body/head running along +Z,
+ * legs at the same x/z offsets as SLOT_ATTACH_POINTS' front/back leg
+ * slots) shared by quadruped NPC species like wolves and bears.
+ * @param {{
+ *   furColor: number | string | any,
+ *   legColor: number | string | any,
+ *   snoutColor: number | string | any,
+ *   bodyW: number, bodyH: number, bodyL: number,
+ *   legW: number, legH: number,
+ *   headSize: number, snoutLen: number,
+ *   earSize: number, tailLen: number,
+ * }} spec
+ * @returns {any}
+ */
+function makeQuadrupedAvatar(spec) {
+  var g = new THREE.Group();
+  /**
+   * @param {number} w
+   * @param {number} h
+   * @param {number} d
+   * @param {number | string | any} color
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   * @returns {any}
+   */
+  function np(w, h, d, color, px, py, pz) {
+    var mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: color }),
+    );
+    mesh.position.set(px, py, pz);
+    mesh.castShadow = true;
+    return mesh;
+  }
+  var legY = spec.legH / 2;
+  var bodyY = spec.legH + spec.bodyH / 2;
+  var legX = spec.bodyW / 2 - spec.legW / 2;
+  // Match SLOT_ATTACH_POINTS' front/back leg z-signs so equipped leg
+  // items line up with the visible legs.
+  var frontZ = spec.bodyL / 2 - spec.legW / 2;
+  var backZ = -frontZ;
+  g.add(
+    np(spec.legW, spec.legH, spec.legW, spec.legColor, -legX, legY, frontZ),
+  );
+  g.add(np(spec.legW, spec.legH, spec.legW, spec.legColor, legX, legY, frontZ));
+  g.add(np(spec.legW, spec.legH, spec.legW, spec.legColor, -legX, legY, backZ));
+  g.add(np(spec.legW, spec.legH, spec.legW, spec.legColor, legX, legY, backZ));
+  g.add(np(spec.bodyW, spec.bodyH, spec.bodyL, spec.furColor, 0, bodyY, 0));
+  var headZ = spec.bodyL / 2 + spec.headSize / 2;
+  var headY = bodyY + spec.bodyH * 0.15;
+  g.add(
+    np(
+      spec.headSize,
+      spec.headSize,
+      spec.headSize,
+      spec.furColor,
+      0,
+      headY,
+      headZ,
+    ),
+  );
+  if (spec.snoutLen > 0) {
+    g.add(
+      np(
+        spec.headSize * 0.55,
+        spec.headSize * 0.4,
+        spec.snoutLen,
+        spec.snoutColor,
+        0,
+        headY - spec.headSize * 0.1,
+        headZ + spec.headSize / 2 + spec.snoutLen / 2,
+      ),
+    );
+  }
+  var earSize = spec.earSize;
+  g.add(
+    np(
+      earSize,
+      earSize,
+      earSize * 0.6,
+      spec.furColor,
+      -spec.headSize * 0.25,
+      headY + spec.headSize / 2 + earSize / 2,
+      headZ,
+    ),
+  );
+  g.add(
+    np(
+      earSize,
+      earSize,
+      earSize * 0.6,
+      spec.furColor,
+      spec.headSize * 0.25,
+      headY + spec.headSize / 2 + earSize / 2,
+      headZ,
+    ),
+  );
+  if (spec.tailLen > 0) {
+    g.add(
+      np(
+        spec.legW * 0.6,
+        spec.legW * 0.6,
+        spec.tailLen,
+        spec.furColor,
+        0,
+        bodyY + spec.bodyH * 0.2,
+        -spec.bodyL / 2 - spec.tailLen / 2,
+      ),
+    );
+  }
+  return g;
+}
+
+/**
+ * @param {string} npcId
+ * @returns {any}
+ */
+function makeWolfAvatar(npcId) {
+  var h = 0;
+  for (var i = 0; i < npcId.length; i++) {
+    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
+  }
+  var lightness = 32 + ((h >>> 0) % 18);
+  return makeQuadrupedAvatar({
+    furColor: new THREE.Color("hsl(210,10%," + lightness + "%)"),
+    legColor: new THREE.Color(
+      "hsl(210,10%," + Math.max(lightness - 8, 15) + "%)",
+    ),
+    snoutColor: 0x1c1c1c,
+    bodyW: 0.4,
+    bodyH: 0.4,
+    bodyL: 0.75,
+    legW: 0.16,
+    legH: 0.4,
+    headSize: 0.32,
+    snoutLen: 0.22,
+    earSize: 0.13,
+    tailLen: 0.35,
+  });
+}
+
+/**
+ * @param {string} npcId
+ * @returns {any}
+ */
+function makeBearAvatar(npcId) {
+  var h = 0;
+  for (var i = 0; i < npcId.length; i++) {
+    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
+  }
+  var lightness = 20 + ((h >>> 0) % 12);
+  return makeQuadrupedAvatar({
+    furColor: new THREE.Color("hsl(25,35%," + lightness + "%)"),
+    legColor: new THREE.Color(
+      "hsl(25,35%," + Math.max(lightness - 6, 10) + "%)",
+    ),
+    snoutColor: 0x2b2018,
+    bodyW: 0.62,
+    bodyH: 0.55,
+    bodyL: 0.85,
+    legW: 0.24,
+    legH: 0.42,
+    headSize: 0.42,
+    snoutLen: 0.12,
+    earSize: 0.14,
+    tailLen: 0,
+  });
+}
+
+/**
+ * @param {string} npcId
+ * @param {string} [classId]
+ * @returns {any}
+ */
+function makeNPCAvatar(npcId, classId) {
+  if (classId === "npc_wolf") return makeWolfAvatar(npcId);
+  if (classId === "npc_bear") return makeBearAvatar(npcId);
+  return makeHumanoidNPCAvatar(npcId);
 }
 
 /**
@@ -379,12 +634,15 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
   if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
 
   if (!npcAvatars[npcId]) {
-    var g = makeNPCAvatar(npcId);
+    var initialClassId =
+      npcData && typeof npcData.class_id === "string" ? npcData.class_id : "";
+    var g = makeNPCAvatar(npcId, initialClassId);
     g.position.set(tx, 0, tz);
     g.rotation.y = hasIncomingRot ? incomingRot : 0;
     scene.add(g);
     npcAvatars[npcId] = {
       group: g,
+      meshClassId: initialClassId,
       targetX: tx,
       targetZ: tz,
       targetRot: hasIncomingRot ? incomingRot : 0,
@@ -392,8 +650,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
       row: Number(row),
       col: Number(col),
       displayName: displayName || shortenId(npcId),
-      class_id:
-        npcData && typeof npcData.class_id === "string" ? npcData.class_id : "",
+      class_id: initialClassId,
       slots:
         npcData && npcData.slots && typeof npcData.slots === "object"
           ? npcData.slots
@@ -416,13 +673,29 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
     if (displayName) npcAvatars[npcId].displayName = displayName;
     if (npcData && npcData.slots && typeof npcData.slots === "object") {
       npcAvatars[npcId].slots = npcData.slots;
-      syncAvatarEquippedItems(npcAvatars[npcId], npcData.slots);
     }
     if (npcData && npcData.values && typeof npcData.values === "object") {
       npcAvatars[npcId].values = npcData.values;
     }
-    if (npcData && typeof npcData.class_id === "string") {
+    if (
+      npcData &&
+      typeof npcData.class_id === "string" &&
+      npcData.class_id !== npcAvatars[npcId].meshClassId
+    ) {
       npcAvatars[npcId].class_id = npcData.class_id;
+      var entry = npcAvatars[npcId];
+      var oldGroup = entry.group;
+      var newGroup = makeNPCAvatar(npcId, npcData.class_id);
+      newGroup.position.copy(oldGroup.position);
+      newGroup.rotation.y = oldGroup.rotation.y;
+      scene.remove(oldGroup);
+      scene.add(newGroup);
+      entry.group = newGroup;
+      entry.meshClassId = npcData.class_id;
+      entry.equipMeshes = {};
+      syncAvatarEquippedItems(entry, entry.slots);
+    } else if (npcData && npcData.slots && typeof npcData.slots === "object") {
+      syncAvatarEquippedItems(npcAvatars[npcId], npcData.slots);
     }
     refreshTileDetailIfOpen();
   }

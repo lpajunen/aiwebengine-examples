@@ -724,6 +724,7 @@ function initMultiplayer() {
     if (payload.values && typeof payload.values === "object") {
       playerInventory.values = payload.values;
     }
+    updateHeldHud();
     renderInventoryPanel();
     if (statsPanelVisible) renderStatisticsPanel();
     if (payload.class_id === "player_ghost" && !wasGhost) {

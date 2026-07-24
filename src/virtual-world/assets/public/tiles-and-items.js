@@ -554,18 +554,46 @@ function getRegistryActionDef(action) {
 function isEntityTargetedAction(action) {
   var def = getRegistryActionDef(action);
   var targetKind = def && def.target_kind;
-  return targetKind === "item" || targetKind === "living";
+  return (
+    targetKind === "item" ||
+    targetKind === "living" ||
+    targetKind === "item_nearby" ||
+    targetKind === "living_nearby"
+  );
+}
+
+// Max Chebyshev tile distance for "item_nearby"/"living_nearby" targeted
+// actions (e.g. follow, fight) — keep in sync with NEARBY_TARGET_TILE_DISTANCE
+// in assets/server/runtime-config.ts.
+var NEARBY_ACTION_TILE_DISTANCE = 5;
+
+/**
+ * @param {number} rowA
+ * @param {number} colA
+ * @param {number} rowB
+ * @param {number} colB
+ * @param {number} maxDistance
+ * @returns {boolean}
+ */
+function isWithinTileDistance(rowA, colA, rowB, colB, maxDistance) {
+  return Math.max(Math.abs(rowA - rowB), Math.abs(colA - colB)) <= maxDistance;
 }
 
 /**
- * Actions the player can currently invoke against a nearby item or living,
+ * Actions the player can currently invoke against an item or living,
  * derived from every tool the player is carrying (slots + bag), filtered to
  * the requested target kind ("item" or "living").
  * @param {"item" | "living"} targetKind
+ * @param {boolean} nearbyOnly When true, only match the "_nearby" variant
+ *   (target kind "item_nearby"/"living_nearby"); when false, match both the
+ *   same-tile and "_nearby" variants.
  * @returns {string[]}
  */
-function actionsAvailableForTargetKind(targetKind) {
+function actionsAvailableForTargetKind(targetKind, nearbyOnly) {
   var inv = normalizeClientInventory(playerInventory);
+  var acceptedKinds = nearbyOnly
+    ? [targetKind + "_nearby"]
+    : [targetKind, targetKind + "_nearby"];
   /** @type {Record<string, boolean>} */
   var seen = {};
   /** @type {string[]} */
@@ -579,7 +607,7 @@ function actionsAvailableForTargetKind(targetKind) {
       var actionId = itemActions[i];
       if (seen[actionId]) continue;
       var def = getRegistryActionDef(actionId);
-      if (!def || def.target_kind !== targetKind) continue;
+      if (!def || acceptedKinds.indexOf(def.target_kind || "") === -1) continue;
       seen[actionId] = true;
       result.push(actionId);
     }

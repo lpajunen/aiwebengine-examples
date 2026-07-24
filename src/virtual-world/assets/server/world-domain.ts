@@ -853,6 +853,18 @@ export function getNearbyTileItems(
   return items;
 }
 
+// Chebyshev (chessboard) distance check used for "_nearby" action target
+// kinds — a maxDistance of 1 matches getNearbyTileKeys' 8-neighbor radius.
+export function isWithinTileDistance(
+  rowA: number,
+  colA: number,
+  rowB: number,
+  colB: number,
+  maxDistance: number,
+): boolean {
+  return Math.max(Math.abs(rowA - rowB), Math.abs(colA - colB)) <= maxDistance;
+}
+
 export function toStoredWorldTimestamp(tsMs: number): number {
   const numeric = Number(tsMs || 0);
   if (!isFinite(numeric) || numeric <= 0) return Math.floor(Date.now() / 1000);

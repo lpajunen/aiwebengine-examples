@@ -11,6 +11,11 @@ export interface ActionDefinition {
     | "facing_or_current_tile"
     | "item"
     | "living"
+    // Same as "item"/"living" but the target may be up to
+    // NEARBY_TARGET_TILE_DISTANCE tiles away instead of requiring the actor's
+    // own tile — see resolveActionTarget() in tree-action-helpers.ts.
+    | "item_nearby"
+    | "living_nearby"
     | "inventory";
   sourceItemIds: string[];
   cost?: Array<{ itemId: string; count: number }>;
@@ -480,7 +485,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     id: "follow",
     labelKey: "tree_action.follow",
     fallbackLabel: "Follow",
-    targetKind: "living",
+    targetKind: "living_nearby",
     sourceItemIds: ["starter_kit"],
   },
   stop_follow: {
@@ -494,7 +499,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     id: "fight",
     labelKey: "tree_action.fight",
     fallbackLabel: "Fight",
-    targetKind: "living",
+    targetKind: "living_nearby",
     sourceItemIds: ["starter_kit"],
   },
   stop_fight: {

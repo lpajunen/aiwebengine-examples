@@ -32,6 +32,7 @@ import {
 } from "./player-snapshots.ts";
 import { getEffectiveNick } from "./social-state.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
+import { NEARBY_TARGET_TILE_DISTANCE } from "./runtime-config.ts";
 import {
   getActionDefinition,
   getItemDefinition,
@@ -58,6 +59,7 @@ import {
   getNearbyTileKeys,
   isOakCenterTile,
   isOakClearingTile,
+  isWithinTileDistance,
   normalizeWorldType,
   worldTypeForPortalBuildAction,
 } from "./world-domain.ts";
@@ -491,6 +493,8 @@ export function performTreeActionForUser(
       targetKind === "current_tile" ||
       targetKind === "item" ||
       targetKind === "living" ||
+      targetKind === "item_nearby" ||
+      targetKind === "living_nearby" ||
       targetKind === "inventory"
     ) {
       return {
@@ -1227,8 +1231,13 @@ export function performTreeActionForUser(
     let targetKind: "player" | "npc" | null = null;
     if (
       targetNpc &&
-      targetNpc.row === resolvedTarget.row &&
-      targetNpc.col === resolvedTarget.col
+      isWithinTileDistance(
+        targetNpc.row,
+        targetNpc.col,
+        canonical.row,
+        canonical.col,
+        NEARBY_TARGET_TILE_DISTANCE,
+      )
     ) {
       targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
       targetKind = "npc";
@@ -1237,8 +1246,13 @@ export function performTreeActionForUser(
       const targetPlayer = worldPlayers[targetLivingId];
       if (
         targetPlayer &&
-        targetPlayer.row === resolvedTarget.row &&
-        targetPlayer.col === resolvedTarget.col
+        isWithinTileDistance(
+          targetPlayer.row,
+          targetPlayer.col,
+          canonical.row,
+          canonical.col,
+          NEARBY_TARGET_TILE_DISTANCE,
+        )
       ) {
         targetLivingLabel = getEffectiveNick(targetLivingId);
         targetKind = "player";
@@ -1291,8 +1305,13 @@ export function performTreeActionForUser(
     let targetKind: "player" | "npc" | null = null;
     if (
       targetNpc &&
-      targetNpc.row === resolvedTarget.row &&
-      targetNpc.col === resolvedTarget.col
+      isWithinTileDistance(
+        targetNpc.row,
+        targetNpc.col,
+        canonical.row,
+        canonical.col,
+        NEARBY_TARGET_TILE_DISTANCE,
+      )
     ) {
       targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
       targetKind = "npc";
@@ -1301,8 +1320,13 @@ export function performTreeActionForUser(
       const targetPlayer = worldPlayers[targetLivingId];
       if (
         targetPlayer &&
-        targetPlayer.row === resolvedTarget.row &&
-        targetPlayer.col === resolvedTarget.col
+        isWithinTileDistance(
+          targetPlayer.row,
+          targetPlayer.col,
+          canonical.row,
+          canonical.col,
+          NEARBY_TARGET_TILE_DISTANCE,
+        )
       ) {
         targetLivingLabel = getEffectiveNick(targetLivingId);
         targetKind = "player";

@@ -301,8 +301,19 @@ export function registerVirtualWorldRuntime(): void {
       },
       targetKind: {
         type: "string",
-        enum: ["self", "facing_tile", "current_tile", "inventory"],
-        description: "What the action targets",
+        enum: [
+          "self",
+          "facing_tile",
+          "current_tile",
+          "facing_or_current_tile",
+          "item",
+          "living",
+          "item_nearby",
+          "living_nearby",
+          "inventory",
+        ],
+        description:
+          "What the action targets. item/living require the target on the actor's own tile; item_nearby/living_nearby allow the target up to 5 tiles away",
       },
       sourceItemIds: {
         type: "array",

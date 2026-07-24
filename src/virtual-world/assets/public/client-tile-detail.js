@@ -143,15 +143,28 @@ function renderTileDetailPanel() {
 
   var tileItems = worldItemsByTile[key] || [];
 
-  // Item/living-targeted actions only make sense against entities standing
-  // on the actor's own tile — the button set is empty when inspecting any
-  // other tile, since resolveActionTarget() on the server always resolves
-  // these target kinds to the actor's current position.
+  // Plain "item"/"living" targeted actions (e.g. poke) require the entity on
+  // the actor's own tile. "item_nearby"/"living_nearby" actions (e.g. follow,
+  // fight) also work up to NEARBY_ACTION_TILE_DISTANCE tiles away — see
+  // isWithinTileDistance() in tree-action-helpers.ts on the server.
   var isOwnTile = row === avatarRow && col === avatarCol;
-  var itemActionIds = isOwnTile ? actionsAvailableForTargetKind("item") : [];
+  var isNearbyTile = isWithinTileDistance(
+    row,
+    col,
+    avatarRow,
+    avatarCol,
+    NEARBY_ACTION_TILE_DISTANCE,
+  );
+  var itemActionIds = isOwnTile
+    ? actionsAvailableForTargetKind("item", false)
+    : isNearbyTile
+      ? actionsAvailableForTargetKind("item", true)
+      : [];
   var livingActionIds = isOwnTile
-    ? actionsAvailableForTargetKind("living")
-    : [];
+    ? actionsAvailableForTargetKind("living", false)
+    : isNearbyTile
+      ? actionsAvailableForTargetKind("living", true)
+      : [];
 
   /**
    * @param {string[]} actionIds

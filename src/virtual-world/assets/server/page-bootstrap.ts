@@ -374,6 +374,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="facing_or_current_tile">facing_or_current_tile</option>
             <option value="item">item</option>
             <option value="living">living</option>
+            <option value="item_nearby">item_nearby</option>
+            <option value="living_nearby">living_nearby</option>
             <option value="inventory">inventory</option>
           </select>
         </label>

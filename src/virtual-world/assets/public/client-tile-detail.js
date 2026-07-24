@@ -192,6 +192,19 @@ function renderTileDetailPanel() {
     return btns;
   }
 
+  /**
+   * Joins already-escaped "label: value" strings into a single dense row
+   * instead of one row per attribute, so an equipped/stat-heavy entity
+   * doesn't push the panel to dozens of rows. Returns "" (no row) when
+   * there's nothing to show.
+   * @param {string[]} parts
+   * @returns {string}
+   */
+  function tileCompactRow(parts) {
+    if (!parts.length) return "";
+    return '<div class="tile-row">' + parts.join(" &middot; ") + "</div>";
+  }
+
   var playersHere = [];
   if (avatarRow === row && avatarCol === col) {
     playersHere.push({ id: playerId, isMe: true });
@@ -268,20 +281,36 @@ function renderTileDetailPanel() {
       }
       var itmState =
         itm.state && typeof itm.state === "object" ? itm.state : {};
-      for (var isk = 0; isk < ITEM_STATE_STAT_KEYS.length; isk++) {
-        var itmStateKey = ITEM_STATE_STAT_KEYS[isk];
-        if (!(itmStateKey in itmState)) continue;
-        html +=
-          '<div class="tile-row">' +
-          escHtml(itemStateValueLabel(itmStateKey)) +
-          ": " +
-          renderItemStateValueDisplay(
-            itmStateKey,
-            itmState[itmStateKey],
-            itmState,
-          ) +
-          "</div>";
+      var itmStatParts = [];
+      if (
+        "currentHitPoints" in itmState ||
+        typeof itmState.maxHitPoints === "number"
+      ) {
+        itmStatParts.push(
+          escHtml(itemStateValueLabel("currentHitPoints")) +
+            ": " +
+            escHtml(
+              formatLivingValue(itmState.currentHitPoints, "currentHitPoints"),
+            ) +
+            "/" +
+            escHtml(formatLivingValue(itmState.maxHitPoints, "maxHitPoints")),
+        );
       }
+      if ("armorClass" in itmState) {
+        itmStatParts.push(
+          escHtml(itemStateValueLabel("armorClass")) +
+            ": " +
+            escHtml(formatLivingValue(itmState.armorClass, "armorClass")),
+        );
+      }
+      if ("weaponClass" in itmState) {
+        itmStatParts.push(
+          escHtml(itemStateValueLabel("weaponClass")) +
+            ": " +
+            escHtml(formatLivingValue(itmState.weaponClass, "weaponClass")),
+        );
+      }
+      html += tileCompactRow(itmStatParts);
     }
   }
   html += "</div>";
@@ -332,36 +361,32 @@ function renderTileDetailPanel() {
           "</div>";
       }
       var ppSlotIds = Object.keys(ppSlots);
+      var ppEquippedParts = [];
       for (var ps = 0; ps < ppSlotIds.length; ps++) {
         var ppSlotId = ppSlotIds[ps];
-        html +=
-          '<div class="tile-row">' +
+        if (!ppSlots[ppSlotId]) continue;
+        ppEquippedParts.push(
           escHtml(inventorySlotLabel(ppData, ppSlotId)) +
-          ": " +
-          escHtml(
-            ppSlots[ppSlotId]
-              ? inventoryItemLabel(ppSlots[ppSlotId])
-              : t("inventory.empty", "empty"),
-          ) +
-          "</div>";
+            ": " +
+            escHtml(inventoryItemLabel(ppSlots[ppSlotId])),
+        );
       }
-      var ppValueKeys = Object.keys(ppValues).sort();
+      html += tileCompactRow(ppEquippedParts);
+      var ppValueKeys = Object.keys(ppValues).sort(function (a, b) {
+        return livingValueLabel(String(ppData.class_id || ""), a).localeCompare(
+          livingValueLabel(String(ppData.class_id || ""), b),
+        );
+      });
+      var ppStatParts = [];
       for (var pv = 0; pv < ppValueKeys.length; pv++) {
         var ppValueKey = ppValueKeys[pv];
-        html +=
-          '<div class="tile-row">' +
+        ppStatParts.push(
           escHtml(livingValueLabel(String(ppData.class_id || ""), ppValueKey)) +
-          ": " +
-          renderLivingValueDisplay(
-            getLivingValueSchemaEntry(
-              String(ppData.class_id || ""),
-              ppValueKey,
-            ),
-            ppValues[ppValueKey],
-            ppValueKey,
-          ) +
-          "</div>";
+            ": " +
+            escHtml(formatLivingValue(ppValues[ppValueKey], ppValueKey)),
+        );
       }
+      html += tileCompactRow(ppStatParts);
       html += "</div>";
     }
   }
@@ -411,46 +436,42 @@ function renderTileDetailPanel() {
           "</div>";
       }
       var npcSlotIds = Object.keys(npcSlots);
+      var npcEquippedParts = [];
       for (var ns = 0; ns < npcSlotIds.length; ns++) {
         var npcSlotId = npcSlotIds[ns];
-        html +=
-          '<div class="tile-row">' +
+        if (!npcSlots[npcSlotId]) continue;
+        npcEquippedParts.push(
           escHtml(inventorySlotLabel(npcData, npcSlotId)) +
-          ": " +
-          escHtml(
-            npcSlots[npcSlotId]
-              ? inventoryItemLabel(npcSlots[npcSlotId])
-              : t("inventory.empty", "empty"),
-          ) +
-          "</div>";
+            ": " +
+            escHtml(inventoryItemLabel(npcSlots[npcSlotId])),
+        );
       }
       if (npcBagCount > 0) {
-        html +=
-          '<div class="tile-row">' +
+        npcEquippedParts.push(
           escHtml(t("tile.bag_items", "Bag items:")) +
-          " " +
-          escHtml(String(npcBagCount)) +
-          "</div>";
+            " " +
+            escHtml(String(npcBagCount)),
+        );
       }
-      var npcValueKeys = Object.keys(npcValues).sort();
+      html += tileCompactRow(npcEquippedParts);
+      var npcValueKeys = Object.keys(npcValues).sort(function (a, b) {
+        return livingValueLabel(
+          String(npcData.class_id || ""),
+          a,
+        ).localeCompare(livingValueLabel(String(npcData.class_id || ""), b));
+      });
+      var npcStatParts = [];
       for (var nv = 0; nv < npcValueKeys.length; nv++) {
         var npcValueKey = npcValueKeys[nv];
-        html +=
-          '<div class="tile-row">' +
+        npcStatParts.push(
           escHtml(
             livingValueLabel(String(npcData.class_id || ""), npcValueKey),
           ) +
-          ": " +
-          renderLivingValueDisplay(
-            getLivingValueSchemaEntry(
-              String(npcData.class_id || ""),
-              npcValueKey,
-            ),
-            npcValues[npcValueKey],
-            npcValueKey,
-          ) +
-          "</div>";
+            ": " +
+            escHtml(formatLivingValue(npcValues[npcValueKey], npcValueKey)),
+        );
       }
+      html += tileCompactRow(npcStatParts);
       html += "</div>";
     }
   }

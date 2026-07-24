@@ -239,10 +239,9 @@ function formatRelTime(ts) {
 
 function sortOnlinePlayersList() {
   onlinePlayersList.sort(function (a, b) {
-    return (
-      Number(b && b.last_active ? b.last_active : 0) -
-      Number(a && a.last_active ? a.last_active : 0)
-    );
+    var nickA = (a && a.nick) || "";
+    var nickB = (b && b.nick) || "";
+    return nickA.localeCompare(nickB);
   });
 }
 

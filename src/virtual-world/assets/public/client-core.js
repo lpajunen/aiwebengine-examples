@@ -148,8 +148,19 @@ function renderPortalDestinationPicker(originalAction, classes) {
   }
   var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
-  for (var i = 0; i < classes.length; i++) {
-    var cls = classes[i];
+  var sortedClasses = classes.slice().sort(function (a, b) {
+    var la = t(
+      String((a && a.labelKey) || ""),
+      String((a && a.fallbackLabel) || (a && a.id) || ""),
+    );
+    var lb = t(
+      String((b && b.labelKey) || ""),
+      String((b && b.fallbackLabel) || (b && b.id) || ""),
+    );
+    return la.localeCompare(lb);
+  });
+  for (var i = 0; i < sortedClasses.length; i++) {
+    var cls = sortedClasses[i];
     if (!cls || !cls.id) continue;
     var btn = document.createElement("button");
     btn.textContent =
@@ -196,7 +207,12 @@ function inventoryItemLabel(item) {
  */
 function getLivingValuesEntries(inv) {
   if (!inv || !inv.values || typeof inv.values !== "object") return [];
-  var keys = Object.keys(inv.values).sort();
+  var classId = inv.class_id || "";
+  var keys = Object.keys(inv.values).sort(function (a, b) {
+    return livingValueLabel(classId, a).localeCompare(
+      livingValueLabel(classId, b),
+    );
+  });
   var out = [];
   for (var i = 0; i < keys.length; i++) {
     out.push({ key: keys[i], value: inv.values[keys[i]] });

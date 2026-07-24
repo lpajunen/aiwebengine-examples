@@ -650,7 +650,9 @@ function actionsAvailableForTargetKind(targetKind, nearbyOnly) {
     for (var s = 0; s < slotIds.length; s++)
       collectFromItem(inv.slots[slotIds[s]]);
   }
-  return result;
+  return result.sort(function (a, b) {
+    return treeActionLabel(a).localeCompare(treeActionLabel(b));
+  });
 }
 
 /** @type {Record<string, ClientItem[]>} */
@@ -791,7 +793,9 @@ function getOwnedTreeActions() {
       actionsByType[actions[m]] = true;
     }
   }
-  return Object.keys(actionsByType);
+  return Object.keys(actionsByType).sort(function (a, b) {
+    return treeActionLabel(a).localeCompare(treeActionLabel(b));
+  });
 }
 
 /**

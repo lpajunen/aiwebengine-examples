@@ -87,6 +87,13 @@ function renderItemClassList() {
     .then(function (data) {
       var classes =
         data && Array.isArray(data.item_classes) ? data.item_classes : [];
+      classes = classes
+        .slice()
+        .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
+          var la = String((a.visuals && a.visuals.fallbackLabel) || a.id || "");
+          var lb = String((b.visuals && b.visuals.fallbackLabel) || b.id || "");
+          return la.localeCompare(lb);
+        });
       if (!classes.length) {
         listDiv.innerHTML =
           '<div class="class-row"><em style="opacity:0.55">' +
@@ -367,6 +374,13 @@ function renderActionClassList() {
     .then(function (data) {
       var classes =
         data && Array.isArray(data.action_classes) ? data.action_classes : [];
+      classes = classes
+        .slice()
+        .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
+          return String(a.fallbackLabel || a.id || "").localeCompare(
+            String(b.fallbackLabel || b.id || ""),
+          );
+        });
       if (!classes.length) {
         listDiv.innerHTML =
           '<div class="class-row"><em style="opacity:0.55">' +
@@ -631,6 +645,13 @@ function renderLivingClassList() {
     .then(function (data) {
       var classes =
         data && Array.isArray(data.living_classes) ? data.living_classes : [];
+      classes = classes
+        .slice()
+        .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
+          return String(a.fallbackLabel || a.id || "").localeCompare(
+            String(b.fallbackLabel || b.id || ""),
+          );
+        });
       if (!classes.length) {
         listDiv.innerHTML =
           '<div class="class-row"><em style="opacity:0.55">' +
@@ -954,6 +975,13 @@ function renderWorldClassList() {
     .then(function (data) {
       var classes =
         data && Array.isArray(data.world_classes) ? data.world_classes : [];
+      classes = classes
+        .slice()
+        .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
+          return String(a.fallbackLabel || a.id || "").localeCompare(
+            String(b.fallbackLabel || b.id || ""),
+          );
+        });
       if (!classes.length) {
         listDiv.innerHTML =
           '<div class="class-row"><em style="opacity:0.55">' +

@@ -248,7 +248,7 @@ function postLivingTargetedAction(btn) {
 }
 
 function useItem() {
-  var actions = getOwnedTreeActions().sort();
+  var actions = getOwnedTreeActions();
   if (actions.length === 0) {
     console.log("No usable item available in inventory or on this tile");
     return;

@@ -18,8 +18,9 @@ function retranslateUI() {
   updateLocaleToggleIcon();
   renderInventoryPanel();
   refreshTileDetailIfOpen();
-  updateHeldHud();
+  updateStatsHud();
   if (statsPanelVisible) renderStatisticsPanel();
+  if (worldInfoPanelVisible) renderWorldInfoPanel();
   if (playersPanelVisible) renderPlayersPanel();
   if (itemClassPanelVisible) renderItemClassList();
   if (actionClassPanelVisible) renderActionClassList();

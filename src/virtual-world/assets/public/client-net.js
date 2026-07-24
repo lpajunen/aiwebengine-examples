@@ -40,7 +40,7 @@ function applyWorldStatePayload(payload, requestSeq) {
   appliedItemSnapshotSeq = requestSeq;
   rebuildItemMeshes();
   refreshTileDetailIfOpen();
-  updateHeldHud();
+  updateStatsHud();
   if (inventoryPanelVisible) renderInventoryPanel();
   if (statsPanelVisible) renderStatisticsPanel();
 }
@@ -465,7 +465,7 @@ function initMultiplayer() {
   scheduleSessionRefresh();
   applyStaticTranslations();
   updateLocaleToggleIcon();
-  updateHeldHud();
+  updateStatsHud();
   renderInventoryPanel();
   updateEditingRightsUI();
   initLogoutTrigger();
@@ -724,7 +724,7 @@ function initMultiplayer() {
     if (payload.values && typeof payload.values === "object") {
       playerInventory.values = payload.values;
     }
-    updateHeldHud();
+    updateStatsHud();
     renderInventoryPanel();
     if (statsPanelVisible) renderStatisticsPanel();
     if (payload.class_id === "player_ghost" && !wasGhost) {

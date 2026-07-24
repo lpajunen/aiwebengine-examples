@@ -498,6 +498,35 @@ function worldTypeLabel(worldType) {
 }
 
 /**
+ * @param {string} classId
+ * @returns {{ id: string, baseType: string, labelKey: string, fallbackLabel: string } | null}
+ */
+function getWorldClassRecord(classId) {
+  if (
+    typeof WORLD_CLASS_REGISTRY === "undefined" ||
+    !Array.isArray(WORLD_CLASS_REGISTRY)
+  ) {
+    return null;
+  }
+  for (var i = 0; i < WORLD_CLASS_REGISTRY.length; i++) {
+    if (WORLD_CLASS_REGISTRY[i] && WORLD_CLASS_REGISTRY[i].id === classId) {
+      return WORLD_CLASS_REGISTRY[i];
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} classId
+ * @returns {string}
+ */
+function worldClassLabel(classId) {
+  var cls = getWorldClassRecord(classId);
+  if (!cls) return worldTypeLabel(classId);
+  return t(cls.labelKey, cls.fallbackLabel || cls.id || "?");
+}
+
+/**
  * @param {ClientItem | null | undefined} item
  * @returns {string}
  */

@@ -9,6 +9,7 @@ declare var WORLD_ITEMS: any;
 declare var PLAYER_INV: any;
 declare var NPCS: any;
 declare var worldId: string;
+declare var WORLD_CLASS_ID: string;
 declare var playerId: string;
 declare var PLAYER_NICK: string;
 declare var ONLINE_PLAYERS: any;

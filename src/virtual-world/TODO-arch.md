@@ -249,7 +249,7 @@ responses) were already correctly full-bag and are unchanged. Client-side:
 slot-appropriate positions on remote player, NPC, and the local player's own
 avatar group, via `syncAvatarEquippedItems`, hooked into
 `upsertRemoteAvatar`/`upsertNPCAvatar` (on slot changes) and
-`updateHeldHud` (for the local avatar). `client-tile-detail.js`'s NPC panel
+`updateStatsHud` (for the local avatar). `client-tile-detail.js`'s NPC panel
 now shows bag count from `inventory_count` instead of reading (no longer
 present) raw bag contents.
 

@@ -90,16 +90,44 @@ canvas {
   font-size: 13px;
   line-height: 1.7;
 }
-#hud-pos strong {
-  font-size: 15px;
-  display: block;
+#hud-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 4px;
+  pointer-events: auto;
+}
+#hud-title-row strong {
+  font-size: 15px;
   color: #a8d8ff;
+}
+#btn-world-info {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #a8d8ff;
+  font-size: 13px;
+  padding: 0;
+  pointer-events: auto;
 }
 #hud-nick-row {
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+}
+.hud-stat {
+  pointer-events: auto;
+}
+#hud-hp {
+  display: inline-block;
+  min-width: 7ch;
+}
+#hud-ac,
+#hud-wc,
+#hud-fatigue {
+  display: inline-block;
+  min-width: 3ch;
 }
 #nick-display {
   display: inline;
@@ -185,13 +213,29 @@ canvas {
   background: rgba(178, 50, 50, 1);
 }
 
-#hud-legend {
+#hud-world-info-panel {
   top: 14px;
   right: 14px;
+  width: min(260px, calc(100vw - 28px));
   font-size: 12px;
   line-height: 1.9;
+  display: none;
+  pointer-events: auto;
+  z-index: 1001;
 }
-#hud-legend strong {
+.world-info-type {
+  font-size: 13px;
+  font-weight: 700;
+  color: #a8d8ff;
+  margin-bottom: 4px;
+}
+.world-info-desc {
+  color: #d8e7c2;
+  font-style: italic;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+.world-info-legend-title {
   display: block;
   margin-bottom: 4px;
   color: #a8d8ff;

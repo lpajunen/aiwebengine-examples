@@ -116,7 +116,7 @@ function renderInventoryPanel() {
   countDiv.textContent =
     inv.bag.length + " " + t("inventory.items_suffix", "items");
 
-  updateHeldHud();
+  updateStatsHud();
 }
 
 /** @param {number} autoHideMs */
@@ -174,6 +174,7 @@ function renderStatisticsPanel() {
       renderLivingValueDisplay(
         getLivingValueSchemaEntry(inv.class_id || "", entry.key),
         entry.value,
+        entry.key,
       ) +
       "</span>" +
       "</div>";
@@ -195,6 +196,30 @@ function closeStatisticsPanel() {
 function toggleStatisticsPanel() {
   if (statsPanelVisible) closeStatisticsPanel();
   else showStatisticsPanel();
+}
+
+// ── World info panel ─────────────────────────────────────────────────────
+
+function renderWorldInfoPanel() {
+  requireElementById("world-info-type").textContent = worldClassLabel(
+    typeof WORLD_CLASS_ID !== "undefined" ? WORLD_CLASS_ID : "",
+  );
+}
+
+function showWorldInfoPanel() {
+  worldInfoPanelVisible = true;
+  requireElementById("hud-world-info-panel").style.display = "block";
+  renderWorldInfoPanel();
+}
+
+function closeWorldInfoPanel() {
+  worldInfoPanelVisible = false;
+  requireElementById("hud-world-info-panel").style.display = "none";
+}
+
+function toggleWorldInfoPanel() {
+  if (worldInfoPanelVisible) closeWorldInfoPanel();
+  else showWorldInfoPanel();
 }
 
 // ── Players panel ────────────────────────────────────────────────────────

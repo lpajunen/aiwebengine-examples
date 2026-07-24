@@ -46,7 +46,7 @@ scene.add(avatar);
 
 // Tracks equip meshes attached to the local player's own avatar group, kept
 // in sync with playerInventory.slots via syncLocalAvatarEquippedItems()
-// (called from updateHeldHud() in client-core.js whenever the inventory
+// (called from updateStatsHud() in client-core.js whenever the inventory
 // changes) for visual parity with how remote/NPC avatars render slots.
 var localAvatarEquipEntry = { group: avatar, equipMeshes: {} };
 
@@ -60,7 +60,7 @@ function syncLocalAvatarEquippedItems() {
 /**
  * Applies the ghost look to the local avatar when the player's living
  * class is player_ghost (see fight-helpers.ts resolvePlayerDeath /
- * tree-action-helpers.ts's "pray" revival). Called from updateHeldHud()
+ * tree-action-helpers.ts's "pray" revival). Called from updateStatsHud()
  * alongside syncLocalAvatarEquippedItems(), the shared "playerInventory
  * changed" hook.
  */

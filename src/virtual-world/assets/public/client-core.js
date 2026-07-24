@@ -27,6 +27,7 @@ var inventoryPanelVisible = false;
 /** @type {number | null} */
 var inventoryAutoHideTimer = null;
 var statsPanelVisible = false;
+var worldInfoPanelVisible = false;
 var usePickerVisible = false;
 /** @type {number | null} */
 var heartbeatTimer = null;
@@ -236,9 +237,15 @@ function livingValueLabel(classId, valueKey) {
   return t(labelKey, fallback);
 }
 
-/** @param {unknown} value */
-function formatLivingValue(value) {
-  if (typeof value === "number") return String(Math.round(value * 100) / 100);
+/**
+ * @param {unknown} value
+ * @param {string} [key]
+ */
+function formatLivingValue(value, key) {
+  if (typeof value === "number") {
+    if (key === "fatigue") return String(Math.round(value));
+    return String(Math.round(value * 100) / 100);
+  }
   if (typeof value === "boolean") return value ? "true" : "false";
   if (value == null) return "-";
   return String(value);
@@ -286,17 +293,19 @@ function renderItemStateValueDisplay(key, value, state) {
     return renderLivingValueDisplay(
       { kind: "number", min: 0, max: state.maxHitPoints },
       value,
+      key,
     );
   }
-  return renderLivingValueDisplay(null, value);
+  return renderLivingValueDisplay(null, value, key);
 }
 
 /**
  * @param {any | null} schemaEntry
  * @param {unknown} value
+ * @param {string} [key]
  * @returns {string}
  */
-function renderLivingValueDisplay(schemaEntry, value) {
+function renderLivingValueDisplay(schemaEntry, value, key) {
   var hasRange =
     schemaEntry &&
     schemaEntry.kind === "number" &&
@@ -306,7 +315,7 @@ function renderLivingValueDisplay(schemaEntry, value) {
   if (!hasRange || typeof value !== "number") {
     return (
       '<span class="living-value-text">' +
-      escHtml(formatLivingValue(value)) +
+      escHtml(formatLivingValue(value, key)) +
       "</span>"
     );
   }
@@ -322,7 +331,7 @@ function renderLivingValueDisplay(schemaEntry, value) {
     '%"></span>' +
     "</span>" +
     '<span class="living-value-meter-text">' +
-    escHtml(formatLivingValue(value)) +
+    escHtml(formatLivingValue(value, key)) +
     "/" +
     escHtml(String(max)) +
     "</span>" +
@@ -330,36 +339,25 @@ function renderLivingValueDisplay(schemaEntry, value) {
   );
 }
 
-/** @param {ClientInventory | any} inv */
-function getPrimaryHeldSlotIds(inv) {
-  var slotIds = getInventorySlotIds(inv);
-  if (slotIds.length === 0) return ["left_hand", "right_hand"];
-  if (
-    slotIds.indexOf("left_hand") !== -1 ||
-    slotIds.indexOf("right_hand") !== -1
-  ) {
-    return ["left_hand", "right_hand"];
-  }
-  if (slotIds.length === 1) return [slotIds[0], "right_hand"];
-  return [slotIds[0], slotIds[1]];
-}
-
-function updateHeldHud() {
-  var heldSlotIds = getPrimaryHeldSlotIds(playerInventory);
-  var leftItem =
-    playerInventory && playerInventory.slots
-      ? playerInventory.slots[heldSlotIds[0]]
-      : playerInventory.left_hand;
-  var rightItem =
-    playerInventory && playerInventory.slots
-      ? playerInventory.slots[heldSlotIds[1]]
-      : playerInventory.right_hand;
-  requireElementById("held-left").textContent = leftItem
-    ? inventoryItemLabel(leftItem)
-    : "-";
-  requireElementById("held-right").textContent = rightItem
-    ? inventoryItemLabel(rightItem)
-    : "-";
+function updateStatsHud() {
+  var inv = normalizeClientInventory(playerInventory);
+  var values = inv.values || {};
+  requireElementById("hud-hp").textContent =
+    formatLivingValue(values.currentHitPoints, "currentHitPoints") +
+    "/" +
+    formatLivingValue(values.maxHitPoints, "maxHitPoints");
+  requireElementById("hud-ac").textContent = formatLivingValue(
+    values.armorClass,
+    "armorClass",
+  );
+  requireElementById("hud-wc").textContent = formatLivingValue(
+    values.weaponClass,
+    "weaponClass",
+  );
+  requireElementById("hud-fatigue").textContent = formatLivingValue(
+    values.fatigue,
+    "fatigue",
+  );
   updateUseButtonState();
   syncLocalAvatarEquippedItems();
   syncLocalAvatarGhostVisual();

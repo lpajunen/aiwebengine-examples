@@ -22,7 +22,11 @@ import {
   savePlayerNick,
   updateOnlinePresence,
 } from "./social-state.ts";
-import { generateMap, getOrCreatePlayerWorld } from "./world-bootstrap.ts";
+import {
+  generateMap,
+  getOrCreatePlayerWorld,
+  getWorldInfo,
+} from "./world-bootstrap.ts";
 import { getAllWorldClasses } from "./world-class-storage.ts";
 import {
   getWorldFlavorTextByIndex,
@@ -57,6 +61,7 @@ type PageState = {
   initRotation: number;
   worldFlavorText: string;
   worldFlavorTextIndex: number;
+  worldClassId: string;
   worldTileDefs: any;
   itemRegistry: any;
   livingRegistry: any;
@@ -179,6 +184,7 @@ export function buildVirtualWorldPageState(
       getWorldFlavorTextIndex(worldId),
     ),
     worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
+    worldClassId: getWorldInfo(worldId).world_class_id,
     worldTileDefs: WORLD_TILE_DEFS,
     itemRegistry: getBootstrapRegistry(),
     livingRegistry: livingRegistry,
@@ -198,16 +204,24 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 </head>
 <body class="game">
   <div class="hud" id="hud-pos">
-    <strong data-i18n-key="hud.title">Virtual World</strong>
-    <div style="margin:4px 0 6px;color:#d8e7c2;font-style:italic;max-width:220px;line-height:1.35;" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
+    <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
     <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
-    <span data-i18n-key="hud.world_label">World:</span> ${state.worldId}<br>
-    <span data-i18n-key="hud.position_label">Position:</span> <span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span><br>
-    <span data-i18n-key="hud.held_left">L:</span> <span id="held-left">-</span> | <span data-i18n-key="hud.held_right">R:</span> <span id="held-right">-</span>
+    <span data-i18n-key="hud.world_label">World:</span> ${state.worldId} (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
+    <span data-i18n-key="hud.stats_label">Stats:</span>
+    <span class="hud-stat" data-i18n-title="living.value.current_hit_points" title="Hit points"><span data-i18n-key="hud.hp_abbr">HP:</span> <span id="hud-hp">-/-</span></span>
+    <span class="hud-stat" data-i18n-title="living.value.armor_class" title="Armor class"><span data-i18n-key="hud.ac_abbr">AC:</span> <span id="hud-ac">-</span></span>
+    <span class="hud-stat" data-i18n-title="living.value.weapon_class" title="Weapon class"><span data-i18n-key="hud.wc_abbr">WC:</span> <span id="hud-wc">-</span></span>
+    <span class="hud-stat" data-i18n-title="living.value.fatigue" title="Fatigue"><span data-i18n-key="hud.fatigue_abbr">F:</span> <span id="hud-fatigue">-</span></span>
   </div>
 
-  <div class="hud" id="hud-legend">
-    <strong data-i18n-key="legend.title">Legend</strong>
+  <div class="hud" id="hud-world-info-panel" style="display:none;">
+    <div class="panel-header">
+      <span class="panel-title" data-i18n-key="panel.world_info">World Info</span>
+      <button class="panel-close" onclick="closeWorldInfoPanel()" data-i18n-title="panel.close" title="Close">×</button>
+    </div>
+    <div class="world-info-type" id="world-info-type"></div>
+    <div class="world-info-desc" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
+    <strong class="world-info-legend-title" data-i18n-key="legend.title">Legend</strong>
     <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> <span data-i18n-key="legend.forest_floor">Forest Floor</span></div>
     <div class="leg"><div class="leg-box" style="background:#355c34;"></div> <span data-i18n-key="legend.spruce_thicket">Spruce Thicket</span></div>
     <div class="leg"><div class="leg-box" style="background:#2d8a3e;"></div> <span data-i18n-key="legend.pine_tree">Pine Tree</span></div>
@@ -466,6 +480,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var PLAYER_INV = ${JSON.stringify(state.playerInventory)};
     var NPCS = ${JSON.stringify(state.npcs)};
     var worldId  = ${JSON.stringify(state.worldId)};
+    var WORLD_CLASS_ID = ${JSON.stringify(state.worldClassId)};
     var playerId = ${JSON.stringify(state.userId)};
     var PLAYER_NICK = ${JSON.stringify(state.playerNick)};
     var ONLINE_PLAYERS = ${JSON.stringify(state.onlinePlayers)};

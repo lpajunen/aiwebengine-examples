@@ -358,6 +358,7 @@ function renderTileDetailPanel() {
               ppValueKey,
             ),
             ppValues[ppValueKey],
+            ppValueKey,
           ) +
           "</div>";
       }
@@ -446,6 +447,7 @@ function renderTileDetailPanel() {
               npcValueKey,
             ),
             npcValues[npcValueKey],
+            npcValueKey,
           ) +
           "</div>";
       }

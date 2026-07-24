@@ -44,7 +44,7 @@ function applyItemStateFromResult(result) {
   }
   rebuildItemMeshes();
   refreshTileDetailIfOpen();
-  updateHeldHud();
+  updateStatsHud();
   renderInventoryPanel();
   if (statsPanelVisible) renderStatisticsPanel();
   updateUseButtonState();

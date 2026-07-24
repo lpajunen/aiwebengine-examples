@@ -137,57 +137,17 @@ function isTouchOnJoystick(touch) {
   );
 }
 
+// Any part of the fixed HUD overlay that currently accepts pointer input
+// (per its CSS pointer-events, which is "none" on decorative panels like
+// the legend and "auto" on interactive ones) should not be hijacked for
+// camera rotation or tile selection. Checking via elementFromPoint instead
+// of a hand-maintained list of panel ids means every panel — including
+// always-visible ones like #hud-pos's rename/language buttons — is covered
+// automatically, and stays covered as panels are added or restyled.
 /** @param {Touch} touch */
 function isTouchOnButtons(touch) {
-  var treeActionsDiv = document.getElementById("hud-tree-actions");
-  if (treeActionsDiv) {
-    var rect = treeActionsDiv.getBoundingClientRect();
-    if (
-      touch.clientX >= rect.left &&
-      touch.clientX <= rect.right &&
-      touch.clientY >= rect.top &&
-      touch.clientY <= rect.bottom
-    ) {
-      return true;
-    }
-  }
-  var inventoryDiv = document.getElementById("hud-inventory-panel");
-  if (inventoryDiv && inventoryDiv.style.display !== "none") {
-    var invRect = inventoryDiv.getBoundingClientRect();
-    if (
-      touch.clientX >= invRect.left &&
-      touch.clientX <= invRect.right &&
-      touch.clientY >= invRect.top &&
-      touch.clientY <= invRect.bottom
-    ) {
-      return true;
-    }
-  }
-  var tileDetailDiv = document.getElementById("hud-tile-detail");
-  if (tileDetailDiv && tileDetailDiv.style.display !== "none") {
-    var tileRect = tileDetailDiv.getBoundingClientRect();
-    if (
-      touch.clientX >= tileRect.left &&
-      touch.clientX <= tileRect.right &&
-      touch.clientY >= tileRect.top &&
-      touch.clientY <= tileRect.bottom
-    ) {
-      return true;
-    }
-  }
-  var usePickerDiv = document.getElementById("hud-use-picker");
-  if (usePickerDiv && usePickerDiv.style.display !== "none") {
-    var usePickerRect = usePickerDiv.getBoundingClientRect();
-    if (
-      touch.clientX >= usePickerRect.left &&
-      touch.clientX <= usePickerRect.right &&
-      touch.clientY >= usePickerRect.top &&
-      touch.clientY <= usePickerRect.bottom
-    ) {
-      return true;
-    }
-  }
-  return false;
+  var el = document.elementFromPoint(touch.clientX, touch.clientY);
+  return !!(el && el.closest(".hud"));
 }
 
 document.addEventListener(

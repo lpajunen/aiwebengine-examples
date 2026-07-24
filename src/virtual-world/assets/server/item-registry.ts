@@ -324,6 +324,22 @@ export function getExtraItemTypes(): string[] {
   });
 }
 
+// Item types marked nonPickable are world-anchored singletons/fixtures (the
+// old oak, portals, blessing markers, corpses) — they must never end up in a
+// living's inventory, so anything that grants items wholesale should skip
+// these regardless of how it enumerates item types.
+export function getNonPickableItemTypes(): string[] {
+  if (_itemClassCache) {
+    return Object.keys(_itemClassCache).filter(function (id) {
+      return !!(_itemClassCache as Record<string, ItemClassRecord>)[id]
+        .nonPickable;
+    });
+  }
+  return Object.keys(ITEM_DEFINITIONS).filter(function (itemId) {
+    return !!ITEM_DEFINITIONS[itemId].nonPickable;
+  });
+}
+
 export function getBootstrapRegistry(): {
   items: Record<
     string,

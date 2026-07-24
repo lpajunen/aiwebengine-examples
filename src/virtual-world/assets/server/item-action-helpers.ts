@@ -1,4 +1,8 @@
-import { getItemStateTemplate, isPickableWorldItem } from "./item-registry.ts";
+import {
+  getItemStateTemplate,
+  getNonPickableItemTypes,
+  isPickableWorldItem,
+} from "./item-registry.ts";
 import {
   deleteWorldItems,
   ensureWorldItems,
@@ -285,8 +289,12 @@ export function grantAllItemsForUser(userId: string): {
 } {
   const worldId = getPlayerWorld(userId) || "";
   const inv = loadPlayerInventory(userId);
+  const nonPickable: Record<string, boolean> = {};
+  getNonPickableItemTypes().forEach(function (type) {
+    nonPickable[type] = true;
+  });
   const itemTypes = getAllKnownItemTypes().filter(function (type) {
-    return type !== "portal";
+    return !nonPickable[type];
   });
   const now = Date.now();
 

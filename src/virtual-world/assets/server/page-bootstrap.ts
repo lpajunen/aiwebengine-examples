@@ -203,15 +203,25 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <link rel="stylesheet" href="/virtual-world/styles.css">
 </head>
 <body class="game">
-  <div class="hud" id="hud-pos">
-    <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
-    <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
-    <span data-i18n-key="hud.world_label">World:</span> ${state.worldId} (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
-    <span data-i18n-key="hud.stats_label">Stats:</span>
-    <span class="hud-stat" data-i18n-title="living.value.current_hit_points" title="Hit points"><span data-i18n-key="hud.hp_abbr">HP:</span> <span id="hud-hp">-/-</span></span>
-    <span class="hud-stat" data-i18n-title="living.value.armor_class" title="Armor class"><span data-i18n-key="hud.ac_abbr">AC:</span> <span id="hud-ac">-</span></span>
-    <span class="hud-stat" data-i18n-title="living.value.weapon_class" title="Weapon class"><span data-i18n-key="hud.wc_abbr">WC:</span> <span id="hud-wc">-</span></span>
-    <span class="hud-stat" data-i18n-title="living.value.fatigue" title="Fatigue"><span data-i18n-key="hud.fatigue_abbr">F:</span> <span id="hud-fatigue">-</span></span>
+  <div id="hud-left-col">
+    <div class="hud" id="hud-pos">
+      <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
+      <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
+      <span data-i18n-key="hud.world_label">World:</span> ${state.worldId} (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
+      <span data-i18n-key="hud.stats_label">Stats:</span>
+      <span class="hud-stat" data-i18n-title="living.value.current_hit_points" title="Hit points"><span data-i18n-key="hud.hp_abbr">HP:</span> <span id="hud-hp">-/-</span></span>
+      <span class="hud-stat" data-i18n-title="living.value.armor_class" title="Armor class"><span data-i18n-key="hud.ac_abbr">AC:</span> <span id="hud-ac">-</span></span>
+      <span class="hud-stat" data-i18n-title="living.value.weapon_class" title="Weapon class"><span data-i18n-key="hud.wc_abbr">WC:</span> <span id="hud-wc">-</span></span>
+      <span class="hud-stat" data-i18n-title="living.value.fatigue" title="Fatigue"><span data-i18n-key="hud.fatigue_abbr">F:</span> <span id="hud-fatigue">-</span></span>
+    </div>
+
+    <div class="hud" id="hud-tile-detail" aria-live="polite">
+      <div class="panel-header">
+        <span class="panel-title" id="tile-detail-title">Square (0, 0)</span>
+        <button class="panel-close" onclick="closeTileDetail()" data-i18n-title="panel.close" title="Close">×</button>
+      </div>
+      <div id="tile-detail-body"></div>
+    </div>
   </div>
 
   <div class="hud" id="hud-world-info-panel" style="display:none;">
@@ -283,14 +293,6 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <button class="panel-close" onclick="closeStatisticsPanel()" data-i18n-title="panel.close" title="Close">×</button>
     </div>
     <div id="stats-list"></div>
-  </div>
-
-  <div class="hud" id="hud-tile-detail" aria-live="polite">
-    <div class="panel-header">
-      <span class="panel-title" id="tile-detail-title">Square (0, 0)</span>
-      <button class="panel-close" onclick="closeTileDetail()" data-i18n-title="panel.close" title="Close">×</button>
-    </div>
-    <div id="tile-detail-body"></div>
   </div>
 
   <div class="hud" id="hud-players-panel">

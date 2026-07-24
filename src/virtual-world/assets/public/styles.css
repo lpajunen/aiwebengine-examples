@@ -84,9 +84,22 @@ canvas {
   backdrop-filter: blur(4px);
 }
 
-#hud-pos {
+#hud-left-col {
+  position: absolute;
   top: 14px;
   left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(300px, calc(100vw - 28px));
+  pointer-events: none;
+}
+#hud-pos,
+#hud-tile-detail {
+  position: static;
+  width: 100%;
+}
+#hud-pos {
   font-size: 13px;
   line-height: 1.7;
 }
@@ -499,9 +512,6 @@ canvas {
 }
 
 #hud-tile-detail {
-  left: 14px;
-  top: 200px;
-  width: min(260px, calc(50vw - 28px));
   max-height: min(52vh, 400px);
   overflow-y: auto;
   display: none;

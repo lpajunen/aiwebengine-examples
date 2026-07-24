@@ -139,6 +139,15 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
   },
+  player_ghost: {
+    id: "player_ghost",
+    kind: "player",
+    labelKey: "living.class.player_ghost",
+    fallbackLabel: "Ghost",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
   npc_human: {
     id: "npc_human",
     kind: "npc",

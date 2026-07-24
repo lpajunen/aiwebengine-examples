@@ -19,6 +19,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Rowan blessing" },
       creator_stone: { name: "Creator's stone" },
       old_oak: { name: "Old oak" },
+      npc_corpse: { name: "Corpse" },
       unknown: { name: "Unknown item" },
       value: {
         max_hit_points: "Max hit points",
@@ -77,6 +78,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         player_human: "Human",
         player_elf: "Elf",
         player_hobbit: "Hobbit",
+        player_ghost: "Ghost",
         npc_human: "Human",
         npc_wolf: "Wolf",
         npc_bear: "Bear",
@@ -332,6 +334,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Pihlajansiunaus" },
       creator_stone: { name: "Luojan kivi" },
       old_oak: { name: "Vanha tammi" },
+      npc_corpse: { name: "Ruumis" },
       unknown: { name: "Tuntematon esine" },
       value: {
         max_hit_points: "Suurin osumapisteet",
@@ -390,6 +393,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         player_human: "Ihminen",
         player_elf: "Haltia",
         player_hobbit: "Hobitti",
+        player_ghost: "Aave",
         npc_human: "Ihminen",
         npc_wolf: "Susi",
         npc_bear: "Karhu",

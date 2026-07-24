@@ -209,6 +209,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "examine",
       "break",
       "fix",
+      "bury",
       "poke",
       "follow",
       "stop_follow",
@@ -252,6 +253,19 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       fallbackLabel: "Old oak",
     },
     actionIds: ["pray"],
+  },
+  npc_corpse: {
+    id: "npc_corpse",
+    kind: "placeable",
+    extra: true,
+    nonDroppable: true,
+    nonPickable: true,
+    visuals: {
+      color: 0x5c5248,
+      labelKey: "item.npc_corpse.name",
+      fallbackLabel: "Corpse",
+    },
+    actionIds: [],
   },
 };
 

@@ -414,9 +414,6 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Pray",
     targetKind: "current_tile",
     sourceItemIds: ["old_oak"],
-    execution: {
-      toastMessage: "You pray hard!",
-    },
   },
   portal_travel: {
     id: "portal_travel",
@@ -490,6 +487,20 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     id: "stop_follow",
     labelKey: "tree_action.stop_follow",
     fallbackLabel: "Stop following",
+    targetKind: "self",
+    sourceItemIds: ["starter_kit"],
+  },
+  fight: {
+    id: "fight",
+    labelKey: "tree_action.fight",
+    fallbackLabel: "Fight",
+    targetKind: "living",
+    sourceItemIds: ["starter_kit"],
+  },
+  stop_fight: {
+    id: "stop_fight",
+    labelKey: "tree_action.stop_fight",
+    fallbackLabel: "Stop fighting",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
   },

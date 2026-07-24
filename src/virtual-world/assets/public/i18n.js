@@ -254,6 +254,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       pokes_you: "pokes you.",
       you_poke_prefix: "You poke",
     },
+    fight: {
+      you_missed: "You missed",
+      you_defeated: "You defeated",
+      you_hit: "You hit",
+      hits_you_for: "hits you for",
+      something: "Something",
+      you_died: "You have died and become a ghost.",
+    },
     world_type: {
       island: "Island",
       cave: "Cave",
@@ -569,6 +577,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     poke: {
       pokes_you: "tökkää sinua.",
       you_poke_prefix: "Tökkäät",
+    },
+    fight: {
+      you_missed: "Osuit huti",
+      you_defeated: "Voitit vastustajan",
+      you_hit: "Osuit vastustajaan",
+      hits_you_for: "osuu sinuun",
+      something: "Joku",
+      you_died: "Olet kuollut ja muuttunut aaveeksi.",
     },
     world_type: {
       island: "Saari",

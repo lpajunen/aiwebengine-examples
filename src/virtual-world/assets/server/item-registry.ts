@@ -213,6 +213,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "poke",
       "follow",
       "stop_follow",
+      "fight",
+      "stop_fight",
       "summon_knife",
       "craft_kantele",
     ],

@@ -524,7 +524,9 @@ function initMultiplayer() {
       payload.col,
       payload.seq,
       payload.rotation,
-      payload.values ? { values: payload.values } : undefined,
+      payload.values || payload.class_id
+        ? { values: payload.values, class_id: payload.class_id }
+        : undefined,
       payload.path,
     );
   }
@@ -663,6 +665,76 @@ function initMultiplayer() {
   }
 
   /**
+   * Per-tick feedback for the attacker in a fight (see fight-helpers.ts
+   * tickFightForWorld) — fights are tick-driven rather than a direct
+   * request/response, so this is the only way the attacker learns the
+   * outcome of each hit.
+   * @param {any} payload
+   */
+  function handleFightTickEvent(payload) {
+    if (!payload) return;
+    var label = String(payload.target_label || "");
+    var suffix = label ? " " + label : "";
+    if (payload.result === "miss") {
+      showHudToast(t("fight.you_missed", "You missed") + suffix + ".", false);
+    } else if (payload.result === "kill") {
+      showHudToast(
+        t("fight.you_defeated", "You defeated") + suffix + "!",
+        false,
+      );
+    } else if (payload.result === "hit") {
+      var dmgSuffix =
+        typeof payload.damage === "number" ? " for " + payload.damage : "";
+      showHudToast(
+        t("fight.you_hit", "You hit") + suffix + dmgSuffix + ".",
+        false,
+      );
+    }
+  }
+
+  /** @param {any} payload */
+  function handleFightHitTakenEvent(payload) {
+    if (!payload) return;
+    var label =
+      String(payload.attacker_label || "") || t("fight.something", "Something");
+    showHudToast(
+      label +
+        " " +
+        t("fight.hits_you_for", "hits you for") +
+        " " +
+        (Number(payload.damage) || 0) +
+        ".",
+      true,
+    );
+  }
+
+  /**
+   * Sent only to the player who was just reduced to 0 HP in a fight (see
+   * fight-helpers.ts resolvePlayerDeath) — applies their new player_ghost
+   * class/values locally and confirms it with a toast. Remote players see
+   * the same class/values change via the accompanying "player_moved" event
+   * (handlePlayerMovedEvent forwards payload.class_id to upsertRemoteAvatar).
+   * @param {any} payload
+   */
+  function handlePlayerDiedEvent(payload) {
+    if (!payload) return;
+    var wasGhost =
+      playerInventory && playerInventory.class_id === "player_ghost";
+    if (payload.class_id) playerInventory.class_id = payload.class_id;
+    if (payload.values && typeof payload.values === "object") {
+      playerInventory.values = payload.values;
+    }
+    renderInventoryPanel();
+    if (statsPanelVisible) renderStatisticsPanel();
+    if (payload.class_id === "player_ghost" && !wasGhost) {
+      showHudToast(
+        t("fight.you_died", "You have died and become a ghost."),
+        true,
+      );
+    }
+  }
+
+  /**
    * A durationMs action (e.g. crafting) that was started earlier has now
    * resolved server-side (see tree-action-helpers.ts resolvePendingActionsForWorld).
    * The payload has the same shape as a normal instant tree-action response.
@@ -778,6 +850,15 @@ function initMultiplayer() {
         return;
       case "follow_ended":
         handleFollowEndedEvent(payload);
+        return;
+      case "fight_tick":
+        handleFightTickEvent(payload);
+        return;
+      case "fight_hit_taken":
+        handleFightHitTakenEvent(payload);
+        return;
+      case "player_died":
+        handlePlayerDiedEvent(payload);
         return;
       case "action_completed":
         handleActionCompletedEvent(payload);

@@ -6,6 +6,7 @@ import {
   VWORLD_DM_INDEX_TABLE,
   VWORLD_DM_TABLE,
   VWORLD_EVENT_SEQ_TABLE,
+  VWORLD_FIGHT_TABLE,
   VWORLD_FOLLOW_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
   VWORLD_LIVING_CLASS_TABLE,
@@ -1014,6 +1015,43 @@ export function ensureWorldDatabaseSchema(): void {
     return database.addUniqueIndex(
       VWORLD_FOLLOW_TABLE,
       JSON.stringify(["follower_id"]),
+    );
+  });
+
+  step("createTable", VWORLD_FIGHT_TABLE, function () {
+    return database.createTable(VWORLD_FIGHT_TABLE);
+  });
+  [
+    ["addTextColumn", "attacker_id", false],
+    ["addTextColumn", "attacker_type", false],
+    ["addTextColumn", "world_id", false],
+    ["addTextColumn", "target_id", false],
+    ["addTextColumn", "target_type", false],
+    ["addIntegerColumn", "created_ts", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_FIGHT_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_FIGHT_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_FIGHT_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_FIGHT_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_FIGHT_TABLE,
+      JSON.stringify(["attacker_id"]),
     );
   });
 

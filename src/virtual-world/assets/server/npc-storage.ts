@@ -24,6 +24,7 @@ import {
   insertWorldRow,
   updateWorldRow,
   deleteWorldRow,
+  deleteWorldRowsWhere,
   querySingleWorldRow,
   queryWorldRows,
   upsertWorldRow,
@@ -162,6 +163,13 @@ export function saveWorldNPCs(
         insertWorldRow(VWORLD_NPC_TABLE, rowData);
       }
     },
+  );
+}
+
+export function deleteNPCById(npcId: string): void {
+  deleteWorldRowsWhere(
+    VWORLD_NPC_TABLE,
+    JSON.stringify({ npc_id: String(npcId) }),
   );
 }
 

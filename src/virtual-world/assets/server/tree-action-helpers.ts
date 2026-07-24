@@ -18,6 +18,8 @@ import {
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
+import { deleteFightState, saveFightState } from "./fight-storage.ts";
+import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
 import {
   addPendingAction,
   deletePendingAction,
@@ -773,9 +775,34 @@ export function performTreeActionForUser(
   }
 
   if (action === "pray") {
+    if (inv.class_id === "player_ghost") {
+      inv.class_id = getDefaultPlayerLivingClassId();
+      inv.values = Object.assign({}, inv.values, {
+        currentHitPoints: inv.values.maxHitPoints,
+      });
+      savePlayerInventory(userId, inv);
+      sendWorldScopedStreamEvent(String(worldId), "player_moved", {
+        player_id: userId,
+        row: canonical.row,
+        col: canonical.col,
+        seq: canonical.seq,
+        rotation: canonical.rotation,
+        class_id: inv.class_id,
+        values: inv.values,
+      });
+      return {
+        status: 200,
+        payload: buildConfiguredSuccessPayload({
+          toast_message: "You feel alive again! You are human once more.",
+          inventory: inv,
+        }),
+      };
+    }
     return {
       status: 200,
-      payload: buildConfiguredSuccessPayload(),
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You pray hard!",
+      }),
     };
   }
 
@@ -1181,6 +1208,84 @@ export function performTreeActionForUser(
       status: 200,
       payload: buildConfiguredSuccessPayload({
         toast_message: "You stop following.",
+      }),
+    };
+  }
+
+  if (action === "fight") {
+    if (inv.class_id === "player_ghost") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.ghost_cannot_fight" },
+      };
+    }
+    const targetLivingId = String((body && body.target_living_id) || "");
+    if (!targetLivingId || targetLivingId === userId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_required" },
+      };
+    }
+    const npcsHere = loadWorldNPCs(worldId);
+    const targetNpc = npcsHere[targetLivingId];
+    let targetLivingLabel = "";
+    let targetKind: "player" | "npc" | null = null;
+    if (
+      targetNpc &&
+      targetNpc.row === resolvedTarget.row &&
+      targetNpc.col === resolvedTarget.col
+    ) {
+      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetKind = "npc";
+    } else {
+      const worldPlayers = loadWorldPlayers(worldId);
+      const targetPlayer = worldPlayers[targetLivingId];
+      if (
+        targetPlayer &&
+        targetPlayer.row === resolvedTarget.row &&
+        targetPlayer.col === resolvedTarget.col
+      ) {
+        targetLivingLabel = getEffectiveNick(targetLivingId);
+        targetKind = "player";
+      }
+    }
+    if (!targetKind) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    if (
+      targetKind === "player" &&
+      loadPlayerInventory(targetLivingId).class_id === "player_ghost"
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_is_ghost" },
+      };
+    }
+    // Fighting also follows the target so the attacker chases it into
+    // range every tick (see tickFollowForWorld); tickFightForWorld lands a
+    // hit whenever attacker and target end up co-located.
+    saveFightState(userId, "player", worldId, targetLivingId, targetKind);
+    saveFollowState(userId, worldId, targetLivingId, targetKind);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You start fighting " + targetLivingLabel + ".",
+        target_living_id: targetLivingId,
+        target_living_label: targetLivingLabel,
+      }),
+    };
+  }
+
+  if (action === "stop_fight") {
+    deleteFightState(userId);
+    deleteFollowState(userId);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You stop fighting.",
       }),
     };
   }

@@ -42,6 +42,10 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "item_bury_destroy",
     deltaKind: "remove",
   },
+  npc_died: {
+    id: "npc_died",
+    deltaKind: "add",
+  },
 };
 
 export function getItemChangeDefinition(

@@ -26,6 +26,7 @@ import {
 } from "./npc-tick-helpers.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
 import { tickFollowForWorld } from "./follow-helpers.ts";
+import { loadActiveNPCFighterIds, tickFightForWorld } from "./fight-helpers.ts";
 import {
   FATIGUE_RECOVERY_PER_SECOND,
   NPC_ACTIVE_WORLD_TTL_MS,
@@ -102,6 +103,8 @@ export function tickWorldNPCs(
   const occupiedPlayers = buildOccupiedPlayerMap(players);
   const occupiedNPCs = buildOccupiedNPCMap(npcs);
 
+  const fightingNpcIds = loadActiveNPCFighterIds(worldId);
+
   let hasChanges = false;
   npcIds.forEach(function (npcId) {
     const npc = npcs[npcId];
@@ -109,6 +112,12 @@ export function tickWorldNPCs(
       return;
     }
     normalizeNPCInventoryState(npc);
+
+    // NPCs currently attacking stay focused on their target (chased/hit by
+    // tickFightForWorld) instead of wandering off or foraging mid-fight.
+    if (fightingNpcIds.has(npcId)) {
+      return;
+    }
 
     const npcMoved = tickNPCMovement({
       worldId: worldId,
@@ -247,6 +256,9 @@ export function tryTickWorldNPCs(worldId: string, now: number): boolean {
   // ...and to advance any active "follow" actions one tile toward their
   // target (see follow-helpers.ts).
   tickFollowForWorld(worldId, now);
+  // ...and to advance any active fights (chase + roll a hit when
+  // co-located; see fight-helpers.ts).
+  tickFightForWorld(worldId, now);
   return true;
 }
 

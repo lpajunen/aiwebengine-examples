@@ -179,6 +179,10 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
 
 const NPC_SPECIES_POOL = ["npc_human", "npc_wolf", "npc_bear"];
 
+// NPC living classes that autonomously start a fight against a player found
+// standing on their tile (see fight-helpers.ts's tickFightForWorld).
+export const AGGRESSIVE_NPC_LIVING_CLASS_IDS = ["npc_wolf", "npc_bear"];
+
 let _livingClassCache: Record<string, LivingClassRecord> | null = null;
 
 function parseSlotDefinitions(

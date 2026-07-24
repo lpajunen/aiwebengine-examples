@@ -38,6 +38,10 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "item_fix",
     deltaKind: "snapshot",
   },
+  item_bury_destroy: {
+    id: "item_bury_destroy",
+    deltaKind: "remove",
+  },
 };
 
 export function getItemChangeDefinition(

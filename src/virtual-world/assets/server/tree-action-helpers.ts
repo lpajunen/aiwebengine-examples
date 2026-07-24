@@ -1007,6 +1007,68 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "bury") {
+    const targetItemId = String((body && body.target_item_id) || "");
+    if (!targetItemId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_required" },
+      };
+    }
+    const buryTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
+    const itemsHere = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    );
+    const targetItem = itemsHere.find(function (item) {
+      return item && String(item.id) === targetItemId;
+    });
+    if (!targetItem) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    if (String(targetItem.type || "") !== "npc_corpse") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_buriable" },
+      };
+    }
+
+    if (Array.isArray(worldItems[buryTileKey])) {
+      worldItems[buryTileKey] = worldItems[buryTileKey].filter(function (
+        item: any,
+      ) {
+        return item && String(item.id) !== targetItemId;
+      });
+      if (worldItems[buryTileKey].length === 0) {
+        delete worldItems[buryTileKey];
+      }
+    }
+    deleteWorldItemById(String(targetItem.id));
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      "item_bury_destroy",
+      resolvedTarget.row,
+      resolvedTarget.col,
+      [targetItem],
+    );
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You bury the corpse.",
+        target_item_id: targetItemId,
+        tile_items: getTileItemsSnapshot(
+          resolvedTarget.row,
+          resolvedTarget.col,
+        ),
+      }),
+    };
+  }
+
   if (action === "poke") {
     const targetLivingId = String((body && body.target_living_id) || "");
     if (!targetLivingId) {

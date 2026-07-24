@@ -465,6 +465,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
   },
+  bury: {
+    id: "bury",
+    labelKey: "tree_action.bury",
+    fallbackLabel: "Bury",
+    targetKind: "item",
+    sourceItemIds: ["starter_kit"],
+  },
   poke: {
     id: "poke",
     labelKey: "tree_action.poke",

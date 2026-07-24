@@ -1,7 +1,5 @@
-import { getEffectiveMap } from "./world-bootstrap.ts";
+import { getEffectiveMap, getWorldClassForWorld } from "./world-bootstrap.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
-import { pickRandomNPCLivingClassId } from "./living-registry.ts";
-import { NPC_MIN_COUNT, NPC_MAX_COUNT } from "./runtime-config.ts";
 import {
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
@@ -382,45 +380,108 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
     occupied[player.row + "_" + player.col] = true;
   });
 
-  const targetCount =
-    NPC_MIN_COUNT +
-    Math.floor(Math.random() * (NPC_MAX_COUNT - NPC_MIN_COUNT + 1));
+  const worldClass = getWorldClassForWorld(worldId);
+  const npcSpawns = worldClass ? worldClass.npcSpawns : [];
   const npcs: Record<string, any> = {};
+  let nextIndex = 1;
+
+  npcSpawns.forEach(function (entry) {
+    if (!getLivingClass(entry.id)) return;
+    for (let count = 0; count < entry.count; count++) {
+      const placed = placeNPCAtRandomTile(
+        worldId,
+        map,
+        mapRows,
+        mapCols,
+        occupied,
+        entry.id,
+        nextIndex,
+      );
+      if (!placed) continue;
+      nextIndex++;
+      npcs[placed.npcId] = placed.npc;
+    }
+  });
+
+  saveWorldNPCs(worldId, npcs);
+  return npcs;
+}
+
+// Finds a random walkable+unoccupied tile and builds a fresh NPC of classId
+// there, marking the tile occupied. Shared by the initial world seed loop
+// and the respawn-timer single-NPC spawn.
+function placeNPCAtRandomTile(
+  worldId: string,
+  map: number[][],
+  mapRows: number,
+  mapCols: number,
+  occupied: Record<string, boolean>,
+  classId: string,
+  index: number,
+): { npcId: string; npc: any } | null {
   let attempts = 0;
   const maxAttempts = 4000;
-
-  while (Object.keys(npcs).length < targetCount && attempts < maxAttempts) {
+  while (attempts < maxAttempts) {
     attempts++;
     const row = 1 + Math.floor(Math.random() * (mapRows - 2));
     const col = 1 + Math.floor(Math.random() * (mapCols - 2));
     const tileKey = row + "_" + col;
-    if (map[row][col] !== 0 || occupied[tileKey]) {
-      continue;
-    }
+    if (map[row][col] !== 0 || occupied[tileKey]) continue;
     occupied[tileKey] = true;
-    const index = Object.keys(npcs).length + 1;
-    const npcId = "npc_" + worldId + "_" + index;
-    const classId = pickRandomNPCLivingClassId();
+    const npcId =
+      "npc_" + worldId + "_" + index + "_" + Date.now().toString(36);
     const livingClass = getLivingClass(classId);
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
       : {};
-    npcs[npcId] = {
-      row,
-      col,
-      seq: 0,
-      rotation: 0,
-      state: "idle",
-      ts: Date.now(),
-      class_id: classId,
-      slots: slots,
-      bag: [],
-      values: livingClass
-        ? Object.assign({}, livingClass.valueTemplate || {})
-        : {},
+    return {
+      npcId: npcId,
+      npc: {
+        row,
+        col,
+        seq: 0,
+        rotation: 0,
+        state: "idle",
+        ts: Date.now(),
+        class_id: classId,
+        slots: slots,
+        bag: [],
+        values: livingClass
+          ? Object.assign({}, livingClass.valueTemplate || {})
+          : {},
+      },
     };
   }
+  return null;
+}
 
-  saveWorldNPCs(worldId, npcs);
-  return npcs;
+// Spawns a single replacement NPC of classId into worldId at a random
+// walkable empty tile — used by spawn-timers.ts when a manifest-tracked
+// NPC's respawn timer comes due. Returns the placed npc (with id) or null if
+// no empty tile could be found.
+export function spawnSingleWorldNPC(
+  worldId: string,
+  classId: string,
+): { npcId: string; npc: any } | null {
+  const map = getEffectiveMap(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
+  const existing = loadWorldNPCs(worldId);
+  const occupied: Record<string, boolean> = {};
+  Object.keys(existing).forEach(function (npcId) {
+    const npc = existing[npcId];
+    if (npc) occupied[npc.row + "_" + npc.col] = true;
+  });
+  const placed = placeNPCAtRandomTile(
+    worldId,
+    map,
+    mapRows,
+    mapCols,
+    occupied,
+    classId,
+    Object.keys(existing).length + 1,
+  );
+  if (!placed) return null;
+  saveWorldNPCs(worldId, { [placed.npcId]: placed.npc });
+  return placed;
 }

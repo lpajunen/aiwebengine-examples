@@ -165,11 +165,6 @@ function editItemClass(id) {
       /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
         String(ic.kind || "tool");
       /** @type {HTMLInputElement} */ (
-        requireElementById("ic-spawnable")
-      ).checked = !!ic.spawnable;
-      /** @type {HTMLInputElement} */ (requireElementById("ic-extra")).checked =
-        !!ic.extra;
-      /** @type {HTMLInputElement} */ (
         requireElementById("ic-non-droppable")
       ).checked = !!ic.nonDroppable;
       /** @type {HTMLInputElement} */ (
@@ -203,10 +198,6 @@ function cancelItemClassEdit() {
   /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
     "tool";
-  /** @type {HTMLInputElement} */ (requireElementById("ic-spawnable")).checked =
-    false;
-  /** @type {HTMLInputElement} */ (requireElementById("ic-extra")).checked =
-    false;
   /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked = false;
@@ -240,12 +231,6 @@ function submitItemClassForm() {
   ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-kind"))
     .value;
-  var spawnableVal = /** @type {HTMLInputElement} */ (
-    requireElementById("ic-spawnable")
-  ).checked;
-  var extraVal = /** @type {HTMLInputElement} */ (
-    requireElementById("ic-extra")
-  ).checked;
   var nonDroppableVal = /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked;
@@ -282,8 +267,6 @@ function submitItemClassForm() {
   var record = {
     id: idVal,
     kind: kindVal,
-    spawnable: spawnableVal,
-    extra: extraVal,
     nonDroppable: nonDroppableVal,
     nonPickable: nonPickableVal,
     visuals: { fallbackLabel: labelVal || idVal },
@@ -1061,6 +1044,18 @@ function editWorldClass(id) {
         String(wc.rows || 100);
       /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value =
         String(wc.cols || 100);
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("wc-item-spawns")
+      ).value =
+        Array.isArray(wc.itemSpawns) && wc.itemSpawns.length
+          ? JSON.stringify(wc.itemSpawns, null, 2)
+          : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("wc-npc-spawns")
+      ).value =
+        Array.isArray(wc.npcSpawns) && wc.npcSpawns.length
+          ? JSON.stringify(wc.npcSpawns, null, 2)
+          : "";
       requireElementById("world-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -1085,6 +1080,12 @@ function cancelWorldClassEdit() {
     "forest";
   /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value = "100";
   /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value = "100";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-item-spawns")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-npc-spawns")
+  ).value = "";
   requireElementById("world-class-form-title").textContent = t(
     "class_editor.new_world_type",
     "New world type",
@@ -1114,12 +1115,58 @@ function submitWorldClassForm() {
   var colsVal = Number(
     /** @type {HTMLInputElement} */ (requireElementById("wc-cols")).value,
   );
+  var itemSpawnsRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-item-spawns")
+  ).value.trim();
+  var npcSpawnsRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-npc-spawns")
+  ).value.trim();
+  var itemSpawns = [];
+  if (itemSpawnsRaw) {
+    try {
+      itemSpawns = JSON.parse(itemSpawnsRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_item_spawns_json", "Invalid item spawns JSON"),
+        true,
+      );
+      return;
+    }
+    if (!Array.isArray(itemSpawns)) {
+      showHudToast(
+        t("class_editor.invalid_item_spawns_json", "Invalid item spawns JSON"),
+        true,
+      );
+      return;
+    }
+  }
+  var npcSpawns = [];
+  if (npcSpawnsRaw) {
+    try {
+      npcSpawns = JSON.parse(npcSpawnsRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_npc_spawns_json", "Invalid NPC spawns JSON"),
+        true,
+      );
+      return;
+    }
+    if (!Array.isArray(npcSpawns)) {
+      showHudToast(
+        t("class_editor.invalid_npc_spawns_json", "Invalid NPC spawns JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     baseType: baseTypeVal,
     rows: rowsVal,
     cols: colsVal,
     fallbackLabel: labelVal || idVal,
+    itemSpawns: itemSpawns,
+    npcSpawns: npcSpawns,
   };
   var url = worldClassEditId
     ? "/virtual-world/world-classes/" + encodeURIComponent(worldClassEditId)

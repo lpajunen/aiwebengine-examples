@@ -20,6 +20,7 @@ import {
 } from "./npc-tick-helpers.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
 import { NPC_AGGRO_CHANCE } from "./runtime-config.ts";
+import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
 import { getEffectiveNick } from "./social-state.ts";
 import {
   broadcastItemChange,
@@ -183,7 +184,7 @@ function stepNPCTowardTarget(
 function resolveNPCDeath(
   worldId: string,
   npcId: string,
-  npc: { row: number; col: number },
+  npc: { row: number; col: number; class_id?: unknown },
 ): void {
   deleteNPCById(npcId);
   sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
@@ -200,6 +201,9 @@ function resolveNPCDeath(
   broadcastItemChange(worldId, "npc", npcId, "npc_died", npc.row, npc.col, [
     corpseItem,
   ]);
+  if (typeof npc.class_id === "string" && npc.class_id) {
+    scheduleRespawnIfManifestTracked(worldId, "npc", npc.class_id);
+  }
 }
 
 // Flips the defeated player's living class to player_ghost and heals them

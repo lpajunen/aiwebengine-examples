@@ -13,6 +13,8 @@ import {
   upsertWorldRow,
 } from "./world-db.ts";
 
+export type WorldClassSpawnEntry = { id: string; count: number };
+
 export type WorldClassRecord = {
   id: string;
   baseType: string;
@@ -20,7 +22,53 @@ export type WorldClassRecord = {
   cols: number;
   labelKey: string;
   fallbackLabel: string;
+  itemSpawns: WorldClassSpawnEntry[];
+  npcSpawns: WorldClassSpawnEntry[];
 };
+
+// Default item spawn manifest shared by all four built-in world classes,
+// reproducing the old flat WORLD_ITEM_SPAWN_COUNT=30 behavior (10 item types
+// x 3 each) now that spawning is explicit per world class.
+function defaultItemSpawns(): WorldClassSpawnEntry[] {
+  return [
+    "saw",
+    "knife",
+    "flower",
+    "tree_planter",
+    "portal_builder",
+    "kantele",
+    "rowan_charm",
+    "rune_stone",
+    "juniper_bundle",
+    "birch_bark_letter",
+  ].map(function (id) {
+    return { id: id, count: 3 };
+  });
+}
+
+// Default NPC spawn manifest shared by all four built-in world classes,
+// reproducing the old NPC_SPECIES_POOL of 3 species with a total NPC count
+// at the midpoint of the old NPC_MIN_COUNT..NPC_MAX_COUNT range (10..20).
+function defaultNPCSpawns(): WorldClassSpawnEntry[] {
+  return ["npc_human", "npc_wolf", "npc_bear"].map(function (id) {
+    return { id: id, count: 5 };
+  });
+}
+
+function normalizeSpawnEntries(raw: unknown): WorldClassSpawnEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WorldClassSpawnEntry[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
+    if (!entry || typeof entry !== "object") continue;
+    const id = String((entry as Record<string, unknown>).id || "").trim();
+    if (!id) continue;
+    const count = Math.floor(Number((entry as Record<string, unknown>).count));
+    if (!Number.isFinite(count) || count < 0) continue;
+    out.push({ id: id, count: count });
+  }
+  return out;
+}
 
 let _worldClassCache: Record<string, WorldClassRecord> | null = null;
 
@@ -38,6 +86,8 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     cols: COLS,
     labelKey: "world_class." + worldType + ".name",
     fallbackLabel: worldType.charAt(0).toUpperCase() + worldType.slice(1),
+    itemSpawns: defaultItemSpawns(),
+    npcSpawns: defaultNPCSpawns(),
   };
 }
 
@@ -48,6 +98,8 @@ export function normalizeWorldClassRecord(record: {
   cols?: unknown;
   labelKey?: unknown;
   fallbackLabel?: unknown;
+  itemSpawns?: unknown;
+  npcSpawns?: unknown;
 }): WorldClassRecord {
   const id = String(record.id || "").trim();
   return {
@@ -59,6 +111,8 @@ export function normalizeWorldClassRecord(record: {
     cols: normalizeWorldDimension(record.cols, COLS),
     labelKey: String(record.labelKey || ""),
     fallbackLabel: String(record.fallbackLabel || id),
+    itemSpawns: normalizeSpawnEntries(record.itemSpawns),
+    npcSpawns: normalizeSpawnEntries(record.npcSpawns),
   };
 }
 
@@ -70,6 +124,20 @@ function worldClassFromDbRow(row: any): WorldClassRecord {
     cols: row.cols,
     labelKey: row.label_key,
     fallbackLabel: row.fallback_label,
+    itemSpawns: (function () {
+      try {
+        return JSON.parse(row.item_spawns_json || "[]");
+      } catch (e) {
+        return [];
+      }
+    })(),
+    npcSpawns: (function () {
+      try {
+        return JSON.parse(row.npc_spawns_json || "[]");
+      } catch (e) {
+        return [];
+      }
+    })(),
   });
 }
 
@@ -83,6 +151,8 @@ function worldClassToDbRow(
   cols: number;
   label_key: string;
   fallback_label: string;
+  item_spawns_json: string;
+  npc_spawns_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -94,6 +164,8 @@ function worldClassToDbRow(
     cols: record.cols,
     label_key: record.labelKey,
     fallback_label: record.fallbackLabel,
+    item_spawns_json: JSON.stringify(record.itemSpawns || []),
+    npc_spawns_json: JSON.stringify(record.npcSpawns || []),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -121,9 +193,11 @@ function rebuildWorldClassCache(logSeed: boolean): void {
   }
 
   // Backfill missing built-ins without overwriting existing custom rows.
+  let patchedSpawns = 0;
   for (let i = 0; i < WORLD_TYPES.length; i++) {
     const worldType = WORLD_TYPES[i];
-    if (!cache[worldType]) {
+    const existing = cache[worldType];
+    if (!existing) {
       const record = builtinWorldClassRecord(worldType);
       upsertWorldRow(
         VWORLD_WORLD_CLASS_TABLE,
@@ -132,13 +206,29 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       );
       cache[record.id] = record;
       insertedDefaults++;
+      continue;
+    }
+    // Rows seeded before item/npc spawn manifests existed have empty arrays
+    // here (JSON.parse fallback) — backfill built-in defaults so previously
+    // seeded worlds keep spawning items/NPCs after this migration.
+    if (existing.itemSpawns.length === 0 && existing.npcSpawns.length === 0) {
+      const defaults = builtinWorldClassRecord(worldType);
+      existing.itemSpawns = defaults.itemSpawns;
+      existing.npcSpawns = defaults.npcSpawns;
+      upsertWorldRow(
+        VWORLD_WORLD_CLASS_TABLE,
+        ["class_id"],
+        worldClassToDbRow(existing, now),
+      );
+      patchedSpawns++;
     }
   }
   if (logSeed && dbRows.length === 0) {
     vwLog("world class repository seeded", { count: insertedDefaults });
-  } else if (insertedDefaults > 0) {
+  } else if (insertedDefaults > 0 || patchedSpawns > 0) {
     vwLog("world class repository backfilled", {
       inserted_count: insertedDefaults,
+      patched_spawn_count: patchedSpawns,
     });
   }
 

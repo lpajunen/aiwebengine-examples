@@ -2,12 +2,12 @@
 // Imported directly by server modules; keep values in sync with existing rows.
 
 export const LEASE_TTL_MS = 30000;
-export const NPC_MIN_COUNT = 10;
-export const NPC_MAX_COUNT = 20;
 export const NPC_TICK_MS = 500;
 export const NPC_TICK_LEASE_MS = 2000;
 export const NPC_ACTIVE_WORLD_TTL_MS = 120000;
-export const WORLD_ITEM_SPAWN_COUNT = 30;
+// How long after a manifest-tracked item is picked up or NPC is killed before
+// a replacement is spawned back into the world (see spawn-timers.ts).
+export const RESPAWN_DELAY_MS = 30 * 60 * 1000;
 // Idle fatigue recovery rate shared by players and NPCs so both take the
 // same calendar time to idle from a given fatigue value down to 0.
 export const FATIGUE_RECOVERY_PER_SECOND = 0.5;
@@ -39,6 +39,7 @@ export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
+export const VWORLD_SPAWN_TIMER_TABLE = "vworld_spawn_timers";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";

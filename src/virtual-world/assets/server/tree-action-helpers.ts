@@ -1467,6 +1467,7 @@ export function performTreeActionForUser(
     const createdDestinationWorld = createWorldOfType(
       portalWorldType,
       portalDimensions,
+      requestedWorldClassId || portalWorldType,
     );
     const portalItem: Record<string, any> = {
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),

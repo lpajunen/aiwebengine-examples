@@ -278,8 +278,6 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
     const record = {
       id,
       kind: String(args.kind || "tool"),
-      spawnable: !!args.spawnable,
-      extra: !!args.extra,
       nonDroppable: !!args.nonDroppable,
       nonPickable: !!args.nonPickable,
       visuals: {
@@ -541,6 +539,14 @@ export function virtualWorldManageWorldClassesToolHandler(
         args.fallbackLabel !== undefined
           ? args.fallbackLabel
           : existing && existing.fallbackLabel,
+      itemSpawns:
+        args.itemSpawns !== undefined
+          ? args.itemSpawns
+          : existing && existing.itemSpawns,
+      npcSpawns:
+        args.npcSpawns !== undefined
+          ? args.npcSpawns
+          : existing && existing.npcSpawns,
     });
     const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {

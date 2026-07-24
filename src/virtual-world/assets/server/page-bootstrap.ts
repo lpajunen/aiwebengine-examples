@@ -343,8 +343,6 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="furniture">furniture</option>
           </select>
         </label>
-        <label><input id="ic-spawnable" type="checkbox"> <span data-i18n-key="class_editor.spawnable">Spawnable</span></label>
-        <label><input id="ic-extra" type="checkbox"> <span data-i18n-key="class_editor.extra">Extra</span></label>
         <label><input id="ic-non-droppable" type="checkbox"> <span data-i18n-key="class_editor.non_droppable">Non-droppable</span></label>
         <label><input id="ic-non-pickable" type="checkbox"> <span data-i18n-key="class_editor.non_pickable">Non-pickable</span></label>
         <label><span data-i18n-key="class_editor.action_ids_label">Action IDs (comma-sep)</span> <input id="ic-action-ids" type="text" placeholder="tune,play_tune" autocomplete="off"></label>
@@ -439,6 +437,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         </label>
         <label><span data-i18n-key="class_editor.rows_label">Rows (8-200)</span> <input id="wc-rows" type="number" min="8" max="200" value="100"></label>
         <label><span data-i18n-key="class_editor.cols_label">Cols (8-200)</span> <input id="wc-cols" type="number" min="8" max="200" value="100"></label>
+        <label><span data-i18n-key="class_editor.item_spawns_label">Item spawns (JSON)</span> <textarea id="wc-item-spawns" rows="3" placeholder='[{"id":"flower","count":3}]'></textarea></label>
+        <label><span data-i18n-key="class_editor.npc_spawns_label">NPC spawns (JSON)</span> <textarea id="wc-npc-spawns" rows="3" placeholder='[{"id":"npc_wolf","count":5}]'></textarea></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitWorldClassForm()" data-i18n-key="class_editor.save">Save</button>

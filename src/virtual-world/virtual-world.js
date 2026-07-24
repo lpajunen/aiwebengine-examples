@@ -11,7 +11,6 @@ import {
   getWorldFlavorTextByIndex,
   getWorldFlavorTextIndex,
   hashString,
-  ITEM_TYPES,
   OAK_CENTER_COL,
   OAK_CENTER_ROW,
   OAK_WORLD_ID,
@@ -252,8 +251,6 @@ import {
   DM_MAX,
   LEASE_TTL_MS,
   NPC_ACTIVE_WORLD_TTL_MS,
-  NPC_MAX_COUNT,
-  NPC_MIN_COUNT,
   NPC_TICK_LEASE_MS,
   NPC_TICK_MS,
   VIRTUAL_WORLD_EVENTS_STREAM_PATH,
@@ -268,7 +265,6 @@ import {
   VWORLD_NPC_TICK_TABLE,
   VWORLD_WORLD_CLASS_TABLE,
   WORLD_CHAT_MAX,
-  WORLD_ITEM_SPAWN_COUNT,
 } from "./server/runtime-config.ts";
 import {
   nextDiagRequestId,

@@ -246,14 +246,6 @@ export function registerVirtualWorldRuntime(): void {
         type: "string",
         description: "i18n label key for the item type",
       },
-      spawnable: {
-        type: "boolean",
-        description: "Whether the item spawns in the world",
-      },
-      extra: {
-        type: "boolean",
-        description: "Whether the item is in the extra item pool",
-      },
       nonDroppable: {
         type: "boolean",
         description: "Whether the item cannot be dropped",
@@ -473,6 +465,30 @@ export function registerVirtualWorldRuntime(): void {
       labelKey: {
         type: "string",
         description: "i18n label key for the world type",
+      },
+      itemSpawns: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            count: { type: "number" },
+          },
+        },
+        description:
+          "Item class IDs and counts to scatter into worlds of this class",
+      },
+      npcSpawns: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            count: { type: "number" },
+          },
+        },
+        description:
+          "NPC living class IDs and counts to populate worlds of this class with",
       },
     },
   });

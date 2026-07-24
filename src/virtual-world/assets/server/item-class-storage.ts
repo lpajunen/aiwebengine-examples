@@ -18,8 +18,6 @@ export function loadAllItemClassRows(): any[] {
 export function upsertItemClassRow(row: {
   class_id: string;
   kind: string;
-  spawnable: number;
-  extra: number;
   non_droppable: number;
   non_pickable: number;
   color: number;

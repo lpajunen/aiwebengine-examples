@@ -16,6 +16,7 @@ import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import { broadcastItemChange } from "./stream-broadcast.ts";
 import { getAllKnownItemTypes } from "./world-domain.ts";
+import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
 import {
   getDefaultPlayerLivingClassId,
@@ -173,6 +174,9 @@ export function handleItemActionForUser(
         canonical.col,
         claimed,
       );
+      for (let i = 0; i < claimed.length; i++) {
+        scheduleRespawnIfManifestTracked(worldId, "item", claimed[i].type);
+      }
     }
     return {
       status: 200,

@@ -1,8 +1,13 @@
-import { getItemStateTemplate, normalizeItemState } from "./item-registry.ts";
-import { WORLD_ITEM_SPAWN_COUNT } from "./runtime-config.ts";
-import { getEffectiveMap } from "./world-bootstrap.ts";
-import { ITEM_TYPES } from "./world-domain.ts";
-import { resolvePortalDestinationWorldType } from "./world-bootstrap.ts";
+import {
+  getItemClass,
+  getItemStateTemplate,
+  normalizeItemState,
+} from "./item-registry.ts";
+import {
+  getEffectiveMap,
+  getWorldClassForWorld,
+  resolvePortalDestinationWorldType,
+} from "./world-bootstrap.ts";
 import {
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
@@ -371,36 +376,52 @@ export function ensureOldOakItem(worldId: string): void {
   });
 }
 
+// Finds a random walkable+empty tile and places one instance of itemType
+// there, mutating `items` (tileKey -> item[]) in place. Shared by the initial
+// world seed loop and the respawn-timer single-item spawn.
+function placeItemAtRandomTile(
+  worldId: string,
+  map: number[][],
+  items: Record<string, any[]>,
+  itemType: string,
+): { id: string; type: string; row: number; col: number } | null {
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
+  let attempts = 0;
+  while (attempts < 1000) {
+    attempts++;
+    const row = 1 + Math.floor(Math.random() * (mapRows - 2));
+    const col = 1 + Math.floor(Math.random() * (mapCols - 2));
+    if (map[row][col] !== 0) continue;
+    const tileKey = row + "_" + col;
+    if (!items[tileKey]) items[tileKey] = [];
+    const newItem = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: itemType,
+      created_at: Date.now(),
+      state: getItemStateTemplate(itemType),
+    };
+    items[tileKey].push(newItem);
+    return { id: newItem.id, type: newItem.type, row: row, col: col };
+  }
+  return null;
+}
+
 export function ensureWorldItems(worldId: string): void {
   ensureOldOakItem(worldId);
 
   const meta = loadWorldItemMeta(worldId);
   if (meta.seeded === 1) return;
 
+  const worldClass = getWorldClassForWorld(worldId);
+  const itemSpawns = worldClass ? worldClass.itemSpawns : [];
   const map = getEffectiveMap(worldId);
-  const mapRows = map.length;
-  const mapCols = map[0] ? map[0].length : 0;
   const items = loadWorldItems(worldId);
-  for (let i = 0; i < WORLD_ITEM_SPAWN_COUNT; i++) {
-    let attempts = 0;
-    while (attempts < 1000) {
-      attempts++;
-      const row = 1 + Math.floor(Math.random() * (mapRows - 2));
-      const col = 1 + Math.floor(Math.random() * (mapCols - 2));
-      if (map[row][col] !== 0) continue;
-      const tileKey = row + "_" + col;
-      if (!items[tileKey]) items[tileKey] = [];
-      const spawnType =
-        ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
-      items[tileKey].push({
-        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-        type: spawnType,
-        created_at: Date.now(),
-        state: getItemStateTemplate
-          ? getItemStateTemplate(spawnType)
-          : undefined,
-      });
-      break;
+  for (let i = 0; i < itemSpawns.length; i++) {
+    const entry = itemSpawns[i];
+    if (!getItemClass(entry.id)) continue;
+    for (let count = 0; count < entry.count; count++) {
+      placeItemAtRandomTile(worldId, map, items, entry.id);
     }
   }
 
@@ -410,6 +431,22 @@ export function ensureWorldItems(worldId: string): void {
     seeded: 1,
     updated_ts: Date.now(),
   });
+}
+
+// Spawns a single replacement instance of itemType into worldId at a random
+// walkable empty tile — used by spawn-timers.ts when a manifest-tracked
+// item's respawn timer comes due. Returns the placed item (with position) or
+// null if no empty tile could be found.
+export function spawnSingleWorldItem(
+  worldId: string,
+  itemType: string,
+): { id: string; type: string; row: number; col: number } | null {
+  const map = getEffectiveMap(worldId);
+  const items = loadWorldItems(worldId);
+  const placed = placeItemAtRandomTile(worldId, map, items, itemType);
+  if (!placed) return null;
+  saveWorldItems(worldId, items);
+  return placed;
 }
 
 export function flattenWorldItems(itemsByTile: Record<string, any[]>): Array<{

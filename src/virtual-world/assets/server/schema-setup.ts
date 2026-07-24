@@ -22,6 +22,7 @@ import {
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
+  VWORLD_SPAWN_TIMER_TABLE,
   VWORLD_WORLD_CLASS_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
   VWORLD_WORLD_ITEM_TABLE,
@@ -163,6 +164,19 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
       );
     },
     "updated_ts",
+    collector,
+  );
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_WORLD_TYPE_TABLE,
+    function () {
+      return database.addTextColumn(
+        VWORLD_WORLD_TYPE_TABLE,
+        "world_class_id",
+        true,
+      );
+    },
+    "world_class_id",
     collector,
   );
   runWorldSchemaStep(
@@ -335,6 +349,42 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
     undefined,
     collector,
   );
+
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_SPAWN_TIMER_TABLE,
+    function () {
+      return database.createTable(VWORLD_SPAWN_TIMER_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  [
+    ["addTextColumn", "world_id", false],
+    ["addTextColumn", "kind", false],
+    ["addTextColumn", "type_id", false],
+    ["addIntegerColumn", "ready_at", false],
+  ].forEach(function (entry) {
+    runWorldSchemaStep(
+      String(entry[0]),
+      VWORLD_SPAWN_TIMER_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_SPAWN_TIMER_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_SPAWN_TIMER_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+      collector,
+    );
+  });
 }
 
 export function ensureWorldDatabaseSchema(): void {
@@ -953,6 +1003,8 @@ export function ensureWorldDatabaseSchema(): void {
     ["addIntegerColumn", "cols", false],
     ["addTextColumn", "label_key", false],
     ["addTextColumn", "fallback_label", false],
+    ["addTextColumn", "item_spawns_json", true],
+    ["addTextColumn", "npc_spawns_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {

@@ -87,7 +87,7 @@ export function switchUserToStartWorld(
   oakWorldId: string,
   worldTypeForest: string,
 ): { ok: boolean } {
-  saveWorldType(oakWorldId, worldTypeForest);
+  saveWorldType(oakWorldId, worldTypeForest, undefined, worldTypeForest);
   switchUserWorld(
     userId,
     oakWorldId,

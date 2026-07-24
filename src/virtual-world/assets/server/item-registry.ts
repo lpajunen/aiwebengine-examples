@@ -25,8 +25,6 @@ export type ItemKind =
 export interface ItemDefinition {
   id: string;
   kind: ItemKind;
-  spawnable?: boolean;
-  extra?: boolean;
   nonDroppable?: boolean;
   nonPickable?: boolean;
   visuals: {
@@ -40,8 +38,6 @@ export interface ItemDefinition {
 export interface ItemClassRecord {
   id: string;
   kind: string;
-  spawnable: boolean;
-  extra: boolean;
   nonDroppable: boolean;
   nonPickable: boolean;
   visuals: {
@@ -57,7 +53,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   saw: {
     id: "saw",
     kind: "tool",
-    spawnable: true,
     visuals: {
       color: 0xbfc6d0,
       labelKey: "item.saw.name",
@@ -68,7 +63,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   knife: {
     id: "knife",
     kind: "tool",
-    spawnable: true,
     visuals: {
       color: 0xd8dee8,
       labelKey: "item.knife.name",
@@ -79,7 +73,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   flower: {
     id: "flower",
     kind: "world_item",
-    spawnable: true,
     visuals: {
       color: 0xec6ea4,
       labelKey: "item.flower.name",
@@ -90,7 +83,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   tree_planter: {
     id: "tree_planter",
     kind: "tool",
-    spawnable: true,
     visuals: {
       color: 0x54d08a,
       labelKey: "item.tree_planter.name",
@@ -101,7 +93,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   portal_builder: {
     id: "portal_builder",
     kind: "artifact",
-    spawnable: true,
     visuals: {
       color: 0xff9f1c,
       labelKey: "item.portal_builder.name",
@@ -119,7 +110,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   kantele: {
     id: "kantele",
     kind: "tool",
-    spawnable: true,
     visuals: {
       color: 0xc58d52,
       labelKey: "item.kantele.name",
@@ -130,7 +120,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   rowan_charm: {
     id: "rowan_charm",
     kind: "artifact",
-    spawnable: true,
     visuals: {
       color: 0xc73a32,
       labelKey: "item.rowan_charm.name",
@@ -141,7 +130,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   rune_stone: {
     id: "rune_stone",
     kind: "artifact",
-    spawnable: true,
     visuals: {
       color: 0x7b7f8a,
       labelKey: "item.rune_stone.name",
@@ -152,7 +140,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   juniper_bundle: {
     id: "juniper_bundle",
     kind: "artifact",
-    spawnable: true,
     visuals: {
       color: 0x51764f,
       labelKey: "item.juniper_bundle.name",
@@ -163,7 +150,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   birch_bark_letter: {
     id: "birch_bark_letter",
     kind: "artifact",
-    spawnable: true,
     visuals: {
       color: 0xe4d2a0,
       labelKey: "item.birch_bark_letter.name",
@@ -174,7 +160,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   hammer: {
     id: "hammer",
     kind: "tool",
-    extra: true,
     visuals: {
       color: 0x8f7f6d,
       labelKey: "item.hammer.name",
@@ -185,7 +170,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   portal: {
     id: "portal",
     kind: "placeable",
-    extra: true,
     nonPickable: true,
     visuals: {
       color: 0x5ad7ff,
@@ -197,7 +181,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   starter_kit: {
     id: "starter_kit",
     kind: "artifact",
-    extra: true,
     nonDroppable: true,
     visuals: {
       color: 0xf3ca40,
@@ -222,7 +205,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   blessing_marker: {
     id: "blessing_marker",
     kind: "placeable",
-    extra: true,
     nonDroppable: true,
     nonPickable: true,
     visuals: {
@@ -235,7 +217,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   creator_stone: {
     id: "creator_stone",
     kind: "artifact",
-    extra: true,
     visuals: {
       color: 0x9b5cff,
       labelKey: "item.creator_stone.name",
@@ -246,7 +227,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   old_oak: {
     id: "old_oak",
     kind: "placeable",
-    extra: true,
     nonDroppable: true,
     nonPickable: true,
     visuals: {
@@ -259,7 +239,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   npc_corpse: {
     id: "npc_corpse",
     kind: "placeable",
-    extra: true,
     nonDroppable: true,
     nonPickable: true,
     visuals: {
@@ -301,27 +280,9 @@ export function getPrimaryActionForItemType(itemId: string): string | null {
   return actions.length > 0 ? actions[0] : null;
 }
 
-export function getSpawnableItemTypes(): string[] {
-  if (_itemClassCache) {
-    return Object.keys(_itemClassCache).filter(function (id) {
-      return !!(_itemClassCache as Record<string, ItemClassRecord>)[id]
-        .spawnable;
-    });
-  }
-  return Object.keys(ITEM_DEFINITIONS).filter(function (itemId) {
-    return !!ITEM_DEFINITIONS[itemId].spawnable;
-  });
-}
-
-export function getExtraItemTypes(): string[] {
-  if (_itemClassCache) {
-    return Object.keys(_itemClassCache).filter(function (id) {
-      return !!(_itemClassCache as Record<string, ItemClassRecord>)[id].extra;
-    });
-  }
-  return Object.keys(ITEM_DEFINITIONS).filter(function (itemId) {
-    return !!ITEM_DEFINITIONS[itemId].extra;
-  });
+export function getAllItemTypeIds(): string[] {
+  if (_itemClassCache) return Object.keys(_itemClassCache);
+  return Object.keys(ITEM_DEFINITIONS);
 }
 
 // Item types marked nonPickable are world-anchored singletons/fixtures (the
@@ -455,8 +416,6 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
   return {
     id: def.id,
     kind: def.kind,
-    spawnable: !!def.spawnable,
-    extra: !!def.extra,
     nonDroppable: !!def.nonDroppable,
     nonPickable: !!def.nonPickable,
     visuals: {
@@ -478,8 +437,6 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
   return {
     id: String(row.class_id || ""),
     kind: String(row.kind || "tool") as ItemKind,
-    spawnable: row.spawnable === 1 || row.spawnable === true,
-    extra: row.extra === 1 || row.extra === true,
     nonDroppable: row.non_droppable === 1 || row.non_droppable === true,
     nonPickable: row.non_pickable === 1 || row.non_pickable === true,
     visuals: {
@@ -510,8 +467,6 @@ function itemClassToDbRow(
 ): {
   class_id: string;
   kind: string;
-  spawnable: number;
-  extra: number;
   non_droppable: number;
   non_pickable: number;
   color: number;
@@ -526,8 +481,6 @@ function itemClassToDbRow(
   return {
     class_id: record.id,
     kind: record.kind,
-    spawnable: record.spawnable ? 1 : 0,
-    extra: record.extra ? 1 : 0,
     non_droppable: record.nonDroppable ? 1 : 0,
     non_pickable: record.nonPickable ? 1 : 0,
     color: record.visuals.color,

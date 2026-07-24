@@ -51,18 +51,15 @@ export const WORLD_TYPE_BUILDING = "building";
 import {
   getActionDefinition,
   getActionsForItemType,
-  getExtraItemTypes,
+  getAllItemTypeIds,
   getPrimaryActionForItemType,
-  getSpawnableItemTypes,
   normalizeItemState,
 } from "./item-registry.ts";
 
 export {
   getActionDefinition,
   getActionsForItemType,
-  getExtraItemTypes,
   getPrimaryActionForItemType,
-  getSpawnableItemTypes,
 };
 
 export const WORLD_TYPES = [
@@ -74,9 +71,7 @@ export const WORLD_TYPES = [
 
 export type WorldType = (typeof WORLD_TYPES)[number];
 
-export const ITEM_TYPES = getSpawnableItemTypes();
-
-export const EXTRA_ITEM_TYPES = getExtraItemTypes();
+export const ALL_ITEM_TYPE_IDS = getAllItemTypeIds();
 
 export interface WorldTileDef {
   value: number;
@@ -146,13 +141,12 @@ export const PORTAL_BUILD_ACTIONS = Object.values(
   PORTAL_BUILD_ACTION_BY_WORLD_TYPE,
 );
 
-export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> = Object.keys(
-  ITEM_TYPES.concat(EXTRA_ITEM_TYPES),
-).reduce(function (acc: Record<string, string>, itemId) {
-  const actionId = getPrimaryActionForItemType(itemId);
-  if (actionId) acc[itemId] = actionId;
-  return acc;
-}, {});
+export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> =
+  ALL_ITEM_TYPE_IDS.reduce(function (acc: Record<string, string>, itemId) {
+    const actionId = getPrimaryActionForItemType(itemId);
+    if (actionId) acc[itemId] = actionId;
+    return acc;
+  }, {});
 
 export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   ground: { value: 0, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
@@ -224,19 +218,7 @@ function isRecordLike(value: unknown): value is Record<string, unknown> {
 }
 
 export function getAllKnownItemTypes(): string[] {
-  const seen: Record<string, boolean> = {};
-  const out: string[] = [];
-  ITEM_TYPES.forEach(function (type) {
-    if (!type || seen[type]) return;
-    seen[type] = true;
-    out.push(type);
-  });
-  EXTRA_ITEM_TYPES.forEach(function (type) {
-    if (!type || seen[type]) return;
-    seen[type] = true;
-    out.push(type);
-  });
-  return out;
+  return ALL_ITEM_TYPE_IDS.slice();
 }
 
 export function hashString(value: string): number {

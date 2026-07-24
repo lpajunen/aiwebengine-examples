@@ -46,6 +46,10 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "npc_died",
     deltaKind: "add",
   },
+  item_respawn: {
+    id: "item_respawn",
+    deltaKind: "add",
+  },
   ingredient_consume: {
     id: "ingredient_consume",
     deltaKind: "remove",

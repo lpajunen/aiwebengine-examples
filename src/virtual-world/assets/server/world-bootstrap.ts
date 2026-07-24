@@ -6,7 +6,6 @@ import {
   applyOakReservation,
   createWorldId,
   COLS,
-  createLivingSlotsFromDefinitions,
   getDefaultWorldTypeForWorldId,
   normalizeWorldDimension,
   normalizeWorldType,
@@ -14,10 +13,9 @@ import {
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
-  getDefaultNPCLivingClassId,
-  getLivingClass,
-  pickRandomNPCLivingClassId,
-} from "./living-registry.ts";
+  getWorldClassWithRefresh,
+  WorldClassRecord,
+} from "./world-class-storage.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 
 export function getOrCreatePlayerWorld(userId: string): string {
@@ -25,7 +23,8 @@ export function getOrCreatePlayerWorld(userId: string): string {
   if (!worldId) {
     worldId = "10000";
     savePlayerWorld(userId, worldId);
-    saveWorldType(worldId, getDefaultWorldTypeForWorldId(worldId));
+    const defaultType = getDefaultWorldTypeForWorldId(worldId);
+    saveWorldType(worldId, defaultType, undefined, defaultType);
   }
   return worldId;
 }
@@ -44,6 +43,7 @@ export function saveWorldType(
   worldId: string | number,
   worldType: string | undefined | null,
   dimensions?: WorldDimensions,
+  worldClassId?: string | null,
 ): string {
   const normalizedWorldId = String(worldId || "");
   const normalizedType = normalizeWorldType(worldType);
@@ -55,6 +55,9 @@ export function saveWorldType(
   if (dimensions) {
     row.rows = normalizeWorldDimension(dimensions.rows, ROWS);
     row.cols = normalizeWorldDimension(dimensions.cols, COLS);
+  }
+  if (worldClassId) {
+    row.world_class_id = String(worldClassId);
   }
   upsertWorldRow(VWORLD_WORLD_TYPE_TABLE, ["world_id"], row);
   return normalizedType;
@@ -69,20 +72,40 @@ export function getWorldInfo(worldId: string | number): {
   world_type: string;
   rows: number;
   cols: number;
+  world_class_id: string;
 } {
   const normalizedWorldId = String(worldId || "");
   const row = querySingleWorldRow(
     VWORLD_WORLD_TYPE_TABLE,
     JSON.stringify({ world_id: normalizedWorldId }),
   );
+  const worldType =
+    row && row.world_type
+      ? normalizeWorldType(String(row.world_type))
+      : getDefaultWorldTypeForWorldId(normalizedWorldId);
   return {
-    world_type:
-      row && row.world_type
-        ? normalizeWorldType(String(row.world_type))
-        : getDefaultWorldTypeForWorldId(normalizedWorldId),
+    world_type: worldType,
     rows: normalizeWorldDimension(row && row.rows, ROWS),
     cols: normalizeWorldDimension(row && row.cols, COLS),
+    world_class_id:
+      row && typeof row.world_class_id === "string" && row.world_class_id
+        ? row.world_class_id
+        : worldType,
   };
+}
+
+// Resolves the WorldClassRecord a world instance was created from (falling
+// back to the built-in class for its base world_type when unset — covers
+// worlds created before world classes tracked an explicit id, plus the oak
+// home world).
+export function getWorldClassForWorld(
+  worldId: string | number,
+): WorldClassRecord | null {
+  const info = getWorldInfo(worldId);
+  return (
+    getWorldClassWithRefresh(info.world_class_id) ||
+    getWorldClassWithRefresh(info.world_type)
+  );
 }
 
 export function getWorldDimensions(worldId: string | number): WorldDimensions {
@@ -108,6 +131,7 @@ export function resolvePortalDestinationWorldType(
 export function createWorldOfType(
   worldType: string | undefined | null,
   dimensions?: Partial<WorldDimensions>,
+  worldClassId?: string | null,
 ): { world_id: string; world_type: string; rows: number; cols: number } {
   const normalizedType = normalizeWorldType(worldType);
   const normalizedDims: WorldDimensions = {
@@ -115,7 +139,12 @@ export function createWorldOfType(
     cols: normalizeWorldDimension(dimensions && dimensions.cols, COLS),
   };
   const worldId = createWorldId();
-  saveWorldType(worldId, normalizedType, normalizedDims);
+  saveWorldType(
+    worldId,
+    normalizedType,
+    normalizedDims,
+    worldClassId || normalizedType,
+  );
   return {
     world_id: worldId,
     world_type: normalizedType,

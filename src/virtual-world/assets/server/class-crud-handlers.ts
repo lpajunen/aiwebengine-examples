@@ -74,8 +74,6 @@ export function createItemClassHandler(context: any) {
   var record = {
     id: id,
     kind: String((body && body.kind) || "tool"),
-    spawnable: !!(body && body.spawnable),
-    extra: !!(body && body.extra),
     nonDroppable: !!(body && body.nonDroppable),
     nonPickable: !!(body && body.nonPickable),
     visuals: {
@@ -143,11 +141,6 @@ export function updateItemClassHandler(context: any) {
   var record = {
     id: classId,
     kind: String((body && body.kind) || existing.kind),
-    spawnable:
-      body && body.spawnable !== undefined
-        ? !!body.spawnable
-        : existing.spawnable,
-    extra: body && body.extra !== undefined ? !!body.extra : existing.extra,
     nonDroppable:
       body && body.nonDroppable !== undefined
         ? !!body.nonDroppable
@@ -642,6 +635,8 @@ export function createWorldClassHandler(context: any) {
     cols: body && body.cols,
     labelKey: body && body.labelKey,
     fallbackLabel: body && body.fallbackLabel,
+    itemSpawns: body && body.itemSpawns,
+    npcSpawns: body && body.npcSpawns,
   });
   var worldCreateWrite = upsertWorldClass(record);
   if (!worldCreateWrite || !worldCreateWrite.ok) {
@@ -704,6 +699,14 @@ export function updateWorldClassHandler(context: any) {
       body && body.fallbackLabel !== undefined
         ? body.fallbackLabel
         : existing.fallbackLabel,
+    itemSpawns:
+      body && body.itemSpawns !== undefined
+        ? body.itemSpawns
+        : existing.itemSpawns,
+    npcSpawns:
+      body && body.npcSpawns !== undefined
+        ? body.npcSpawns
+        : existing.npcSpawns,
   });
   var worldUpdateWrite = upsertWorldClass(record);
   if (!worldUpdateWrite || !worldUpdateWrite.ok) {

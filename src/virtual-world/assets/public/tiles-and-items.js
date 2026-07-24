@@ -714,6 +714,10 @@ function getOwnedTreeActions() {
     avatarRow + 1 + "_" + avatarCol,
     avatarRow + "_" + (avatarCol - 1),
     avatarRow + "_" + (avatarCol + 1),
+    avatarRow - 1 + "_" + (avatarCol - 1),
+    avatarRow - 1 + "_" + (avatarCol + 1),
+    avatarRow + 1 + "_" + (avatarCol - 1),
+    avatarRow + 1 + "_" + (avatarCol + 1),
   ];
   for (var t = 0; t < nearbyTileKeys.length; t++) {
     var tileItems = worldItemsByTile[nearbyTileKeys[t]];

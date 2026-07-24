@@ -663,16 +663,24 @@ export function getAllLivingItems(inv: unknown): InventoryItem[] {
   return getEquippedItems(inv).concat(getBagItems(inv));
 }
 
-export function countLivingItemsByType(inv: unknown): Record<string, number> {
+// Shared by inventory items and world items sitting on tiles — both are
+// arrays of objects with an `id`/`type`, so the same counter works for
+// "what do I have in my bag" and "what ingredients are lying nearby".
+export function countItemsByType(items: unknown[]): Record<string, number> {
   const counts: Record<string, number> = {};
-  const items = getAllLivingItems(inv);
+  if (!Array.isArray(items)) return counts;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const type = item && item.type ? String(item.type) : "";
+    if (!isValidItem(item)) continue;
+    const type = String(item.type || "");
     if (!type) continue;
     counts[type] = (counts[type] || 0) + 1;
   }
   return counts;
+}
+
+export function countLivingItemsByType(inv: unknown): Record<string, number> {
+  return countItemsByType(getAllLivingItems(inv));
 }
 
 export function consumeLivingItemsByType(
@@ -834,17 +842,27 @@ function getAdjacentTileKeys(row: number, col: number): string[] {
     row + 1 + "_" + col,
     row + "_" + (col - 1),
     row + "_" + (col + 1),
+    row - 1 + "_" + (col - 1),
+    row - 1 + "_" + (col + 1),
+    row + 1 + "_" + (col - 1),
+    row + 1 + "_" + (col + 1),
   ];
 }
 
+// Tile keys a living can reach for item lookup: its current tile plus all
+// eight surrounding tiles (cardinal and diagonal/corner neighbors).
+export function getNearbyTileKeys(row: number, col: number): string[] {
+  return [row + "_" + col].concat(getAdjacentTileKeys(row, col));
+}
+
 // Items usable for an action-availability check: the living's current tile
-// plus its four cardinal neighbors, matching how far a living can reach.
+// plus its eight surrounding neighbors, matching how far a living can reach.
 export function getNearbyTileItems(
   worldItems: Record<string, unknown>,
   row: number,
   col: number,
 ): unknown[] {
-  const keys = [row + "_" + col].concat(getAdjacentTileKeys(row, col));
+  const keys = getNearbyTileKeys(row, col);
   let items: unknown[] = [];
   for (let i = 0; i < keys.length; i++) {
     const tileItems = worldItems[keys[i]];

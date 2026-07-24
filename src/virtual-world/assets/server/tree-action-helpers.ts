@@ -55,6 +55,7 @@ import {
   canTileItemsUseTreeAction,
   canonicalTreeAction,
   getNearbyTileItems,
+  getNearbyTileKeys,
   isOakCenterTile,
   isOakClearingTile,
   normalizeWorldType,
@@ -80,6 +81,7 @@ import {
 } from "./action-logic-interpreter.ts";
 import {
   consumeLivingItemsByType,
+  countItemsByType,
   countLivingItemsByType,
   findFirstLivingItemByTypes,
   getNPCDisplayName,
@@ -542,12 +544,59 @@ export function performTreeActionForUser(
     savePlayerInventory(userId, inv);
   }
 
+  // Removes up to `count` items of `itemId` from the tiles surrounding the
+  // living (current tile + 8 neighbors), deleting the underlying world-item
+  // rows and broadcasting the removal per affected tile. Returns how many it
+  // actually removed, which may be less than `count`.
+  function consumeCostItemFromNearbyTiles(
+    itemId: string,
+    count: number,
+  ): number {
+    let remaining = Number(count || 0);
+    if (remaining <= 0) return 0;
+    const tileKeys = getNearbyTileKeys(canonical.row, canonical.col);
+    for (let k = 0; k < tileKeys.length && remaining > 0; k++) {
+      const tileKey = tileKeys[k];
+      const tileItems = worldItems[tileKey];
+      if (!Array.isArray(tileItems)) continue;
+      const removedFromTile: any[] = [];
+      for (let i = tileItems.length - 1; i >= 0 && remaining > 0; i--) {
+        const item = tileItems[i];
+        if (isValidItem(item) && String(item.type || "") === itemId) {
+          tileItems.splice(i, 1);
+          deleteWorldItemById(String(item.id));
+          removedFromTile.push(item);
+          remaining--;
+        }
+      }
+      if (tileItems.length === 0) delete worldItems[tileKey];
+      if (removedFromTile.length > 0) {
+        const parts = tileKey.split("_");
+        broadcastItemChange(
+          worldId,
+          "player",
+          userId,
+          "ingredient_consume",
+          Number(parts[0]),
+          Number(parts[1]),
+          removedFromTile,
+        );
+      }
+    }
+    return Number(count || 0) - remaining;
+  }
+
   // Consumes actionDefinition.cost/fatigueCost when the action is about to
   // execute. Callers must invoke this exactly once per action, right before
   // the action's effects — tile-targeted actions call it after tile
   // validation (below); self/inventory-targeted actions with a dedicated
   // early-return branch call it for themselves since they never reach that
   // shared call site.
+  //
+  // Ingredients are sourced from the surrounding tiles first (current tile +
+  // 8 neighbors) and only fall back to the living's inventory for whatever
+  // count the tiles didn't cover, so picking ingredients up isn't required
+  // before crafting/using an action on the spot.
   function applyActionStartCosts(): { status: number; payload: any } | null {
     let inventoryMutatedByCost = false;
 
@@ -557,12 +606,14 @@ export function performTreeActionForUser(
       actionDefinition.cost.length > 0
     ) {
       const heldCounts = countLivingItemsByType(inv);
+      const tileCounts = countItemsByType(nearbyTileItems);
       const costItems = actionDefinition.cost;
       for (let i = 0; i < costItems.length; i++) {
-        if (
-          (heldCounts[costItems[i].itemId] || 0) <
-          Number(costItems[i].count || 0)
-        ) {
+        const need = Number(costItems[i].count || 0);
+        const available =
+          (tileCounts[costItems[i].itemId] || 0) +
+          (heldCounts[costItems[i].itemId] || 0);
+        if (available < need) {
           return {
             status: 200,
             payload: { ok: false, error: "error.missing_required_ingredients" },
@@ -570,7 +621,15 @@ export function performTreeActionForUser(
         }
       }
       for (let i = 0; i < costItems.length; i++) {
-        consumeLivingItemsByType(inv, costItems[i].itemId, costItems[i].count);
+        const need = Number(costItems[i].count || 0);
+        const takenFromTiles = consumeCostItemFromNearbyTiles(
+          costItems[i].itemId,
+          need,
+        );
+        const stillNeeded = need - takenFromTiles;
+        if (stillNeeded > 0) {
+          consumeLivingItemsByType(inv, costItems[i].itemId, stillNeeded);
+        }
       }
       inventoryMutatedByCost = true;
     }

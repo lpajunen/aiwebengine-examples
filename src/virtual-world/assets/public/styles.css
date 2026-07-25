@@ -124,6 +124,22 @@ canvas {
   padding: 0;
   pointer-events: auto;
 }
+#hud-editor-buttons {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+#hud-editor-buttons button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  line-height: 1.3;
+}
 #hud-nick-row {
   pointer-events: auto;
   user-select: none;
@@ -951,9 +967,9 @@ canvas {
 #hud-living-class-panel,
 #hud-world-class-panel {
   right: 14px;
-  bottom: 70px;
+  bottom: 90px;
   width: min(400px, calc(100vw - 28px));
-  max-height: min(75vh, 640px);
+  max-height: min(85vh, 700px);
   overflow-y: auto;
   display: none;
   pointer-events: auto;
@@ -964,8 +980,8 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: min(24vh, 200px);
-  overflow-y: auto;
+  height: 144px;
+  overflow-y: scroll;
   margin-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   padding-bottom: 8px;

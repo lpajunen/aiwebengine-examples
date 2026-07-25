@@ -199,7 +199,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 <body class="game">
   <div id="hud-left-col">
     <div class="hud" id="hud-pos">
-      <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
+      <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><span id="hud-editor-buttons"><button id="btn-item-classes" onclick="toggleItemClassPanel()" data-i18n-title="hud.item_types" title="Item types">📦</button><button id="btn-action-classes" onclick="toggleActionClassPanel()" data-i18n-title="hud.action_types" title="Action types">⚡</button><button id="btn-living-classes" onclick="toggleLivingClassPanel()" data-i18n-title="hud.living_types" title="Living types">🧬</button><button id="btn-world-classes" onclick="toggleWorldClassPanel()" data-i18n-title="hud.world_types" title="World types">🌍</button></span><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
       <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
       <span data-i18n-key="hud.world_label">World:</span> ${state.worldId} (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
       <span data-i18n-key="hud.stats_label">Stats:</span>
@@ -252,10 +252,6 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <button id="btn-stats" onclick="toggleStatisticsPanel()">📊 <span data-i18n-key="hud.stats">Stats</span></button>
     <button id="btn-players" onclick="togglePlayersPanel()">👥 <span data-i18n-key="hud.players">Players</span></button>
     <button id="btn-chat" onclick="toggleChatPanel()">💬 <span data-i18n-key="hud.chat">Chat</span><span class="unread-badge" id="chat-unread-badge"></span></button>
-    <button id="btn-item-classes" onclick="toggleItemClassPanel()">📦 <span data-i18n-key="hud.item_types">Item types</span></button>
-    <button id="btn-action-classes" onclick="toggleActionClassPanel()">⚡ <span data-i18n-key="hud.action_types">Action types</span></button>
-    <button id="btn-living-classes" onclick="toggleLivingClassPanel()">🧬 <span data-i18n-key="hud.living_types">Living types</span></button>
-    <button id="btn-world-classes" onclick="toggleWorldClassPanel()">🌍 <span data-i18n-key="hud.world_types">World types</span></button>
   </div>
 
   <div class="hud" id="hud-use-picker">

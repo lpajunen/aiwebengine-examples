@@ -29,4 +29,9 @@ declare var WORLD_CLASS_REGISTRY: Array<{
   labelKey: string;
   fallbackLabel: string;
 }>;
-declare var INITIAL_FOLLOW: { target_id: string; target_label: string } | null;
+declare var INITIAL_ACTIVE_ACTIONS: Array<{
+  action_id: string;
+  target_id: string;
+  target_label: string;
+  started_ts: number;
+}>;

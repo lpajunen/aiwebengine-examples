@@ -424,6 +424,9 @@ function performResync() {
       if (Array.isArray(payload.players)) applyPlayersSnapshot(payload.players);
       if (Array.isArray(payload.npcs)) syncNPCSnapshot(payload.npcs);
       applyWorldStatePayload(payload.world, requestSeq);
+      if (Array.isArray(payload.active_actions)) {
+        applyActiveActionsSnapshot(payload.active_actions);
+      }
     })
     .catch(function (err) {
       if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
@@ -658,7 +661,21 @@ function initMultiplayer() {
 
   /** @param {any} payload */
   function handleFollowEndedEvent(payload) {
-    hideFollowBanner();
+    // A fight always keeps its own matching follow row (see fight-helpers.ts),
+    // so this can fire while the list is showing a "fight" entry, not a
+    // "follow" one — only toast when a standalone follow actually ended.
+    var had = activeActions.some(function (a) {
+      return a.action_id === "follow";
+    });
+    removeActiveAction("follow");
+    if (had && payload && payload.reason === "target_gone") {
+      showHudToast(t("follow.target_gone", "Lost track of them."), false);
+    }
+  }
+
+  /** @param {any} payload */
+  function handleFightEndedEvent(payload) {
+    removeActiveAction("fight");
     if (payload && payload.reason === "target_gone") {
       showHudToast(t("follow.target_gone", "Lost track of them."), false);
     }
@@ -851,6 +868,9 @@ function initMultiplayer() {
         return;
       case "follow_ended":
         handleFollowEndedEvent(payload);
+        return;
+      case "fight_ended":
+        handleFightEndedEvent(payload);
         return;
       case "fight_tick":
         handleFightTickEvent(payload);

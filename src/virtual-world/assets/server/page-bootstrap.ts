@@ -1,7 +1,10 @@
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
-import { getNPCDisplayName, WORLD_TILE_DEFS } from "./world-domain.ts";
+import { WORLD_TILE_DEFS } from "./world-domain.ts";
+import {
+  ActiveActionEntry,
+  getActiveActionsForUser,
+} from "./active-actions.ts";
 import { loadDMIndex, loadWorldChat } from "./chat-storage.ts";
-import { loadFollowState } from "./follow-storage.ts";
 import {
   ensureWorldItems,
   loadPlayerInventory,
@@ -66,7 +69,7 @@ type PageState = {
   itemRegistry: any;
   livingRegistry: any;
   worldClassRegistry: any[];
-  activeFollow: { target_id: string; target_label: string } | null;
+  activeActions: ActiveActionEntry[];
 };
 
 export function ensureStarterKit(userId: string): void {
@@ -137,16 +140,7 @@ export function buildVirtualWorldPageState(
 
   updateOnlinePresence(userId, worldId, "");
 
-  const followState = loadFollowState(userId);
-  const activeFollow = followState
-    ? {
-        target_id: followState.target_id,
-        target_label:
-          followState.target_type === "npc"
-            ? getNPCDisplayName(worldId, followState.target_id)
-            : getEffectiveNick(followState.target_id),
-      }
-    : null;
+  const activeActions = getActiveActionsForUser(userId);
 
   const livingClasses = getAllLivingClasses();
   const livingRegistry = {
@@ -189,7 +183,7 @@ export function buildVirtualWorldPageState(
     itemRegistry: getBootstrapRegistry(),
     livingRegistry: livingRegistry,
     worldClassRegistry: getAllWorldClasses(),
-    activeFollow: activeFollow,
+    activeActions: activeActions,
   };
 }
 
@@ -249,10 +243,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 
   <div class="hud" id="hud-toast" aria-live="polite"></div>
 
-  <div class="hud" id="hud-follow-banner" style="display:none;">
-    <span id="follow-banner-text"></span>
-    <button onclick="stopFollowing()" data-i18n-key="hud.stop_following">Stop</button>
-  </div>
+  <div class="hud" id="hud-active-actions" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
@@ -495,7 +486,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var ITEM_REGISTRY = ${JSON.stringify(state.itemRegistry)};
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
     var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
-    var INITIAL_FOLLOW = ${JSON.stringify(state.activeFollow)};
+    var INITIAL_ACTIVE_ACTIONS = ${JSON.stringify(state.activeActions)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

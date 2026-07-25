@@ -200,18 +200,25 @@ canvas {
   background: rgba(120, 35, 25, 0.92);
 }
 
-#hud-follow-banner {
+#hud-active-actions {
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   font-size: 13px;
   pointer-events: auto;
   z-index: 1020;
 }
-#hud-follow-banner button {
+.active-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.active-action-row button {
   font-size: 12px;
   font-weight: 600;
   padding: 5px 12px;
@@ -222,7 +229,7 @@ canvas {
   color: #fff;
   background: rgba(150, 40, 40, 0.88);
 }
-#hud-follow-banner button:hover {
+.active-action-row button:hover {
   background: rgba(178, 50, 50, 1);
 }
 

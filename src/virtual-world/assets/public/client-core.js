@@ -408,26 +408,93 @@ function showHudToast(message, isError) {
 }
 
 /**
- * @param {string} label
+ * @typedef {{action_id: string, target_id: string, target_label: string, started_ts: number}} ActiveActionEntry
  */
-function showFollowBanner(label) {
-  requireElementById("follow-banner-text").textContent =
-    t("hud.following_prefix", "Following") + " " + label;
-  requireElementById("hud-follow-banner").style.display = "block";
+
+/** @type {ActiveActionEntry[]} */
+var activeActions = [];
+
+/** @type {Record<string, string[]>} */
+var ACTIVE_ACTION_PREFIX_KEYS = {
+  follow: ["hud.following_prefix", "Following"],
+  fight: ["hud.fighting_prefix", "Fighting"],
+};
+
+function renderActiveActionsList() {
+  var container = requireElementById("hud-active-actions");
+  if (!activeActions.length) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+  var sorted = activeActions.slice().sort(function (a, b) {
+    return a.started_ts - b.started_ts;
+  });
+  container.innerHTML = sorted
+    .map(function (entry) {
+      var prefixInfo =
+        ACTIVE_ACTION_PREFIX_KEYS[entry.action_id] || entry.action_id;
+      var prefix = Array.isArray(prefixInfo)
+        ? t(prefixInfo[0], prefixInfo[1])
+        : prefixInfo;
+      return (
+        '<div class="active-action-row">' +
+        "<span>" +
+        escapeHtml(prefix) +
+        " " +
+        escapeHtml(entry.target_label) +
+        "</span>" +
+        '<button data-action-id="' +
+        escapeHtml(entry.action_id) +
+        '" onclick="stopActiveAction(this.dataset.actionId)">' +
+        escapeHtml(t("hud.stop_action", "Stop")) +
+        "</button>" +
+        "</div>"
+      );
+    })
+    .join("");
+  container.style.display = "flex";
 }
 
-function hideFollowBanner() {
-  requireElementById("hud-follow-banner").style.display = "none";
+/** @param {ActiveActionEntry} entry */
+function upsertActiveAction(entry) {
+  if (entry.action_id === "fight") {
+    activeActions = activeActions.filter(function (a) {
+      return a.action_id !== "follow";
+    });
+  }
+  var found = false;
+  activeActions = activeActions.map(function (a) {
+    if (a.action_id === entry.action_id) {
+      found = true;
+      return entry;
+    }
+    return a;
+  });
+  if (!found) activeActions.push(entry);
+  renderActiveActionsList();
 }
 
-if (INITIAL_FOLLOW) {
-  showFollowBanner(INITIAL_FOLLOW.target_label);
+/** @param {string} actionId */
+function removeActiveAction(actionId) {
+  activeActions = activeActions.filter(function (a) {
+    return a.action_id !== actionId;
+  });
+  renderActiveActionsList();
 }
 
-function stopFollowing() {
-  hideFollowBanner();
-  postTreeAction("stop_follow", {});
+/** @param {ActiveActionEntry[]} list */
+function applyActiveActionsSnapshot(list) {
+  activeActions = Array.isArray(list) ? list.slice() : [];
+  renderActiveActionsList();
 }
+
+/** @param {string} actionId */
+function stopActiveAction(actionId) {
+  postTreeAction("stop_" + actionId, {});
+}
+
+applyActiveActionsSnapshot(INITIAL_ACTIVE_ACTIONS || []);
 
 function triggerLogout() {
   showHudToast(

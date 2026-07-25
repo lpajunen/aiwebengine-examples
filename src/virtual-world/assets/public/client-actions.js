@@ -212,10 +212,26 @@ function postTreeAction(action, extras) {
           false,
         );
       } else if (result.action === "follow" && result.target_living_label) {
-        showFollowBanner(result.target_living_label);
+        upsertActiveAction({
+          action_id: "follow",
+          target_id: result.target_living_id,
+          target_label: result.target_living_label,
+          started_ts: Date.now(),
+        });
+        showHudToast(result.toast_message || "", false);
+      } else if (result.action === "fight" && result.target_living_label) {
+        upsertActiveAction({
+          action_id: "fight",
+          target_id: result.target_living_id,
+          target_label: result.target_living_label,
+          started_ts: Date.now(),
+        });
         showHudToast(result.toast_message || "", false);
       } else if (result.action === "stop_follow") {
-        hideFollowBanner();
+        removeActiveAction("follow");
+        showHudToast(result.toast_message || "", false);
+      } else if (result.action === "stop_fight") {
+        removeActiveAction("fight");
         showHudToast(result.toast_message || "", false);
       } else if (result.toast_message) {
         showHudToast(result.toast_message, false);

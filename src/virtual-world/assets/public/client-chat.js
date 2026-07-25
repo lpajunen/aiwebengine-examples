@@ -3,15 +3,6 @@
 
 // ── Chat helpers ─────────────────────────────────────────────────────────
 
-/** @param {any} str */
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 /** @param {number | string | Date} ts */
 function formatChatTime(ts) {
   var d = new Date(ts);

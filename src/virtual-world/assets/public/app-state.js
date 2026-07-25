@@ -1,5 +1,14 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
 
+/** @param {any} str */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /** @returns {{ state: Record<string, any>, render: Record<string, any> }} */
 function getVirtualWorldApp() {
   var app =

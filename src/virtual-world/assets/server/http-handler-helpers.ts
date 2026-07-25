@@ -1,4 +1,5 @@
 import { findFirstLivingItemByTypes } from "./world-domain.ts";
+import { getActiveActionsForUser } from "./active-actions.ts";
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
 import {
   addToDMIndex,
@@ -416,6 +417,7 @@ export function buildResyncForUser(userId: string): {
       players: listPlayersForUser(userId),
       npcs: listNPCsForUser(userId),
       world: getCurrentWorldStateForUser(userId),
+      active_actions: getActiveActionsForUser(userId),
     },
   };
 }

@@ -328,6 +328,9 @@ function resolveCombatHit(
       result: "kill",
       target_label: targetLabel,
     });
+    sendRecipientScopedStreamEvent(fight.attacker_id, "fight_ended", {
+      reason: "killed",
+    });
   }
 
   if (fight.target_type === "npc") {
@@ -371,7 +374,7 @@ function processFight(
     deleteFightState(fight.attacker_id);
     if (fight.attacker_type === "player") {
       deleteFollowState(fight.attacker_id);
-      sendRecipientScopedStreamEvent(fight.attacker_id, "follow_ended", {
+      sendRecipientScopedStreamEvent(fight.attacker_id, "fight_ended", {
         reason: "target_gone",
       });
     }
@@ -389,6 +392,9 @@ function processFight(
   ) {
     deleteFightState(fight.attacker_id);
     deleteFollowState(fight.attacker_id);
+    sendRecipientScopedStreamEvent(fight.attacker_id, "fight_ended", {
+      reason: "ghost",
+    });
     return;
   }
   if (
@@ -398,7 +404,7 @@ function processFight(
     deleteFightState(fight.attacker_id);
     if (fight.attacker_type === "player") {
       deleteFollowState(fight.attacker_id);
-      sendRecipientScopedStreamEvent(fight.attacker_id, "follow_ended", {
+      sendRecipientScopedStreamEvent(fight.attacker_id, "fight_ended", {
         reason: "target_gone",
       });
     }

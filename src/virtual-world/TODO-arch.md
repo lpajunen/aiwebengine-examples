@@ -224,18 +224,30 @@ sequenced together. Numbering continues from the list above.
 
 ### 11. Container items (items inside items)
 
-**Today:** containment is one level deep and only living objects contain
-things: an item lives on a tile, in a slot, or in a bag (`slots_json` /
-`bag_json` flat structures in `item-storage.ts`). Items have no contents of
-their own.
+**Status: implemented (July 2026).** A `chest` item class (`kind:
+"container"` in `item-registry.ts`) holds other items at
+`item.state.contents`. Because item `state` already round-trips as opaque
+JSON everywhere an item travels — bag, slots, world-tile rows, SSE
+`item_changed` payloads — pickup/drop/equip move a container and its
+contents as one atomic unit for free; no new persistence path was needed.
+Two new item actions, `container_put`/`container_get`
+(`item-action-helpers.ts`), join `pick`/`drop`/`equip` in the existing
+delegation from `tree-action-helpers.ts`, so both the game client
+(`/virtual-world/tree-action`) and the `virtualWorldManageItems` MCP tool
+get the new verbs with no new routes. Depth is capped at 1 by rule (a
+container-kind item is rejected as a put target — no nesting) and count at
+`MAX_CONTAINER_ITEMS` (`runtime-config.ts`), enforced both at put-time and
+defensively on every load via `normalizeItemState`. Container selectors
+(bag/slot/tile) resolve by item id, not array position — bag order shifts
+under a container that stays open across multiple put/take requests, so an
+index-based selector goes stale. Client: a new container panel
+(`client-container-panel.js`) opens a chest from the bag or the ground and
+shows Put/Take buttons alongside the inventory panel.
 
-**Needed:** an item can contain other items — a chest holding a sword and a
-helmet — with contents moving along when the container is picked up,
-dropped, or transferred. Requires a recursive item representation (contents
-list on the item record), depth/count limits to keep payloads and the
-interpreter bounded, and pickup/drop/craft flows that treat a container and
-its contents as one atomic unit (extends the claim-by-delete and
-transaction work in item 3).
+Remaining gap: `defaultItemSpawns()` seeds one `chest` per world class, but
+`ensureWorldItems` only seeds a world once (`meta.seeded`), so worlds
+created before this change never retroactively get one — reachable today
+only via the `cheat` grant-all nickname or the item class editor.
 
 ### 12. Slot/bag visibility semantics
 

@@ -116,7 +116,13 @@ export function performTreeActionForUser(
     (body && body.destination_world_class_id) || "",
   ).trim();
 
-  if (action === "pick" || action === "drop" || action === "equip") {
+  if (
+    action === "pick" ||
+    action === "drop" ||
+    action === "equip" ||
+    action === "container_put" ||
+    action === "container_get"
+  ) {
     return handleItemActionForUser(userId, body || {});
   }
 

@@ -1,4 +1,5 @@
 import {
+  MAX_CONTAINER_ITEMS,
   VWORLD_ACTION_CLASS_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
 } from "./runtime-config.ts";
@@ -20,7 +21,7 @@ import {
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
 export type ItemKind =
-  "tool" | "artifact" | "world_item" | "placeable" | "consumable";
+  "tool" | "artifact" | "world_item" | "placeable" | "consumable" | "container";
 
 export interface ItemDefinition {
   id: string;
@@ -249,6 +250,16 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: [],
   },
+  chest: {
+    id: "chest",
+    kind: "container",
+    visuals: {
+      color: 0x8a5a2b,
+      labelKey: "item.chest.name",
+      fallbackLabel: "Wooden chest",
+    },
+    actionIds: [],
+  },
 };
 
 export function getItemDefinition(itemId: string): ItemDefinition | null {
@@ -310,6 +321,7 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       color: number;
       action_ids: string[];
+      kind: string;
     }
   >;
   actions: Record<
@@ -337,6 +349,7 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       color: number;
       action_ids: string[];
+      kind: string;
     }
   > = {};
   const actions: Record<
@@ -365,6 +378,7 @@ export function getBootstrapRegistry(): {
         fallback_label: cls.visuals.fallbackLabel,
         color: cls.visuals.color,
         action_ids: cls.actionIds.slice(),
+        kind: cls.kind,
       };
     });
   } else {
@@ -375,6 +389,7 @@ export function getBootstrapRegistry(): {
         fallback_label: item.visuals.fallbackLabel,
         color: item.visuals.color,
         action_ids: item.actionIds.slice(),
+        kind: item.kind,
       };
     });
   }
@@ -433,6 +448,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
 // Default stateTemplates for built-in items that use the logic spec
 const DEFAULT_STATE_TEMPLATES: Record<string, Record<string, unknown>> = {
   kantele: { tuned: false, playsLeft: 0 },
+  chest: { contents: [] },
 };
 
 function itemClassFromDbRow(row: any): ItemClassRecord {
@@ -671,6 +687,20 @@ export function getItemStateTemplate(itemId: string): Record<string, unknown> {
   return applyItemStateDefaults(Object.assign({}, classTemplate));
 }
 
+// Minimal structural check for a content-array entry — deliberately not the
+// full isValidItem() from world-domain.ts (which imports this module), to
+// avoid a circular import; id/type is all normalizeItemState needs to trust.
+function isValidContentItem(
+  item: unknown,
+): item is { id: string; type: string } {
+  return (
+    !!item &&
+    typeof item === "object" &&
+    typeof (item as Record<string, unknown>).id === "string" &&
+    typeof (item as Record<string, unknown>).type === "string"
+  );
+}
+
 // Merges stored item state over the class's current state template, so an
 // item created before a stat was added (or before a class's stateTemplate
 // was edited) still reads with the up-to-date defaults — the same backfill
@@ -684,6 +714,17 @@ export function normalizeItemState(
     Object.keys(state as Record<string, unknown>).forEach(function (key) {
       out[key] = (state as Record<string, unknown>)[key];
     });
+  }
+  // Containers hold at most one level of nesting (contents can't themselves
+  // be containers — enforced at put-time in item-action-helpers.ts) and at
+  // most MAX_CONTAINER_ITEMS entries — bound the array defensively here too
+  // so any load path (not just the put action) normalizes to the invariant.
+  const cls = getItemClass(itemId);
+  if (cls && cls.kind === "container") {
+    const rawContents = Array.isArray(out.contents) ? out.contents : [];
+    out.contents = rawContents
+      .filter(isValidContentItem)
+      .slice(0, MAX_CONTAINER_ITEMS);
   }
   return out;
 }

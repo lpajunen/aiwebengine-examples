@@ -91,12 +91,33 @@ function renderInventoryPanel() {
           escHtml(inventorySlotLabel(inv, slotIds[si])) +
           "</button> ";
       }
+      var isContainer = isContainerItemType(item.type);
+      var openBtn = isContainer
+        ? '<button onclick="openContainerFromBag(' +
+          i +
+          ')">' +
+          escHtml(t("inventory.open", "Open")) +
+          "</button> "
+        : "";
+      // A container-kind item is never itself a valid put target (nesting is
+      // rejected server-side), so excluding isContainer already excludes the
+      // open container's own bag row — no separate self-reference check
+      // needed.
+      var putInChestBtn =
+        openContainerSel && !isContainer
+          ? '<button onclick="putIntoOpenContainer(' +
+            i +
+            ')">' +
+            escHtml(t("inventory.put_in_chest", "Put in chest")) +
+            "</button> "
+          : "";
       rows +=
         '<div class="inv-row">' +
         '<span class="label">' +
         escHtml(inventoryItemLabel(item)) +
         "</span>" +
         '<span class="inv-row-actions">' +
+        openBtn +
         equipBtns +
         (item.non_droppable
           ? ""
@@ -105,6 +126,7 @@ function renderInventoryPanel() {
             ')">' +
             escHtml(t("inventory.drop", "Drop")) +
             "</button> ") +
+        putInChestBtn +
         actionBtns +
         "</span>" +
         "</div>";

@@ -432,6 +432,22 @@ canvas {
   padding: 10px;
   z-index: 1001;
 }
+#hud-container-panel {
+  /* Opposite corner from #hud-inventory-panel: the container panel is shown
+     alongside the inventory panel (see openContainer() in
+     client-container-panel.js), so it needs a non-overlapping anchor
+     instead of the shared right:14px/bottom:70px spot every other
+     (mutually-exclusive) side panel uses. */
+  left: 14px;
+  bottom: 70px;
+  width: min(340px, calc(100vw - 28px));
+  max-height: min(52vh, 460px);
+  overflow: hidden;
+  display: none;
+  pointer-events: auto;
+  padding: 10px;
+  z-index: 1002;
+}
 .inv-slots {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -473,7 +489,8 @@ canvas {
   background: rgba(255, 255, 255, 0.2);
 }
 #inv-bag-list,
-#stats-list {
+#stats-list,
+#container-list {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;

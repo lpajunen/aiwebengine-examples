@@ -47,6 +47,7 @@ function applyItemStateFromResult(result) {
   updateStatsHud();
   renderInventoryPanel();
   if (statsPanelVisible) renderStatisticsPanel();
+  refreshContainerPanelIfOpen();
   updateUseButtonState();
 }
 
@@ -66,6 +67,9 @@ function postItemAction(payload, onSuccess) {
     .then(function (result) {
       if (!result || !result.ok) {
         console.log("Item action failed:", result && result.error);
+        if (result && result.error) {
+          showHudToast(translateServerMessage(result.error), true);
+        }
         return;
       }
       applyItemStateFromResult(result);
@@ -113,4 +117,55 @@ function equipFromInventory(index, slot) {
     index: index,
     to: slot,
   });
+}
+
+/**
+ * Puts a bag item into the currently open container (see
+ * client-container-panel.js). No-op if no container is open.
+ * @param {number} index
+ */
+function putIntoOpenContainer(index) {
+  if (!openContainerSel) return;
+  postItemAction({
+    action: "container_put",
+    container: openContainerSel,
+    from: "inventory",
+    index: index,
+  });
+}
+
+/**
+ * Takes an item out of the currently open container into the player's bag.
+ * @param {number} contentIndex
+ */
+function takeFromOpenContainer(contentIndex) {
+  if (!openContainerSel) return;
+  postItemAction({
+    action: "container_get",
+    container: openContainerSel,
+    content_index: contentIndex,
+    to: "inventory",
+  });
+}
+
+/**
+ * Opens a bag item as a container (see client-container-panel.js). Resolves
+ * the bag position to a stable item id up front — the container selector is
+ * held across multiple put/take requests, and bag order shifts as items
+ * move in and out, so an index would go stale.
+ * @param {number} index
+ */
+function openContainerFromBag(index) {
+  var inv = normalizeClientInventory(playerInventory);
+  var item = Array.isArray(inv.bag) ? inv.bag[index] : null;
+  if (!item) return;
+  openContainer({ location: "bag", item_id: item.id });
+}
+
+/**
+ * Opens a tile item as a container.
+ * @param {string} itemId
+ */
+function openContainerFromTile(itemId) {
+  openContainer({ location: "tile", item_id: itemId });
 }

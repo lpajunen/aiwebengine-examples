@@ -54,6 +54,14 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "ingredient_consume",
     deltaKind: "remove",
   },
+  container_put: {
+    id: "container_put",
+    deltaKind: "snapshot",
+  },
+  container_get: {
+    id: "container_get",
+    deltaKind: "snapshot",
+  },
 };
 
 export function getItemChangeDefinition(

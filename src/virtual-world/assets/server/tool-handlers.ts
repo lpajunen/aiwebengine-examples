@@ -134,6 +134,8 @@ export function virtualWorldManageItemsToolHandler(context: any): string {
     from: args.from,
     to: args.to,
     index: args.index,
+    container: args.container,
+    content_index: args.content_index,
   });
   result.payload.status = result.status;
   result.payload.world_id = getPlayerWorld(userId);

@@ -560,11 +560,20 @@ var PORTAL_BUILD_ACTIONS = [
 
 /**
  * @param {string} type
- * @returns {{label_key?: string, fallback_label?: string, color?: number, action_ids?: string[]} | null}
+ * @returns {{label_key?: string, fallback_label?: string, color?: number, action_ids?: string[], kind?: string} | null}
  */
 function getRegistryItemDef(type) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;
   return ITEM_REGISTRY.items[String(type || "")] || null;
+}
+
+/**
+ * @param {string} type
+ * @returns {boolean}
+ */
+function isContainerItemType(type) {
+  var def = getRegistryItemDef(type);
+  return !!def && def.kind === "container";
 }
 
 /**

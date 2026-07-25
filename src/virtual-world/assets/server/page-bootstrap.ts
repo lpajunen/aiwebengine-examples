@@ -274,6 +274,14 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     </div>
   </div>
 
+  <div class="hud" id="hud-container-panel">
+    <div class="panel-header">
+      <span class="panel-title" id="container-panel-title" data-i18n-key="panel.container">Container</span>
+      <button class="panel-close" onclick="closeContainerPanel()" data-i18n-title="panel.close" title="Close">×</button>
+    </div>
+    <div id="container-list"></div>
+  </div>
+
   <div class="hud" id="hud-statistics-panel">
     <div class="panel-header">
       <span class="panel-title" data-i18n-key="panel.statistics">Statistics</span>
@@ -495,6 +503,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <script src="/virtual-world/client-net.js"></script>
   <script src="/virtual-world/client-actions.js"></script>
   <script src="/virtual-world/client-panels.js"></script>
+  <script src="/virtual-world/client-container-panel.js"></script>
   <script src="/virtual-world/client-chat.js"></script>
   <script src="/virtual-world/client-item-actions.js"></script>
   <script src="/virtual-world/client-tile-detail.js"></script>

@@ -42,9 +42,11 @@ function defaultItemSpawns(): WorldClassSpawnEntry[] {
     "rune_stone",
     "juniper_bundle",
     "birch_bark_letter",
-  ].map(function (id) {
-    return { id: id, count: 3 };
-  });
+  ]
+    .map(function (id) {
+      return { id: id, count: 3 };
+    })
+    .concat([{ id: "chest", count: 1 }]);
 }
 
 // Default NPC spawn manifest shared by all four built-in world classes,

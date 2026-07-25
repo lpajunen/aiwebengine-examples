@@ -260,10 +260,19 @@ function renderTileDetailPanel() {
     for (var i = 0; i < tileItems.length; i++) {
       var itm = tileItems[i];
       var label = inventoryItemLabel(itm);
+      var containerOpenBtn =
+        isOwnTile && isContainerItemType(itm.type)
+          ? "<button onclick=\"openContainerFromTile('" +
+            escHtml(String(itm.id)) +
+            "')\">" +
+            escHtml(t("inventory.open", "Open")) +
+            "</button> "
+          : "";
       html +=
         '<div class="tile-row">' +
         escHtml(label) +
         " " +
+        containerOpenBtn +
         entityActionButtons(
           itemActionIds,
           "target-item-id",

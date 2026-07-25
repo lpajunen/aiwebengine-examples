@@ -106,7 +106,14 @@ export function registerVirtualWorldRuntime(): void {
     properties: {
       action: {
         type: "string",
-        enum: ["list", "pick", "drop", "equip"],
+        enum: [
+          "list",
+          "pick",
+          "drop",
+          "equip",
+          "container_put",
+          "container_get",
+        ],
         description:
           "List nearby items or perform an inventory/world item action",
         default: "list",
@@ -114,17 +121,32 @@ export function registerVirtualWorldRuntime(): void {
       from: {
         type: "string",
         description:
-          "Source selector for drop or equip: use 'inventory' (or the equivalent alias 'bag') for bag by index, or a living slot ID like 'left_hand'",
+          "Source selector for drop, equip, or container_put: use 'inventory' (or the equivalent alias 'bag') for bag by index, or a living slot ID like 'left_hand'",
       },
       to: {
         type: "string",
         description:
-          "Destination selector for equip: use 'inventory' (or the equivalent alias 'bag') for bag, or any valid living slot ID",
+          "Destination selector for equip or container_get: use 'inventory' (or the equivalent alias 'bag') for bag, or any valid living slot ID",
       },
       index: {
         type: "number",
         description:
-          "Bag index used for drop or equip when from='inventory' (or 'bag')",
+          "Bag index used for drop, equip, or container_put when from='inventory' (or 'bag')",
+      },
+      container: {
+        type: "object",
+        description:
+          "Container item selector for container_put/container_get: {location: 'bag'|'slot'|'tile', slot, item_id}. Use item_id (not bag position) for 'bag' — bag order shifts as items move. 'tile' only resolves a container sitting on the player's current tile.",
+        properties: {
+          location: { type: "string", enum: ["bag", "slot", "tile"] },
+          slot: { type: "string" },
+          item_id: { type: "string" },
+        },
+      },
+      content_index: {
+        type: "number",
+        description:
+          "Index within the container's contents array to take, for container_get",
       },
     },
   });
@@ -192,7 +214,7 @@ export function registerVirtualWorldRuntime(): void {
   );
   safeRegisterTool(
     "virtualWorldManageItems",
-    "List, pick up, drop, or equip items for the authenticated player",
+    "List, pick up, drop, equip items, or put/get items into a container item for the authenticated player",
     virtualWorldManageItemsSchema,
     "virtualWorldManageItemsToolHandler",
   );
@@ -529,6 +551,7 @@ export function registerVirtualWorldRuntime(): void {
     "client-net.js",
     "client-actions.js",
     "client-panels.js",
+    "client-container-panel.js",
     "client-chat.js",
     "client-item-actions.js",
     "client-tile-detail.js",

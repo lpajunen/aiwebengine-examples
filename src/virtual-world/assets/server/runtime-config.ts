@@ -54,3 +54,8 @@ export const NPC_AGGRO_CHANCE = 0.4;
 // "living_nearby" (e.g. follow, fight) — see resolveActionTarget() in
 // tree-action-helpers.ts and isWithinTileDistance() in world-domain.ts.
 export const NEARBY_TARGET_TILE_DISTANCE = 5;
+// Max items a single container-kind item (e.g. chest) can hold — keeps
+// state_json payloads and container UI bounded. Containers cannot nest, so
+// this is also the effective bound on total items reachable through one
+// container.
+export const MAX_CONTAINER_ITEMS = 20;

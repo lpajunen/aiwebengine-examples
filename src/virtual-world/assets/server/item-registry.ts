@@ -47,6 +47,7 @@ export interface ItemClassRecord {
   };
   actionIds: string[];
   stateTemplate: Record<string, unknown>;
+  ownerIds: string[];
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -425,6 +426,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     },
     actionIds: def.actionIds.slice(),
     stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
+    ownerIds: [],
   };
 }
 
@@ -458,6 +460,14 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
         return {};
       }
     })(),
+    ownerIds: (function () {
+      try {
+        const parsed = JSON.parse(row.owner_ids_json || "[]");
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch (e) {
+        return [];
+      }
+    })(),
   };
 }
 
@@ -474,6 +484,9 @@ function itemClassToDbRow(
   fallback_label: string;
   action_ids_json: string;
   state_template_json: string;
+  owner_ids_json: string;
+  spawnable: number;
+  extra: number;
   created_at: number;
   updated_at: number;
 } {
@@ -481,6 +494,10 @@ function itemClassToDbRow(
   return {
     class_id: record.id,
     kind: record.kind,
+    // Dead columns from an earlier schema (see item-class-storage.ts) —
+    // constant filler so NOT NULL inserts succeed; nothing reads these back.
+    spawnable: 1,
+    extra: 0,
     non_droppable: record.nonDroppable ? 1 : 0,
     non_pickable: record.nonPickable ? 1 : 0,
     color: record.visuals.color,
@@ -488,6 +505,7 @@ function itemClassToDbRow(
     fallback_label: record.visuals.fallbackLabel,
     action_ids_json: JSON.stringify(record.actionIds),
     state_template_json: JSON.stringify(record.stateTemplate || {}),
+    owner_ids_json: JSON.stringify(record.ownerIds || []),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -590,6 +608,20 @@ export function getItemClass(itemId: string): ItemClassRecord | null {
   );
 }
 
+// Cache-miss-tolerant lookup: another instance (or the editor on this one)
+// may have created the class after this instance's cache was built, so
+// refresh from the DB before concluding the class does not exist. Use this
+// instead of getItemClass() wherever a miss would otherwise be reported to
+// the caller as "not found" (get/update/delete).
+export function getItemClassWithRefresh(
+  itemId: string,
+): ItemClassRecord | null {
+  const cls = getItemClass(itemId);
+  if (cls) return cls;
+  refreshItemClassCache();
+  return getItemClass(itemId);
+}
+
 export function upsertItemClass(record: ItemClassRecord): {
   ok: boolean;
   error?: string;
@@ -663,6 +695,7 @@ export interface ActionClassRecord extends Omit<
   "targetKind"
 > {
   targetKind: string;
+  ownerIds: string[];
 }
 
 let _actionClassCache: Record<string, ActionClassRecord> | null = null;
@@ -703,6 +736,10 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       row.duration_ms === null || row.duration_ms === undefined
         ? undefined
         : Number(row.duration_ms),
+    ownerIds: (function () {
+      const parsed = parseJson(row.owner_ids_json, []) as unknown[];
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    })(),
   };
 }
 
@@ -721,8 +758,9 @@ function actionClassToDbRow(
   logic_spec_json: string;
   cost_json: string;
   produces_json: string;
-  fatigue_cost: number | null;
-  duration_ms: number | null;
+  fatigue_cost?: number;
+  duration_ms?: number;
+  owner_ids_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -739,10 +777,18 @@ function actionClassToDbRow(
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
-    fatigue_cost:
-      record.fatigueCost === undefined ? null : Number(record.fatigueCost),
-    duration_ms:
-      record.durationMs === undefined ? null : Number(record.durationMs),
+    // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
+    // `null` value (binds it as text, which Postgres then rejects against
+    // the integer column) — omit the key entirely instead of writing null
+    // when unset; the column is nullable and defaults to SQL NULL when
+    // absent from the insert/upsert payload.
+    ...(record.fatigueCost !== undefined
+      ? { fatigue_cost: Number(record.fatigueCost) }
+      : {}),
+    ...(record.durationMs !== undefined
+      ? { duration_ms: Number(record.durationMs) }
+      : {}),
+    owner_ids_json: JSON.stringify(record.ownerIds || []),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -764,7 +810,7 @@ function backfillActionClassDefaults(
     const def = ACTION_DEFINITIONS[defId];
     const existing = cache[defId];
     if (!existing) {
-      const record: ActionClassRecord = Object.assign({}, def);
+      const record: ActionClassRecord = Object.assign({ ownerIds: [] }, def);
       upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
       inserted++;
@@ -895,6 +941,16 @@ export function getActionClass(actionId: string): ActionClassRecord | null {
       String(actionId || "")
     ] || null
   );
+}
+
+// See getItemClassWithRefresh() above — same cache-miss-tolerant retry.
+export function getActionClassWithRefresh(
+  actionId: string,
+): ActionClassRecord | null {
+  const cls = getActionClass(actionId);
+  if (cls) return cls;
+  refreshActionClassCache();
+  return getActionClass(actionId);
 }
 
 export function upsertActionClass(record: ActionClassRecord): {

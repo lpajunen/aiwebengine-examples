@@ -1,3 +1,4 @@
+import { isAdminUser } from "./admin-storage.ts";
 import { findFirstLivingItemByTypes } from "./world-domain.ts";
 import { getActiveActionsForUser } from "./active-actions.ts";
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
@@ -85,6 +86,31 @@ export function getAuthenticatedUserId(context: any): string | null {
 export function userHasCreatorStone(userId: string): boolean {
   const inv = loadPlayerInventory(userId);
   return !!findFirstLivingItemByTypes(inv, ["creator_stone"]);
+}
+
+// A caller may mutate a class record if they own it or are an admin
+// (vworld_admins, DB-managed only — see admin-storage.ts). Used for
+// update/delete of item/action/living/world classes; create is still gated
+// by userHasCreatorStone alone.
+export function canManageClass(
+  userId: string,
+  ownerIds: string[] | null | undefined,
+): boolean {
+  if (isAdminUser(userId)) return true;
+  return Array.isArray(ownerIds) && ownerIds.indexOf(userId) !== -1;
+}
+
+// Normalizes a client-supplied ownerIds array on class update (create always
+// force-sets [callerId] instead of trusting client input). Returns null when
+// the caller didn't send one, so callers fall back to the existing owner list.
+export function normalizeOwnerIdsInput(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  raw.forEach(function (id) {
+    const trimmed = String(id || "").trim();
+    if (trimmed) out.push(trimmed);
+  });
+  return out;
 }
 
 export function listItemsForUser(userId: string): {

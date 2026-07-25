@@ -295,6 +295,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     error: {
       editing_rights_required: "Editing rights required",
+      not_class_owner: "You do not have edit rights for this item",
       missing_id: "Missing id",
       invalid_json_body: "Invalid JSON body",
       item_class_not_found: "Item class not found",
@@ -628,6 +629,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     error: {
       editing_rights_required: "Muokkausoikeudet vaaditaan",
+      not_class_owner: "Sinulla ei ole muokkausoikeutta tähän",
       missing_id: "Tunniste puuttuu",
       invalid_json_body: "Virheellinen JSON-pyyntö",
       item_class_not_found: "Esinetyyppiä ei löytynyt",

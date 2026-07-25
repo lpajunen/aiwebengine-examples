@@ -18,6 +18,10 @@ export function loadAllItemClassRows(): any[] {
 export function upsertItemClassRow(row: {
   class_id: string;
   kind: string;
+  // Dead columns from an earlier schema — nothing reads them, but they are
+  // NOT NULL with no default, so every insert must still supply a value.
+  spawnable: number;
+  extra: number;
   non_droppable: number;
   non_pickable: number;
   color: number;
@@ -25,6 +29,7 @@ export function upsertItemClassRow(row: {
   fallback_label: string;
   action_ids_json: string;
   state_template_json: string;
+  owner_ids_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

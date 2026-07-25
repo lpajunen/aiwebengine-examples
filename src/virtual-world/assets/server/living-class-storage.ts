@@ -23,6 +23,7 @@ export function upsertLivingClassRow(row: {
   slot_definitions_json: string;
   value_template_json: string;
   value_schema_json: string;
+  owner_ids_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

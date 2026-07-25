@@ -274,6 +274,14 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     ),
     valueTemplate: parseValueTemplate(String(row.value_template_json || "{}")),
     valueSchema: parseValueSchema(String(row.value_schema_json || "{}")),
+    ownerIds: (function () {
+      try {
+        const parsed = JSON.parse(row.owner_ids_json || "[]");
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch (e) {
+        return [];
+      }
+    })(),
   };
 }
 
@@ -288,6 +296,7 @@ function livingClassToDbRow(
   slot_definitions_json: string;
   value_template_json: string;
   value_schema_json: string;
+  owner_ids_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -300,6 +309,7 @@ function livingClassToDbRow(
     slot_definitions_json: JSON.stringify(record.slotDefinitions || []),
     value_template_json: JSON.stringify(record.valueTemplate || {}),
     value_schema_json: JSON.stringify(record.valueSchema || {}),
+    owner_ids_json: JSON.stringify(record.ownerIds || []),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -324,6 +334,7 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     }),
     valueTemplate: Object.assign({}, cls.valueTemplate || {}),
     valueSchema: cls.valueSchema ? Object.assign({}, cls.valueSchema) : {},
+    ownerIds: [],
   };
 }
 
@@ -387,6 +398,18 @@ export function getLivingClass(classId: string): LivingClassRecord | null {
     return _livingClassCache[lookupId];
   }
   return getBuiltInLivingClass(lookupId);
+}
+
+// See getItemClassWithRefresh() in item-registry.ts — same cache-miss-
+// tolerant retry, for custom (non-built-in) classes another instance may
+// have created after this instance's cache was built.
+export function getLivingClassWithRefresh(
+  classId: string,
+): LivingClassRecord | null {
+  const cls = getLivingClass(classId);
+  if (cls) return cls;
+  refreshLivingClassCache();
+  return getLivingClass(classId);
 }
 
 export function upsertLivingClass(record: LivingClassRecord): {

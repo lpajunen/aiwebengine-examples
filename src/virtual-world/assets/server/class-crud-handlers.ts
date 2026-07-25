@@ -2,10 +2,10 @@
 import {
   deleteActionClass,
   deleteItemClass,
-  getActionClass,
+  getActionClassWithRefresh,
   getAllActionClasses,
   getAllItemClasses,
-  getItemClass,
+  getItemClassWithRefresh,
   refreshActionClassCache,
   refreshItemClassCache,
   upsertActionClass,
@@ -13,7 +13,7 @@ import {
 } from "./item-registry.ts";
 import {
   deleteLivingClass,
-  getLivingClass,
+  getLivingClassWithRefresh,
   refreshLivingClassCache,
   upsertLivingClass,
 } from "./living-registry.ts";
@@ -26,8 +26,14 @@ import {
   refreshWorldClassCache,
   upsertWorldClass,
 } from "./world-class-storage.ts";
-import { userHasCreatorStone } from "./http-handler-helpers.ts";
+import {
+  canManageClass,
+  normalizeOwnerIdsInput,
+  userHasCreatorStone,
+} from "./http-handler-helpers.ts";
 import { getAllLivingClasses } from "./living-registry.ts";
+
+const CLASS_OWNER_ERROR = { error: "error.not_class_owner" };
 
 /**
  * @param {*} context
@@ -88,6 +94,7 @@ export function createItemClassHandler(context: any) {
       body && body.stateTemplate && typeof body.stateTemplate === "object"
         ? body.stateTemplate
         : {},
+    ownerIds: [context.request.auth.userId],
   };
   var itemCreateWrite = upsertItemClass(record);
   if (!itemCreateWrite || !itemCreateWrite.ok) {
@@ -131,12 +138,15 @@ export function updateItemClassHandler(context: any) {
   } catch (e) {
     return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
-  var existing = getItemClass(classId);
+  var existing = getItemClassWithRefresh(classId);
   if (!existing) {
     return ResponseBuilder.json(
       { ok: false, error: "error.item_class_not_found" },
       404,
     );
+  }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   var record = {
     id: classId,
@@ -171,6 +181,8 @@ export function updateItemClassHandler(context: any) {
       body && body.stateTemplate && typeof body.stateTemplate === "object"
         ? body.stateTemplate
         : existing.stateTemplate,
+    ownerIds:
+      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
   };
   var itemUpdateWrite = upsertItemClass(record);
   if (!itemUpdateWrite || !itemUpdateWrite.ok) {
@@ -207,6 +219,13 @@ export function deleteItemClassHandler(context: any) {
   );
   if (!classId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var existing = getItemClassWithRefresh(classId);
+  if (
+    existing &&
+    !canManageClass(context.request.auth.userId, existing.ownerIds)
+  ) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   deleteItemClass(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
@@ -276,6 +295,7 @@ export function createActionClassHandler(context: any) {
       body && body.durationMs !== undefined
         ? Number(body.durationMs)
         : undefined,
+    ownerIds: [context.request.auth.userId],
   };
   var actionCreateWrite = upsertActionClass(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
@@ -319,12 +339,15 @@ export function updateActionClassHandler(context: any) {
   } catch (e) {
     return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
-  var existing = getActionClass(actionId);
+  var existing = getActionClassWithRefresh(actionId);
   if (!existing) {
     return ResponseBuilder.json(
       { ok: false, error: "error.action_class_not_found" },
       404,
     );
+  }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   var record = {
     id: actionId,
@@ -367,6 +390,8 @@ export function updateActionClassHandler(context: any) {
       body && body.durationMs !== undefined
         ? Number(body.durationMs)
         : existing.durationMs,
+    ownerIds:
+      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
   };
   var actionUpdateWrite = upsertActionClass(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {
@@ -403,6 +428,13 @@ export function deleteActionClassHandler(context: any) {
   );
   if (!actionId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var existing = getActionClassWithRefresh(actionId);
+  if (
+    existing &&
+    !canManageClass(context.request.auth.userId, existing.ownerIds)
+  ) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   deleteActionClass(actionId);
   return ResponseBuilder.json({ ok: true, deleted_id: actionId });
@@ -476,6 +508,7 @@ export function createLivingClassHandler(context: any) {
       body && body.valueSchema && typeof body.valueSchema === "object"
         ? body.valueSchema
         : undefined,
+    ownerIds: [context.request.auth.userId],
   };
   var livingCreateWrite = upsertLivingClass(record);
   if (!livingCreateWrite || !livingCreateWrite.ok) {
@@ -519,12 +552,15 @@ export function updateLivingClassHandler(context: any) {
   } catch (e) {
     return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
   }
-  var existing = getLivingClass(classId);
+  var existing = getLivingClassWithRefresh(classId);
   if (!existing) {
     return ResponseBuilder.json(
       { ok: false, error: "error.living_class_not_found" },
       404,
     );
+  }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   var record = {
     id: classId,
@@ -548,6 +584,8 @@ export function updateLivingClassHandler(context: any) {
       body && body.valueSchema && typeof body.valueSchema === "object"
         ? body.valueSchema
         : existing.valueSchema,
+    ownerIds:
+      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
   };
   var livingUpdateWrite = upsertLivingClass(record);
   if (!livingUpdateWrite || !livingUpdateWrite.ok) {
@@ -584,6 +622,13 @@ export function deleteLivingClassHandler(context: any) {
   );
   if (!classId) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var existing = getLivingClassWithRefresh(classId);
+  if (
+    existing &&
+    !canManageClass(context.request.auth.userId, existing.ownerIds)
+  ) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   deleteLivingClass(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
@@ -637,6 +682,7 @@ export function createWorldClassHandler(context: any) {
     fallbackLabel: body && body.fallbackLabel,
     itemSpawns: body && body.itemSpawns,
     npcSpawns: body && body.npcSpawns,
+    ownerIds: [context.request.auth.userId],
   });
   var worldCreateWrite = upsertWorldClass(record);
   if (!worldCreateWrite || !worldCreateWrite.ok) {
@@ -687,6 +733,9 @@ export function updateWorldClassHandler(context: any) {
       404,
     );
   }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
+  }
   var record = normalizeWorldClassRecord({
     id: classId,
     baseType:
@@ -707,6 +756,8 @@ export function updateWorldClassHandler(context: any) {
       body && body.npcSpawns !== undefined
         ? body.npcSpawns
         : existing.npcSpawns,
+    ownerIds:
+      body && body.ownerIds !== undefined ? body.ownerIds : existing.ownerIds,
   });
   var worldUpdateWrite = upsertWorldClass(record);
   if (!worldUpdateWrite || !worldUpdateWrite.ok) {
@@ -749,6 +800,13 @@ export function deleteWorldClassHandler(context: any) {
       { ok: false, error: "error.world_class_builtin" },
       400,
     );
+  }
+  var existing = getWorldClassWithRefresh(classId);
+  if (
+    existing &&
+    !canManageClass(context.request.auth.userId, existing.ownerIds)
+  ) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   deleteWorldClass(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });

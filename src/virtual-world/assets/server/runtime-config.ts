@@ -39,6 +39,10 @@ export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
+// No CRUD route or MCP tool ever writes to this table — rows are added by an
+// operator directly via the DB, deliberately kept out of the creator_stone
+// item-economy trust boundary. See canManageClass() in http-handler-helpers.ts.
+export const VWORLD_ADMIN_TABLE = "vworld_admins";
 export const VWORLD_SPAWN_TIMER_TABLE = "vworld_spawn_timers";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";

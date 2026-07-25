@@ -5,7 +5,9 @@ import {
 import { refreshLivingClassCache } from "./living-registry.ts";
 import { refreshWorldClassCache } from "./world-class-storage.ts";
 import {
+  canManageClass,
   getAuthenticatedUserId,
+  normalizeOwnerIdsInput,
   userHasCreatorStone,
 } from "./http-handler-helpers.ts";
 import {
@@ -21,17 +23,17 @@ import {
 import {
   deleteActionClass,
   deleteItemClass,
-  getActionClass,
+  getActionClassWithRefresh,
   getAllActionClasses,
   getAllItemClasses,
-  getItemClass,
+  getItemClassWithRefresh,
   upsertActionClass,
   upsertItemClass,
 } from "./item-registry.ts";
 import {
   deleteLivingClass,
   getAllLivingClasses,
-  getLivingClass,
+  getLivingClassWithRefresh,
   upsertLivingClass,
 } from "./living-registry.ts";
 import { movePlayerForUser } from "./move-player.ts";
@@ -48,7 +50,7 @@ import { getOrCreatePlayerWorld } from "./world-bootstrap.ts";
 import {
   deleteWorldClass,
   getAllWorldClasses,
-  getWorldClass,
+  getWorldClassWithRefresh,
   isBuiltinWorldClassId,
   normalizeWorldClassRecord,
   upsertWorldClass,
@@ -260,7 +262,7 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
     refreshItemClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = getItemClass(id);
+    const cls = getItemClassWithRefresh(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Item class not found" });
     return JSON.stringify({ ok: true, item_class: cls });
@@ -270,10 +272,14 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     refreshItemClassCache();
+    let existing: ReturnType<typeof getItemClassWithRefresh> = null;
     if (action === "update") {
-      const existing = getItemClass(id);
+      existing = getItemClassWithRefresh(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Item class not found" });
+      if (!canManageClass(userId, existing.ownerIds)) {
+        return JSON.stringify({ ok: false, error: "Not class owner" });
+      }
     }
     const record = {
       id,
@@ -290,6 +296,9 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
         args.stateTemplate && typeof args.stateTemplate === "object"
           ? args.stateTemplate
           : {},
+      ownerIds: existing
+        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        : [userId],
     };
     const writeResult = upsertItemClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -309,6 +318,10 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const existing = getItemClassWithRefresh(id);
+    if (existing && !canManageClass(userId, existing.ownerIds)) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
+    }
     deleteItemClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
@@ -342,7 +355,7 @@ export function virtualWorldManageActionClassesToolHandler(
     refreshActionClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = getActionClass(id);
+    const cls = getActionClassWithRefresh(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Action class not found" });
     return JSON.stringify({ ok: true, action_class: cls });
@@ -352,10 +365,14 @@ export function virtualWorldManageActionClassesToolHandler(
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     refreshActionClassCache();
+    let existing: ReturnType<typeof getActionClassWithRefresh> = null;
     if (action === "update") {
-      const existing = getActionClass(id);
+      existing = getActionClassWithRefresh(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Action class not found" });
+      if (!canManageClass(userId, existing.ownerIds)) {
+        return JSON.stringify({ ok: false, error: "Not class owner" });
+      }
     }
     const record = {
       id,
@@ -375,6 +392,9 @@ export function virtualWorldManageActionClassesToolHandler(
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:
         args.durationMs !== undefined ? Number(args.durationMs) : undefined,
+      ownerIds: existing
+        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        : [userId],
     };
     const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -394,6 +414,10 @@ export function virtualWorldManageActionClassesToolHandler(
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const existing = getActionClassWithRefresh(id);
+    if (existing && !canManageClass(userId, existing.ownerIds)) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
+    }
     deleteActionClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
@@ -427,7 +451,7 @@ export function virtualWorldManageLivingClassesToolHandler(
     refreshLivingClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = getLivingClass(id);
+    const cls = getLivingClassWithRefresh(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "Living class not found" });
     return JSON.stringify({ ok: true, living_class: cls });
@@ -437,10 +461,14 @@ export function virtualWorldManageLivingClassesToolHandler(
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     refreshLivingClassCache();
+    let existing: ReturnType<typeof getLivingClassWithRefresh> = null;
     if (action === "update") {
-      const existing = getLivingClass(id);
+      existing = getLivingClassWithRefresh(id);
       if (!existing)
         return JSON.stringify({ ok: false, error: "Living class not found" });
+      if (!canManageClass(userId, existing.ownerIds)) {
+        return JSON.stringify({ ok: false, error: "Not class owner" });
+      }
     }
     const record = {
       id,
@@ -457,6 +485,9 @@ export function virtualWorldManageLivingClassesToolHandler(
         args.valueSchema && typeof args.valueSchema === "object"
           ? args.valueSchema
           : undefined,
+      ownerIds: existing
+        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        : [userId],
     };
     const writeResult = upsertLivingClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -476,6 +507,10 @@ export function virtualWorldManageLivingClassesToolHandler(
   if (action === "delete") {
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    const existing = getLivingClassWithRefresh(id);
+    if (existing && !canManageClass(userId, existing.ownerIds)) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
+    }
     deleteLivingClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
   }
@@ -509,7 +544,7 @@ export function virtualWorldManageWorldClassesToolHandler(
     refreshWorldClassCache();
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
-    const cls = getWorldClass(id);
+    const cls = getWorldClassWithRefresh(id);
     if (!cls)
       return JSON.stringify({ ok: false, error: "World class not found" });
     return JSON.stringify({ ok: true, world_class: cls });
@@ -519,9 +554,14 @@ export function virtualWorldManageWorldClassesToolHandler(
     const id = String(args.id || "").trim();
     if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
     refreshWorldClassCache();
-    const existing = getWorldClass(id);
-    if (action === "update" && !existing) {
-      return JSON.stringify({ ok: false, error: "World class not found" });
+    const existing = getWorldClassWithRefresh(id);
+    if (action === "update") {
+      if (!existing) {
+        return JSON.stringify({ ok: false, error: "World class not found" });
+      }
+      if (!canManageClass(userId, existing.ownerIds)) {
+        return JSON.stringify({ ok: false, error: "Not class owner" });
+      }
     }
     const record = normalizeWorldClassRecord({
       id,
@@ -547,6 +587,11 @@ export function virtualWorldManageWorldClassesToolHandler(
         args.npcSpawns !== undefined
           ? args.npcSpawns
           : existing && existing.npcSpawns,
+      ownerIds:
+        action === "update"
+          ? normalizeOwnerIdsInput(args.ownerIds) ||
+            (existing && existing.ownerIds)
+          : [userId],
     });
     const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -570,6 +615,13 @@ export function virtualWorldManageWorldClassesToolHandler(
         ok: false,
         error: "Built-in world classes cannot be deleted",
       });
+    }
+    const existingForDelete = getWorldClassWithRefresh(id);
+    if (
+      existingForDelete &&
+      !canManageClass(userId, existingForDelete.ownerIds)
+    ) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
     }
     deleteWorldClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });

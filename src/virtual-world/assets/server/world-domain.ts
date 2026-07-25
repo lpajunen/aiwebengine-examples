@@ -116,6 +116,9 @@ export interface LivingClassRecord {
   slotDefinitions: LivingSlotDefinition[];
   valueTemplate: Record<string, unknown>;
   valueSchema?: LivingValueSchema;
+  // Optional so the built-in DEFAULT_LIVING_CLASSES literals don't need to
+  // declare it; treat missing the same as [] (admin-only, see canManageClass).
+  ownerIds?: string[];
 }
 
 export interface LivingState {

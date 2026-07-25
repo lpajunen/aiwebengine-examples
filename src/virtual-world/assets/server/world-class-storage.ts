@@ -24,6 +24,7 @@ export type WorldClassRecord = {
   fallbackLabel: string;
   itemSpawns: WorldClassSpawnEntry[];
   npcSpawns: WorldClassSpawnEntry[];
+  ownerIds: string[];
 };
 
 // Default item spawn manifest shared by all four built-in world classes,
@@ -53,6 +54,16 @@ function defaultNPCSpawns(): WorldClassSpawnEntry[] {
   return ["npc_human", "npc_wolf", "npc_bear"].map(function (id) {
     return { id: id, count: 5 };
   });
+}
+
+function normalizeOwnerIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const id = String(raw[i] || "").trim();
+    if (id) out.push(id);
+  }
+  return out;
 }
 
 function normalizeSpawnEntries(raw: unknown): WorldClassSpawnEntry[] {
@@ -88,6 +99,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     fallbackLabel: worldType.charAt(0).toUpperCase() + worldType.slice(1),
     itemSpawns: defaultItemSpawns(),
     npcSpawns: defaultNPCSpawns(),
+    ownerIds: [],
   };
 }
 
@@ -100,6 +112,7 @@ export function normalizeWorldClassRecord(record: {
   fallbackLabel?: unknown;
   itemSpawns?: unknown;
   npcSpawns?: unknown;
+  ownerIds?: unknown;
 }): WorldClassRecord {
   const id = String(record.id || "").trim();
   return {
@@ -113,6 +126,7 @@ export function normalizeWorldClassRecord(record: {
     fallbackLabel: String(record.fallbackLabel || id),
     itemSpawns: normalizeSpawnEntries(record.itemSpawns),
     npcSpawns: normalizeSpawnEntries(record.npcSpawns),
+    ownerIds: normalizeOwnerIds(record.ownerIds),
   };
 }
 
@@ -138,6 +152,13 @@ function worldClassFromDbRow(row: any): WorldClassRecord {
         return [];
       }
     })(),
+    ownerIds: (function () {
+      try {
+        return JSON.parse(row.owner_ids_json || "[]");
+      } catch (e) {
+        return [];
+      }
+    })(),
   });
 }
 
@@ -153,6 +174,7 @@ function worldClassToDbRow(
   fallback_label: string;
   item_spawns_json: string;
   npc_spawns_json: string;
+  owner_ids_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -166,6 +188,7 @@ function worldClassToDbRow(
     fallback_label: record.fallbackLabel,
     item_spawns_json: JSON.stringify(record.itemSpawns || []),
     npc_spawns_json: JSON.stringify(record.npcSpawns || []),
+    owner_ids_json: JSON.stringify(record.ownerIds || []),
     created_at: storedTs,
     updated_at: storedTs,
   };

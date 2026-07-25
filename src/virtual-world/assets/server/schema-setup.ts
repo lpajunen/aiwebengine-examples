@@ -2,6 +2,7 @@ import { vwLog } from "./diagnostics.ts";
 import { parseWorldDbResult } from "./world-db.ts";
 import {
   VWORLD_ACTION_CLASS_TABLE,
+  VWORLD_ADMIN_TABLE,
   VWORLD_CHAT_TABLE,
   VWORLD_DM_INDEX_TABLE,
   VWORLD_DM_TABLE,
@@ -847,6 +848,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "fallback_label", false],
     ["addTextColumn", "action_ids_json", false],
     ["addTextColumn", "state_template_json", false],
+    ["addTextColumn", "owner_ids_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -893,6 +895,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "produces_json", true],
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
+    ["addTextColumn", "owner_ids_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -964,6 +967,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "slot_definitions_json", false],
     ["addTextColumn", "value_template_json", false],
     ["addTextColumn", "value_schema_json", false],
+    ["addTextColumn", "owner_ids_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -1005,6 +1009,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "fallback_label", false],
     ["addTextColumn", "item_spawns_json", true],
     ["addTextColumn", "npc_spawns_json", true],
+    ["addTextColumn", "owner_ids_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -1031,6 +1036,41 @@ export function ensureWorldDatabaseSchema(): void {
     return database.addUniqueIndex(
       VWORLD_WORLD_CLASS_TABLE,
       JSON.stringify(["class_id"]),
+    );
+  });
+
+  // No CRUD route or MCP tool writes here — rows are inserted directly via
+  // the DB by an operator to grant class-editing override rights.
+  step("createTable", VWORLD_ADMIN_TABLE, function () {
+    return database.createTable(VWORLD_ADMIN_TABLE);
+  });
+  [
+    ["addTextColumn", "user_id", false],
+    ["addIntegerColumn", "created_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_ADMIN_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_ADMIN_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_ADMIN_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_ADMIN_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_ADMIN_TABLE,
+      JSON.stringify(["user_id"]),
     );
   });
 

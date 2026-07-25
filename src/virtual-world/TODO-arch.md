@@ -186,16 +186,23 @@ instead of hardcoded box geometry.
 
 ### 9. Abuse controls for user-generated content
 
-**Today:** in-game editing of item/action/living classes is gated by the
-creator's stone, and user-authored action logic runs through the data-driven
-`action-logic-interpreter.ts` (correctly, no `eval`). But there is no rate
-limiting (moves, chat, class edits), no quotas on created content, and no
-moderation or permission model beyond the single gate item.
+**Status: permission model partially implemented (July 2026).** Item,
+action, living, and world classes now carry an `ownerIds` list
+(`class-crud-handlers.ts`): creating a class still only needs the creator's
+stone and always assigns `[callerId]`; updating or deleting requires being
+an owner or being listed in the DB-only `vworld_admins` table
+(`admin-storage.ts`, `http-handler-helpers.ts` — no route or tool sets this,
+by design, so admin status can only be granted by direct DB access).
+Legacy/built-in classes backfill to `ownerIds: []` and are therefore
+admin-only until explicitly assigned to someone. This replaces the single
+binary creator's-stone gate for mutation with owner-or-admin, but there is
+still no moderator role distinct from admin, no rate limiting (moves, chat,
+class edits), no quotas on created content, and no validation limits on
+interpreter programs.
 
 **Needed:** per-user rate limits on mutating endpoints, quotas on
 user-created classes/items, validation limits on interpreter programs
-(size, step count), and a permission/roles model (world owner, moderator,
-player) replacing the single creator's-stone gate.
+(size, step count), and a moderator role between player and DB-admin.
 
 ### 10. Tests and observability
 

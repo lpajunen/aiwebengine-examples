@@ -16,7 +16,8 @@ by the engine, so a world can grow without redeploying the script.
 
 ## The world
 
-A world is a two-dimensional grid of tiles (currently 100×100), visualized
+A world is a two-dimensional grid of tiles (100×100 by default; a world
+type can configure its own size from 8×8 up to 200×200), visualized
 in the browser as a three-dimensional scene — a 2.5D presentation: game
 logic (movement, positions, spawning) operates on the 2D grid, while the
 client renders that grid with height, perspective, and 3D models.
@@ -203,12 +204,15 @@ flowchart LR
 
 In the current implementation, content types are called **classes** in the
 code (`living-class-storage.ts`, `item-class-storage.ts`,
-`action-class-storage.ts`), world size is fixed at 100×100, world types are
-a fixed set of generation presets (forest, island, cave, building), and
-in-world editing is gated by the creator's stone item. The direction of
-travel — fully creator-defined world types, spawn rules, container items,
-slots and bags, timed actions, the persistence tiers above, and a real
-permission model — is tracked in [TODO-arch.md](TODO-arch.md).
+`action-class-storage.ts`, `world-class-storage.ts`). World types are
+themselves a creator-defined class built on top of four generation presets
+(forest, island, cave, building), each with its own size (8×8–200×200,
+default 100×100) and item/NPC spawn manifests. Creating a new class is
+gated by the creator's stone item; editing or deleting an existing one
+requires being its owner or a DB-managed admin. The direction of travel —
+container items, timed actions, the persistence tiers above, and abuse
+controls (rate limits, quotas) on top of the current owner/admin permission
+model — is tracked in [TODO-arch.md](TODO-arch.md).
 
 ## Code layout
 

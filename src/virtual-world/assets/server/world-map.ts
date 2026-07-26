@@ -8,14 +8,12 @@ import {
   mulberry32,
   ROWS,
   WORLD_TILE_GROUND,
-  WORLD_TILE_HOUSE,
   WORLD_TILE_LAKE,
   WORLD_TILE_MOUNTAIN,
   WORLD_TILE_OCEAN,
   WORLD_TILE_PINE_TREE,
   WORLD_TILE_RIVER,
   WORLD_TILE_ROCK,
-  WORLD_TYPE_BUILDING,
   WORLD_TYPE_CAVE,
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,
@@ -35,28 +33,6 @@ function paintWorldBorder(map: number[][], tileName: string): void {
   for (let c = 0; c < cols; c++) {
     map[0][c] = tileValue;
     map[rows - 1][c] = tileValue;
-  }
-}
-
-function paintWorldRing(
-  map: number[][],
-  tileName: string,
-  inset: number,
-): void {
-  const tileValue = worldTileValueForName(tileName);
-  const rows = map.length;
-  const cols = map[0] ? map[0].length : 0;
-  const minRow = Math.max(0, Number(inset) || 0);
-  const minCol = minRow;
-  const maxRow = rows - 1 - minRow;
-  const maxCol = cols - 1 - minCol;
-  for (let row = minRow; row <= maxRow; row++) {
-    map[row][minCol] = tileValue;
-    map[row][maxCol] = tileValue;
-  }
-  for (let col = minCol; col <= maxCol; col++) {
-    map[minRow][col] = tileValue;
-    map[maxRow][col] = tileValue;
   }
 }
 
@@ -84,11 +60,6 @@ export function generateWorldMap(
   }
 
   paintWorldBorder(map, boundaryTileName);
-  if (worldType === WORLD_TYPE_ISLAND) paintWorldRing(map, WORLD_TILE_OCEAN, 1);
-  if (worldType === WORLD_TYPE_CAVE) paintWorldRing(map, WORLD_TILE_ROCK, 1);
-  if (worldType === WORLD_TYPE_BUILDING) {
-    paintWorldRing(map, WORLD_TILE_HOUSE, 1);
-  }
 
   // Enclosures need room for position offset 3 + max extent 12 + border.
   if (rows >= 22 && cols >= 22) {

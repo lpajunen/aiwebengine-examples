@@ -1521,6 +1521,21 @@ export function performTreeActionForUser(
       portalItem,
     ]);
 
+    // Seed a portal back at the new world's default spawn tile (1,1 for any
+    // non-oak world, see getDefaultSpawnPosition) so the player who steps
+    // through isn't stranded there.
+    const returnPortalItem: Record<string, any> = {
+      id:
+        "w" +
+        createdDestinationWorld.world_id +
+        "_i" +
+        nextWorldItemId(createdDestinationWorld.world_id),
+      type: "portal",
+      created_at: Date.now(),
+      destination_world_id: worldId,
+    };
+    upsertWorldItem(createdDestinationWorld.world_id, 1, 1, returnPortalItem);
+
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),

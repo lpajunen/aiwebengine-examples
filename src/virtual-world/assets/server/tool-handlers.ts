@@ -390,6 +390,7 @@ export function virtualWorldManageActionClassesToolHandler(
       logicSpec: args.logicSpec ?? undefined,
       cost: args.cost ?? undefined,
       produces: args.produces ?? undefined,
+      removes: args.removes ?? undefined,
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:

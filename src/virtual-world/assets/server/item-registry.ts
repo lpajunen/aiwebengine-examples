@@ -762,6 +762,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["cost"] | undefined,
     produces: parseJson(row.produces_json, undefined) as
       ActionDefinition["produces"] | undefined,
+    removes: parseJson(row.removes_json, undefined) as
+      ActionDefinition["removes"] | undefined,
     fatigueCost:
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
@@ -792,6 +794,7 @@ function actionClassToDbRow(
   logic_spec_json: string;
   cost_json: string;
   produces_json: string;
+  removes_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
@@ -811,6 +814,7 @@ function actionClassToDbRow(
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
+    removes_json: record.removes ? JSON.stringify(record.removes) : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
     // the integer column) — omit the key entirely instead of writing null
@@ -883,9 +887,37 @@ function backfillActionClassDefaults(
         }
       }
     }
-    if (existing.validation === undefined && def.validation !== undefined) {
-      existing.validation = def.validation;
-      changed = true;
+    if (def.validation !== undefined) {
+      if (existing.validation === undefined) {
+        existing.validation = def.validation;
+        changed = true;
+      } else {
+        // Same rationale as execution above: shallow-merge only keys missing
+        // from the already-seeded row, so a creator's customization of an
+        // existing validation key survives but a new key (or one renamed in
+        // ACTION_DEFINITIONS, e.g. requirePortalState -> requireItemState)
+        // still reaches rows seeded before that change.
+        const mergedValidation: Record<string, unknown> = Object.assign(
+          {},
+          existing.validation,
+        );
+        let validationChanged = false;
+        Object.keys(def.validation).forEach(function (key) {
+          const defValidation = def.validation as Record<string, unknown>;
+          if (
+            mergedValidation[key] === undefined &&
+            defValidation[key] !== undefined
+          ) {
+            mergedValidation[key] = defValidation[key];
+            validationChanged = true;
+          }
+        });
+        if (validationChanged) {
+          existing.validation =
+            mergedValidation as ActionClassRecord["validation"];
+          changed = true;
+        }
+      }
     }
     if (existing.logicSpec === undefined && def.logicSpec !== undefined) {
       existing.logicSpec = def.logicSpec;
@@ -897,6 +929,10 @@ function backfillActionClassDefaults(
     }
     if (existing.produces === undefined && def.produces !== undefined) {
       existing.produces = def.produces;
+      changed = true;
+    }
+    if (existing.removes === undefined && def.removes !== undefined) {
+      existing.removes = def.removes;
       changed = true;
     }
     if (existing.fatigueCost === undefined && def.fatigueCost !== undefined) {

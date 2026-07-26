@@ -287,6 +287,7 @@ export function createActionClassHandler(context: any) {
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
     cost: body && body.cost ? body.cost : undefined,
     produces: body && body.produces ? body.produces : undefined,
+    removes: body && body.removes ? body.removes : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
@@ -382,6 +383,8 @@ export function updateActionClassHandler(context: any) {
     cost: body && body.cost !== undefined ? body.cost : existing.cost,
     produces:
       body && body.produces !== undefined ? body.produces : existing.produces,
+    removes:
+      body && body.removes !== undefined ? body.removes : existing.removes,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)

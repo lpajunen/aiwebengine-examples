@@ -29,6 +29,10 @@ export interface ActionDefinition {
     // tree-action-helpers.ts.
     placement?: "inventory" | "target_tile";
   }>;
+  // Removes any item of these types from the target tile (e.g. remove_portal)
+  // — the inverse of produces' placement: "target_tile" — see the removes
+  // handling at the end of performTreeActionForUser in tree-action-helpers.ts.
+  removes?: Array<{ itemId: string }>;
   fatigueCost?: number;
   // Optional real-time delay (ms) between the action starting and its
   // effects/produces resolving — see execution.startToastMessage.
@@ -78,14 +82,10 @@ export interface ActionDefinition {
       kind: "present" | "absent";
       errorMessage: string;
     };
-    requirePortalState?: {
-      kind: "present" | "absent";
-      errorMessage: string;
-    };
     // Generic presence/absence check for any item type at the target tile
-    // (e.g. place_blessing uses this to reject placing a second marker where
-    // one already rests) — same shape as requirePortalState/requireHouseState
-    // but parameterized by itemId instead of a fixed item/mod kind.
+    // (e.g. place_blessing rejects a second marker, build_portal/remove_portal
+    // check for an existing portal) — same shape as requireHouseState but
+    // parameterized by itemId instead of a fixed world-mod kind.
     requireItemState?: {
       itemId: string;
       kind: "present" | "absent";
@@ -285,7 +285,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       requireWalkableTile: {
         errorMessage: "Cannot build portal here",
       },
-      requirePortalState: {
+      requireItemState: {
+        itemId: "portal",
         kind: "absent",
         errorMessage: "Portal already exists",
       },
@@ -297,6 +298,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Close rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    removes: [{ itemId: "portal" }],
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -313,7 +315,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
     validation: {
-      requirePortalState: {
+      requireItemState: {
+        itemId: "portal",
         kind: "present",
         errorMessage: "No portal to remove",
       },

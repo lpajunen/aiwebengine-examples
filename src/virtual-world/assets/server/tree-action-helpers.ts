@@ -439,19 +439,6 @@ export function performTreeActionForUser(
       }
     }
 
-    if (validation.requirePortalState) {
-      const tileItems = getTileItemsSnapshot(row, col);
-      const hasPortal = tileItems.some(function (item) {
-        return item && item.type === "portal";
-      });
-      if (validation.requirePortalState.kind === "present" && !hasPortal) {
-        return validation.requirePortalState.errorMessage;
-      }
-      if (validation.requirePortalState.kind === "absent" && hasPortal) {
-        return validation.requirePortalState.errorMessage;
-      }
-    }
-
     if (validation.requireItemState) {
       const tileItems = getTileItemsSnapshot(row, col);
       const requiredItemId = validation.requireItemState.itemId;
@@ -794,8 +781,11 @@ export function performTreeActionForUser(
   }
 
   if (action === "portal_travel") {
+    const portalItemIds = actionDefinition
+      ? actionDefinition.sourceItemIds
+      : [];
     const portalEntry = nearbyTileItems.find(function (item) {
-      return isValidItem(item) && item.type === "portal";
+      return isValidItem(item) && portalItemIds.indexOf(item.type) !== -1;
     });
     if (!portalEntry) {
       return {
@@ -1529,40 +1519,6 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "remove_portal") {
-    const removeTileKey = targetRow + "_" + targetCol;
-    const removeItems = Array.isArray(worldItems[removeTileKey])
-      ? worldItems[removeTileKey]
-      : [];
-    const keptItems = [];
-    const removedPortals = [];
-    for (let removeIdx = 0; removeIdx < removeItems.length; removeIdx++) {
-      const removeItem = removeItems[removeIdx];
-      if (removeItem && removeItem.type === "portal") {
-        removedPortals.push(removeItem);
-      } else {
-        keptItems.push(removeItem);
-      }
-    }
-
-    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
-    else delete worldItems[removeTileKey];
-    deleteWorldItems(removedPortals);
-    maybePersistConfiguredItemMutation(
-      targetRow,
-      targetCol,
-      worldItems,
-      removedPortals,
-    );
-
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        removed_count: removedPortals.length,
-      }),
-    };
-  }
-
   if (action === "plant" || action === "cut") {
     applyTreeAction(worldId, userId, targetRow, targetCol, action, trees);
     maybeSendConfiguredWorldEvent(targetRow, targetCol);
@@ -1571,6 +1527,38 @@ export function performTreeActionForUser(
       trees: trees,
       houses: houses,
     });
+  }
+
+  let removedCount: number | undefined;
+
+  if (actionDefinition && actionDefinition.removes) {
+    const removedItemIds = actionDefinition.removes.map(function (entry) {
+      return entry.itemId;
+    });
+    const removeTileKey = targetRow + "_" + targetCol;
+    const tileItemsAtTarget = Array.isArray(worldItems[removeTileKey])
+      ? worldItems[removeTileKey]
+      : [];
+    const keptItems: any[] = [];
+    const removedItems: any[] = [];
+    tileItemsAtTarget.forEach(function (item) {
+      if (item && removedItemIds.indexOf(item.type) !== -1) {
+        removedItems.push(item);
+      } else {
+        keptItems.push(item);
+      }
+    });
+
+    if (keptItems.length > 0) worldItems[removeTileKey] = keptItems;
+    else delete worldItems[removeTileKey];
+    deleteWorldItems(removedItems);
+    maybePersistConfiguredItemMutation(
+      targetRow,
+      targetCol,
+      worldItems,
+      removedItems,
+    );
+    removedCount = removedItems.length;
   }
 
   if (
@@ -1611,7 +1599,9 @@ export function performTreeActionForUser(
 
   return {
     status: 200,
-    payload: buildConfiguredSuccessPayload(),
+    payload: buildConfiguredSuccessPayload(
+      removedCount !== undefined ? { removed_count: removedCount } : undefined,
+    ),
   };
 }
 

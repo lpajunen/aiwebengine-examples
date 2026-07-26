@@ -388,10 +388,27 @@ export function registerVirtualWorldRuntime(): void {
           properties: {
             itemId: { type: "string" },
             count: { type: "number" },
+            placement: {
+              type: "string",
+              enum: ["inventory", "target_tile"],
+              description:
+                '"inventory" (default) adds the item to the player\'s bag; "target_tile" places it on the action\'s target tile instead (e.g. place_blessing)',
+            },
           },
         },
         description:
-          "Optional items added to the player's inventory when the action succeeds",
+          "Optional items granted when the action succeeds — see placement for where they end up",
+      },
+      removes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            itemId: { type: "string" },
+          },
+        },
+        description:
+          "Optional item types removed from the action's target tile when the action succeeds (e.g. remove_portal)",
       },
       fatigueCost: {
         type: "number",

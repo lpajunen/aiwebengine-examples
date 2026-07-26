@@ -968,7 +968,13 @@ function toggleLivingClassPanel() {
 
 // ── World class panel ────────────────────────────────────────────────────
 
-var BUILTIN_WORLD_CLASS_IDS = ["forest", "island", "cave", "building"];
+var BUILTIN_WORLD_CLASS_IDS = [
+  "forest",
+  "island",
+  "cave",
+  "building",
+  "village",
+];
 
 /** @param {string} id
  * @returns {boolean} */

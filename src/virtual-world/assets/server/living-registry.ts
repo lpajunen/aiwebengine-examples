@@ -40,6 +40,23 @@ function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   ];
 }
 
+function bipedLegsOnlySlotDefinitions(): LivingClassRecord["slotDefinitions"] {
+  return [
+    {
+      id: "left_leg",
+      labelKey: "living.slot.left_leg",
+      fallbackLabel: "Left leg",
+      tags: ["leg"],
+    },
+    {
+      id: "right_leg",
+      labelKey: "living.slot.right_leg",
+      fallbackLabel: "Right leg",
+      tags: ["leg"],
+    },
+  ];
+}
+
 function quadrupedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   return [
     {
@@ -176,6 +193,24 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
+  },
+  npc_dog: {
+    id: "npc_dog",
+    kind: "npc",
+    labelKey: "living.class.npc_dog",
+    fallbackLabel: "Dog",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+  },
+  npc_chicken: {
+    id: "npc_chicken",
+    kind: "npc",
+    labelKey: "living.class.npc_chicken",
+    fallbackLabel: "Chicken",
+    slotDefinitions: bipedLegsOnlySlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
   },
 };
 

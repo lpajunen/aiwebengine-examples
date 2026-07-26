@@ -595,12 +595,88 @@ function makeBearAvatar(npcId) {
 
 /**
  * @param {string} npcId
+ * @returns {any}
+ */
+function makeDogAvatar(npcId) {
+  var h = 0;
+  for (var i = 0; i < npcId.length; i++) {
+    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
+  }
+  var hue = 25 + ((h >>> 0) % 30);
+  var lightness = 42 + ((h >>> 0) % 14);
+  return makeQuadrupedAvatar({
+    furColor: new THREE.Color("hsl(" + hue + ",45%," + lightness + "%)"),
+    legColor: new THREE.Color(
+      "hsl(" + hue + ",45%," + Math.max(lightness - 8, 15) + "%)",
+    ),
+    snoutColor: 0x2b2018,
+    bodyW: 0.3,
+    bodyH: 0.3,
+    bodyL: 0.55,
+    legW: 0.11,
+    legH: 0.3,
+    headSize: 0.24,
+    snoutLen: 0.15,
+    earSize: 0.1,
+    tailLen: 0.22,
+  });
+}
+
+/**
+ * Builds a small two-legged bird silhouette used for chickens.
+ * @param {string} npcId
+ * @returns {any}
+ */
+function makeChickenAvatar(npcId) {
+  var h = 0;
+  for (var i = 0; i < npcId.length; i++) {
+    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
+  }
+  var featherLightness = 82 + ((h >>> 0) % 12);
+  var featherColor = new THREE.Color("hsl(40,20%," + featherLightness + "%)");
+  var g = new THREE.Group();
+  /**
+   * @param {number} w
+   * @param {number} h2
+   * @param {number} d
+   * @param {number | string | any} color
+   * @param {number} px
+   * @param {number} py
+   * @param {number} pz
+   * @returns {any}
+   */
+  function np(w, h2, d, color, px, py, pz) {
+    var mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h2, d),
+      new THREE.MeshLambertMaterial({ color: color }),
+    );
+    mesh.position.set(px, py, pz);
+    mesh.castShadow = true;
+    return mesh;
+  }
+  var legY = 0.11;
+  g.add(np(0.05, 0.22, 0.05, 0xd98c3a, -0.07, legY, 0));
+  g.add(np(0.05, 0.22, 0.05, 0xd98c3a, 0.07, legY, 0));
+  var bodyY = 0.22 + 0.17;
+  g.add(np(0.3, 0.32, 0.38, featherColor, 0, bodyY, 0));
+  var headY = bodyY + 0.28;
+  var headZ = 0.24;
+  g.add(np(0.18, 0.18, 0.18, featherColor, 0, headY, headZ));
+  g.add(np(0.08, 0.06, 0.09, 0xd9862b, 0, headY - 0.02, headZ + 0.13));
+  g.add(np(0.1, 0.08, 0.03, 0xc23b2b, 0, headY + 0.11, headZ - 0.01));
+  return g;
+}
+
+/**
+ * @param {string} npcId
  * @param {string} [classId]
  * @returns {any}
  */
 function makeNPCAvatar(npcId, classId) {
   if (classId === "npc_wolf") return makeWolfAvatar(npcId);
   if (classId === "npc_bear") return makeBearAvatar(npcId);
+  if (classId === "npc_dog") return makeDogAvatar(npcId);
+  if (classId === "npc_chicken") return makeChickenAvatar(npcId);
   return makeHumanoidNPCAvatar(npcId);
 }
 

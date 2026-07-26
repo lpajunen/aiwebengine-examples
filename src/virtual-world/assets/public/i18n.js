@@ -82,6 +82,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_human: "Human",
         npc_wolf: "Wolf",
         npc_bear: "Bear",
+        npc_dog: "Dog",
+        npc_chicken: "Chicken",
       },
       slot: {
         left_hand: "Left Hand",
@@ -421,6 +423,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_human: "Ihminen",
         npc_wolf: "Susi",
         npc_bear: "Karhu",
+        npc_dog: "Koira",
+        npc_chicken: "Kana",
       },
       slot: {
         left_hand: "Vasen käsi",

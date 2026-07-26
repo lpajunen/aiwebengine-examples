@@ -447,6 +447,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="island">island</option>
             <option value="cave">cave</option>
             <option value="building">building</option>
+            <option value="village">village</option>
           </select>
         </label>
         <label><span data-i18n-key="class_editor.rows_label">Rows (8-200)</span> <input id="wc-rows" type="number" min="8" max="200" value="100"></label>

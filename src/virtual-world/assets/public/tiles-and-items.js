@@ -17,6 +17,7 @@ var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (
         sand: { value: 9, walkable: true, layer: "terrain" },
         cave_floor: { value: 10, walkable: true, layer: "terrain" },
         wood_floor: { value: 11, walkable: true, layer: "terrain" },
+        stick_fence: { value: 12, walkable: false, layer: "terrain" },
       }
 );
 /** @type {Record<number, string>} */
@@ -478,7 +479,8 @@ function normalizeWorldType(worldType) {
     normalized === "forest" ||
     normalized === "island" ||
     normalized === "cave" ||
-    normalized === "building"
+    normalized === "building" ||
+    normalized === "village"
   ) {
     return normalized;
   }
@@ -494,6 +496,7 @@ function worldTypeLabel(worldType) {
   if (normalized === "island") return t("world_type.island", "Island");
   if (normalized === "cave") return t("world_type.cave", "Cave");
   if (normalized === "building") return t("world_type.building", "House");
+  if (normalized === "village") return t("world_type.village", "Village");
   return t("world_type.forest", "Forest");
 }
 

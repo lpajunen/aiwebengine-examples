@@ -90,6 +90,11 @@ var matLake = new THREE.MeshLambertMaterial({ color: 0x4f91c9 });
 var matRiver = new THREE.MeshLambertMaterial({ color: 0x62b9d9 });
 var matRock = new THREE.MeshLambertMaterial({ color: 0x7f8892 });
 var matMountain = new THREE.MeshLambertMaterial({ color: 0x8a8178 });
+var geoFencePost = new THREE.CylinderGeometry(0.05, 0.07, 0.85, 6);
+var geoFenceRailX = new THREE.BoxGeometry(TILE * 0.85, 0.09, 0.09);
+var geoFenceRailZ = new THREE.BoxGeometry(0.09, 0.09, TILE * 0.85);
+var matFencePost = new THREE.MeshLambertMaterial({ color: 0x8a6239 });
+var matFenceRail = new THREE.MeshLambertMaterial({ color: 0x9c7444 });
 var geoHouseFloor = new THREE.BoxGeometry(1.82, 0.16, 1.82);
 var geoHouseBody = new THREE.BoxGeometry(1.56, 1.18, 1.56);
 var geoHouseWallNorthSouth = new THREE.BoxGeometry(1.62, 1.06, 0.12);
@@ -230,6 +235,9 @@ function countTilesByValue(tileValue) {
 /** @type {any} */ var iRiver = null;
 /** @type {any} */ var iRock = null;
 /** @type {any} */ var iMountain = null;
+/** @type {any} */ var iFencePost = null;
+/** @type {any} */ var iFenceRailX = null;
+/** @type {any} */ var iFenceRailZ = null;
 /** @type {any} */ var iSandA = null;
 /** @type {any} */ var iSandB = null;
 /** @type {any} */ var iCaveFloorA = null;
@@ -362,8 +370,26 @@ function rebuildFloorOverlayMeshes() {
 }
 
 function rebuildTerrainFeatureMeshes() {
-  scene.remove(iOcean, iLake, iRiver, iRock, iMountain);
-  disposeInstancedMeshes([iOcean, iLake, iRiver, iRock, iMountain]);
+  scene.remove(
+    iOcean,
+    iLake,
+    iRiver,
+    iRock,
+    iMountain,
+    iFencePost,
+    iFenceRailX,
+    iFenceRailZ,
+  );
+  disposeInstancedMeshes([
+    iOcean,
+    iLake,
+    iRiver,
+    iRock,
+    iMountain,
+    iFencePost,
+    iFenceRailX,
+    iFenceRailZ,
+  ]);
 
   iOcean = new THREE.InstancedMesh(
     geoWaterTile,
@@ -390,12 +416,25 @@ function rebuildTerrainFeatureMeshes() {
     matMountain,
     countTilesByValue(clientTileValueForName("mountain")),
   );
+  var fenceCount = countTilesByValue(clientTileValueForName("stick_fence"));
+  iFencePost = new THREE.InstancedMesh(geoFencePost, matFencePost, fenceCount);
+  iFenceRailX = new THREE.InstancedMesh(
+    geoFenceRailX,
+    matFenceRail,
+    fenceCount,
+  );
+  iFenceRailZ = new THREE.InstancedMesh(
+    geoFenceRailZ,
+    matFenceRail,
+    fenceCount,
+  );
 
   var oceanIdx = 0;
   var lakeIdx = 0;
   var riverIdx = 0;
   var rockIdx = 0;
   var mountainIdx = 0;
+  var fenceIdx = 0;
   for (var row = 0; row < ROWS; row++) {
     for (var col = 0; col < COLS; col++) {
       var tileValue = MAP[row][col];
@@ -411,6 +450,11 @@ function rebuildTerrainFeatureMeshes() {
         setInstanceTransform(iRock, rockIdx++, x, 0.2, z, 1, 1, 1);
       } else if (tileValue === clientTileValueForName("mountain")) {
         setInstanceTransform(iMountain, mountainIdx++, x, 0.92, z, 1, 1, 1);
+      } else if (tileValue === clientTileValueForName("stick_fence")) {
+        setInstanceTransform(iFencePost, fenceIdx, x, 0.42, z, 1, 1, 1);
+        setInstanceTransform(iFenceRailX, fenceIdx, x, 0.5, z, 1, 1, 1);
+        setInstanceTransform(iFenceRailZ, fenceIdx, x, 0.5, z, 1, 1, 1);
+        fenceIdx++;
       }
     }
   }
@@ -420,7 +464,19 @@ function rebuildTerrainFeatureMeshes() {
   finalizeInstancedMesh(iRiver);
   finalizeInstancedMesh(iRock);
   finalizeInstancedMesh(iMountain);
-  scene.add(iOcean, iLake, iRiver, iRock, iMountain);
+  finalizeInstancedMesh(iFencePost);
+  finalizeInstancedMesh(iFenceRailX);
+  finalizeInstancedMesh(iFenceRailZ);
+  scene.add(
+    iOcean,
+    iLake,
+    iRiver,
+    iRock,
+    iMountain,
+    iFencePost,
+    iFenceRailX,
+    iFenceRailZ,
+  );
 }
 
 function countRenderablePines() {

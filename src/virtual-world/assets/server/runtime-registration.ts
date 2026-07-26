@@ -173,7 +173,7 @@ export function registerVirtualWorldRuntime(): void {
       },
       destination_world_type: {
         type: "string",
-        enum: ["forest", "island", "cave", "building"],
+        enum: ["forest", "island", "cave", "building", "village"],
         description: "Optional portal destination world type for build_portal",
       },
       destination_world_rows: {
@@ -502,7 +502,7 @@ export function registerVirtualWorldRuntime(): void {
       },
       baseType: {
         type: "string",
-        enum: ["forest", "island", "cave", "building"],
+        enum: ["forest", "island", "cave", "building", "village"],
         description: "Built-in generation preset the world class is based on",
       },
       rows: {

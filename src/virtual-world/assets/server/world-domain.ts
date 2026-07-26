@@ -28,6 +28,7 @@ export const WORLD_TILE_MOUNTAIN = "mountain";
 export const WORLD_TILE_SAND = "sand";
 export const WORLD_TILE_CAVE_FLOOR = "cave_floor";
 export const WORLD_TILE_WOOD_FLOOR = "wood_floor";
+export const WORLD_TILE_STICK_FENCE = "stick_fence";
 
 export type WorldTileName =
   | typeof WORLD_TILE_GROUND
@@ -41,12 +42,14 @@ export type WorldTileName =
   | typeof WORLD_TILE_MOUNTAIN
   | typeof WORLD_TILE_SAND
   | typeof WORLD_TILE_CAVE_FLOOR
-  | typeof WORLD_TILE_WOOD_FLOOR;
+  | typeof WORLD_TILE_WOOD_FLOOR
+  | typeof WORLD_TILE_STICK_FENCE;
 
 export const WORLD_TYPE_FOREST = "forest";
 export const WORLD_TYPE_ISLAND = "island";
 export const WORLD_TYPE_CAVE = "cave";
 export const WORLD_TYPE_BUILDING = "building";
+export const WORLD_TYPE_VILLAGE = "village";
 
 import {
   getActionDefinition,
@@ -67,6 +70,7 @@ export const WORLD_TYPES = [
   WORLD_TYPE_ISLAND,
   WORLD_TYPE_CAVE,
   WORLD_TYPE_BUILDING,
+  WORLD_TYPE_VILLAGE,
 ] as const;
 
 export type WorldType = (typeof WORLD_TYPES)[number];
@@ -163,6 +167,7 @@ export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   sand: { value: 9, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
   cave_floor: { value: 10, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
   wood_floor: { value: 11, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
+  stick_fence: { value: 12, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
 };
 
 export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
@@ -178,6 +183,7 @@ export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
   9: WORLD_TILE_SAND,
   10: WORLD_TILE_CAVE_FLOOR,
   11: WORLD_TILE_WOOD_FLOOR,
+  12: WORLD_TILE_STICK_FENCE,
 };
 
 const WORLD_FLAVOR_TEXTS = [
@@ -286,6 +292,7 @@ export function getWorldWallTileName(worldType: string): WorldTileName {
   if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_ROCK;
   if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
   if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
+  if (normalizedType === WORLD_TYPE_VILLAGE) return WORLD_TILE_STICK_FENCE;
   return WORLD_TILE_SPRUCE_THICKET;
 }
 
@@ -294,6 +301,7 @@ export function getWorldBoundaryTileName(worldType: string): WorldTileName {
   if (normalizedType === WORLD_TYPE_ISLAND) return WORLD_TILE_OCEAN;
   if (normalizedType === WORLD_TYPE_CAVE) return WORLD_TILE_MOUNTAIN;
   if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
+  if (normalizedType === WORLD_TYPE_VILLAGE) return WORLD_TILE_STICK_FENCE;
   return WORLD_TILE_SPRUCE_THICKET;
 }
 

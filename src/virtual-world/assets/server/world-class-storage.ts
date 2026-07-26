@@ -5,6 +5,7 @@ import {
   normalizeWorldDimension,
   normalizeWorldType,
   ROWS,
+  WORLD_TYPE_VILLAGE,
   WORLD_TYPES,
 } from "./world-domain.ts";
 import {
@@ -49,11 +50,16 @@ function defaultItemSpawns(): WorldClassSpawnEntry[] {
     .concat([{ id: "chest", count: 1 }]);
 }
 
-// Default NPC spawn manifest shared by all four built-in world classes,
-// reproducing the old NPC_SPECIES_POOL of 3 species with a total NPC count
-// at the midpoint of the old NPC_MIN_COUNT..NPC_MAX_COUNT range (10..20).
-function defaultNPCSpawns(): WorldClassSpawnEntry[] {
-  return ["npc_human", "npc_wolf", "npc_bear"].map(function (id) {
+// Default NPC spawn manifest for built-in world classes, reproducing the old
+// NPC_SPECIES_POOL of 3 species with a total NPC count at the midpoint of the
+// old NPC_MIN_COUNT..NPC_MAX_COUNT range (10..20). Village worlds get tame
+// dogs/chickens instead of the wolves/bears every other preset spawns.
+function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
+  const speciesIds =
+    worldType === WORLD_TYPE_VILLAGE
+      ? ["npc_human", "npc_dog", "npc_chicken"]
+      : ["npc_human", "npc_wolf", "npc_bear"];
+  return speciesIds.map(function (id) {
     return { id: id, count: 5 };
   });
 }
@@ -85,8 +91,9 @@ function normalizeSpawnEntries(raw: unknown): WorldClassSpawnEntry[] {
 
 let _worldClassCache: Record<string, WorldClassRecord> | null = null;
 
-// The four generation presets double as built-in world classes; custom
-// classes reference one of them as baseType and override the dimensions.
+// The generation presets in WORLD_TYPES double as built-in world classes;
+// custom classes reference one of them as baseType and override the
+// dimensions.
 export function isBuiltinWorldClassId(classId: string): boolean {
   return WORLD_TYPES.indexOf(String(classId || "") as any) !== -1;
 }
@@ -100,7 +107,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     labelKey: "world_class." + worldType + ".name",
     fallbackLabel: worldType.charAt(0).toUpperCase() + worldType.slice(1),
     itemSpawns: defaultItemSpawns(),
-    npcSpawns: defaultNPCSpawns(),
+    npcSpawns: defaultNPCSpawns(worldType),
     ownerIds: [],
   };
 }

@@ -167,6 +167,14 @@ export function loadWorldItems(worldId: string): Record<string, any[]> {
               ? row.destination_world_type
               : undefined,
         }),
+        destination_row:
+          row.destination_row === null || row.destination_row === undefined
+            ? undefined
+            : Number(row.destination_row),
+        destination_col:
+          row.destination_col === null || row.destination_col === undefined
+            ? undefined
+            : Number(row.destination_col),
         state: normalizeItemState(
           String(row.type || ""),
           (function () {
@@ -267,6 +275,12 @@ export function upsertWorldItem(
       typeof item.destination_world_type === "string"
         ? normalizeWorldType(item.destination_world_type)
         : null,
+    destination_row: Number.isFinite(Number(item.destination_row))
+      ? Number(item.destination_row)
+      : null,
+    destination_col: Number.isFinite(Number(item.destination_col))
+      ? Number(item.destination_col)
+      : null,
     state_json:
       item.state && typeof item.state === "object"
         ? JSON.stringify(item.state)

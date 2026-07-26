@@ -837,7 +837,17 @@ export function performTreeActionForUser(
       isValidItem(portalEntry) && portalEntry.destination_world_id
         ? String(portalEntry.destination_world_id)
         : "10000";
-    switchUserWorld(userId, newWorldId);
+    const destinationRow = isValidItem(portalEntry)
+      ? Number(portalEntry.destination_row)
+      : NaN;
+    const destinationCol = isValidItem(portalEntry)
+      ? Number(portalEntry.destination_col)
+      : NaN;
+    const destinationSpawn =
+      Number.isFinite(destinationRow) && Number.isFinite(destinationCol)
+        ? { row: destinationRow, col: destinationCol }
+        : undefined;
+    switchUserWorld(userId, newWorldId, destinationSpawn);
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
@@ -1510,6 +1520,10 @@ export function performTreeActionForUser(
       destination_world_type: createdDestinationWorld.world_type,
       destination_world_rows: createdDestinationWorld.rows,
       destination_world_cols: createdDestinationWorld.cols,
+      // The new world's default spawn tile (see getDefaultSpawnPosition) -
+      // where the matching return portal below is placed.
+      destination_row: 1,
+      destination_col: 1,
     };
     if (requestedWorldClassId) {
       portalItem.destination_world_class_id = requestedWorldClassId;
@@ -1522,8 +1536,9 @@ export function performTreeActionForUser(
     ]);
 
     // Seed a portal back at the new world's default spawn tile (1,1 for any
-    // non-oak world, see getDefaultSpawnPosition) so the player who steps
-    // through isn't stranded there.
+    // non-oak world, see getDefaultSpawnPosition), pointing at this exact
+    // tile, so the player who steps through isn't stranded there and lands
+    // back where they built the portal rather than at world's spawn point.
     const returnPortalItem: Record<string, any> = {
       id:
         "w" +
@@ -1533,6 +1548,8 @@ export function performTreeActionForUser(
       type: "portal",
       created_at: Date.now(),
       destination_world_id: worldId,
+      destination_row: targetRow,
+      destination_col: targetCol,
     };
     upsertWorldItem(createdDestinationWorld.world_id, 1, 1, returnPortalItem);
 

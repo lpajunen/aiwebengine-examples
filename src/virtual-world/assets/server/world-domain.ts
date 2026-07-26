@@ -84,6 +84,8 @@ export interface InventoryItem {
   type: string;
   destination_world_id?: string;
   destination_world_type?: string;
+  destination_row?: number;
+  destination_col?: number;
   state?: Record<string, unknown>;
   [key: string]: unknown;
 }

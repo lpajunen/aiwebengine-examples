@@ -745,6 +745,8 @@ export function ensureWorldDatabaseSchema(): void {
     ["addIntegerColumn", "created_at", false],
     ["addTextColumn", "destination_world_id", true],
     ["addTextColumn", "destination_world_type", true],
+    ["addIntegerColumn", "destination_row", true],
+    ["addIntegerColumn", "destination_col", true],
     ["addTextColumn", "state_json", true],
   ].forEach(function (entry) {
     step(

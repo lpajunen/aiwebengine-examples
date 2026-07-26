@@ -14,6 +14,7 @@ import {
   savePlayerInventory,
   saveWorldItems,
   spawnItemsForUser,
+  spawnItemsOnTile,
   upsertWorldItem,
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
@@ -451,6 +452,20 @@ export function performTreeActionForUser(
       }
     }
 
+    if (validation.requireItemState) {
+      const tileItems = getTileItemsSnapshot(row, col);
+      const requiredItemId = validation.requireItemState.itemId;
+      const hasItem = tileItems.some(function (item) {
+        return item && item.type === requiredItemId;
+      });
+      if (validation.requireItemState.kind === "present" && !hasItem) {
+        return validation.requireItemState.errorMessage;
+      }
+      if (validation.requireItemState.kind === "absent" && hasItem) {
+        return validation.requireItemState.errorMessage;
+      }
+    }
+
     if (validation.requireTreeState) {
       const treeKey = row + "_" + col;
       const treeState = trees[treeKey];
@@ -772,51 +787,6 @@ export function performTreeActionForUser(
     if (playTuneCostError) return playTuneCostError;
     maybeAppendConfiguredWorldChatMessage();
     maybeApplyLogicEffects();
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
-  if (action === "place_blessing") {
-    const blessingTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
-    const blessingItems = Array.isArray(worldItems[blessingTileKey])
-      ? worldItems[blessingTileKey]
-      : [];
-    const existingBlessing = blessingItems.some(function (item) {
-      return item && item.type === "blessing_marker";
-    });
-    if (existingBlessing) {
-      return {
-        status: 200,
-        payload: {
-          ok: false,
-          error: "error.blessing_already_rests_here",
-        },
-      };
-    }
-
-    const blessingItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "blessing_marker",
-      created_at: Date.now(),
-      placed_by: userId,
-      non_droppable: true,
-    };
-    if (!worldItems[blessingTileKey]) worldItems[blessingTileKey] = [];
-    worldItems[blessingTileKey].push(blessingItem);
-    upsertWorldItem(
-      worldId,
-      resolvedTarget.row,
-      resolvedTarget.col,
-      blessingItem,
-    );
-    maybePersistConfiguredItemMutation(
-      resolvedTarget.row,
-      resolvedTarget.col,
-      worldItems,
-      [blessingItem],
-    );
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),
@@ -1608,8 +1578,35 @@ export function performTreeActionForUser(
     actionDefinition.produces &&
     actionDefinition.produces.length > 0
   ) {
-    spawnItemsForUser(worldId, userId, inv, actionDefinition.produces);
-    savePlayerInventory(userId, inv);
+    const inventoryProduces = actionDefinition.produces.filter(
+      function (entry) {
+        return (entry.placement || "inventory") === "inventory";
+      },
+    );
+    const tileProduces = actionDefinition.produces.filter(function (entry) {
+      return entry.placement === "target_tile";
+    });
+
+    if (inventoryProduces.length > 0) {
+      spawnItemsForUser(worldId, userId, inv, inventoryProduces);
+      savePlayerInventory(userId, inv);
+    }
+
+    if (tileProduces.length > 0) {
+      const placedItems = spawnItemsOnTile(worldId, userId, tileProduces);
+      const targetTileKey = targetRow + "_" + targetCol;
+      if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
+      placedItems.forEach(function (placedItem) {
+        worldItems[targetTileKey].push(placedItem);
+        upsertWorldItem(worldId, targetRow, targetCol, placedItem);
+      });
+      maybePersistConfiguredItemMutation(
+        targetRow,
+        targetCol,
+        worldItems,
+        placedItems,
+      );
+    }
   }
 
   return {

@@ -356,6 +356,36 @@ export function spawnItemsForUser(
   return createdItems;
 }
 
+// Shared by any action with a `produces` effect entry configured with
+// placement: "target_tile" (e.g. place_blessing) — creates the listed items
+// for the caller to add to the target tile's world-items entry, instead of
+// the actor's bag. non_droppable is copied from the item's class here
+// because pick/drop (see item-action-helpers.ts) checks that flag on the
+// item instance, not the class.
+export function spawnItemsOnTile(
+  worldId: string,
+  userId: string,
+  produces: Array<{ itemId: string; count: number }>,
+): any[] {
+  const createdItems: any[] = [];
+  for (let i = 0; i < produces.length; i++) {
+    const entry = produces[i];
+    const itemClass = getItemClass(entry.itemId);
+    for (let count = 0; count < Number(entry.count || 0); count++) {
+      const newItem: Record<string, unknown> = {
+        id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+        type: entry.itemId,
+        created_at: Date.now(),
+        placed_by: userId,
+        state: getItemStateTemplate(entry.itemId),
+      };
+      if (itemClass && itemClass.nonDroppable) newItem.non_droppable = true;
+      createdItems.push(newItem);
+    }
+  }
+  return createdItems;
+}
+
 export function ensureOldOakItem(worldId: string): void {
   if (!isOakWorld(worldId)) return;
   const items = loadWorldItems(worldId);

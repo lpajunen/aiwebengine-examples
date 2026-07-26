@@ -19,7 +19,16 @@ export interface ActionDefinition {
     | "inventory";
   sourceItemIds: string[];
   cost?: Array<{ itemId: string; count: number }>;
-  produces?: Array<{ itemId: string; count: number }>;
+  produces?: Array<{
+    itemId: string;
+    count: number;
+    // "inventory" (default) adds the item to the actor's bag, as crafting
+    // actions do. "target_tile" places it in the world at the action's
+    // resolved target tile instead (e.g. place_blessing) — see the produces
+    // handling at the end of performTreeActionForUser in
+    // tree-action-helpers.ts.
+    placement?: "inventory" | "target_tile";
+  }>;
   fatigueCost?: number;
   // Optional real-time delay (ms) between the action starting and its
   // effects/produces resolving — see execution.startToastMessage.
@@ -70,6 +79,15 @@ export interface ActionDefinition {
       errorMessage: string;
     };
     requirePortalState?: {
+      kind: "present" | "absent";
+      errorMessage: string;
+    };
+    // Generic presence/absence check for any item type at the target tile
+    // (e.g. place_blessing uses this to reject placing a second marker where
+    // one already rests) — same shape as requirePortalState/requireHouseState
+    // but parameterized by itemId instead of a fixed item/mod kind.
+    requireItemState?: {
+      itemId: string;
       kind: "present" | "absent";
       errorMessage: string;
     };
@@ -365,6 +383,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Place rowan blessing",
     targetKind: "current_tile",
     sourceItemIds: ["rowan_charm"],
+    produces: [
+      { itemId: "blessing_marker", count: 1, placement: "target_tile" },
+    ],
+    validation: {
+      requireItemState: {
+        itemId: "blessing_marker",
+        kind: "absent",
+        errorMessage: "error.blessing_already_rests_here",
+      },
+    },
     execution: {
       successPayload: {
         includeTargetPosition: true,

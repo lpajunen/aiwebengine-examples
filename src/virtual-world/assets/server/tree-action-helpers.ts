@@ -759,27 +759,6 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "tune") {
-    const tuneCostError = applyActionStartCostsOrDefer();
-    if (tuneCostError) return tuneCostError;
-    maybeApplyLogicEffects();
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
-  if (action === "play_tune") {
-    const playTuneCostError = applyActionStartCostsOrDefer();
-    if (playTuneCostError) return playTuneCostError;
-    maybeAppendConfiguredWorldChatMessage();
-    maybeApplyLogicEffects();
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
   if (action === "portal_travel") {
     const portalItemIds = actionDefinition
       ? actionDefinition.sourceItemIds
@@ -1596,6 +1575,9 @@ export function performTreeActionForUser(
       );
     }
   }
+
+  maybeAppendConfiguredWorldChatMessage();
+  maybeApplyLogicEffects();
 
   return {
     status: 200,

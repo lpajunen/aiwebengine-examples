@@ -54,14 +54,13 @@ import {
   OAK_WORLD_ID,
   canInventoryUseTreeAction,
   canTileItemsUseTreeAction,
-  canonicalTreeAction,
   getNearbyTileItems,
   getNearbyTileKeys,
   isOakCenterTile,
   isOakClearingTile,
   isWithinTileDistance,
+  isWorldTileWalkable,
   normalizeWorldType,
-  worldTypeForPortalBuildAction,
 } from "./world-domain.ts";
 import {
   applyHouseAction,
@@ -98,11 +97,11 @@ export function performTreeActionForUser(
   options?: { resuming?: boolean },
 ): { status: number; payload: any } {
   const rawAction = body && body.action;
-  const action = canonicalTreeAction(rawAction);
+  const action = String(rawAction || "");
   const actionDefinition = getActionDefinition(action);
-  const requestedPortalWorldType =
-    worldTypeForPortalBuildAction(rawAction) ||
-    normalizeWorldType(body && body.destination_world_type);
+  const requestedPortalWorldType = normalizeWorldType(
+    body && body.destination_world_type,
+  );
   const requestedPortalRows = Number(body && body.destination_world_rows);
   const requestedPortalCols = Number(body && body.destination_world_cols);
   const requestedPortalDimensions =
@@ -419,7 +418,11 @@ export function performTreeActionForUser(
           : validation.requireHouseState.errorMessage;
       }
     } else {
-      if (validation.requireWalkableTile && map[row] && map[row][col] !== 0) {
+      if (
+        validation.requireWalkableTile &&
+        map[row] &&
+        !isWorldTileWalkable(map[row][col])
+      ) {
         return validation.requireWalkableTile.errorMessage;
       }
 

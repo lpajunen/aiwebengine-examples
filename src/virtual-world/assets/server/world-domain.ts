@@ -133,17 +133,6 @@ export interface OakTile {
   col: number;
 }
 
-export const PORTAL_BUILD_ACTION_BY_WORLD_TYPE: Record<WorldType, string> = {
-  forest: "build_portal_forest",
-  island: "build_portal_island",
-  cave: "build_portal_cave",
-  building: "build_portal_building",
-};
-
-export const PORTAL_BUILD_ACTIONS = Object.values(
-  PORTAL_BUILD_ACTION_BY_WORLD_TYPE,
-);
-
 export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> =
   ALL_ITEM_TYPE_IDS.reduce(function (acc: Record<string, string>, itemId) {
     const actionId = getPrimaryActionForItemType(itemId);
@@ -270,32 +259,6 @@ export function normalizeWorldType(
   return WORLD_TYPES.indexOf(normalized) !== -1
     ? normalized
     : WORLD_TYPE_FOREST;
-}
-
-export function portalBuildActionForWorldType(worldType: string): string {
-  return (
-    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[normalizeWorldType(worldType)] ||
-    PORTAL_BUILD_ACTION_BY_WORLD_TYPE[WORLD_TYPE_FOREST]
-  );
-}
-
-export function worldTypeForPortalBuildAction(
-  action: string | undefined | null,
-): WorldType | null {
-  const normalizedAction = String(action || "");
-  for (let i = 0; i < WORLD_TYPES.length; i++) {
-    const worldType = WORLD_TYPES[i];
-    if (portalBuildActionForWorldType(worldType) === normalizedAction) {
-      return worldType;
-    }
-  }
-  return null;
-}
-
-export function canonicalTreeAction(action: string | undefined | null): string {
-  return worldTypeForPortalBuildAction(action)
-    ? "build_portal"
-    : String(action || "");
 }
 
 export function getDefaultWorldTypeForWorldId(
@@ -799,8 +762,7 @@ export function canInventoryUseTreeAction(
   inv: unknown,
   action: string,
 ): boolean {
-  const normalizedAction = canonicalTreeAction(action);
-  if (!getActionDefinition(action) && !getActionDefinition(normalizedAction)) {
+  if (!getActionDefinition(action)) {
     return false;
   }
   return getInventoryTreeActions(inv).indexOf(String(action)) !== -1;

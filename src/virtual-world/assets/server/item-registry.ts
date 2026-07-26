@@ -100,14 +100,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.portal_builder.name",
       fallbackLabel: "Rune gate charm",
     },
-    actionIds: [
-      "build_portal",
-      "build_portal_forest",
-      "build_portal_island",
-      "build_portal_cave",
-      "build_portal_building",
-      "remove_portal",
-    ],
+    actionIds: ["build_portal", "remove_portal"],
   },
   kantele: {
     id: "kantele",

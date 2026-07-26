@@ -16,7 +16,6 @@ import {
   OAK_WORLD_ID,
   applyOakReservation,
   buildInventorySelectors,
-  canonicalTreeAction,
   findFirstLivingItemByTypes,
   getOakClearingTiles,
   isOakCenterTile,
@@ -31,7 +30,6 @@ import {
   WORLD_TILE_NAME_BY_VALUE,
   WORLD_TYPE_FOREST,
   worldTileValueForName,
-  worldTypeForPortalBuildAction,
 } from "./server/world-domain.ts";
 import {
   deleteWorldRow,

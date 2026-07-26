@@ -551,13 +551,6 @@ function portalDestinationLabel(item) {
   return worldLabel + " " + worldSuffix;
 }
 
-var PORTAL_BUILD_ACTIONS = [
-  "build_portal_forest",
-  "build_portal_island",
-  "build_portal_cave",
-  "build_portal_building",
-];
-
 /**
  * @param {string} type
  * @returns {{label_key?: string, fallback_label?: string, color?: number, action_ids?: string[], kind?: string} | null}
@@ -680,7 +673,7 @@ function treeActionsForItemType(type) {
     return registryItem.action_ids.slice();
   }
   if (type === "portal_builder") {
-    return PORTAL_BUILD_ACTIONS.concat(["remove_portal"]);
+    return ["build_portal", "remove_portal"];
   }
   if (type === "hammer") return ["build_house", "destroy_house"];
   if (type === "tree_planter") return ["plant"];
@@ -718,30 +711,6 @@ function treeActionLabel(action) {
   }
   if (action === "build_portal") {
     return t("tree_action.build_portal", "Use portal builder (build portal)");
-  }
-  if (action === "build_portal_forest") {
-    return t(
-      "tree_action.build_portal_forest",
-      "Use portal builder (build forest portal)",
-    );
-  }
-  if (action === "build_portal_island") {
-    return t(
-      "tree_action.build_portal_island",
-      "Use portal builder (build island portal)",
-    );
-  }
-  if (action === "build_portal_cave") {
-    return t(
-      "tree_action.build_portal_cave",
-      "Use portal builder (build cave portal)",
-    );
-  }
-  if (action === "build_portal_building") {
-    return t(
-      "tree_action.build_portal_building",
-      "Use portal builder (build house portal)",
-    );
   }
   if (action === "remove_portal") {
     return t("tree_action.remove_portal", "Use portal builder (remove portal)");

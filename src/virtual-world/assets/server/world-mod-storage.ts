@@ -10,6 +10,7 @@ import {
   WORLD_TILE_GROUND,
   WORLD_TILE_HOUSE,
   WORLD_TILE_PINE_TREE,
+  isWorldTileWalkable,
 } from "./world-domain.ts";
 import { deleteWorldRow, queryWorldRows, upsertWorldRow } from "./world-db.ts";
 
@@ -175,7 +176,7 @@ export function checkHouseBuildable(
   houses: Record<string, any>,
 ): { ok: true } | { ok: false; reason: HouseBuildBlockReason } {
   const tileKey = row + "_" + col;
-  if (map[row] && map[row][col] !== 0) {
+  if (map[row] && !isWorldTileWalkable(map[row][col])) {
     return { ok: false, reason: "not_walkable" };
   }
   if (houses[tileKey]) {

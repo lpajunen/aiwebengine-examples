@@ -508,6 +508,7 @@ export function createLivingClassHandler(context: any) {
       body && body.valueSchema && typeof body.valueSchema === "object"
         ? body.valueSchema
         : undefined,
+    aggressive: !!(body && body.aggressive),
     ownerIds: [context.request.auth.userId],
   };
   var livingCreateWrite = upsertLivingClass(record);
@@ -584,6 +585,10 @@ export function updateLivingClassHandler(context: any) {
       body && body.valueSchema && typeof body.valueSchema === "object"
         ? body.valueSchema
         : existing.valueSchema,
+    aggressive:
+      body && body.aggressive !== undefined
+        ? !!body.aggressive
+        : existing.aggressive,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
   };

@@ -151,8 +151,8 @@ var GHOST_OPACITY = 0.45;
 
 /**
  * Toggles a humanoid avatar group (local player or remote player — NPCs are
- * never ghosts, see AGGRESSIVE_NPC_LIVING_CLASS_IDS/DEFAULT_LIVING_CLASSES in
- * living-registry.ts, where player_ghost is a player-only living class)
+ * never ghosts, see DEFAULT_LIVING_CLASSES in living-registry.ts, where
+ * player_ghost is a player-only living class)
  * between its normal opaque look and a translucent pale "ghost" look.
  * Only touches body-part meshes tagged with userData.baseColor at creation
  * (makePart/rp) — equip-item meshes added by syncAvatarEquippedItems are

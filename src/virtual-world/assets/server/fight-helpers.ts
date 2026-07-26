@@ -12,7 +12,7 @@ import {
   upsertWorldItem,
 } from "./item-storage.ts";
 import { getItemStateTemplate } from "./item-registry.ts";
-import { AGGRESSIVE_NPC_LIVING_CLASS_IDS } from "./living-registry.ts";
+import { getLivingClassWithRefresh } from "./living-registry.ts";
 import { deleteNPCById, loadWorldNPCs, saveWorldNPCs } from "./npc-storage.ts";
 import {
   buildOccupiedNPCMap,
@@ -41,11 +41,12 @@ function directionToRotation(dr: number, dc: number): number {
   return 0;
 }
 
-// Aggressive NPC classes (see AGGRESSIVE_NPC_LIVING_CLASS_IDS) start a fight
-// on their own against any player found standing on their tile, mirroring
-// the same-tile co-location convention a player's own "fight"/"poke"/"follow"
-// actions use. Once started, the fight is processed identically to a
-// player-initiated one for the rest of its lifetime.
+// NPCs whose living class has the "aggressive" flag set (see
+// LivingClassRecord.aggressive in world-domain.ts) start a fight on their own
+// against any player found standing on their tile, mirroring the same-tile
+// co-location convention a player's own "fight"/"poke"/"follow" actions use.
+// Once started, the fight is processed identically to a player-initiated one
+// for the rest of its lifetime.
 function maybeStartNPCAggression(
   worldId: string,
   npcs: Record<string, any>,
@@ -56,11 +57,8 @@ function maybeStartNPCAggression(
   Object.keys(npcs).forEach(function (npcId) {
     const npc = npcs[npcId];
     if (!npc || alreadyFighting.has(npcId)) return;
-    if (
-      AGGRESSIVE_NPC_LIVING_CLASS_IDS.indexOf(String(npc.class_id || "")) === -1
-    ) {
-      return;
-    }
+    const livingClass = getLivingClassWithRefresh(String(npc.class_id || ""));
+    if (!livingClass || !livingClass.aggressive) return;
     const targetPlayerId = Object.keys(players).find(function (pid) {
       const p = players[pid];
       return p && p.row === npc.row && p.col === npc.col;

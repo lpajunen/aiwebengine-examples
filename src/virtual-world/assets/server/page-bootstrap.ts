@@ -421,6 +421,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.slot_definitions_label">Slot definitions (JSON)</span> <textarea id="lc-slot-definitions" rows="3" placeholder='[{"id":"left_hand","labelKey":"living.slot.left_hand","fallbackLabel":"Left hand","tags":["hand"]}]'></textarea></label>
         <label><span data-i18n-key="class_editor.value_template_label">Value template (JSON)</span> <textarea id="lc-value-template" rows="2" placeholder='{"fatigue": 0}'></textarea></label>
         <label><span data-i18n-key="class_editor.value_schema_label">Value schema (JSON)</span> <textarea id="lc-value-schema" rows="3" placeholder='{"fatigue":{"kind":"number","min":0,"max":100}}'></textarea></label>
+        <label><input id="lc-aggressive" type="checkbox"> <span data-i18n-key="class_editor.aggressive">Aggressive (NPC auto-attacks players on its tile)</span></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitLivingClassForm()" data-i18n-key="class_editor.save">Save</button>

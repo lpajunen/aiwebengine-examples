@@ -487,6 +487,12 @@ export function virtualWorldManageLivingClassesToolHandler(
         args.valueSchema && typeof args.valueSchema === "object"
           ? args.valueSchema
           : undefined,
+      aggressive:
+        args.aggressive !== undefined
+          ? !!args.aggressive
+          : existing
+            ? existing.aggressive
+            : false,
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

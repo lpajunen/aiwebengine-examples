@@ -455,6 +455,11 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Value schema keyed by value name, each entry describing kind (number/string/boolean), min/max, and optional label",
       },
+      aggressive: {
+        type: "boolean",
+        description:
+          "Whether NPCs of this class autonomously start a fight against any player standing on their tile",
+      },
     },
   });
   safeRegisterTool(

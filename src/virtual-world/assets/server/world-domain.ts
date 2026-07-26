@@ -118,6 +118,10 @@ export interface LivingClassRecord {
   slotDefinitions: LivingSlotDefinition[];
   valueTemplate: Record<string, unknown>;
   valueSchema?: LivingValueSchema;
+  // NPCs of this class autonomously start a fight against any player found
+  // standing on their tile (see fight-helpers.ts's maybeStartNPCAggression).
+  // Meaningless for kind "player".
+  aggressive?: boolean;
   // Optional so the built-in DEFAULT_LIVING_CLASSES literals don't need to
   // declare it; treat missing the same as [] (admin-only, see canManageClass).
   ownerIds?: string[];

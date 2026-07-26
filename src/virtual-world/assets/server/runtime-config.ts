@@ -47,8 +47,9 @@ export const VWORLD_SPAWN_TIMER_TABLE = "vworld_spawn_timers";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
-// Per-tick chance a co-located aggressive NPC (see AGGRESSIVE_NPC_LIVING_CLASS_IDS
-// in living-registry.ts) starts a fight against a player standing on its tile.
+// Per-tick chance a co-located NPC whose living class has aggressive: true
+// (see LivingClassRecord in world-domain.ts) starts a fight against a player
+// standing on its tile.
 export const NPC_AGGRO_CHANCE = 0.4;
 // Max Chebyshev tile distance for actions with targetKind "item_nearby" or
 // "living_nearby" (e.g. follow, fight) — see resolveActionTarget() in

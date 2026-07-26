@@ -749,6 +749,9 @@ function editLivingClass(id) {
         lc.valueSchema && Object.keys(lc.valueSchema).length
           ? JSON.stringify(lc.valueSchema, null, 2)
           : "";
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-aggressive")
+      ).checked = !!lc.aggressive;
       requireElementById("living-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -780,6 +783,9 @@ function cancelLivingClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-value-schema")
   ).value = "";
+  /** @type {HTMLInputElement} */ (
+    requireElementById("lc-aggressive")
+  ).checked = false;
   requireElementById("living-class-form-title").textContent = t(
     "class_editor.new_living_type",
     "New living type",
@@ -866,6 +872,9 @@ function submitLivingClassForm() {
       return;
     }
   }
+  var aggressiveVal = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-aggressive")
+  ).checked;
   var record = {
     id: idVal,
     kind: kindVal,
@@ -873,6 +882,7 @@ function submitLivingClassForm() {
     slotDefinitions: slotDefinitions,
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,
+    aggressive: aggressiveVal,
   };
   var url = livingClassEditId
     ? "/virtual-world/living-classes/" + encodeURIComponent(livingClassEditId)

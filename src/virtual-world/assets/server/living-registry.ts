@@ -165,6 +165,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: quadrupedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    aggressive: true,
   },
   npc_bear: {
     id: "npc_bear",
@@ -174,12 +175,9 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: quadrupedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    aggressive: true,
   },
 };
-
-// NPC living classes that autonomously start a fight against a player found
-// standing on their tile (see fight-helpers.ts's tickFightForWorld).
-export const AGGRESSIVE_NPC_LIVING_CLASS_IDS = ["npc_wolf", "npc_bear"];
 
 let _livingClassCache: Record<string, LivingClassRecord> | null = null;
 
@@ -274,6 +272,7 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     ),
     valueTemplate: parseValueTemplate(String(row.value_template_json || "{}")),
     valueSchema: parseValueSchema(String(row.value_schema_json || "{}")),
+    aggressive: row.aggressive === 1 || row.aggressive === true,
     ownerIds: (function () {
       try {
         const parsed = JSON.parse(row.owner_ids_json || "[]");
@@ -296,6 +295,7 @@ function livingClassToDbRow(
   slot_definitions_json: string;
   value_template_json: string;
   value_schema_json: string;
+  aggressive: number;
   owner_ids_json: string;
   created_at: number;
   updated_at: number;
@@ -309,6 +309,7 @@ function livingClassToDbRow(
     slot_definitions_json: JSON.stringify(record.slotDefinitions || []),
     value_template_json: JSON.stringify(record.valueTemplate || {}),
     value_schema_json: JSON.stringify(record.valueSchema || {}),
+    aggressive: record.aggressive ? 1 : 0,
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     created_at: storedTs,
     updated_at: storedTs,
@@ -334,6 +335,7 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     }),
     valueTemplate: Object.assign({}, cls.valueTemplate || {}),
     valueSchema: cls.valueSchema ? Object.assign({}, cls.valueSchema) : {},
+    aggressive: !!cls.aggressive,
     ownerIds: [],
   };
 }

@@ -969,6 +969,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "slot_definitions_json", false],
     ["addTextColumn", "value_template_json", false],
     ["addTextColumn", "value_schema_json", false],
+    ["addIntegerColumn", "aggressive", false],
     ["addTextColumn", "owner_ids_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],

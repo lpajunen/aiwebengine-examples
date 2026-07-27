@@ -34,6 +34,8 @@ import { getAllWorldClasses } from "./world-class-storage.ts";
 import {
   getWorldFlavorTextByIndex,
   getWorldFlavorTextIndex,
+  OAK_CENTER_COL,
+  OAK_CENTER_ROW,
 } from "./world-domain.ts";
 import {
   loadWorldHouses,
@@ -70,6 +72,8 @@ type PageState = {
   livingRegistry: any;
   worldClassRegistry: any[];
   activeActions: ActiveActionEntry[];
+  oakCenterRow: number;
+  oakCenterCol: number;
 };
 
 export function ensureStarterKit(userId: string): void {
@@ -116,7 +120,18 @@ export function buildVirtualWorldPageState(
   const playerInventory = loadPlayerInventory(userId);
   const npcs = getWorldNPCSnapshot(worldId);
   const savedPos = loadPlayerPosition(userId);
-  const hasSavedPos = savedPos && savedPos.world_id === String(worldId);
+  const mapRows = map.length;
+  const mapCols = map[0] ? map[0].length : 0;
+  // A world's dimensions can shrink after a position was saved (e.g. the oak
+  // world's village migration to 30x30) — discard an out-of-bounds saved
+  // position rather than spawning the player off the generated map.
+  const hasSavedPos =
+    !!savedPos &&
+    savedPos.world_id === String(worldId) &&
+    Number(savedPos.row) >= 0 &&
+    Number(savedPos.row) < mapRows &&
+    Number(savedPos.col) >= 0 &&
+    Number(savedPos.col) < mapCols;
   const initialPos = hasSavedPos
     ? savedPos
     : getDefaultSpawnPosition(worldId, userId);
@@ -184,6 +199,8 @@ export function buildVirtualWorldPageState(
     livingRegistry: livingRegistry,
     worldClassRegistry: getAllWorldClasses(),
     activeActions: activeActions,
+    oakCenterRow: OAK_CENTER_ROW,
+    oakCenterCol: OAK_CENTER_COL,
   };
 }
 
@@ -493,6 +510,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
     var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
     var INITIAL_ACTIVE_ACTIONS = ${JSON.stringify(state.activeActions)};
+    var OAK_CENTER_ROW = ${JSON.stringify(state.oakCenterRow)};
+    var OAK_CENTER_COL = ${JSON.stringify(state.oakCenterCol)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

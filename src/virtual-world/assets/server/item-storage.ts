@@ -17,6 +17,7 @@ import {
   createEmptyLivingState,
   isOakWorld,
   isValidItem,
+  isWorldTileWalkable,
   OAK_CENTER_COL,
   OAK_CENTER_ROW,
   LivingState,
@@ -33,8 +34,21 @@ import {
   deleteWorldRowsWhere,
   querySingleWorldRow,
   queryWorldRows,
+  runInWorldTransaction,
   upsertWorldRow,
 } from "./world-db.ts";
+import { ensureWorldItemSchema } from "./schema-setup.ts";
+
+// init()'s full schema migration can time out before finishing the world-item
+// table (see ensureWorldItemSchema) — self-heal on first write per process,
+// the same pattern follow/fight storage use, so the destination_row/col
+// columns that upsertWorldItem writes always exist.
+let itemSchemaEnsured = false;
+function ensureItemSchema(): void {
+  if (itemSchemaEnsured) return;
+  ensureWorldItemSchema();
+  itemSchemaEnsured = true;
+}
 
 export function loadPlayerInventory(userId: string): LivingState {
   const normalizeRawToLiving = function (raw: unknown, classId: string) {
@@ -198,6 +212,7 @@ export function saveWorldItems(
   worldId: string,
   items: Record<string, any[]>,
 ): void {
+  ensureItemSchema();
   const normalized: Record<string, any[]> = {};
   if (items && typeof items === "object") {
     Object.keys(items).forEach(function (tileKey) {
@@ -256,7 +271,15 @@ export function upsertWorldItem(
   ) {
     return;
   }
-  upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], {
+  ensureItemSchema();
+  // The DB layer rejects a null written to an INTEGER column ("integer but
+  // expression is of type text"), so destination_row/destination_col — which
+  // are only meaningful for portals — must be OMITTED entirely when absent
+  // rather than sent as null. (Nullable TEXT columns like destination_world_id
+  // accept null fine.) Sending null here was silently failing every non-portal
+  // upsertWorldItem write — drops and the oak singleton — while saveWorldItems,
+  // which never sends these keys, persisted normally.
+  const row_data: Record<string, unknown> = {
     item_id: String(item.id),
     world_id: String(worldId),
     row: Number(row),
@@ -275,17 +298,18 @@ export function upsertWorldItem(
       typeof item.destination_world_type === "string"
         ? normalizeWorldType(item.destination_world_type)
         : null,
-    destination_row: Number.isFinite(Number(item.destination_row))
-      ? Number(item.destination_row)
-      : null,
-    destination_col: Number.isFinite(Number(item.destination_col))
-      ? Number(item.destination_col)
-      : null,
     state_json:
       item.state && typeof item.state === "object"
         ? JSON.stringify(item.state)
         : null,
-  });
+  };
+  if (Number.isFinite(Number(item.destination_row))) {
+    row_data.destination_row = Number(item.destination_row);
+  }
+  if (Number.isFinite(Number(item.destination_col))) {
+    row_data.destination_col = Number(item.destination_col);
+  }
+  upsertWorldRow(VWORLD_WORLD_ITEM_TABLE, ["item_id"], row_data);
 }
 
 /**
@@ -436,7 +460,11 @@ function placeItemAtRandomTile(
     attempts++;
     const row = 1 + Math.floor(Math.random() * (mapRows - 2));
     const col = 1 + Math.floor(Math.random() * (mapCols - 2));
-    if (map[row][col] !== 0) continue;
+    // Any walkable floor is a valid drop spot — checking the tile's
+    // walkability (not a hardcoded ground==0) lets non-forest worlds whose
+    // floor is sand/cave_floor/wood_floor/bridge seed items too, instead of
+    // spinning all 1000 attempts and placing nothing.
+    if (!isWorldTileWalkable(map[row][col])) continue;
     const tileKey = row + "_" + col;
     if (!items[tileKey]) items[tileKey] = [];
     const newItem = {
@@ -451,29 +479,53 @@ function placeItemAtRandomTile(
   return null;
 }
 
+// Bump when the built-in item spawn manifest changes, or to force a one-time
+// reseed after a broken/partial seed. A world whose stored marker is older
+// than this reseeds once on next load. Persisted in the world-item meta's
+// `seeded` field, which used to be a 0/1 flag — so version 1 is exactly the
+// old "already seeded" state, and any pre-existing world reseeds once here.
+export const WORLD_ITEM_SEED_VERSION = 4;
+
 export function ensureWorldItems(worldId: string): void {
   ensureOldOakItem(worldId);
 
   const meta = loadWorldItemMeta(worldId);
-  if (meta.seeded === 1) return;
+  if (meta.seeded === WORLD_ITEM_SEED_VERSION) return;
 
-  const worldClass = getWorldClassForWorld(worldId);
-  const itemSpawns = worldClass ? worldClass.itemSpawns : [];
-  const map = getEffectiveMap(worldId);
-  const items = loadWorldItems(worldId);
-  for (let i = 0; i < itemSpawns.length; i++) {
-    const entry = itemSpawns[i];
-    if (!getItemClass(entry.id)) continue;
-    for (let count = 0; count < entry.count; count++) {
-      placeItemAtRandomTile(worldId, map, items, entry.id);
+  // Reseed inside a transaction: this path can run from a GET handler
+  // (listItemsForUser, page load) that isn't already transactional, and the
+  // deploy runtime restarts between requests, so an unwrapped batch of
+  // upserts can be partially discarded — leaving a world with a handful of
+  // items and no oak. runInWorldTransaction commits them atomically (and
+  // nests as a savepoint when a POST caller already opened a transaction).
+  runInWorldTransaction("seed_world_items", function () {
+    // Clear existing world items first so the reseed replaces the manifest
+    // rather than stacking a second copy (and drops items stranded off-map by
+    // a world that shrank), then restore the oak singleton the wipe removed.
+    deleteWorldRowsWhere(
+      VWORLD_WORLD_ITEM_TABLE,
+      JSON.stringify({ world_id: String(worldId) }),
+    );
+    ensureOldOakItem(worldId);
+
+    const worldClass = getWorldClassForWorld(worldId);
+    const itemSpawns = worldClass ? worldClass.itemSpawns : [];
+    const map = getEffectiveMap(worldId);
+    const items = loadWorldItems(worldId);
+    for (let i = 0; i < itemSpawns.length; i++) {
+      const entry = itemSpawns[i];
+      if (!getItemClass(entry.id)) continue;
+      for (let count = 0; count < entry.count; count++) {
+        placeItemAtRandomTile(worldId, map, items, entry.id);
+      }
     }
-  }
 
-  saveWorldItems(worldId, items);
-  saveWorldItemMeta(worldId, {
-    next_item_seq: loadWorldItemMeta(worldId).next_item_seq,
-    seeded: 1,
-    updated_ts: Date.now(),
+    saveWorldItems(worldId, items);
+    saveWorldItemMeta(worldId, {
+      next_item_seq: loadWorldItemMeta(worldId).next_item_seq,
+      seeded: WORLD_ITEM_SEED_VERSION,
+      updated_ts: Date.now(),
+    });
   });
 }
 

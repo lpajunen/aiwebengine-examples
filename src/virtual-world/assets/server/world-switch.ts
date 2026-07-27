@@ -15,6 +15,7 @@ import {
 } from "./social-state.ts";
 import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
 import { createWorldOfType, saveWorldType } from "./world-bootstrap.ts";
+import { OAK_WORLD_COLS, OAK_WORLD_ROWS } from "./world-domain.ts";
 type SpawnPosition = {
   row: number;
   col: number;
@@ -85,9 +86,14 @@ export function switchUserToNewWorld(
 export function switchUserToStartWorld(
   userId: string,
   oakWorldId: string,
-  worldTypeForest: string,
+  oakWorldType: string,
 ): { ok: boolean } {
-  saveWorldType(oakWorldId, worldTypeForest, undefined, worldTypeForest);
+  saveWorldType(
+    oakWorldId,
+    oakWorldType,
+    { rows: OAK_WORLD_ROWS, cols: OAK_WORLD_COLS },
+    oakWorldType,
+  );
   switchUserWorld(
     userId,
     oakWorldId,

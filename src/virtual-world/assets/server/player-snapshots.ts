@@ -1,4 +1,4 @@
-import { getEffectiveMap } from "./world-bootstrap.ts";
+import { getEffectiveMap, getWorldDimensions } from "./world-bootstrap.ts";
 import {
   getOakClearingTiles,
   hashString,
@@ -90,13 +90,26 @@ export function getCanonicalPlayerState(
   worldId: string,
   userId: string,
 ): SpawnPosition {
+  // A world's dimensions can shrink after a position was persisted (e.g. the
+  // oak world's village migration to 30x30). Any stored coordinate now off
+  // the map is invalid — treat it as absent and fall through to the default
+  // spawn, so item drops (which land at the canonical position) never write
+  // to an off-map tile that no client would render.
+  const dims = getWorldDimensions(worldId);
+  const inBounds = function (row: number, col: number): boolean {
+    return (
+      Number.isFinite(row) &&
+      Number.isFinite(col) &&
+      row >= 0 &&
+      row < dims.rows &&
+      col >= 0 &&
+      col < dims.cols
+    );
+  };
+
   const players = loadWorldPlayers(worldId);
   const cur = players[userId];
-  if (
-    cur &&
-    Number.isFinite(Number(cur.row)) &&
-    Number.isFinite(Number(cur.col))
-  ) {
+  if (cur && inBounds(Number(cur.row), Number(cur.col))) {
     return {
       row: Number(cur.row),
       col: Number(cur.col),
@@ -107,15 +120,19 @@ export function getCanonicalPlayerState(
     };
   }
   const savedPos = loadPlayerPosition(userId);
-  if (!savedPos || savedPos.world_id !== String(worldId)) {
-    return getDefaultSpawnPosition(worldId, userId);
+  if (
+    savedPos &&
+    savedPos.world_id === String(worldId) &&
+    inBounds(Number(savedPos.row), Number(savedPos.col))
+  ) {
+    return {
+      row: savedPos.row,
+      col: savedPos.col,
+      seq: savedPos.seq,
+      rotation: savedPos.rotation,
+    };
   }
-  return {
-    row: savedPos.row,
-    col: savedPos.col,
-    seq: savedPos.seq,
-    rotation: savedPos.rotation,
-  };
+  return getDefaultSpawnPosition(worldId, userId);
 }
 
 export function buildActiveWorldPlayers(

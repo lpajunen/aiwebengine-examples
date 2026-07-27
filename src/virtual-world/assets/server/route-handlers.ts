@@ -39,6 +39,7 @@ import { runInWorldTransaction } from "./world-db.ts";
 import {
   OAK_WORLD_ID,
   WORLD_TYPE_FOREST,
+  WORLD_TYPE_VILLAGE,
   buildInventorySelectors,
 } from "./world-domain.ts";
 
@@ -78,9 +79,6 @@ export function virtualWorldEventsStreamCustomizer(context: any) {
   return filter;
 }
 
-/**
- * @param {*} context
- */
 export function itemsHandler(context: any) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -447,7 +445,7 @@ export function startWorldHandler(context: any) {
   }
   var userId = context.request.auth.userId;
   return ResponseBuilder.json(
-    switchUserToStartWorld(userId, OAK_WORLD_ID, WORLD_TYPE_FOREST),
+    switchUserToStartWorld(userId, OAK_WORLD_ID, WORLD_TYPE_VILLAGE),
   );
 }
 

@@ -104,6 +104,79 @@ export function runChatSchemaStep(
   return executeSchemaStep("chat", op, tableName, run, columnName, collector);
 }
 
+// Re-ensures just the world-item + item-meta tables. init()'s
+// ensureWorldDatabaseSchema() runs a long sequential migration list that can
+// time out before reaching (or completing) these tables — in particular the
+// destination_row/destination_col columns added later for portal exit tiles.
+// When those columns are missing, every upsertWorldItem write (drops, the oak
+// singleton, portals) silently fails while saveWorldItems — which omits them —
+// still persists, so seeded items appear but dropped ones vanish. Item write
+// paths call this once per process (idempotent; benign "already exists") so
+// the columns exist regardless of how far init() got.
+export function ensureWorldItemSchema(collector?: Array<any>): void {
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_WORLD_ITEM_TABLE,
+    function () {
+      return database.createTable(VWORLD_WORLD_ITEM_TABLE);
+    },
+    undefined,
+    collector,
+  );
+  (
+    [
+      ["addTextColumn", "item_id", false],
+      ["addTextColumn", "world_id", false],
+      ["addIntegerColumn", "row", false],
+      ["addIntegerColumn", "col", false],
+      ["addTextColumn", "type", false],
+      ["addIntegerColumn", "created_at", false],
+      ["addTextColumn", "destination_world_id", true],
+      ["addTextColumn", "destination_world_type", true],
+      ["addIntegerColumn", "destination_row", true],
+      ["addIntegerColumn", "destination_col", true],
+      ["addTextColumn", "state_json", true],
+    ] as Array<[string, string, boolean]>
+  ).forEach(function (entry) {
+    runWorldSchemaStep(
+      entry[0],
+      VWORLD_WORLD_ITEM_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_WORLD_ITEM_TABLE,
+              entry[1],
+              entry[2],
+            )
+          : database.addTextColumn(VWORLD_WORLD_ITEM_TABLE, entry[1], entry[2]);
+      },
+      entry[1],
+      collector,
+    );
+  });
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    VWORLD_WORLD_ITEM_TABLE,
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_WORLD_ITEM_TABLE,
+        JSON.stringify(["item_id"]),
+      );
+    },
+    undefined,
+    collector,
+  );
+  runWorldSchemaStep(
+    "createTable",
+    VWORLD_WORLD_ITEM_META_TABLE,
+    function () {
+      return database.createTable(VWORLD_WORLD_ITEM_META_TABLE);
+    },
+    undefined,
+    collector,
+  );
+}
+
 export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
   runWorldSchemaStep(
     "createTable",

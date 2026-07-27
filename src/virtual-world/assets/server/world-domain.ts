@@ -1,13 +1,18 @@
 // Default dimensions for worlds without stored rows/cols (all pre-existing
-// worlds, including the oak home world, which must stay 100×100 for its
-// reserved-clearing constants below).
+// worlds except the oak home world, which is pinned to OAK_WORLD_ROWS/COLS
+// below regardless of what's stored).
 export const ROWS = 100;
 export const COLS = 100;
 export const MIN_WORLD_DIM = 8;
 export const MAX_WORLD_DIM = 200;
 export const OAK_WORLD_ID = "10000";
-export const OAK_CENTER_ROW = 50;
-export const OAK_CENTER_COL = 50;
+// The oak home/start world is a fixed-size village clearing, not a generic
+// generated world — its dimensions and clearing center are pinned here
+// rather than following the stored world row, same as OAK_WORLD_ID itself.
+export const OAK_WORLD_ROWS = 30;
+export const OAK_WORLD_COLS = 30;
+export const OAK_CENTER_ROW = Math.floor(OAK_WORLD_ROWS / 2);
+export const OAK_CENTER_COL = Math.floor(OAK_WORLD_COLS / 2);
 export const OAK_CLEAR_RADIUS = 5;
 
 export const WORLD_MOD_LAYER_TERRAIN = "terrain";
@@ -29,6 +34,7 @@ export const WORLD_TILE_SAND = "sand";
 export const WORLD_TILE_CAVE_FLOOR = "cave_floor";
 export const WORLD_TILE_WOOD_FLOOR = "wood_floor";
 export const WORLD_TILE_STICK_FENCE = "stick_fence";
+export const WORLD_TILE_BRIDGE = "bridge";
 
 export type WorldTileName =
   | typeof WORLD_TILE_GROUND
@@ -43,7 +49,8 @@ export type WorldTileName =
   | typeof WORLD_TILE_SAND
   | typeof WORLD_TILE_CAVE_FLOOR
   | typeof WORLD_TILE_WOOD_FLOOR
-  | typeof WORLD_TILE_STICK_FENCE;
+  | typeof WORLD_TILE_STICK_FENCE
+  | typeof WORLD_TILE_BRIDGE;
 
 export const WORLD_TYPE_FOREST = "forest";
 export const WORLD_TYPE_ISLAND = "island";
@@ -168,6 +175,7 @@ export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   cave_floor: { value: 10, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
   wood_floor: { value: 11, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
   stick_fence: { value: 12, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
+  bridge: { value: 13, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
 };
 
 export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
@@ -184,6 +192,7 @@ export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
   10: WORLD_TILE_CAVE_FLOOR,
   11: WORLD_TILE_WOOD_FLOOR,
   12: WORLD_TILE_STICK_FENCE,
+  13: WORLD_TILE_BRIDGE,
 };
 
 const WORLD_FLAVOR_TEXTS = [
@@ -276,7 +285,7 @@ export function normalizeWorldType(
 export function getDefaultWorldTypeForWorldId(
   worldId: string | number,
 ): WorldType {
-  return isOakWorld(worldId) ? WORLD_TYPE_FOREST : WORLD_TYPE_FOREST;
+  return isOakWorld(worldId) ? WORLD_TYPE_VILLAGE : WORLD_TYPE_FOREST;
 }
 
 export function getWorldFloorTileName(worldType: string): WorldTileName {

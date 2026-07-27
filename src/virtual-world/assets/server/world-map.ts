@@ -4,9 +4,13 @@ import {
   getWorldBoundaryTileName,
   getWorldFloorTileName,
   getWorldWallTileName,
+  isOakWorld,
   isWorldTileWalkable,
   mulberry32,
+  OAK_CENTER_COL,
+  OAK_CLEAR_RADIUS,
   ROWS,
+  WORLD_TILE_BRIDGE,
   WORLD_TILE_GROUND,
   WORLD_TILE_LAKE,
   WORLD_TILE_MOUNTAIN,
@@ -17,6 +21,7 @@ import {
   WORLD_TYPE_CAVE,
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,
+  WORLD_TYPE_VILLAGE,
   worldTileValueForName,
   WORLD_MOD_LAYER_TERRAIN,
   WORLD_MOD_LAYER_OBJECT,
@@ -143,7 +148,9 @@ export function generateWorldMap(
   }
 
   // Coast, river, and lakes assume enough interior to leave land; skip them
-  // on small maps rather than flooding the whole world.
+  // on small maps rather than flooding the whole world. Villages keep the
+  // river (crossed by bridges below) but skip the ocean coastline and lakes,
+  // which don't fit a walled settlement.
   if (worldType === WORLD_TYPE_FOREST && rows >= 26 && cols >= 26) {
     const coastWidth = 7 + Math.floor(rand() * 6);
     for (let coastRow = 1; coastRow < rows - 1; coastRow++) {
@@ -157,12 +164,47 @@ export function generateWorldMap(
         map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
       }
     }
+  }
 
-    let riverCol = Math.floor(cols * (0.35 + rand() * 0.3));
+  if (
+    (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_VILLAGE) &&
+    rows >= 26 &&
+    cols >= 26
+  ) {
+    // Tracks which columns the river occupies at each row so bridges below
+    // can be painted exactly over the river instead of guessing its path.
+    const riverColsByRow: Record<number, number[]> = {};
+
+    // The oak world's river must run the full height of the map uninterrupted
+    // (the clearing reservation below would otherwise cut a walkable gap
+    // through it), so confine its wander to a band on one side of the oak
+    // clearing instead of letting it drift across the whole map width.
+    const avoidOakClearing = isOakWorld(worldId);
+    let riverBandMin = 8;
+    let riverBandMax = cols - 9;
+    if (avoidOakClearing) {
+      if (rand() < 0.5) {
+        riverBandMin = 3;
+        riverBandMax = Math.max(
+          riverBandMin,
+          OAK_CENTER_COL - OAK_CLEAR_RADIUS - 2,
+        );
+      } else {
+        riverBandMax = cols - 4;
+        riverBandMin = Math.min(
+          riverBandMax,
+          OAK_CENTER_COL + OAK_CLEAR_RADIUS + 2,
+        );
+      }
+    }
+    let riverCol = avoidOakClearing
+      ? Math.floor((riverBandMin + riverBandMax) / 2)
+      : Math.floor(cols * (0.35 + rand() * 0.3));
     for (let riverRow = 1; riverRow < rows - 1; riverRow++) {
       riverCol += rand() < 0.33 ? -1 : rand() < 0.66 ? 0 : 1;
-      riverCol = Math.max(8, Math.min(cols - 9, riverCol));
+      riverCol = Math.max(riverBandMin, Math.min(riverBandMax, riverCol));
       const riverRadius = rand() < 0.2 ? 1 : 0;
+      const riverCols: number[] = [];
       for (
         let riverOffset = -riverRadius;
         riverOffset <= riverRadius;
@@ -170,16 +212,36 @@ export function generateWorldMap(
       ) {
         map[riverRow][riverCol + riverOffset] =
           worldTileValueForName(WORLD_TILE_RIVER);
+        riverCols.push(riverCol + riverOffset);
+      }
+      riverColsByRow[riverRow] = riverCols;
+    }
+
+    if (worldType === WORLD_TYPE_VILLAGE) {
+      // Two crossings north/south of center, each two rows wide, kept clear
+      // of the oak clearing reservation (applied after this function returns
+      // for the oak world) so both riverbanks stay reachable on foot.
+      const bridgeRows = [Math.round(rows * 0.25), Math.round(rows * 0.75)];
+      for (const bridgeRow of bridgeRows) {
+        for (const bridgeSpanRow of [bridgeRow, bridgeRow + 1]) {
+          const riverCols = riverColsByRow[bridgeSpanRow];
+          if (!riverCols) continue;
+          for (const col of riverCols) {
+            map[bridgeSpanRow][col] = worldTileValueForName(WORLD_TILE_BRIDGE);
+          }
+        }
       }
     }
 
-    for (let lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
-      paintTerrainCircle(
-        12 + Math.floor(rand() * (rows - 24)),
-        12 + Math.floor(rand() * (cols - 24)),
-        2 + Math.floor(rand() * 3),
-        WORLD_TILE_LAKE,
-      );
+    if (worldType === WORLD_TYPE_FOREST) {
+      for (let lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
+        paintTerrainCircle(
+          12 + Math.floor(rand() * (rows - 24)),
+          12 + Math.floor(rand() * (cols - 24)),
+          2 + Math.floor(rand() * 3),
+          WORLD_TILE_LAKE,
+        );
+      }
     }
   }
 

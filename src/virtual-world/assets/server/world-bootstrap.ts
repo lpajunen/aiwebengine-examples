@@ -1,4 +1,8 @@
-import { VWORLD_WORLD_TYPE_TABLE } from "./runtime-config.ts";
+import {
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+  VWORLD_WORLD_TYPE_TABLE,
+} from "./runtime-config.ts";
 import { generateWorldMap, applyWorldModsToMap } from "./world-map.ts";
 import { loadWorldMods } from "./world-mod-storage.ts";
 import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
@@ -7,8 +11,11 @@ import {
   createWorldId,
   COLS,
   getDefaultWorldTypeForWorldId,
+  isOakWorld,
   normalizeWorldDimension,
   normalizeWorldType,
+  OAK_WORLD_COLS,
+  OAK_WORLD_ROWS,
   ROWS,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
@@ -16,17 +23,56 @@ import {
   getWorldClassWithRefresh,
   WorldClassRecord,
 } from "./world-class-storage.ts";
-import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
+import {
+  deleteWorldRowsWhere,
+  querySingleWorldRow,
+  upsertWorldRow,
+} from "./world-db.ts";
 
 export function getOrCreatePlayerWorld(userId: string): string {
   let worldId = getPlayerWorld(userId);
   if (!worldId) {
     worldId = "10000";
     savePlayerWorld(userId, worldId);
-    const defaultType = getDefaultWorldTypeForWorldId(worldId);
-    saveWorldType(worldId, defaultType, undefined, defaultType);
   }
+  ensureOakWorldConfig(worldId);
   return worldId;
+}
+
+// The oak/start world is a fixed-size village clearing, not a generic
+// generated world. Self-heals its stored type/dimensions on every load
+// (cheap no-op once migrated) so rows persisted before the village/30x30
+// switch upgrade the next time anyone loads into it, without needing a
+// one-off migration script.
+function ensureOakWorldConfig(worldId: string): void {
+  if (!isOakWorld(worldId)) return;
+  const defaultType = getDefaultWorldTypeForWorldId(worldId);
+  const info = getWorldInfo(worldId);
+  if (
+    info.world_type === defaultType &&
+    info.rows === OAK_WORLD_ROWS &&
+    info.cols === OAK_WORLD_COLS
+  ) {
+    return;
+  }
+  saveWorldType(
+    worldId,
+    defaultType,
+    { rows: OAK_WORLD_ROWS, cols: OAK_WORLD_COLS },
+    defaultType,
+  );
+  // The stored map just changed shape/type. Any items seeded against the old
+  // map are now at coordinates that may fall outside the new bounds, and the
+  // world's "seeded" marker would otherwise stop ensureWorldItems from ever
+  // re-placing them. Drop both so the world re-seeds items on the new map.
+  deleteWorldRowsWhere(
+    VWORLD_WORLD_ITEM_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+  );
+  deleteWorldRowsWhere(
+    VWORLD_WORLD_ITEM_META_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+  );
 }
 
 export function getWorldType(worldId: string | number): string {

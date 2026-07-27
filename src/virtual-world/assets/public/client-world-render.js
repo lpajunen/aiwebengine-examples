@@ -57,6 +57,8 @@ var matCaveFloorA = new THREE.MeshLambertMaterial({ color: 0x6a6b72 });
 var matCaveFloorB = new THREE.MeshLambertMaterial({ color: 0x5a5c63 });
 var matWoodFloorA = new THREE.MeshLambertMaterial({ color: 0x9b6c3f });
 var matWoodFloorB = new THREE.MeshLambertMaterial({ color: 0x835730 });
+var matBridgeA = new THREE.MeshLambertMaterial({ color: 0xb08a55 });
+var matBridgeB = new THREE.MeshLambertMaterial({ color: 0x9a7447 });
 
 var geoSpruceTrunk = new THREE.CylinderGeometry(0.11, 0.16, 0.95, 6);
 var geoSpruceCanopyLow = new THREE.ConeGeometry(0.78, 1.5, 8);
@@ -117,7 +119,11 @@ var matHouseChimney = new THREE.MeshLambertMaterial({ color: 0x6a6767 });
  * @returns {boolean}
  */
 function isOldOakTile(row, col) {
-  return String(worldId) === "10000" && row === 50 && col === 50;
+  return (
+    String(worldId) === "10000" &&
+    row === OAK_CENTER_ROW &&
+    col === OAK_CENTER_COL
+  );
 }
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
@@ -179,8 +185,8 @@ function setTreeMeshVisibility(visible) {
 function buildOakGroup() {
   if (String(worldId) !== "10000") return null;
   var group = new THREE.Group();
-  var oakX = tileX(50);
-  var oakZ = tileZ(50);
+  var oakX = tileX(OAK_CENTER_COL);
+  var oakZ = tileZ(OAK_CENTER_ROW);
 
   var oakTrunk = new THREE.Mesh(geoOakTrunk, matOakTrunk);
   oakTrunk.position.set(oakX, 0.65, oakZ);
@@ -244,6 +250,8 @@ function countTilesByValue(tileValue) {
 /** @type {any} */ var iCaveFloorB = null;
 /** @type {any} */ var iWoodFloorA = null;
 /** @type {any} */ var iWoodFloorB = null;
+/** @type {any} */ var iBridgeA = null;
+/** @type {any} */ var iBridgeB = null;
 
 /**
  * @param {string} tileName
@@ -270,6 +278,8 @@ function rebuildFloorOverlayMeshes() {
     iCaveFloorB,
     iWoodFloorA,
     iWoodFloorB,
+    iBridgeA,
+    iBridgeB,
   );
   disposeInstancedMeshes([
     iSandA,
@@ -278,6 +288,8 @@ function rebuildFloorOverlayMeshes() {
     iCaveFloorB,
     iWoodFloorA,
     iWoodFloorB,
+    iBridgeA,
+    iBridgeB,
   ]);
 
   iSandA = new THREE.InstancedMesh(
@@ -310,6 +322,16 @@ function rebuildFloorOverlayMeshes() {
     matWoodFloorB,
     countParityTiles("wood_floor", 1),
   );
+  iBridgeA = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matBridgeA,
+    countParityTiles("bridge", 0),
+  );
+  iBridgeB = new THREE.InstancedMesh(
+    geoFloorOverlay,
+    matBridgeB,
+    countParityTiles("bridge", 1),
+  );
 
   var sandAIdx = 0;
   var sandBIdx = 0;
@@ -317,6 +339,8 @@ function rebuildFloorOverlayMeshes() {
   var caveBIdx = 0;
   var woodAIdx = 0;
   var woodBIdx = 0;
+  var bridgeAIdx = 0;
+  var bridgeBIdx = 0;
   for (var row = 0; row < ROWS; row++) {
     for (var col = 0; col < COLS; col++) {
       var tileValue = MAP[row][col];
@@ -356,6 +380,17 @@ function rebuildFloorOverlayMeshes() {
           1,
           1,
         );
+      } else if (tileValue === clientTileValueForName("bridge")) {
+        setInstanceTransform(
+          parity === 0 ? iBridgeA : iBridgeB,
+          parity === 0 ? bridgeAIdx++ : bridgeBIdx++,
+          x,
+          0.03,
+          z,
+          1,
+          1,
+          1,
+        );
       }
     }
   }
@@ -366,7 +401,18 @@ function rebuildFloorOverlayMeshes() {
   finalizeInstancedMesh(iCaveFloorB);
   finalizeInstancedMesh(iWoodFloorA);
   finalizeInstancedMesh(iWoodFloorB);
-  scene.add(iSandA, iSandB, iCaveFloorA, iCaveFloorB, iWoodFloorA, iWoodFloorB);
+  finalizeInstancedMesh(iBridgeA);
+  finalizeInstancedMesh(iBridgeB);
+  scene.add(
+    iSandA,
+    iSandB,
+    iCaveFloorA,
+    iCaveFloorB,
+    iWoodFloorA,
+    iWoodFloorB,
+    iBridgeA,
+    iBridgeB,
+  );
 }
 
 function rebuildTerrainFeatureMeshes() {

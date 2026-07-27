@@ -18,6 +18,7 @@ var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (
         cave_floor: { value: 10, walkable: true, layer: "terrain" },
         wood_floor: { value: 11, walkable: true, layer: "terrain" },
         stick_fence: { value: 12, walkable: false, layer: "terrain" },
+        bridge: { value: 13, walkable: true, layer: "terrain" },
       }
 );
 /** @type {Record<number, string>} */

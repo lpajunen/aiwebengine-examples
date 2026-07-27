@@ -97,7 +97,10 @@ function renderTileDetailPanel() {
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
   var key = row + "_" + col;
-  var isOakCenter = String(worldId) === "10000" && row === 50 && col === 50;
+  var isOakCenter =
+    String(worldId) === "10000" &&
+    row === OAK_CENTER_ROW &&
+    col === OAK_CENTER_COL;
 
   requireElementById("tile-detail-title").textContent =
     t("tile.square", "Square") + " (" + col + ", " + row + ")";
@@ -134,6 +137,8 @@ function renderTileDetailPanel() {
     terrainLabel = t("terrain.cave_floor", "Cave floor");
   } else if (terrainType === clientTileValueForName("wood_floor")) {
     terrainLabel = t("terrain.wood_floor", "Wood floor");
+  } else if (terrainType === clientTileValueForName("bridge")) {
+    terrainLabel = t("terrain.bridge", "Bridge");
   } else {
     terrainLabel =
       treeMod && treeMod.action === "cut"

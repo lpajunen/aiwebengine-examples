@@ -739,6 +739,24 @@ function treeActionLabel(action) {
   return action;
 }
 
+/**
+ * Whether a door's action makes sense given its current open state, so the HUD
+ * only offers the relevant one: a closed door offers "open" (not "enter"/
+ * "close"), an open door offers "enter"/"close" (not "open"). Non-door items
+ * pass through unaffected.
+ * @param {ClientItem} item
+ * @param {string} action
+ * @returns {boolean}
+ */
+function isNearbyItemActionApplicable(item, action) {
+  if (!item || item.type !== "door") return true;
+  var isOpen = !!(item.state && item.state.open === true);
+  if (action === "open_door") return !isOpen;
+  if (action === "close_door") return isOpen;
+  if (action === "door_travel") return isOpen;
+  return true;
+}
+
 /** @returns {string[]} */
 function getOwnedTreeActions() {
   var actionsByType = /** @type {Record<string, boolean>} */ ({});
@@ -777,6 +795,7 @@ function getOwnedTreeActions() {
     for (var m = 0; m < actions.length; m++) {
       if (!actions[m]) continue;
       if (isEntityTargetedAction(actions[m])) continue;
+      if (!isNearbyItemActionApplicable(all[j], actions[m])) continue;
       actionsByType[actions[m]] = true;
     }
   }

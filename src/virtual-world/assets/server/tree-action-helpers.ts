@@ -1474,6 +1474,14 @@ export function performTreeActionForUser(
       portalItem,
     ]);
 
+    // Seed the destination world's item manifest FIRST, then plant the return
+    // portal on top. ensureWorldItems wipes and reseeds any world whose
+    // `seeded` marker is stale (a brand-new world's is 0), so if the return
+    // portal were planted before the world was seeded, the first player to
+    // step through would trigger that reseed and delete it. Seeding here marks
+    // the world current, so the portal we add below survives.
+    ensureWorldItems(createdDestinationWorld.world_id);
+
     // Seed a portal back at the new world's default spawn tile (1,1 for any
     // non-oak world, see getDefaultSpawnPosition), pointing at this exact
     // tile, so the player who steps through isn't stranded there and lands

@@ -261,6 +261,70 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
   },
+  build_door: {
+    id: "build_door",
+    labelKey: "tree_action.build_door",
+    fallbackLabel: "Hang a door",
+    targetKind: "facing_tile",
+    sourceItemIds: ["hammer"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
+      },
+      itemChange: {
+        eventId: "door_create",
+      },
+    },
+    validation: {
+      // A door is an opening in a house wall — it must be hung on an existing
+      // house tile, and only one door per tile.
+      requireHouseState: {
+        kind: "present",
+        errorMessage: "A door must be hung on a house wall",
+      },
+      requireItemState: {
+        itemId: "door",
+        kind: "absent",
+        errorMessage: "A door already hangs here",
+      },
+    },
+  },
+  remove_door: {
+    id: "remove_door",
+    labelKey: "tree_action.remove_door",
+    fallbackLabel: "Take down door",
+    targetKind: "facing_tile",
+    sourceItemIds: ["hammer"],
+    removes: [{ itemId: "door" }],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+        includeRemovedCount: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
+      },
+      itemChange: {
+        eventId: "door_remove",
+      },
+    },
+    validation: {
+      requireItemState: {
+        itemId: "door",
+        kind: "present",
+        errorMessage: "No door to take down",
+      },
+    },
+  },
   build_portal: {
     id: "build_portal",
     labelKey: "tree_action.build_portal",
@@ -425,6 +489,21 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Enter rune gate",
     targetKind: "current_tile",
     sourceItemIds: ["portal"],
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
+  },
+  door_travel: {
+    id: "door_travel",
+    labelKey: "tree_action.door_travel",
+    fallbackLabel: "Enter door",
+    // A door sits on a (non-walkable) house wall tile, so unlike portal_travel
+    // the actor faces it from the adjacent tile rather than standing on it.
+    targetKind: "facing_tile",
+    sourceItemIds: ["door"],
     execution: {
       successPayload: {
         includeSwitchedWorld: true,

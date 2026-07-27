@@ -861,6 +861,9 @@ function updateTerrainFeatureMeshes() {
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────
 var itemGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+// A door reads as a tall thin panel standing on its tile, rather than the
+// small ground-item cube used for everything else.
+var doorGeo = new THREE.BoxGeometry(0.72, 1.0, 0.16);
 /** @type {Record<string, any>} */
 var itemMatCache = {};
 var itemMeshGroup = new THREE.Group();
@@ -891,6 +894,7 @@ function itemTypeColor(type) {
   if (type === "birch_bark_letter") return 0xe4d2a0;
   if (type === "blessing_marker") return 0xb54434;
   if (type === "portal") return 0x5ad7ff;
+  if (type === "door") return 0x9c6b3f;
   return 0xf3ca40;
 }
 
@@ -926,10 +930,14 @@ function rebuildItemMeshes() {
     for (var i = 0; i < arr.length; i++) {
       var item = arr[i];
       if (item.type === "old_oak") continue;
-      var mesh = new THREE.Mesh(itemGeo, getItemMaterial(item.type));
-      var ox = ((i % 3) - 1) * 0.2;
-      var oz = ((Math.floor(i / 3) % 3) - 1) * 0.2;
-      var oy = 0.2 + Math.floor(i / 9) * 0.16;
+      var isDoor = item.type === "door";
+      var mesh = new THREE.Mesh(
+        isDoor ? doorGeo : itemGeo,
+        getItemMaterial(item.type),
+      );
+      var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
+      var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
+      var oy = isDoor ? 0.5 : 0.2 + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
       mesh.castShadow = true;
       mesh.receiveShadow = false;

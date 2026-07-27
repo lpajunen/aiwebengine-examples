@@ -162,7 +162,18 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.hammer.name",
       fallbackLabel: "Hammer",
     },
-    actionIds: ["build_house", "destroy_house"],
+    actionIds: ["build_house", "destroy_house", "build_door", "remove_door"],
+  },
+  door: {
+    id: "door",
+    kind: "placeable",
+    nonPickable: true,
+    visuals: {
+      color: 0x9c6b3f,
+      labelKey: "item.door.name",
+      fallbackLabel: "Door",
+    },
+    actionIds: ["door_travel"],
   },
   portal: {
     id: "portal",

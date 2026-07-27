@@ -22,6 +22,14 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "portal_remove",
     deltaKind: "remove",
   },
+  door_create: {
+    id: "door_create",
+    deltaKind: "add",
+  },
+  door_remove: {
+    id: "door_remove",
+    deltaKind: "remove",
+  },
   blessing_place: {
     id: "blessing_place",
     deltaKind: "add",

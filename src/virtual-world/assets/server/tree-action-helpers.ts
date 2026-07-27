@@ -62,6 +62,7 @@ import {
   isWithinTileDistance,
   isWorldTileWalkable,
   normalizeWorldType,
+  WORLD_TYPE_BUILDING,
 } from "./world-domain.ts";
 import {
   applyHouseAction,
@@ -759,7 +760,10 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "portal_travel") {
+  if (action === "portal_travel" || action === "door_travel") {
+    // A door and a rune gate travel identically — read the destination off the
+    // faced/underfoot portal-kind item (door_travel's source is ["door"],
+    // portal_travel's is ["portal"]) and switch worlds.
     const portalItemIds = actionDefinition
       ? actionDefinition.sourceItemIds
       : [];
@@ -1414,6 +1418,63 @@ export function performTreeActionForUser(
       houses,
     );
     maybeSendConfiguredWorldEvent(targetRow, targetCol);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload(),
+    };
+  }
+
+  if (action === "build_door") {
+    // A door is a portal whose destination is always a house interior
+    // (WORLD_TYPE_BUILDING: wood floor, house walls) — no world-type picker.
+    // Same linked-pair machinery as build_portal: plant the door on the faced
+    // house-wall tile, seed the interior, then drop a matching return door at
+    // the interior's spawn tile pointing back here.
+    const targetTileKey = targetRow + "_" + targetCol;
+    const createdInterior = createWorldOfType(
+      WORLD_TYPE_BUILDING,
+      { rows: 12, cols: 12 },
+      WORLD_TYPE_BUILDING,
+    );
+    const doorItem: Record<string, any> = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: "door",
+      created_at: Date.now(),
+      destination_world_id: createdInterior.world_id,
+      destination_world_type: createdInterior.world_type,
+      destination_world_rows: createdInterior.rows,
+      destination_world_cols: createdInterior.cols,
+      // The interior's default spawn tile (see getDefaultSpawnPosition) — where
+      // the matching return door below is placed.
+      destination_row: 1,
+      destination_col: 1,
+    };
+    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
+    worldItems[targetTileKey].push(doorItem);
+    upsertWorldItem(worldId, targetRow, targetCol, doorItem);
+    maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
+      doorItem,
+    ]);
+
+    // Seed the interior's item manifest before planting the return door — a
+    // brand-new world's stale `seeded` marker would otherwise make the first
+    // visitor's reseed wipe the door (see the build_portal note below).
+    ensureWorldItems(createdInterior.world_id);
+
+    const returnDoorItem: Record<string, any> = {
+      id:
+        "w" +
+        createdInterior.world_id +
+        "_i" +
+        nextWorldItemId(createdInterior.world_id),
+      type: "door",
+      created_at: Date.now(),
+      destination_world_id: worldId,
+      destination_row: targetRow,
+      destination_col: targetCol,
+    };
+    upsertWorldItem(createdInterior.world_id, 1, 1, returnDoorItem);
+
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload(),

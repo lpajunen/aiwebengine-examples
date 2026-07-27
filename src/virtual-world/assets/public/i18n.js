@@ -11,6 +11,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       tree_planter: { name: "Pine sapling" },
       portal_builder: { name: "Rune gate charm" },
       portal: { name: "Rune gate" },
+      door: { name: "Door" },
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Rowan charm" },
@@ -35,6 +36,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       cut: "Use woodsman's saw",
       build_house: "Use hammer (build house)",
       destroy_house: "Use hammer (destroy house)",
+      build_door: "Hang a door",
+      remove_door: "Take down door",
+      door_travel: "Enter door",
       build_portal: "Raise rune gate",
       remove_portal: "Close rune gate",
       tune: "Tune kantele",
@@ -361,6 +365,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       tree_planter: { name: "Männyn taimi" },
       portal_builder: { name: "Riimuportin amuletti" },
       portal: { name: "Riimuportti" },
+      door: { name: "Ovi" },
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Pihlajakoriste" },
@@ -385,6 +390,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       cut: "Käytä metsurin sahaa",
       build_house: "Käytä vasaraa (rakenna talo)",
       destroy_house: "Käytä vasaraa (pura talo)",
+      build_door: "Ripusta ovi",
+      remove_door: "Irrota ovi",
+      door_travel: "Astu ovesta",
       build_portal: "Nosta riimuportti",
       remove_portal: "Sulje riimuportti",
       tune: "Viritä kantele",
@@ -882,6 +890,7 @@ function itemTypeToLabelKey(type) {
   if (type === "birch_bark_letter") return "item.birch_bark_letter.name";
   if (type === "blessing_marker") return "item.blessing_marker.name";
   if (type === "portal") return "item.portal.name";
+  if (type === "door") return "item.door.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   if (type === "creator_stone") return "item.creator_stone.name";
   if (type === "old_oak") return "item.old_oak.name";

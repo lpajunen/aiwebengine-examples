@@ -285,7 +285,7 @@ function renderTileDetailPanel() {
           "postItemTargetedAction",
         ) +
         "</div>";
-      if (itm.type === "portal") {
+      if (itm.type === "portal" || itm.type === "door") {
         html +=
           '<div class="tile-row">' +
           escHtml(t("tile.leads_to", "Leads to")) +

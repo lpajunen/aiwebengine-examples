@@ -911,6 +911,24 @@ function getItemMaterial(type) {
   return itemMatCache[type];
 }
 
+// Doors render darker when shut and lighter/ajar when open, so their state is
+// legible at a glance (open doors can be walked through; see door_travel).
+/** @type {Record<string, any>} */
+var doorMatCache = {};
+/**
+ * @param {boolean} isOpen
+ * @returns {any}
+ */
+function getDoorMaterial(isOpen) {
+  var key = isOpen ? "open" : "closed";
+  if (!doorMatCache[key]) {
+    doorMatCache[key] = new THREE.MeshLambertMaterial({
+      color: isOpen ? 0xb98a5a : 0x6f4a2a,
+    });
+  }
+  return doorMatCache[key];
+}
+
 function clearItemMeshes() {
   while (itemMeshGroup.children.length > 0) {
     var child = itemMeshGroup.children.pop();
@@ -931,14 +949,21 @@ function rebuildItemMeshes() {
       var item = arr[i];
       if (item.type === "old_oak") continue;
       var isDoor = item.type === "door";
+      var doorOpen = isDoor && !!(item.state && item.state.open === true);
       var mesh = new THREE.Mesh(
         isDoor ? doorGeo : itemGeo,
-        getItemMaterial(item.type),
+        isDoor ? getDoorMaterial(doorOpen) : getItemMaterial(item.type),
       );
       var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
       var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
       var oy = isDoor ? 0.5 : 0.2 + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
+      // An open door swings ~70° ajar and shifts to its hinge edge; a shut
+      // door sits flush across the tile.
+      if (isDoor && doorOpen) {
+        mesh.rotation.y = Math.PI * 0.39;
+        mesh.position.x -= 0.28;
+      }
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       itemMeshGroup.add(mesh);

@@ -173,7 +173,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.door.name",
       fallbackLabel: "Door",
     },
-    actionIds: ["door_travel"],
+    actionIds: ["door_travel", "open_door", "close_door"],
   },
   portal: {
     id: "portal",

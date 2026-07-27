@@ -502,12 +502,72 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Enter door",
     // A door sits on a (non-walkable) house wall tile, so unlike portal_travel
     // the actor faces it from the adjacent tile rather than standing on it.
+    // Travel is gated on the door's open state (see door_travel branch in
+    // tree-action-helpers.ts) — a closed door can't be walked through.
     targetKind: "facing_tile",
     sourceItemIds: ["door"],
     execution: {
       successPayload: {
         includeSwitchedWorld: true,
         includeWorldId: true,
+      },
+    },
+  },
+  open_door: {
+    id: "open_door",
+    labelKey: "tree_action.open_door",
+    fallbackLabel: "Open door",
+    targetKind: "facing_tile",
+    sourceItemIds: ["door"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
+      },
+      itemChange: {
+        eventId: "door_state",
+      },
+      toastMessage: "The door swings open.",
+    },
+    validation: {
+      requireItemState: {
+        itemId: "door",
+        kind: "present",
+        errorMessage: "No door here",
+      },
+    },
+  },
+  close_door: {
+    id: "close_door",
+    labelKey: "tree_action.close_door",
+    fallbackLabel: "Close door",
+    targetKind: "facing_tile",
+    sourceItemIds: ["door"],
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+        includeTileItems: true,
+      },
+      itemMutation: {
+        saveWorldItems: true,
+      },
+      itemChange: {
+        eventId: "door_state",
+      },
+      toastMessage: "You pull the door shut.",
+    },
+    validation: {
+      requireItemState: {
+        itemId: "door",
+        kind: "present",
+        errorMessage: "No door here",
       },
     },
   },

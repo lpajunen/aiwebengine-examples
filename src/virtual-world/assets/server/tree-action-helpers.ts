@@ -776,6 +776,18 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.missing_required_item_for_action" },
       };
     }
+    // A closed door blocks passage (rune gates have no open state, so this
+    // only gates doors). Missing state is treated as closed for safety.
+    if (
+      isValidItem(portalEntry) &&
+      portalEntry.type === "door" &&
+      !(portalEntry.state && portalEntry.state.open === true)
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.door_closed" },
+      };
+    }
     const newWorldId =
       isValidItem(portalEntry) && portalEntry.destination_world_id
         ? String(portalEntry.destination_world_id)
@@ -1424,6 +1436,47 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "open_door" || action === "close_door") {
+    // Toggle the faced door's open state and persist it on the world item.
+    // requireItemState (door present) already ran in validation above, so a
+    // door is on the target tile.
+    const doorTileKey = targetRow + "_" + targetCol;
+    const doorTileItems = Array.isArray(worldItems[doorTileKey])
+      ? worldItems[doorTileKey]
+      : [];
+    const doorEntry = doorTileItems.find(function (item) {
+      return isValidItem(item) && item.type === "door";
+    });
+    if (!doorEntry) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.missing_required_item_for_action" },
+      };
+    }
+    const shouldOpen = action === "open_door";
+    const isOpen = !!(doorEntry.state && doorEntry.state.open === true);
+    if (isOpen === shouldOpen) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: shouldOpen
+            ? "error.door_already_open"
+            : "error.door_already_closed",
+        },
+      };
+    }
+    doorEntry.state = Object.assign({}, doorEntry.state, { open: shouldOpen });
+    upsertWorldItem(worldId, targetRow, targetCol, doorEntry);
+    maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
+      doorEntry,
+    ]);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload(),
+    };
+  }
+
   if (action === "build_door") {
     // A door is a portal whose destination is always a house interior
     // (WORLD_TYPE_BUILDING: wood floor, house walls) — no world-type picker.
@@ -1440,6 +1493,9 @@ export function performTreeActionForUser(
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),
       type: "door",
       created_at: Date.now(),
+      // A freshly hung door starts open, preserving the build-then-enter flow;
+      // close_door seals it (see the door_travel open gate below).
+      state: { open: true },
       destination_world_id: createdInterior.world_id,
       destination_world_type: createdInterior.world_type,
       destination_world_rows: createdInterior.rows,
@@ -1469,6 +1525,7 @@ export function performTreeActionForUser(
         nextWorldItemId(createdInterior.world_id),
       type: "door",
       created_at: Date.now(),
+      state: { open: true },
       destination_world_id: worldId,
       destination_row: targetRow,
       destination_col: targetCol,

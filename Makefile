@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run install outdated format format-check lint typecheck verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run install outdated format format-check lint typecheck verify
 
 # Server host configuration (can be overridden via environment variable)
 export SERVER_HOST ?= https://softagen.com
@@ -24,6 +24,14 @@ upload-virtual-world:
 
 upload-virtual-world-dry-run:
 	npm run upload-virtual-world-dry-run
+
+# Deploy only changed virtual-world files (git-detected, or pass FILES="a b").
+# Per-file upsert + sha256 read-back verify — see scripts/deploy-assets.js.
+deploy-changed:
+	node scripts/deploy-assets.js $(FILES)
+
+deploy-changed-dry-run:
+	node scripts/deploy-assets.js --dry-run $(FILES)
 
 install:
 	npm run install

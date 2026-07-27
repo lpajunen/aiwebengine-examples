@@ -6,6 +6,50 @@
 /** @type {Record<string, string>} */
 var LOCALE_FLAG_BY_CODE = { en: "🇬🇧", fi: "🇫🇮" };
 
+/**
+ * Build the per-locale `labels` payload sent with a class record. The English
+ * name lives in the record's fallbackLabel; this carries only the non-English
+ * overrides (today just Finnish). Omitted/blank entries are simply left out.
+ * @param {string} nameFi
+ * @returns {Record<string, string>}
+ */
+function buildLabelsPayload(nameFi) {
+  /** @type {Record<string, string>} */
+  var labels = {};
+  if (nameFi) labels.fi = nameFi;
+  return labels;
+}
+
+/**
+ * Localized display name for an editor-list row of a flat class record
+ * (action/living/world — label fields live at the top level).
+ * @param {any} cls
+ * @returns {string}
+ */
+function classDisplayLabel(cls) {
+  if (!cls) return "?";
+  return localizeLabel(
+    cls.labels,
+    String(cls.labelKey || ""),
+    String(cls.fallbackLabel || cls.id || "?"),
+  );
+}
+
+/**
+ * Localized display name for an item-class editor-list row, whose label
+ * fields live under `visuals`.
+ * @param {any} ic
+ * @returns {string}
+ */
+function itemClassDisplayLabel(ic) {
+  if (!ic) return "?";
+  return localizeLabel(
+    ic.labels,
+    String((ic.visuals && ic.visuals.labelKey) || ""),
+    String((ic.visuals && ic.visuals.fallbackLabel) || ic.id || "?"),
+  );
+}
+
 function updateLocaleToggleIcon() {
   var btn = document.getElementById("btn-locale-toggle");
   if (!btn) return;
@@ -25,6 +69,7 @@ function retranslateUI() {
   if (itemClassPanelVisible) renderItemClassList();
   if (actionClassPanelVisible) renderActionClassList();
   if (livingClassPanelVisible) renderLivingClassList();
+  if (worldClassPanelVisible) renderWorldClassList();
   if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
 }
 
@@ -90,9 +135,9 @@ function renderItemClassList() {
       classes = classes
         .slice()
         .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
-          var la = String((a.visuals && a.visuals.fallbackLabel) || a.id || "");
-          var lb = String((b.visuals && b.visuals.fallbackLabel) || b.id || "");
-          return la.localeCompare(lb);
+          return itemClassDisplayLabel(a).localeCompare(
+            itemClassDisplayLabel(b),
+          );
         });
       if (!classes.length) {
         listDiv.innerHTML =
@@ -106,9 +151,7 @@ function renderItemClassList() {
       var rows = "";
       for (var i = 0; i < classes.length; i++) {
         var ic = classes[i];
-        var label = escHtml(
-          String((ic.visuals && ic.visuals.fallbackLabel) || ic.id || "?"),
-        );
+        var label = escHtml(itemClassDisplayLabel(ic));
         var id = escHtml(String(ic.id || ""));
         rows +=
           '<div class="class-row">' +
@@ -170,6 +213,8 @@ function editItemClass(id) {
       idEl.disabled = true;
       /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value =
         String((ic.visuals && ic.visuals.fallbackLabel) || "");
+      /** @type {HTMLInputElement} */ (requireElementById("ic-name-fi")).value =
+        String((ic.labels && ic.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
         String(ic.kind || "tool");
       /** @type {HTMLInputElement} */ (
@@ -204,6 +249,7 @@ function cancelItemClassEdit() {
   idEl.disabled = false;
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("ic-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
     "tool";
   /** @type {HTMLInputElement} */ (
@@ -236,6 +282,9 @@ function submitItemClassForm() {
   }
   var labelVal = /** @type {HTMLInputElement} */ (
     requireElementById("ic-label")
+  ).value.trim();
+  var nameFiVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ic-name-fi")
   ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-kind"))
     .value;
@@ -280,6 +329,7 @@ function submitItemClassForm() {
     visuals: { fallbackLabel: labelVal || idVal },
     actionIds: actionIds,
     stateTemplate: stateTemplate,
+    labels: buildLabelsPayload(nameFiVal),
   };
   var url = itemClassEditId
     ? "/virtual-world/item-classes/" + encodeURIComponent(itemClassEditId)
@@ -377,9 +427,7 @@ function renderActionClassList() {
       classes = classes
         .slice()
         .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
-          return String(a.fallbackLabel || a.id || "").localeCompare(
-            String(b.fallbackLabel || b.id || ""),
-          );
+          return classDisplayLabel(a).localeCompare(classDisplayLabel(b));
         });
       if (!classes.length) {
         listDiv.innerHTML =
@@ -396,7 +444,7 @@ function renderActionClassList() {
       var rows = "";
       for (var i = 0; i < classes.length; i++) {
         var ac = classes[i];
-        var label = escHtml(String(ac.fallbackLabel || ac.id || "?"));
+        var label = escHtml(classDisplayLabel(ac));
         var id = escHtml(String(ac.id || ""));
         rows +=
           '<div class="class-row">' +
@@ -458,6 +506,8 @@ function editActionClass(id) {
       idEl.disabled = true;
       /** @type {HTMLInputElement} */ (requireElementById("ac-label")).value =
         String(ac.fallbackLabel || "");
+      /** @type {HTMLInputElement} */ (requireElementById("ac-name-fi")).value =
+        String((ac.labels && ac.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (
         requireElementById("ac-target-kind")
       ).value = String(ac.targetKind || "self");
@@ -489,6 +539,7 @@ function cancelActionClassEdit() {
   idEl.disabled = false;
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("ac-label")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("ac-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (
     requireElementById("ac-target-kind")
   ).value = "self";
@@ -517,6 +568,9 @@ function submitActionClassForm() {
   }
   var labelVal = /** @type {HTMLInputElement} */ (
     requireElementById("ac-label")
+  ).value.trim();
+  var nameFiVal = /** @type {HTMLInputElement} */ (
+    requireElementById("ac-name-fi")
   ).value.trim();
   var targetKindVal = /** @type {HTMLSelectElement} */ (
     requireElementById("ac-target-kind")
@@ -551,6 +605,7 @@ function submitActionClassForm() {
     targetKind: targetKindVal,
     sourceItemIds: sourceItemIds,
     logicSpec: logicSpec,
+    labels: buildLabelsPayload(nameFiVal),
   };
   var url = actionClassEditId
     ? "/virtual-world/action-classes/" + encodeURIComponent(actionClassEditId)
@@ -648,9 +703,7 @@ function renderLivingClassList() {
       classes = classes
         .slice()
         .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
-          return String(a.fallbackLabel || a.id || "").localeCompare(
-            String(b.fallbackLabel || b.id || ""),
-          );
+          return classDisplayLabel(a).localeCompare(classDisplayLabel(b));
         });
       if (!classes.length) {
         listDiv.innerHTML =
@@ -667,7 +720,7 @@ function renderLivingClassList() {
       var rows = "";
       for (var i = 0; i < classes.length; i++) {
         var lc = classes[i];
-        var label = escHtml(String(lc.fallbackLabel || lc.id || "?"));
+        var label = escHtml(classDisplayLabel(lc));
         var id = escHtml(String(lc.id || ""));
         rows +=
           '<div class="class-row">' +
@@ -729,6 +782,8 @@ function editLivingClass(id) {
       idEl.disabled = true;
       /** @type {HTMLInputElement} */ (requireElementById("lc-label")).value =
         String(lc.fallbackLabel || "");
+      /** @type {HTMLInputElement} */ (requireElementById("lc-name-fi")).value =
+        String((lc.labels && lc.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
         String(lc.kind || "creature");
       /** @type {HTMLTextAreaElement} */ (
@@ -772,6 +827,7 @@ function cancelLivingClassEdit() {
   idEl.disabled = false;
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("lc-label")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("lc-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
     "creature";
   /** @type {HTMLTextAreaElement} */ (
@@ -805,6 +861,9 @@ function submitLivingClassForm() {
   }
   var labelVal = /** @type {HTMLInputElement} */ (
     requireElementById("lc-label")
+  ).value.trim();
+  var nameFiVal = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-name-fi")
   ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-kind"))
     .value;
@@ -883,6 +942,7 @@ function submitLivingClassForm() {
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,
     aggressive: aggressiveVal,
+    labels: buildLabelsPayload(nameFiVal),
   };
   var url = livingClassEditId
     ? "/virtual-world/living-classes/" + encodeURIComponent(livingClassEditId)
@@ -994,9 +1054,7 @@ function renderWorldClassList() {
       classes = classes
         .slice()
         .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
-          return String(a.fallbackLabel || a.id || "").localeCompare(
-            String(b.fallbackLabel || b.id || ""),
-          );
+          return classDisplayLabel(a).localeCompare(classDisplayLabel(b));
         });
       if (!classes.length) {
         listDiv.innerHTML =
@@ -1009,14 +1067,7 @@ function renderWorldClassList() {
       for (var i = 0; i < classes.length; i++) {
         var wc = classes[i];
         var id = escHtml(String(wc.id || ""));
-        var label = escHtml(String(wc.fallbackLabel || wc.id || "?"));
-        var summary = escHtml(
-          String(wc.baseType || "") +
-            " " +
-            String(wc.rows || "?") +
-            "×" +
-            String(wc.cols || "?"),
-        );
+        var label = escHtml(classDisplayLabel(wc));
         var delBtn = isBuiltinWorldClassId(String(wc.id || ""))
           ? ""
           : '<button data-world-class-id="' +
@@ -1031,8 +1082,6 @@ function renderWorldClassList() {
           "</span> " +
           '<span class="class-row-label">' +
           label +
-          " · " +
-          summary +
           "</span>" +
           '<span class="class-row-btns">' +
           '<button data-world-class-id="' +
@@ -1082,6 +1131,8 @@ function editWorldClass(id) {
       idEl.disabled = true;
       /** @type {HTMLInputElement} */ (requireElementById("wc-label")).value =
         String(wc.fallbackLabel || "");
+      /** @type {HTMLInputElement} */ (requireElementById("wc-name-fi")).value =
+        String((wc.labels && wc.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (
         requireElementById("wc-base-type")
       ).value = String(wc.baseType || "forest");
@@ -1121,6 +1172,7 @@ function cancelWorldClassEdit() {
   idEl.disabled = false;
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("wc-label")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("wc-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("wc-base-type")).value =
     "forest";
   /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value = "100";
@@ -1150,6 +1202,9 @@ function submitWorldClassForm() {
   }
   var labelVal = /** @type {HTMLInputElement} */ (
     requireElementById("wc-label")
+  ).value.trim();
+  var nameFiVal = /** @type {HTMLInputElement} */ (
+    requireElementById("wc-name-fi")
   ).value.trim();
   var baseTypeVal = /** @type {HTMLSelectElement} */ (
     requireElementById("wc-base-type")
@@ -1212,6 +1267,7 @@ function submitWorldClassForm() {
     fallbackLabel: labelVal || idVal,
     itemSpawns: itemSpawns,
     npcSpawns: npcSpawns,
+    labels: buildLabelsPayload(nameFiVal),
   };
   var url = worldClassEditId
     ? "/virtual-world/world-classes/" + encodeURIComponent(worldClassEditId)

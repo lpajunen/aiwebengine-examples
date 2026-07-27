@@ -30,6 +30,7 @@ export function upsertActionClassRow(row: {
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

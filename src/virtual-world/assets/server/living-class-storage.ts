@@ -24,6 +24,7 @@ export function upsertLivingClassRow(row: {
   value_template_json: string;
   value_schema_json: string;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

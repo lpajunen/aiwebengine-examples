@@ -136,6 +136,10 @@ export interface LivingClassRecord {
   // Optional so the built-in DEFAULT_LIVING_CLASSES literals don't need to
   // declare it; treat missing the same as [] (admin-only, see canManageClass).
   ownerIds?: string[];
+  // Per-locale display-name overrides (today just { fi }); the canonical
+  // English name stays in fallbackLabel. Optional so built-in literals — which
+  // translate via labelKey — need not declare it. See class-labels.ts.
+  labels?: Record<string, string>;
 }
 
 export interface LivingState {

@@ -37,6 +37,7 @@ import {
   upsertLivingClass,
 } from "./living-registry.ts";
 import { movePlayerForUser } from "./move-player.ts";
+import { normalizeClassLabels } from "./class-labels.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import {
@@ -301,6 +302,12 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],
+      labels:
+        args.labels !== undefined
+          ? normalizeClassLabels(args.labels)
+          : existing
+            ? existing.labels
+            : {},
     };
     const writeResult = upsertItemClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -398,6 +405,12 @@ export function virtualWorldManageActionClassesToolHandler(
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],
+      labels:
+        args.labels !== undefined
+          ? normalizeClassLabels(args.labels)
+          : existing
+            ? existing.labels
+            : {},
     };
     const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -497,6 +510,12 @@ export function virtualWorldManageLivingClassesToolHandler(
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],
+      labels:
+        args.labels !== undefined
+          ? normalizeClassLabels(args.labels)
+          : existing
+            ? existing.labels
+            : {},
     };
     const writeResult = upsertLivingClass(record);
     if (!writeResult || !writeResult.ok) {
@@ -601,6 +620,8 @@ export function virtualWorldManageWorldClassesToolHandler(
           ? normalizeOwnerIdsInput(args.ownerIds) ||
             (existing && existing.ownerIds)
           : [userId],
+      labels:
+        args.labels !== undefined ? args.labels : existing && existing.labels,
     });
     const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {

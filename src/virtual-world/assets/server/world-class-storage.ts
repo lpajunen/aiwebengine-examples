@@ -13,6 +13,7 @@ import {
   queryWorldRows,
   upsertWorldRow,
 } from "./world-db.ts";
+import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
 
 export type WorldClassSpawnEntry = { id: string; count: number };
 
@@ -26,6 +27,7 @@ export type WorldClassRecord = {
   itemSpawns: WorldClassSpawnEntry[];
   npcSpawns: WorldClassSpawnEntry[];
   ownerIds: string[];
+  labels: ClassLabels;
 };
 
 // Default item spawn manifest shared by all four built-in world classes,
@@ -109,6 +111,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     itemSpawns: defaultItemSpawns(),
     npcSpawns: defaultNPCSpawns(worldType),
     ownerIds: [],
+    labels: {},
   };
 }
 
@@ -122,6 +125,7 @@ export function normalizeWorldClassRecord(record: {
   itemSpawns?: unknown;
   npcSpawns?: unknown;
   ownerIds?: unknown;
+  labels?: unknown;
 }): WorldClassRecord {
   const id = String(record.id || "").trim();
   return {
@@ -136,6 +140,7 @@ export function normalizeWorldClassRecord(record: {
     itemSpawns: normalizeSpawnEntries(record.itemSpawns),
     npcSpawns: normalizeSpawnEntries(record.npcSpawns),
     ownerIds: normalizeOwnerIds(record.ownerIds),
+    labels: normalizeClassLabels(record.labels),
   };
 }
 
@@ -168,6 +173,7 @@ function worldClassFromDbRow(row: any): WorldClassRecord {
         return [];
       }
     })(),
+    labels: row.labels_json,
   });
 }
 
@@ -184,6 +190,7 @@ function worldClassToDbRow(
   item_spawns_json: string;
   npc_spawns_json: string;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -198,6 +205,7 @@ function worldClassToDbRow(
     item_spawns_json: JSON.stringify(record.itemSpawns || []),
     npc_spawns_json: JSON.stringify(record.npcSpawns || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
+    labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
     created_at: storedTs,
     updated_at: storedTs,
   };

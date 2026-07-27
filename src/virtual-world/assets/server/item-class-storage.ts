@@ -30,6 +30,7 @@ export function upsertItemClassRow(row: {
   action_ids_json: string;
   state_template_json: string;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 }): any | null {

@@ -30,6 +30,7 @@ declare var WORLD_CLASS_REGISTRY: Array<{
   cols: number;
   labelKey: string;
   fallbackLabel: string;
+  labels?: Record<string, string>;
 }>;
 declare var INITIAL_ACTIVE_ACTIONS: Array<{
   action_id: string;

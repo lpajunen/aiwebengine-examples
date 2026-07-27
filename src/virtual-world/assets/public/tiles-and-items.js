@@ -419,7 +419,7 @@ function livingClassLabel(classId) {
   var cls = classes[id];
   var labelKey = (cls && cls.labelKey) || "living.class." + id;
   var fallbackLabel = (cls && cls.fallbackLabel) || humanizeType(id);
-  return t(labelKey, fallbackLabel);
+  return localizeLabel(cls && cls.labels, labelKey, fallbackLabel);
 }
 
 /**
@@ -503,7 +503,7 @@ function worldTypeLabel(worldType) {
 
 /**
  * @param {string} classId
- * @returns {{ id: string, baseType: string, labelKey: string, fallbackLabel: string } | null}
+ * @returns {{ id: string, baseType: string, labelKey: string, fallbackLabel: string, labels?: Record<string, string> } | null}
  */
 function getWorldClassRecord(classId) {
   if (
@@ -527,7 +527,11 @@ function getWorldClassRecord(classId) {
 function worldClassLabel(classId) {
   var cls = getWorldClassRecord(classId);
   if (!cls) return worldTypeLabel(classId);
-  return t(cls.labelKey, cls.fallbackLabel || cls.id || "?");
+  return localizeLabel(
+    cls.labels,
+    cls.labelKey,
+    cls.fallbackLabel || cls.id || "?",
+  );
 }
 
 /**
@@ -557,7 +561,7 @@ function portalDestinationLabel(item) {
 
 /**
  * @param {string} type
- * @returns {{label_key?: string, fallback_label?: string, color?: number, action_ids?: string[], kind?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, action_ids?: string[], kind?: string} | null}
  */
 function getRegistryItemDef(type) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;
@@ -575,7 +579,7 @@ function isContainerItemType(type) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, canonical_id?: string, target_kind?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -696,7 +700,8 @@ function treeActionsForItemType(type) {
 function treeActionLabel(action) {
   var registryAction = getRegistryActionDef(action);
   if (registryAction) {
-    return t(
+    return localizeLabel(
+      registryAction.labels,
       registryAction.label_key || String(action || ""),
       registryAction.fallback_label || String(action || ""),
     );
@@ -788,8 +793,9 @@ function inventoryItemLabel(item) {
   if (!item || !item.type) return t("inventory.empty", "empty");
   var type = String(item.type);
   var registryItem = getRegistryItemDef(type);
-  if (registryItem && registryItem.label_key) {
-    return t(
+  if (registryItem && (registryItem.label_key || registryItem.labels)) {
+    return localizeLabel(
+      registryItem.labels,
       registryItem.label_key,
       registryItem.fallback_label || humanizeType(type),
     );

@@ -361,7 +361,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-title" id="item-class-form-title" data-i18n-key="class_editor.new_item_type">New item type</div>
       <div class="class-form-fields">
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="ic-id" type="text" placeholder="my_item" autocomplete="off"></label>
-        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="ic-label" type="text" placeholder="My Item" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="ic-label" type="text" placeholder="My Item" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="ic-name-fi" type="text" placeholder="Esineeni" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.kind_label">Kind</span>
           <select id="ic-kind">
             <option value="tool">tool</option>
@@ -393,7 +394,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-title" id="action-class-form-title" data-i18n-key="class_editor.new_action_type">New action type</div>
       <div class="class-form-fields">
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="ac-id" type="text" placeholder="my_action" autocomplete="off"></label>
-        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="ac-label" type="text" placeholder="My Action" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="ac-label" type="text" placeholder="My Action" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="ac-name-fi" type="text" placeholder="Toimintoni" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.target_kind_label">Target kind</span>
           <select id="ac-target-kind">
             <option value="self">self</option>
@@ -427,7 +429,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-title" id="living-class-form-title" data-i18n-key="class_editor.new_living_type">New living type</div>
       <div class="class-form-fields">
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="lc-id" type="text" placeholder="my_creature" autocomplete="off"></label>
-        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="lc-label" type="text" placeholder="My Creature" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="lc-label" type="text" placeholder="My Creature" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="lc-name-fi" type="text" placeholder="Olentoni" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.kind_label">Kind</span>
           <select id="lc-kind">
             <option value="player">player</option>
@@ -457,7 +460,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-title" id="world-class-form-title" data-i18n-key="class_editor.new_world_type">New world type</div>
       <div class="class-form-fields">
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="wc-id" type="text" placeholder="small_house" autocomplete="off"></label>
-        <label><span data-i18n-key="class_editor.label_label">Label</span> <input id="wc-label" type="text" placeholder="Small house" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="wc-label" type="text" placeholder="Small house" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="wc-name-fi" type="text" placeholder="Pieni talo" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.base_type_label">Base type</span>
           <select id="wc-base-type">
             <option value="forest">forest</option>

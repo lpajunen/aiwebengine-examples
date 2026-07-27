@@ -10,6 +10,7 @@ import {
   loadAllLivingClassRows,
   upsertLivingClassRow,
 } from "./living-class-storage.ts";
+import { normalizeClassLabels } from "./class-labels.ts";
 
 function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   return [
@@ -316,6 +317,7 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
         return [];
       }
     })(),
+    labels: normalizeClassLabels(row.labels_json),
   };
 }
 
@@ -332,6 +334,7 @@ function livingClassToDbRow(
   value_schema_json: string;
   aggressive: number;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -346,6 +349,7 @@ function livingClassToDbRow(
     value_schema_json: JSON.stringify(record.valueSchema || {}),
     aggressive: record.aggressive ? 1 : 0,
     owner_ids_json: JSON.stringify(record.ownerIds || []),
+    labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
     created_at: storedTs,
     updated_at: storedTs,
   };

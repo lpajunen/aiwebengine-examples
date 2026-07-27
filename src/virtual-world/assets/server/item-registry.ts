@@ -17,6 +17,7 @@ import {
   upsertActionClassRow,
   deleteActionClassRow,
 } from "./action-class-storage.ts";
+import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
 
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
@@ -49,6 +50,7 @@ export interface ItemClassRecord {
   actionIds: string[];
   stateTemplate: Record<string, unknown>;
   ownerIds: string[];
+  labels: ClassLabels;
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -68,7 +70,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     visuals: {
       color: 0xd8dee8,
       labelKey: "item.knife.name",
-      fallbackLabel: "Puukko knife",
+      fallbackLabel: "Knife",
     },
     actionIds: [],
   },
@@ -312,6 +314,7 @@ export function getBootstrapRegistry(): {
     {
       label_key: string;
       fallback_label: string;
+      labels: ClassLabels;
       color: number;
       action_ids: string[];
       kind: string;
@@ -322,6 +325,7 @@ export function getBootstrapRegistry(): {
     {
       label_key: string;
       fallback_label: string;
+      labels: ClassLabels;
       canonical_id: string;
       target_kind: string;
       tree_action?: "plant" | "cut";
@@ -340,6 +344,7 @@ export function getBootstrapRegistry(): {
     {
       label_key: string;
       fallback_label: string;
+      labels: ClassLabels;
       color: number;
       action_ids: string[];
       kind: string;
@@ -350,6 +355,7 @@ export function getBootstrapRegistry(): {
     {
       label_key: string;
       fallback_label: string;
+      labels: ClassLabels;
       canonical_id: string;
       target_kind: string;
       tree_action?: "plant" | "cut";
@@ -369,6 +375,7 @@ export function getBootstrapRegistry(): {
       items[itemId] = {
         label_key: cls.visuals.labelKey,
         fallback_label: cls.visuals.fallbackLabel,
+        labels: normalizeClassLabels(cls.labels),
         color: cls.visuals.color,
         action_ids: cls.actionIds.slice(),
         kind: cls.kind,
@@ -380,6 +387,7 @@ export function getBootstrapRegistry(): {
       items[itemId] = {
         label_key: item.visuals.labelKey,
         fallback_label: item.visuals.fallbackLabel,
+        labels: {},
         color: item.visuals.color,
         action_ids: item.actionIds.slice(),
         kind: item.kind,
@@ -396,6 +404,7 @@ export function getBootstrapRegistry(): {
     actions[actionId] = {
       label_key: action.labelKey,
       fallback_label: action.fallbackLabel,
+      labels: normalizeClassLabels((action as ActionClassRecord).labels),
       canonical_id: action.canonicalId || action.id,
       target_kind: action.targetKind,
       tree_action: worldMutation ? worldMutation.treeAction : undefined,
@@ -435,6 +444,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     actionIds: def.actionIds.slice(),
     stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
     ownerIds: [],
+    labels: {},
   };
 }
 
@@ -477,6 +487,7 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
         return [];
       }
     })(),
+    labels: normalizeClassLabels(row.labels_json),
   };
 }
 
@@ -494,6 +505,7 @@ function itemClassToDbRow(
   action_ids_json: string;
   state_template_json: string;
   owner_ids_json: string;
+  labels_json: string;
   spawnable: number;
   extra: number;
   created_at: number;
@@ -515,6 +527,7 @@ function itemClassToDbRow(
     action_ids_json: JSON.stringify(record.actionIds),
     state_template_json: JSON.stringify(record.stateTemplate || {}),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
+    labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -730,6 +743,7 @@ export interface ActionClassRecord extends Omit<
 > {
   targetKind: string;
   ownerIds: string[];
+  labels: ClassLabels;
 }
 
 let _actionClassCache: Record<string, ActionClassRecord> | null = null;
@@ -776,6 +790,7 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       const parsed = parseJson(row.owner_ids_json, []) as unknown[];
       return Array.isArray(parsed) ? parsed.map(String) : [];
     })(),
+    labels: normalizeClassLabels(row.labels_json),
   };
 }
 
@@ -798,6 +813,7 @@ function actionClassToDbRow(
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
+  labels_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -827,6 +843,7 @@ function actionClassToDbRow(
       ? { duration_ms: Number(record.durationMs) }
       : {}),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
+    labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -848,7 +865,10 @@ function backfillActionClassDefaults(
     const def = ACTION_DEFINITIONS[defId];
     const existing = cache[defId];
     if (!existing) {
-      const record: ActionClassRecord = Object.assign({ ownerIds: [] }, def);
+      const record: ActionClassRecord = Object.assign(
+        { ownerIds: [], labels: {} },
+        def,
+      );
       upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
       inserted++;

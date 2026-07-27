@@ -32,6 +32,7 @@ import {
   userHasCreatorStone,
 } from "./http-handler-helpers.ts";
 import { getAllLivingClasses } from "./living-registry.ts";
+import { normalizeClassLabels } from "./class-labels.ts";
 
 const CLASS_OWNER_ERROR = { error: "error.not_class_owner" };
 
@@ -95,6 +96,7 @@ export function createItemClassHandler(context: any) {
         ? body.stateTemplate
         : {},
     ownerIds: [context.request.auth.userId],
+    labels: normalizeClassLabels(body && body.labels),
   };
   var itemCreateWrite = upsertItemClass(record);
   if (!itemCreateWrite || !itemCreateWrite.ok) {
@@ -183,6 +185,10 @@ export function updateItemClassHandler(context: any) {
         : existing.stateTemplate,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    labels:
+      body && body.labels !== undefined
+        ? normalizeClassLabels(body.labels)
+        : existing.labels,
   };
   var itemUpdateWrite = upsertItemClass(record);
   if (!itemUpdateWrite || !itemUpdateWrite.ok) {
@@ -297,6 +303,7 @@ export function createActionClassHandler(context: any) {
         ? Number(body.durationMs)
         : undefined,
     ownerIds: [context.request.auth.userId],
+    labels: normalizeClassLabels(body && body.labels),
   };
   var actionCreateWrite = upsertActionClass(record);
   if (!actionCreateWrite || !actionCreateWrite.ok) {
@@ -395,6 +402,10 @@ export function updateActionClassHandler(context: any) {
         : existing.durationMs,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    labels:
+      body && body.labels !== undefined
+        ? normalizeClassLabels(body.labels)
+        : existing.labels,
   };
   var actionUpdateWrite = upsertActionClass(record);
   if (!actionUpdateWrite || !actionUpdateWrite.ok) {
@@ -513,6 +524,7 @@ export function createLivingClassHandler(context: any) {
         : undefined,
     aggressive: !!(body && body.aggressive),
     ownerIds: [context.request.auth.userId],
+    labels: normalizeClassLabels(body && body.labels),
   };
   var livingCreateWrite = upsertLivingClass(record);
   if (!livingCreateWrite || !livingCreateWrite.ok) {
@@ -594,6 +606,10 @@ export function updateLivingClassHandler(context: any) {
         : existing.aggressive,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    labels:
+      body && body.labels !== undefined
+        ? normalizeClassLabels(body.labels)
+        : existing.labels,
   };
   var livingUpdateWrite = upsertLivingClass(record);
   if (!livingUpdateWrite || !livingUpdateWrite.ok) {
@@ -691,6 +707,7 @@ export function createWorldClassHandler(context: any) {
     itemSpawns: body && body.itemSpawns,
     npcSpawns: body && body.npcSpawns,
     ownerIds: [context.request.auth.userId],
+    labels: body && body.labels,
   });
   var worldCreateWrite = upsertWorldClass(record);
   if (!worldCreateWrite || !worldCreateWrite.ok) {
@@ -766,6 +783,7 @@ export function updateWorldClassHandler(context: any) {
         : existing.npcSpawns,
     ownerIds:
       body && body.ownerIds !== undefined ? body.ownerIds : existing.ownerIds,
+    labels: body && body.labels !== undefined ? body.labels : existing.labels,
   });
   var worldUpdateWrite = upsertWorldClass(record);
   if (!worldUpdateWrite || !worldUpdateWrite.ok) {

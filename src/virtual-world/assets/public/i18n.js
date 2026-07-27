@@ -5,7 +5,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
   en: {
     item: {
       saw: { name: "Woodsman's saw" },
-      knife: { name: "Puukko knife" },
+      knife: { name: "Knife" },
+      hammer: { name: "Hammer" },
       flower: { name: "Forest flower" },
       tree_planter: { name: "Pine sapling" },
       portal_builder: { name: "Rune gate charm" },
@@ -42,6 +43,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_travel: "Enter rune gate",
       return_home: "Travel to the old oak",
       pray: "Pray",
+      stop_follow: "Stop following",
+      stop_fight: "Stop fighting",
+      summon_knife: "Summon knife",
+    },
+    recipe: {
+      craft_kantele: "Craft kantele",
     },
     terrain: {
       wall: "Spruce thicket",
@@ -193,7 +200,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       rows_label: "Rows (8-200)",
       cols_label: "Cols (8-200)",
       id_label: "ID",
-      label_label: "Label",
+      label_label: "Name (English)",
+      name_fi_label: "Name (Finnish)",
       kind_label: "Kind",
       target_kind_label: "Target kind",
       non_droppable: "Non-droppable",
@@ -348,6 +356,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     item: {
       saw: { name: "Metsurin saha" },
       knife: { name: "Puukko" },
+      hammer: { name: "Vasara" },
       flower: { name: "Metsakukka" },
       tree_planter: { name: "Männyn taimi" },
       portal_builder: { name: "Riimuportin amuletti" },
@@ -384,6 +393,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_travel: "Astu riimuporttiin",
       return_home: "Matkaa vanhalle tammelle",
       pray: "Rukoile",
+      stop_follow: "Lopeta seuraaminen",
+      stop_fight: "Lopeta taistelu",
+      summon_knife: "Kutsu puukko",
+    },
+    recipe: {
+      craft_kantele: "Rakenna kantele",
     },
     terrain: {
       wall: "Kuusitiheikkö",
@@ -535,7 +550,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       rows_label: "Rivit (8-200)",
       cols_label: "Sarakkeet (8-200)",
       id_label: "Tunniste",
-      label_label: "Nimi",
+      label_label: "Nimi (englanti)",
+      name_fi_label: "Nimi (suomi)",
       kind_label: "Laji",
       target_kind_label: "Kohteen tyyppi",
       non_droppable: "Ei pudotettavissa",
@@ -777,6 +793,25 @@ function t(key, fallback) {
   var english = getMessageByKey("en", key);
   if (english !== null) return english;
   return fallback || key;
+}
+
+/**
+ * Resolve a creator class's display name, preferring a per-locale override in
+ * its `labels` map (e.g. { fi: "Miekka" }) and otherwise falling back to
+ * t(labelKey, fallback). Built-in classes carry no labels map and translate
+ * through their static labelKey, so they keep working unchanged.
+ * @param {Record<string, string> | null | undefined} labels
+ * @param {string} [labelKey]
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+function localizeLabel(labels, labelKey, fallback) {
+  var locale = resolveLocale();
+  if (labels && typeof labels === "object") {
+    var direct = labels[locale];
+    if (typeof direct === "string" && direct) return direct;
+  }
+  return t(labelKey || "", fallback);
 }
 
 function applyStaticTranslations() {

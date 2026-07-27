@@ -924,6 +924,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "action_ids_json", false],
     ["addTextColumn", "state_template_json", false],
     ["addTextColumn", "owner_ids_json", true],
+    ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -972,6 +973,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
     ["addTextColumn", "owner_ids_json", true],
+    ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -1045,6 +1047,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "value_schema_json", false],
     ["addIntegerColumn", "aggressive", false],
     ["addTextColumn", "owner_ids_json", true],
+    ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {
@@ -1087,6 +1090,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "item_spawns_json", true],
     ["addTextColumn", "npc_spawns_json", true],
     ["addTextColumn", "owner_ids_json", true],
+    ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],
     ["addIntegerColumn", "updated_at", false],
   ].forEach(function (entry) {

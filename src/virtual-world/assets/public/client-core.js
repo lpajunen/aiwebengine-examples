@@ -139,7 +139,7 @@ function openPortalDestinationPicker(originalAction) {
 
 /**
  * @param {string} originalAction
- * @param {Array<{id: string, labelKey?: string, fallbackLabel?: string, rows?: number, cols?: number}>} classes
+ * @param {Array<{id: string, labelKey?: string, fallbackLabel?: string, labels?: Record<string, string>, rows?: number, cols?: number}>} classes
  */
 function renderPortalDestinationPicker(originalAction, classes) {
   if (!Array.isArray(classes) || classes.length === 0) {
@@ -149,11 +149,13 @@ function renderPortalDestinationPicker(originalAction, classes) {
   var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
   var sortedClasses = classes.slice().sort(function (a, b) {
-    var la = t(
+    var la = localizeLabel(
+      a && a.labels,
       String((a && a.labelKey) || ""),
       String((a && a.fallbackLabel) || (a && a.id) || ""),
     );
-    var lb = t(
+    var lb = localizeLabel(
+      b && b.labels,
       String((b && b.labelKey) || ""),
       String((b && b.fallbackLabel) || (b && b.id) || ""),
     );
@@ -164,7 +166,11 @@ function renderPortalDestinationPicker(originalAction, classes) {
     if (!cls || !cls.id) continue;
     var btn = document.createElement("button");
     btn.textContent =
-      t(String(cls.labelKey || ""), String(cls.fallbackLabel || cls.id)) +
+      localizeLabel(
+        cls.labels,
+        String(cls.labelKey || ""),
+        String(cls.fallbackLabel || cls.id),
+      ) +
       " (" +
       String(cls.rows) +
       "×" +
@@ -192,8 +198,9 @@ function inventoryItemLabel(item) {
   if (!item || !item.type) return t("inventory.empty", "empty");
   var type = String(item.type);
   var registryItem = getRegistryItemDef(type);
-  if (registryItem && registryItem.label_key) {
-    return t(
+  if (registryItem && (registryItem.label_key || registryItem.labels)) {
+    return localizeLabel(
+      registryItem.labels,
       registryItem.label_key,
       registryItem.fallback_label || humanizeType(type),
     );
@@ -242,10 +249,14 @@ function getLivingValueSchemaEntry(classId, valueKey) {
  */
 function livingValueLabel(classId, valueKey) {
   var schemaEntry = getLivingValueSchemaEntry(classId, valueKey);
+  // The i18n living.value.* keys are snake_case, but a living's value keys are
+  // camelCase (maxHitPoints, …). When the class carries no valueSchema entry to
+  // supply a labelKey, snake_case the key so the fallback still resolves a
+  // localized label instead of leaking the English humanized key.
   var labelKey =
     schemaEntry && schemaEntry.labelKey
       ? schemaEntry.labelKey
-      : "living.value." + valueKey;
+      : "living.value." + camelToSnakeCase(valueKey);
   var fallback =
     schemaEntry && schemaEntry.fallbackLabel
       ? schemaEntry.fallbackLabel

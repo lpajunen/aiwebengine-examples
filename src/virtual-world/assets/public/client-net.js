@@ -151,6 +151,14 @@ function applyItemDeltaFromEvent(payload) {
 var pendingMoves = []; // FIFO queue of {row,col,seq} — one entry per step
 var moveInFlight = false;
 
+// In-place world swap (portal/door travel). reconnectWorldStream is assigned by
+// initMultiplayer once the SSE plumbing exists; swapToWorld calls it to
+// re-point the event stream at the new world. worldSwitchInFlight guards
+// against a double-trigger (the action response and the SSE echo can both fire).
+/** @type {null | (() => void)} */
+var reconnectWorldStream = null;
+var worldSwitchInFlight = false;
+
 /**
  * Rebuild the queued moves as direction deltas reapplied from an
  * authoritative server position (preserves the user's intended movement
@@ -464,6 +472,124 @@ function applyPlayersSnapshot(players) {
   });
 }
 
+/**
+ * Re-initialize the client for a new world in place — no page reload — from a
+ * /virtual-world/world-state payload (the same shape the page bootstrap injects
+ * as globals). Keeps the WebGL context, renderer, camera, lights and JS runtime
+ * alive; swaps only world-scoped data, meshes and the event stream. See
+ * enterWorldSwitch(). DMs and session state deliberately survive (user-scoped).
+ * @param {any} state
+ */
+function swapToWorld(state) {
+  if (!state || typeof state !== "object" || !state.map) {
+    // Malformed payload — fall back to a full reload rather than render a
+    // broken world.
+    window.location.href = "/virtual-world/play";
+    return;
+  }
+
+  // 1. World-scoped globals.
+  MAP = state.map;
+  WORLD_MODS = state.worldMods || {};
+  TREE_MODS = state.treeMods || {};
+  HOUSE_MODS = state.houseMods || {};
+  worldId = state.worldId;
+  WORLD_CLASS_ID = state.worldClassId;
+  worldItemsByTile = normalizeClientWorldItems(state.worldItems || {});
+  if (state.playerInventory) {
+    playerInventory = normalizeClientInventory(state.playerInventory);
+  }
+  // Paint the world-mod overlay (houses, planted trees, tile mods) into the new
+  // MAP — these live in WORLD_MODS/HOUSE_MODS/TREE_MODS, not the base map, so
+  // they must be re-applied on every swap the way boot does.
+  resetWorldModsFromGlobals();
+
+  // 2. Reposition the local avatar at the new spawn; drop moves queued in the
+  //    old world.
+  pendingMoves = [];
+  moveInFlight = false;
+  avatarRow = Number(state.initRow) || 0;
+  avatarCol = Number(state.initCol) || 0;
+  moveSeq = Number(state.initSeq) || 0;
+  targetX = tileX(avatarCol);
+  targetZ = tileZ(avatarRow);
+  avatar.position.set(targetX, 0, targetZ);
+  if (isFinite(Number(state.initRotation))) {
+    avatar.rotation.y = Number(state.initRotation);
+  }
+
+  // 3. Reset realtime baselines so the new world's scope seqs re-baseline and a
+  //    stale in-flight item snapshot can't clobber the swapped-in state.
+  eventSeqByScope = {};
+  itemSnapshotRequestSeq += 1;
+  appliedItemSnapshotSeq = itemSnapshotRequestSeq;
+
+  // 4. Rebuild the scene: drop every remote avatar from the old world, rebuild
+  //    all world meshes for the new MAP, then reconcile NPCs (syncNPCSnapshot
+  //    removes any NPC not present in the new snapshot).
+  for (var pid in remoteAvatars) removeRemoteAvatar(pid);
+  buildStaticWorldMeshes();
+  syncNPCSnapshot(Array.isArray(state.npcs) ? state.npcs : []);
+
+  // 5. Per-world UI + chat (DMs untouched — they're user-scoped).
+  worldChatMessages = Array.isArray(state.initialChat) ? state.initialChat : [];
+  onlinePlayersList = Array.isArray(state.onlinePlayers)
+    ? state.onlinePlayers
+    : [];
+  applyActiveActionsSnapshot(state.activeActions);
+  closeTileDetail();
+  var worldIdEl = document.getElementById("hud-world-id");
+  if (worldIdEl) worldIdEl.textContent = String(worldId);
+  requireElementById("pos-col").textContent = String(avatarCol);
+  requireElementById("pos-row").textContent = String(avatarRow);
+  var descEl = document.getElementById("world-info-desc");
+  if (descEl) {
+    descEl.setAttribute(
+      "data-i18n-key",
+      "world.flavor_text_" + (Number(state.worldFlavorTextIndex) || 0),
+    );
+    descEl.textContent = String(state.worldFlavorText || "");
+  }
+  applyStaticTranslations();
+  updateCamera();
+  updateStatsHud();
+  updateUseButtonState();
+  updateEditingRightsUI();
+  renderInventoryPanel();
+  if (statsPanelVisible) renderStatisticsPanel();
+  if (playersPanelVisible) renderPlayersPanel();
+  if (worldInfoPanelVisible) renderWorldInfoPanel();
+  if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
+
+  // 6. Re-point the event stream at the new world, then resync to populate
+  //    remote avatars and per-scope seq baselines.
+  if (typeof reconnectWorldStream === "function") reconnectWorldStream();
+  performResync();
+}
+
+/**
+ * Entry point for a portal/door world change. Fetches the new world's state and
+ * swaps it in place; on any failure falls back to the original full page reload
+ * so travel never gets stuck. Guarded so the action response and the SSE
+ * "leaving" echo don't both trigger a swap.
+ */
+function enterWorldSwitch() {
+  if (worldSwitchInFlight) return;
+  worldSwitchInFlight = true;
+  showHudToast(t("world.traveling", "Traveling…"), false);
+  fetchJsonWithAuth("/virtual-world/world-state")
+    .then(function (state) {
+      worldSwitchInFlight = false;
+      swapToWorld(state);
+    })
+    .catch(function (err) {
+      worldSwitchInFlight = false;
+      if (err && (err.code === "AUTH_401" || err.code === "AUTH_STOPPED"))
+        return;
+      window.location.href = "/virtual-world/play";
+    });
+}
+
 function initMultiplayer() {
   scheduleSessionRefresh();
   applyStaticTranslations();
@@ -478,11 +604,17 @@ function initMultiplayer() {
   // per-scope event seq baselines for gap detection.
   performResync();
 
-  var eventsSseParams = new URLSearchParams({
-    world_id: String(worldId),
-    recipient_id: String(playerId),
-  });
-  var eventsSseUrl = "/virtual-world/events?" + eventsSseParams.toString();
+  // Built freshly on each (re)connect so an in-place world swap picks up the
+  // new world_id without a page reload.
+  function buildEventsSseUrl() {
+    var params = new URLSearchParams({
+      world_id: String(worldId),
+      recipient_id: String(playerId),
+    });
+    return "/virtual-world/events?" + params.toString();
+  }
+  /** @type {EventSource | null} */
+  var currentEventSource = null;
   /** @type {number | null} */
   var eventsReconnectTimer = null;
   var eventsRetryCount = 0;
@@ -493,7 +625,7 @@ function initMultiplayer() {
     if (!payload || !payload.player_id) return;
     if (payload.leaving) {
       if (payload.player_id === playerId && payload.switched_world) {
-        window.location.href = "/virtual-world/play";
+        enterWorldSwitch();
         return;
       }
       removeRemoteAvatar(payload.player_id);
@@ -888,7 +1020,8 @@ function initMultiplayer() {
   }
 
   function openUnifiedSSE() {
-    var es = new EventSource(eventsSseUrl);
+    var es = new EventSource(buildEventsSseUrl());
+    currentEventSource = es;
     es.onmessage = function (evt) {
       eventsRetryCount = 0;
       try {
@@ -927,6 +1060,24 @@ function initMultiplayer() {
   }
 
   openUnifiedSSE();
+
+  // Exposed so swapToWorld() can re-point the event stream at the new world
+  // after an in-place world swap (portal/door travel) — closes the current
+  // EventSource and reopens against the freshly-updated worldId.
+  reconnectWorldStream = function () {
+    if (eventsReconnectTimer) {
+      window.clearTimeout(eventsReconnectTimer);
+      eventsReconnectTimer = null;
+    }
+    eventsRetryCount = 0;
+    if (currentEventSource) {
+      try {
+        currentEventSource.close();
+      } catch (e) {}
+      currentEventSource = null;
+    }
+    openUnifiedSSE();
+  };
 
   // Announce departure
   window.addEventListener("beforeunload", postLeave);

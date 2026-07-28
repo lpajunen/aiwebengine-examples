@@ -61,6 +61,27 @@ export function getVirtualWorldPage(context: any) {
 }
 
 /**
+ * JSON form of the page bootstrap state, used by the client to swap worlds in
+ * place (after a portal/door travel) without a full page reload. Returns the
+ * exact same payload injected into the game page's <script> block, so the
+ * client can re-initialize the world from it. Reuses buildVirtualWorldPageState
+ * wholesale — its side effects (starter kit, NPC activation, presence, default
+ * spawn) are all the desired on-world-entry behavior.
+ * @param {*} context
+ */
+export function worldStateHandler(context: any) {
+  const req = context.request;
+  if (!req.auth || !req.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  const state = buildVirtualWorldPageState(
+    req.auth.userId,
+    req.auth.userName || "",
+  );
+  return ResponseBuilder.json(state);
+}
+
+/**
  * @param {*} context
  * @returns {Record<string, string>}
  */

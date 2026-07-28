@@ -605,6 +605,7 @@ export function registerVirtualWorldRuntime(): void {
     "currentWorldHandler",
     "GET",
   );
+  safeRegisterRoute("/virtual-world/world-state", "worldStateHandler", "GET");
   safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
   safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
   safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");

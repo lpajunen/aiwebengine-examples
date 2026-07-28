@@ -292,6 +292,7 @@ import {
 } from "./server/class-crud-handlers.ts";
 import {
   getVirtualWorldPage as getVirtualWorldPageImpl,
+  worldStateHandler as worldStateHandlerImpl,
   virtualWorldEventsStreamCustomizer as virtualWorldEventsStreamCustomizerImpl,
   itemsHandler as itemsHandlerImpl,
   itemActionHandler as itemActionHandlerImpl,
@@ -440,6 +441,10 @@ function deleteWorldClassHandler(context) {
 /** @param {*} context */
 function getVirtualWorldPage(context) {
   return getVirtualWorldPageImpl(context);
+}
+/** @param {*} context */
+function worldStateHandler(context) {
+  return worldStateHandlerImpl(context);
 }
 /** @param {*} context */
 function virtualWorldEventsStreamCustomizer(context) {

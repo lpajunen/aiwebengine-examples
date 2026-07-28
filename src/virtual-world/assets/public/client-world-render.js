@@ -252,6 +252,20 @@ function countTilesByValue(tileValue) {
 /** @type {any} */ var iWoodFloorB = null;
 /** @type {any} */ var iBridgeA = null;
 /** @type {any} */ var iBridgeB = null;
+// Ground/spruce/oak meshes are rebuilt from scratch on each world load (boot
+// and in-place world swap) by buildStaticWorldMeshes(), so they are mutable
+// module holders rather than build-once locals.
+/** @type {any} */ var iGroundA = null;
+/** @type {any} */ var iGroundB = null;
+/** @type {any} */ var iSpruceTrunk = null;
+/** @type {any} */ var iSpruceCanopyLow = null;
+/** @type {any} */ var iSpruceCanopyMid = null;
+/** @type {any} */ var iSpruceCanopyTop = null;
+/** @type {any} */ var iPineTrunk = null;
+/** @type {any} */ var iPineCanopyLow = null;
+/** @type {any} */ var iPineCanopyMid = null;
+/** @type {any} */ var iPineCanopyTop = null;
+/** @type {any} */ var oakGroup = null;
 
 /**
  * @param {string} tileName
@@ -745,105 +759,132 @@ function rebuildPineInstances() {
   scene.add(iPineTrunk, iPineCanopyLow, iPineCanopyMid, iPineCanopyTop);
 }
 
-// Count instances
-var cntA = 0,
-  cntB = 0,
-  cntWall = 0,
-  cntSpruce = 0;
-for (var r = 0; r < ROWS; r++) {
-  for (var c = 0; c < COLS; c++) {
-    if ((r + c) % 2 === 0) cntA++;
-    else cntB++;
-    if (MAP[r][c] === clientTileValueForName("spruce_thicket")) {
-      cntWall++;
-      cntSpruce++;
-    }
+// Remove + dispose the ground/spruce/oak meshes from a previous world load so
+// an in-place world swap doesn't leak the outgoing world's terrain.
+function disposeStaticWorldMeshes() {
+  scene.remove(
+    iGroundA,
+    iGroundB,
+    iSpruceTrunk,
+    iSpruceCanopyLow,
+    iSpruceCanopyMid,
+    iSpruceCanopyTop,
+  );
+  disposeInstancedMeshes([
+    iGroundA,
+    iGroundB,
+    iSpruceTrunk,
+    iSpruceCanopyLow,
+    iSpruceCanopyMid,
+    iSpruceCanopyTop,
+  ]);
+  if (oakGroup) {
+    scene.remove(oakGroup);
+    oakGroup = null;
   }
 }
 
-var iGroundA = new THREE.InstancedMesh(geoGround, matGroundA, cntA);
-var iGroundB = new THREE.InstancedMesh(geoGround, matGroundB, cntB);
-var iSpruceTrunk = new THREE.InstancedMesh(
-  geoSpruceTrunk,
-  matSpruceTrunk,
-  cntSpruce,
-);
-var iSpruceCanopyLow = new THREE.InstancedMesh(
-  geoSpruceCanopyLow,
-  matSpruceLow,
-  cntSpruce,
-);
-var iSpruceCanopyMid = new THREE.InstancedMesh(
-  geoSpruceCanopyMid,
-  matSpruceMid,
-  cntSpruce,
-);
-var iSpruceCanopyTop = new THREE.InstancedMesh(
-  geoSpruceCanopyTop,
-  matSpruceTop,
-  cntSpruce,
-);
-/** @type {any} */
-var iPineTrunk = null;
-/** @type {any} */
-var iPineCanopyLow = null;
-/** @type {any} */
-var iPineCanopyMid = null;
-/** @type {any} */
-var iPineCanopyTop = null;
-var oakGroup = buildOakGroup();
+// (Re)build every world-scoped mesh from the current MAP/*_MODS globals. Called
+// once at boot and again on each in-place world swap; recomputes ROWS/COLS so
+// worlds of a different size render correctly.
+function buildStaticWorldMeshes() {
+  ROWS = MAP.length;
+  COLS = MAP[0] ? MAP[0].length : 0;
+  appState.world.rows = ROWS;
+  appState.world.cols = COLS;
 
-iGroundA.receiveShadow = true;
-iGroundB.receiveShadow = true;
-finalizeInstancedMesh(iSpruceTrunk);
-finalizeInstancedMesh(iSpruceCanopyLow);
-finalizeInstancedMesh(iSpruceCanopyMid);
-finalizeInstancedMesh(iSpruceCanopyTop);
+  disposeStaticWorldMeshes();
 
-var idxA = 0,
-  idxB = 0,
-  idxW = 0;
-for (var r = 0; r < ROWS; r++) {
-  for (var c = 0; c < COLS; c++) {
-    var tx = tileX(c),
-      tz = tileZ(r);
-
-    dummy.position.set(tx, -0.125, tz);
-    dummy.scale.set(1, 1, 1);
-    dummy.updateMatrix();
-    if ((r + c) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
-    else iGroundB.setMatrixAt(idxB++, dummy.matrix);
-
-    if (MAP[r][c] === clientTileValueForName("spruce_thicket")) {
-      setInstanceTransform(iSpruceTrunk, idxW, tx, 0.48, tz, 1, 1, 1);
-      setInstanceTransform(iSpruceCanopyLow, idxW, tx, 1.08, tz, 1, 1, 1);
-      setInstanceTransform(iSpruceCanopyMid, idxW, tx, 1.62, tz, 1, 1, 1);
-      setInstanceTransform(iSpruceCanopyTop, idxW, tx, 2.04, tz, 1, 1, 1);
-      idxW++;
+  // Count instances
+  var cntA = 0,
+    cntB = 0,
+    cntSpruce = 0;
+  for (var r = 0; r < ROWS; r++) {
+    for (var c = 0; c < COLS; c++) {
+      if ((r + c) % 2 === 0) cntA++;
+      else cntB++;
+      if (MAP[r][c] === clientTileValueForName("spruce_thicket")) cntSpruce++;
     }
   }
+
+  iGroundA = new THREE.InstancedMesh(geoGround, matGroundA, cntA);
+  iGroundB = new THREE.InstancedMesh(geoGround, matGroundB, cntB);
+  iSpruceTrunk = new THREE.InstancedMesh(
+    geoSpruceTrunk,
+    matSpruceTrunk,
+    cntSpruce,
+  );
+  iSpruceCanopyLow = new THREE.InstancedMesh(
+    geoSpruceCanopyLow,
+    matSpruceLow,
+    cntSpruce,
+  );
+  iSpruceCanopyMid = new THREE.InstancedMesh(
+    geoSpruceCanopyMid,
+    matSpruceMid,
+    cntSpruce,
+  );
+  iSpruceCanopyTop = new THREE.InstancedMesh(
+    geoSpruceCanopyTop,
+    matSpruceTop,
+    cntSpruce,
+  );
+  oakGroup = buildOakGroup();
+
+  iGroundA.receiveShadow = true;
+  iGroundB.receiveShadow = true;
+  finalizeInstancedMesh(iSpruceTrunk);
+  finalizeInstancedMesh(iSpruceCanopyLow);
+  finalizeInstancedMesh(iSpruceCanopyMid);
+  finalizeInstancedMesh(iSpruceCanopyTop);
+
+  var idxA = 0,
+    idxB = 0,
+    idxW = 0;
+  for (var row = 0; row < ROWS; row++) {
+    for (var col = 0; col < COLS; col++) {
+      var tx = tileX(col),
+        tz = tileZ(row);
+
+      dummy.position.set(tx, -0.125, tz);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      if ((row + col) % 2 === 0) iGroundA.setMatrixAt(idxA++, dummy.matrix);
+      else iGroundB.setMatrixAt(idxB++, dummy.matrix);
+
+      if (MAP[row][col] === clientTileValueForName("spruce_thicket")) {
+        setInstanceTransform(iSpruceTrunk, idxW, tx, 0.48, tz, 1, 1, 1);
+        setInstanceTransform(iSpruceCanopyLow, idxW, tx, 1.08, tz, 1, 1, 1);
+        setInstanceTransform(iSpruceCanopyMid, idxW, tx, 1.62, tz, 1, 1, 1);
+        setInstanceTransform(iSpruceCanopyTop, idxW, tx, 2.04, tz, 1, 1, 1);
+        idxW++;
+      }
+    }
+  }
+
+  iGroundA.instanceMatrix.needsUpdate = true;
+  iGroundB.instanceMatrix.needsUpdate = true;
+  iSpruceTrunk.instanceMatrix.needsUpdate = true;
+  iSpruceCanopyLow.instanceMatrix.needsUpdate = true;
+  iSpruceCanopyMid.instanceMatrix.needsUpdate = true;
+  iSpruceCanopyTop.instanceMatrix.needsUpdate = true;
+
+  scene.add(
+    iGroundA,
+    iGroundB,
+    iSpruceTrunk,
+    iSpruceCanopyLow,
+    iSpruceCanopyMid,
+    iSpruceCanopyTop,
+  );
+  if (oakGroup) scene.add(oakGroup);
+
+  rebuildFloorOverlayMeshes();
+  rebuildTerrainFeatureMeshes();
+  rebuildPineInstances();
+  rebuildHouseMeshes();
+  rebuildItemMeshes();
 }
-
-iGroundA.instanceMatrix.needsUpdate = true;
-iGroundB.instanceMatrix.needsUpdate = true;
-iSpruceTrunk.instanceMatrix.needsUpdate = true;
-iSpruceCanopyLow.instanceMatrix.needsUpdate = true;
-iSpruceCanopyMid.instanceMatrix.needsUpdate = true;
-iSpruceCanopyTop.instanceMatrix.needsUpdate = true;
-
-scene.add(
-  iGroundA,
-  iGroundB,
-  iSpruceTrunk,
-  iSpruceCanopyLow,
-  iSpruceCanopyMid,
-  iSpruceCanopyTop,
-);
-if (oakGroup) scene.add(oakGroup);
-rebuildFloorOverlayMeshes();
-rebuildTerrainFeatureMeshes();
-rebuildPineInstances();
-rebuildHouseMeshes();
 
 // ── Function to rebuild tree instances after tree modifications ───────────
 function updateTreeInstances() {
@@ -971,4 +1012,8 @@ function rebuildItemMeshes() {
   }
 }
 
-rebuildItemMeshes();
+// Boot: build the initial world. buildStaticWorldMeshes() also rebuilds floor
+// overlays, terrain features, pines, houses and ground items, so it fully
+// replaces the previous per-mesh boot calls. Deferred to end-of-file so
+// itemMeshGroup / worldItemsByTile are already initialized.
+buildStaticWorldMeshes();

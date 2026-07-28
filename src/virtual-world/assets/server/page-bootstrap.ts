@@ -218,7 +218,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     <div class="hud" id="hud-pos">
       <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><span id="hud-editor-buttons"><button id="btn-item-classes" onclick="toggleItemClassPanel()" data-i18n-title="hud.item_types" title="Item types">📦</button><button id="btn-action-classes" onclick="toggleActionClassPanel()" data-i18n-title="hud.action_types" title="Action types">⚡</button><button id="btn-living-classes" onclick="toggleLivingClassPanel()" data-i18n-title="hud.living_types" title="Living types">🧬</button><button id="btn-world-classes" onclick="toggleWorldClassPanel()" data-i18n-title="hud.world_types" title="World types">🌍</button></span><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
       <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
-      <span data-i18n-key="hud.world_label">World:</span> ${state.worldId} (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
+      <span data-i18n-key="hud.world_label">World:</span> <span id="hud-world-id">${state.worldId}</span> (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
       <span data-i18n-key="hud.stats_label">Stats:</span>
       <span class="hud-stat" data-i18n-title="living.value.current_hit_points" title="Hit points"><span data-i18n-key="hud.hp_abbr">HP:</span> <span id="hud-hp">-/-</span></span>
       <span class="hud-stat" data-i18n-title="living.value.armor_class" title="Armor class"><span data-i18n-key="hud.ac_abbr">AC:</span> <span id="hud-ac">-</span></span>
@@ -241,7 +241,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <button class="panel-close" onclick="closeWorldInfoPanel()" data-i18n-title="panel.close" title="Close">×</button>
     </div>
     <div class="world-info-type" id="world-info-type"></div>
-    <div class="world-info-desc" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
+    <div class="world-info-desc" id="world-info-desc" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
     <strong class="world-info-legend-title" data-i18n-key="legend.title">Legend</strong>
     <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> <span data-i18n-key="legend.forest_floor">Forest Floor</span></div>
     <div class="leg"><div class="leg-box" style="background:#355c34;"></div> <span data-i18n-key="legend.spruce_thicket">Spruce Thicket</span></div>

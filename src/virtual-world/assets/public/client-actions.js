@@ -237,7 +237,7 @@ function postTreeAction(action, extras) {
         showHudToast(result.toast_message, false);
       }
       if (result.switched_world) {
-        window.location.href = "/virtual-world/play";
+        enterWorldSwitch();
       }
     })
     .catch(function (err) {

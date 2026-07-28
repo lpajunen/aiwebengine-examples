@@ -141,12 +141,8 @@ function hasAnyWorldMods(mods) {
   );
 }
 
-var worldMods = /** @type {ClientWorldMods} */ (
-  normalizeWorldMods(typeof WORLD_MODS !== "undefined" ? WORLD_MODS : null)
-);
-if (!hasAnyWorldMods(worldMods)) {
-  worldMods = buildLegacyWorldModsFromBootstrap();
-}
+/** @type {ClientWorldMods} */
+var worldMods = createEmptyClientWorldMods();
 
 /**
  * @returns {void}
@@ -196,8 +192,24 @@ function rebuildLegacyDynamicViews() {
 var dynamicTrees = {};
 /** @type {Record<string, any>} */
 var dynamicHouses = {};
-applyWorldModsToClientMap();
-rebuildLegacyDynamicViews();
+
+// (Re)initialize the client world-mod overlay from the current
+// WORLD_MODS/TREE_MODS/HOUSE_MODS globals and paint it into MAP. Trees, houses
+// and tile mods live in this overlay (not in the server-generated base map), so
+// this must run at boot AND again on an in-place world swap (see swapToWorld) —
+// otherwise travelling away and back leaves the village houses/planted trees
+// unpainted until a full page reload.
+function resetWorldModsFromGlobals() {
+  worldMods = /** @type {ClientWorldMods} */ (
+    normalizeWorldMods(typeof WORLD_MODS !== "undefined" ? WORLD_MODS : null)
+  );
+  if (!hasAnyWorldMods(worldMods)) {
+    worldMods = buildLegacyWorldModsFromBootstrap();
+  }
+  applyWorldModsToClientMap();
+  rebuildLegacyDynamicViews();
+}
+resetWorldModsFromGlobals();
 
 /**
  * Resolves a (possibly custom, config-driven) action id to the underlying

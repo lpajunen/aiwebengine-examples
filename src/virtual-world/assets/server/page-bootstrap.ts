@@ -67,10 +67,13 @@ type PageState = {
   worldFlavorText: string;
   worldFlavorTextIndex: number;
   worldClassId: string;
-  worldTileDefs: any;
-  itemRegistry: any;
-  livingRegistry: any;
-  worldClassRegistry: any[];
+  // World-independent registries — present when building the full page, omitted
+  // by the in-place world-swap endpoint (the client already holds them from
+  // boot). See buildVirtualWorldPageState's includeRegistries option.
+  worldTileDefs?: any;
+  itemRegistry?: any;
+  livingRegistry?: any;
+  worldClassRegistry?: any[];
   activeActions: ActiveActionEntry[];
   oakCenterRow: number;
   oakCenterCol: number;
@@ -107,6 +110,7 @@ export function escapeHtml(value: string): string {
 export function buildVirtualWorldPageState(
   userId: string,
   authName: string,
+  options?: { includeRegistries?: boolean },
 ): PageState {
   const worldId = getOrCreatePlayerWorld(userId);
   markNPCWorldActive(worldId);
@@ -157,18 +161,9 @@ export function buildVirtualWorldPageState(
 
   const activeActions = getActiveActionsForUser(userId);
 
-  const livingClasses = getAllLivingClasses();
-  const livingRegistry = {
-    classes: Array.isArray(livingClasses)
-      ? livingClasses.reduce(function (acc: Record<string, any>, cls: any) {
-          if (!cls || typeof cls.id !== "string") return acc;
-          acc[String(cls.id)] = cls;
-          return acc;
-        }, {})
-      : {},
-  };
+  const includeRegistries = !options || options.includeRegistries !== false;
 
-  return {
+  const state: PageState = {
     map: map,
     worldMods: worldMods,
     treeMods: treeMods,
@@ -194,14 +189,32 @@ export function buildVirtualWorldPageState(
     ),
     worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
     worldClassId: getWorldInfo(worldId).world_class_id,
-    worldTileDefs: WORLD_TILE_DEFS,
-    itemRegistry: getBootstrapRegistry(),
-    livingRegistry: livingRegistry,
-    worldClassRegistry: getAllWorldClasses(),
     activeActions: activeActions,
     oakCenterRow: OAK_CENTER_ROW,
     oakCenterCol: OAK_CENTER_COL,
   };
+
+  // The item/living/world-class registries and tile defs are world-independent
+  // and already held by the client from page boot, so the in-place world-swap
+  // endpoint omits them (see worldStateHandler) — this both shrinks the swap
+  // payload and skips the avoidable server work of assembling them.
+  if (includeRegistries) {
+    const livingClasses = getAllLivingClasses();
+    state.worldTileDefs = WORLD_TILE_DEFS;
+    state.itemRegistry = getBootstrapRegistry();
+    state.livingRegistry = {
+      classes: Array.isArray(livingClasses)
+        ? livingClasses.reduce(function (acc: Record<string, any>, cls: any) {
+            if (!cls || typeof cls.id !== "string") return acc;
+            acc[String(cls.id)] = cls;
+            return acc;
+          }, {})
+        : {},
+    };
+    state.worldClassRegistry = getAllWorldClasses();
+  }
+
+  return state;
 }
 
 export function renderVirtualWorldPageHtml(state: PageState): string {

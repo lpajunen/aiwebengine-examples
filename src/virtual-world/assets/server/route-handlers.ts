@@ -77,6 +77,7 @@ export function worldStateHandler(context: any) {
   const state = buildVirtualWorldPageState(
     req.auth.userId,
     req.auth.userName || "",
+    { includeRegistries: false },
   );
   return ResponseBuilder.json(state);
 }

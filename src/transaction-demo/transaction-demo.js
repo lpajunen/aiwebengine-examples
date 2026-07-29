@@ -1,32 +1,34 @@
+/// <reference path="../../types/aiwebengine.d.ts" />
+
 // Example: Transaction support demonstration
 // This script shows how to use database transactions in aiwebengine
 
-// Register HTTP route
-registerRoute({
-  method: "POST",
-  path: "/transaction-demo/transfer",
-  handlerFunctionName: "handleTransfer",
-});
-
-registerRoute({
-  method: "POST",
-  path: "/transaction-demo/batch",
-  handlerFunctionName: "handleBatch",
-});
-
-registerRoute({
-  method: "POST",
-  path: "/transaction-demo/nested",
-  handlerFunctionName: "handleNested",
-});
+/**
+ * Register the demo HTTP routes on script initialization.
+ */
+function init() {
+  routeRegistry.registerRoute(
+    "/transaction-demo/transfer",
+    "handleTransfer",
+    "POST",
+  );
+  routeRegistry.registerRoute("/transaction-demo/batch", "handleBatch", "POST");
+  routeRegistry.registerRoute(
+    "/transaction-demo/nested",
+    "handleNested",
+    "POST",
+  );
+}
 
 /**
  * Example 1: Basic transaction for fund transfer
  *
  * This demonstrates automatic commit on success and rollback on error
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function handleTransfer(req) {
-  const body = JSON.parse(req.body);
+function handleTransfer(context) {
+  const body = JSON.parse(context.request?.body || "{}");
   const { fromAccount, toAccount, amount } = body;
 
   // Start transaction with 5 second timeout
@@ -73,7 +75,7 @@ export function handleTransfer(req) {
     };
   } catch (error) {
     // Transaction will auto-rollback on exception
-    console.error("Transfer failed:", error.message);
+    console.error("Transfer failed:", /** @type {Error} */ (error).message);
     throw error; // Re-throw to trigger auto-rollback
   }
 }
@@ -83,9 +85,11 @@ export function handleTransfer(req) {
  *
  * This demonstrates processing multiple items where individual failures
  * don't abort the entire batch
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function handleBatch(req) {
-  const body = JSON.parse(req.body);
+function handleBatch(context) {
+  const body = JSON.parse(context.request?.body || "{}");
   const { items } = body;
 
   if (!Array.isArray(items)) {
@@ -133,13 +137,14 @@ export function handleBatch(req) {
       // Savepoint automatically released on next iteration or commit
     } catch (error) {
       // Rollback just this item
-      console.log(`Rolling back item ${item.id || i}: ${error.message}`);
+      const err = /** @type {Error} */ (error);
+      console.log(`Rolling back item ${item.id || i}: ${err.message}`);
       database.rollbackToSavepoint(savepoint);
 
       results.push({
         item: item.id || i,
         status: "failed",
-        error: error.message,
+        error: err.message,
       });
     }
   }
@@ -176,9 +181,11 @@ export function handleBatch(req) {
  *
  * This demonstrates manual transaction management with multiple
  * savepoint levels
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function handleNested(req) {
-  const body = JSON.parse(req.body);
+function handleNested(context) {
+  const body = JSON.parse(context.request?.body || "{}");
 
   // Start outer transaction
   database.beginTransaction(10000);
@@ -219,7 +226,10 @@ export function handleNested(req) {
         database.releaseSavepoint(sp2.savepoint);
       } catch (nestedError) {
         // Rollback just the innermost operation
-        console.log("Rolling back nested operation:", nestedError.message);
+        console.log(
+          "Rolling back nested operation:",
+          /** @type {Error} */ (nestedError).message,
+        );
         database.rollbackToSavepoint(sp2.savepoint);
       }
 
@@ -227,7 +237,10 @@ export function handleNested(req) {
       database.releaseSavepoint(sp1.savepoint);
     } catch (error) {
       // Rollback to first savepoint
-      console.log("Rolling back to first checkpoint:", error.message);
+      console.log(
+        "Rolling back to first checkpoint:",
+        /** @type {Error} */ (error).message,
+      );
       database.rollbackToSavepoint(sp1.savepoint);
 
       // Continue with fallback logic
@@ -256,11 +269,12 @@ export function handleNested(req) {
     };
   } catch (error) {
     // Auto-rollback on exception
-    console.error("Transaction failed:", error.message);
+    const err = /** @type {Error} */ (error);
+    console.error("Transaction failed:", err.message);
     return {
       status: 500,
       body: JSON.stringify({
-        error: "Transaction failed: " + error.message,
+        error: "Transaction failed: " + err.message,
       }),
     };
   }

@@ -12,8 +12,19 @@
  * Maximum file size: 10MB (configurable via max_upload_size_bytes)
  */
 
+/**
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
+ */
 function handleUpload(context) {
-  const { request } = context;
+  const request = context.request;
+  if (!request) {
+    return {
+      status: 400,
+      body: JSON.stringify({ error: "Missing request" }),
+      contentType: "application/json",
+    };
+  }
 
   // Check if any files were uploaded
   if (!request.files || request.files.length === 0) {
@@ -56,6 +67,7 @@ function handleUpload(context) {
   });
 
   // Extract form fields (non-file data)
+  /** @type {Record<string, string>} */
   const formFields = {};
   for (const [key, value] of Object.entries(request.form)) {
     formFields[key] = value;
@@ -81,5 +93,9 @@ function handleUpload(context) {
   };
 }
 
-// Register the route
-registerRoute("POST", "/upload", handleUpload);
+/**
+ * Register the route on script initialization.
+ */
+function init() {
+  routeRegistry.registerRoute("/upload", "handleUpload", "POST");
+}

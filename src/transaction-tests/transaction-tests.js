@@ -1,40 +1,37 @@
+/// <reference path="../../types/aiwebengine.d.ts" />
+
 // Test script for transaction functionality
 // This demonstrates and tests the transaction support
 
-registerRoute({
-  method: "GET",
-  path: "/test/transaction-commit",
-  handlerFunctionName: "testCommit",
-});
-
-registerRoute({
-  method: "GET",
-  path: "/test/transaction-rollback",
-  handlerFunctionName: "testRollback",
-});
-
-registerRoute({
-  method: "GET",
-  path: "/test/transaction-savepoint",
-  handlerFunctionName: "testSavepoint",
-});
-
-registerRoute({
-  method: "GET",
-  path: "/test/transaction-timeout",
-  handlerFunctionName: "testTimeout",
-});
-
-registerRoute({
-  method: "GET",
-  path: "/test/transaction-nested",
-  handlerFunctionName: "testNested",
-});
+/**
+ * Register the transaction test routes on script initialization.
+ */
+function init() {
+  routeRegistry.registerRoute("/test/transaction-commit", "testCommit", "GET");
+  routeRegistry.registerRoute(
+    "/test/transaction-rollback",
+    "testRollback",
+    "GET",
+  );
+  routeRegistry.registerRoute(
+    "/test/transaction-savepoint",
+    "testSavepoint",
+    "GET",
+  );
+  routeRegistry.registerRoute(
+    "/test/transaction-timeout",
+    "testTimeout",
+    "GET",
+  );
+  routeRegistry.registerRoute("/test/transaction-nested", "testNested", "GET");
+}
 
 /**
  * Test 1: Basic commit - handler completes normally
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function testCommit(req) {
+function testCommit(context) {
   console.log("TEST: Transaction commit");
 
   // Begin transaction
@@ -68,8 +65,10 @@ export function testCommit(req) {
 
 /**
  * Test 2: Rollback - handler throws exception
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function testRollback(req) {
+function testRollback(context) {
   console.log("TEST: Transaction rollback");
 
   // Begin transaction
@@ -96,8 +95,10 @@ export function testRollback(req) {
 
 /**
  * Test 3: Savepoint - create and rollback to savepoint
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function testSavepoint(req) {
+function testSavepoint(context) {
   console.log("TEST: Savepoint rollback");
 
   // Begin transaction
@@ -178,8 +179,10 @@ export function testSavepoint(req) {
 
 /**
  * Test 4: Transaction timeout
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function testTimeout(req) {
+function testTimeout(context) {
   console.log("TEST: Transaction timeout");
 
   // Begin transaction with very short timeout (100ms)
@@ -236,8 +239,10 @@ export function testTimeout(req) {
 
 /**
  * Test 5: Nested transactions with multiple savepoints
+ * @param {HandlerContext} context
+ * @returns {HttpResponse}
  */
-export function testNested(req) {
+function testNested(context) {
   console.log("TEST: Nested transactions");
 
   // Begin outer transaction

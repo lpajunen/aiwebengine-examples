@@ -19,7 +19,11 @@
 /**
  * McpClient wrapper class for easier JavaScript usage
  */
-class GitHubMcpClient {
+class GitHubMcpDemoClient {
+  /**
+   * @param {string} serverUrl
+   * @param {string} secretIdentifier
+   */
   constructor(serverUrl, secretIdentifier) {
     // Call the native constructor which returns JSON string
     const clientDataJson = McpClient.constructor(serverUrl, secretIdentifier);
@@ -28,7 +32,7 @@ class GitHubMcpClient {
 
   /**
    * List all available tools from the MCP server
-   * @returns {Array} Array of tool objects with name, description, and inputSchema
+   * @returns {any[]} Array of tool objects with name, description, and inputSchema
    */
   listTools() {
     const clientDataJson = JSON.stringify(this._clientData);
@@ -40,7 +44,7 @@ class GitHubMcpClient {
    * Call a tool on the MCP server
    * @param {string} toolName - Name of the tool to call
    * @param {object} args - Tool arguments
-   * @returns {object} Tool result or error object
+   * @returns {any} Tool result or error object
    */
   callTool(toolName, args) {
     const clientDataJson = JSON.stringify(this._clientData);
@@ -69,7 +73,7 @@ function demonstrateGitHubMcp() {
 
     // 1. Create MCP client connected to GitHub's MCP server
     console.log("1. Connecting to GitHub MCP server...");
-    const client = new GitHubMcpClient(
+    const client = new GitHubMcpDemoClient(
       "https://api.githubcopilot.com/mcp/",
       "github_token",
     );
@@ -136,22 +140,26 @@ function demonstrateGitHubMcp() {
       },
     };
   } catch (error) {
-    console.error("\n✗ Error:", error.message);
-    console.error("Stack:", error.stack);
+    const err = /** @type {Error} */ (error);
+    console.error("\n✗ Error:", err.message);
+    console.error("Stack:", err.stack);
 
     return {
       success: false,
-      error: error.message,
+      error: err.message,
     };
   }
 }
 
 /**
  * Example: List all open issues from a repository
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} [state]
  */
 function listRepositoryIssues(owner, repo, state = "open") {
   try {
-    const client = new GitHubMcpClient(
+    const client = new GitHubMcpDemoClient(
       "https://api.githubcopilot.com/mcp/",
       "github_token",
     );
@@ -171,17 +179,18 @@ function listRepositoryIssues(owner, repo, state = "open") {
       return [];
     }
 
+    /** @type {any[]} */
     const issues = result.issues || [];
 
     console.log(`Found ${issues.length} ${state} issues:\n`);
-    issues.forEach((issue, index) => {
+    issues.forEach((/** @type {any} */ issue, /** @type {number} */ index) => {
       console.log(`${index + 1}. #${issue.number} - ${issue.title}`);
       console.log(`   Author: ${issue.user?.login}, State: ${issue.state}`);
     });
 
     return issues;
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error("Error:", /** @type {Error} */ (error).message);
     return [];
   }
 }

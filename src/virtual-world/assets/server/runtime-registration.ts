@@ -2,6 +2,10 @@ import { vwLog } from "./diagnostics.ts";
 import { VIRTUAL_WORLD_EVENTS_STREAM_PATH } from "./runtime-config.ts";
 import { getAllActionIds } from "./item-registry.ts";
 
+// Swagger/OpenAPI group all virtual-world HTTP routes share, so they render
+// under one "Virtual world" section instead of the default untagged bucket.
+const VIRTUAL_WORLD_API_TAG = "Virtual world";
+
 function safeRegisterRoute(
   path: string,
   handler: string,
@@ -9,11 +13,11 @@ function safeRegisterRoute(
   opts?: any,
 ): void {
   try {
-    if (opts) {
-      routeRegistry.registerRoute(path, handler, method, opts);
-    } else {
-      routeRegistry.registerRoute(path, handler, method);
+    const routeOpts = { ...(opts || {}) };
+    if (!routeOpts.tags) {
+      routeOpts.tags = [VIRTUAL_WORLD_API_TAG];
     }
+    routeRegistry.registerRoute(path, handler, method, routeOpts);
   } catch (e) {
     vwLog("route registration skipped", {
       path: path,
@@ -28,11 +32,9 @@ function safeRegisterStreamRoute(
   customizationFunction?: string,
 ): void {
   try {
-    if (customizationFunction) {
-      routeRegistry.registerStreamRoute(path, customizationFunction);
-    } else {
-      routeRegistry.registerStreamRoute(path);
-    }
+    routeRegistry.registerStreamRoute(path, customizationFunction, {
+      tags: [VIRTUAL_WORLD_API_TAG],
+    });
   } catch (e) {
     vwLog("stream route registration skipped", {
       path: path,
@@ -60,7 +62,9 @@ function safeRegisterTool(
 
 function safeRegisterAssetRoute(path: string, assetPath: string): void {
   try {
-    routeRegistry.registerAssetRoute(path, assetPath);
+    routeRegistry.registerAssetRoute(path, assetPath, {
+      tags: [VIRTUAL_WORLD_API_TAG],
+    });
   } catch (e) {
     vwLog("asset route registration skipped", {
       path: path,
@@ -592,7 +596,7 @@ export function registerVirtualWorldRuntime(): void {
     summary: "Virtual World (Play)",
     description:
       "Interactive 2.5D block world rendered with Three.js. Navigate with WASD or arrow keys. Requires authentication.",
-    tags: ["Demo"],
+    tags: [VIRTUAL_WORLD_API_TAG],
   });
   safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");
   safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");

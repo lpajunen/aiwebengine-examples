@@ -21,6 +21,10 @@ Or use MCP to upload scripts directly to your aiwebengine instance.
 - **graphql_subscription_demo.js** - GraphQL subscription example using Server-Sent Events (SSE)
 - **graphql_ws_demo.js** - GraphQL subscription example using WebSocket (graphql-transport-ws protocol)
 - **script_updates_demo.js** - Script update demonstration
+- **file-upload.js** - Handling multipart file uploads (base64 data with metadata)
+- **github_mcp_issues.js** - Using McpClient to fetch GitHub issues via GitHub's MCP server
+- **transaction-demo.js** - Atomic database operations with transaction support
+- **transaction-tests.js** - Demonstrates and tests transaction commit/rollback/savepoint behavior
 
 ## Security Note
 

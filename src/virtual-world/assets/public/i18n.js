@@ -310,6 +310,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         "The forest floor feels old here, as if someone just finished a quiet verse.",
       flavor_text_3:
         "Juniper smoke and birdsong drift through this hidden clearing.",
+      traveling: "Traveling…",
     },
     auth: {
       session_expired_redirecting: "Session expired. Redirecting to login...",
@@ -684,6 +685,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         "Metsän pohja tuntuu täällä vanhalta, ikään kuin joku olisi juuri lausunut hiljaisen säkeen.",
       flavor_text_3:
         "Katajan savu ja lintujen laulu leijuvat tässä piilotetussa aukiossa.",
+      traveling: "Matkalla…",
     },
     auth: {
       session_expired_redirecting:

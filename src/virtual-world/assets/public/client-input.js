@@ -95,17 +95,15 @@ document.addEventListener("mouseleave", function () {
   isDragging = false;
 });
 
-requireElementById("hud-inventory-panel").addEventListener(
-  "wheel",
-  function (e) {
-    e.stopPropagation();
-  },
-  { passive: true },
-);
-
 document.addEventListener(
   "wheel",
   function (e) {
+    // A wheel over any interactive HUD panel/dialog should scroll that panel
+    // (native behavior), not zoom the camera underneath it. Same guard the
+    // touch handlers use via closest(".hud") so every panel is covered
+    // automatically as panels are added or restyled.
+    var t = /** @type {Element | null} */ (e.target);
+    if (t && t.closest && t.closest(".hud")) return;
     e.preventDefault();
     cameraOrbit.radius = Math.max(
       10,

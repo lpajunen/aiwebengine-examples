@@ -54,7 +54,13 @@ export interface ActionDefinition {
     // remains the finish/success message (shown immediately for instant
     // actions, or when a durationMs action resolves).
     startToastMessage?: string;
+    // i18n key for the start toast, localized like toastMessageKey below.
+    startToastMessageKey?: string;
     toastMessage?: string;
+    // i18n key for the finish toast; the client localizes it with toastMessage
+    // as the English fallback (see withConfiguredToastMessage). toastMessage is
+    // still required so servers/older clients without the key stay readable.
+    toastMessageKey?: string;
     worldChatText?: string;
     successPayload?: {
       includeTargetPosition?: boolean;
@@ -133,13 +139,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validation: {
       requireTreeState: {
         kind: "plantable",
-        missingErrorMessage: "Cannot plant here",
-        conflictErrorMessage: "Tree already exists",
+        missingErrorMessage: "error.cannot_plant_here",
+        conflictErrorMessage: "error.tree_already_exists",
       },
       blockedZones: [
         {
           kind: "oak_clearing",
-          errorMessage: "The oak clearing must remain open",
+          errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],
     },
@@ -166,13 +172,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validation: {
       requireTreeState: {
         kind: "cuttable",
-        missingErrorMessage: "No tree to cut",
-        conflictErrorMessage: "Tree already cut",
+        missingErrorMessage: "error.no_tree_to_cut",
+        conflictErrorMessage: "error.tree_already_cut",
       },
       blockedZones: [
         {
           kind: "oak_center",
-          errorMessage: "The old oak stands firm",
+          errorMessage: "error.old_oak_stands_firm",
         },
       ],
     },
@@ -205,13 +211,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validation: {
       requireTreeState: {
         kind: "plantable",
-        missingErrorMessage: "Cannot plant here",
-        conflictErrorMessage: "Tree already exists",
+        missingErrorMessage: "error.cannot_plant_here",
+        conflictErrorMessage: "error.tree_already_exists",
       },
       blockedZones: [
         {
           kind: "oak_clearing",
-          errorMessage: "The oak clearing must remain open",
+          errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],
     },
@@ -237,16 +243,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     },
     validation: {
       requireWalkableTile: {
-        errorMessage: "Cannot build house here",
+        errorMessage: "error.cannot_build_house_here",
       },
       requireHouseState: {
         kind: "absent",
-        errorMessage: "House already exists",
+        errorMessage: "error.house_already_exists",
       },
       blockedZones: [
         {
           kind: "oak_clearing",
-          errorMessage: "The oak clearing must remain open",
+          errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],
     },
@@ -272,7 +278,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validation: {
       requireHouseState: {
         kind: "present",
-        errorMessage: "No house to destroy",
+        errorMessage: "error.no_house_to_destroy",
       },
     },
   },
@@ -302,12 +308,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       // house tile, and only one door per tile.
       requireHouseState: {
         kind: "present",
-        errorMessage: "A door must be hung on a house wall",
+        errorMessage: "error.door_needs_wall",
       },
       requireItemState: {
         itemId: "door",
         kind: "absent",
-        errorMessage: "A door already hangs here",
+        errorMessage: "error.door_already_hangs",
       },
     },
   },
@@ -337,7 +343,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       requireItemState: {
         itemId: "door",
         kind: "present",
-        errorMessage: "No door to take down",
+        errorMessage: "error.no_door_to_remove",
       },
     },
   },
@@ -364,12 +370,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     },
     validation: {
       requireWalkableTile: {
-        errorMessage: "Cannot build portal here",
+        errorMessage: "error.cannot_build_portal_here",
       },
       requireItemState: {
         itemId: "portal",
         kind: "absent",
-        errorMessage: "Portal already exists",
+        errorMessage: "error.portal_already_exists",
       },
     },
   },
@@ -399,7 +405,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       requireItemState: {
         itemId: "portal",
         kind: "present",
-        errorMessage: "No portal to remove",
+        errorMessage: "error.no_portal_to_remove",
       },
     },
   },
@@ -416,6 +422,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeInventory: true,
       },
       toastMessage: "The kantele strings ring clear and ready.",
+      toastMessageKey: "tree_action.tune_toast",
     },
     logicSpec: {
       effects: [
@@ -437,6 +444,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       toastMessage: "A kantele tune carries across the clearing.",
+      toastMessageKey: "tree_action.play_tune_toast",
       worldChatText: "lets a kantele melody drift through the spruce hush.",
     },
     logicSpec: {
@@ -445,13 +453,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
           field: "state.tuned",
           op: "eq",
           value: true,
-          errorMessage: "The kantele needs tuning first",
+          errorMessage: "error.kantele_needs_tuning",
         },
         {
           field: "state.playsLeft",
           op: "gt",
           value: 0,
-          errorMessage: "The kantele needs tuning first",
+          errorMessage: "error.kantele_needs_tuning",
         },
       ],
       effects: [
@@ -494,6 +502,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         eventId: "blessing_place",
       },
       toastMessage: "A rowan blessing now marks this place.",
+      toastMessageKey: "tree_action.place_blessing_toast",
     },
   },
   pray: {
@@ -571,12 +580,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         eventId: "door_state",
       },
       toastMessage: "The door swings open.",
+      toastMessageKey: "tree_action.open_door_toast",
     },
     validation: {
       requireItemState: {
         itemId: "door",
         kind: "present",
-        errorMessage: "No door here",
+        errorMessage: "error.no_door_here",
       },
     },
   },
@@ -600,12 +610,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         eventId: "door_state",
       },
       toastMessage: "You pull the door shut.",
+      toastMessageKey: "tree_action.close_door_toast",
     },
     validation: {
       requireItemState: {
         itemId: "door",
         kind: "present",
-        errorMessage: "No door here",
+        errorMessage: "error.no_door_here",
       },
     },
   },
@@ -699,6 +710,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeInventory: true,
       },
       toastMessage: "A knife appears in your bag.",
+      toastMessageKey: "tree_action.summon_knife_toast",
     },
   },
   craft_kantele: {
@@ -720,7 +732,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeInventory: true,
       },
       startToastMessage: "You start crafting a Kantele.",
+      startToastMessageKey: "tree_action.craft_kantele_start_toast",
       toastMessage: "You finished crafting a Kantele.",
+      toastMessageKey: "tree_action.craft_kantele_toast",
     },
   },
 };

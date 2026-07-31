@@ -96,6 +96,27 @@ import {
   replaceLivingItemById,
 } from "./world-domain.ts";
 
+// Build the toast fields for a payload: the i18n key the client localizes,
+// plus the pre-assembled English string as the fallback, and any {token}
+// params the localized template interpolates. Handlers that assemble a toast
+// inline (dynamic labels, level numbers) use this so the client can localize
+// it — the declarative execution.toastMessage path uses withConfiguredToastMessage.
+function toastFields(
+  key: string,
+  english: string,
+  params?: Record<string, unknown>,
+): {
+  toast_message: string;
+  toast_message_key: string;
+  toast_message_params?: Record<string, unknown>;
+} {
+  return {
+    toast_message: english,
+    toast_message_key: key,
+    ...(params ? { toast_message_params: params } : {}),
+  };
+}
+
 export function performTreeActionForUser(
   userId: string,
   body: any,
@@ -193,7 +214,10 @@ export function performTreeActionForUser(
   }
 
   function getActionExecutionConfig(): {
+    startToastMessage?: string;
+    startToastMessageKey?: string;
     toastMessage?: string;
+    toastMessageKey?: string;
     worldChatText?: string;
     successPayload?: {
       includeTargetPosition?: boolean;
@@ -249,6 +273,11 @@ export function performTreeActionForUser(
     return {
       ...payload,
       toast_message: execution.toastMessage,
+      // The client localizes toast_message_key, falling back to the English
+      // toast_message above when the key is absent or unknown.
+      ...(execution.toastMessageKey
+        ? { toast_message_key: execution.toastMessageKey }
+        : {}),
     };
   }
 
@@ -559,6 +588,18 @@ export function performTreeActionForUser(
       playerCol,
       rotation,
     );
+
+    // A door hangs on a (non-walkable) wall tile that may be beside the player
+    // rather than the exact tile they face. For open/close_door, prefer the
+    // faced tile if it holds a door, otherwise snap to an adjacent tile that
+    // does — so the toggle works from any orientation, matching door_travel.
+    if (action === "open_door" || action === "close_door") {
+      const doorTile = findAdjacentDoorTile(targetTile.row, targetTile.col);
+      if (doorTile) {
+        return { row: doorTile.row, col: doorTile.col, inBounds: true };
+      }
+    }
+
     const worldDims = getWorldDimensions(worldId);
     return {
       row: targetTile.row,
@@ -569,6 +610,37 @@ export function performTreeActionForUser(
         targetTile.col >= 0 &&
         targetTile.col < worldDims.cols,
     };
+  }
+
+  // Find the door tile to open/close: the faced tile if it has a door, else
+  // the first tile in the player's 8-neighbourhood that does. Returns null
+  // when no door is adjacent (validation then reports "No door here").
+  function findAdjacentDoorTile(
+    facedRow: number,
+    facedCol: number,
+  ): { row: number; col: number } | null {
+    const tileHasDoor = function (r: number, c: number): boolean {
+      const items = worldItems[r + "_" + c];
+      return (
+        Array.isArray(items) &&
+        items.some(function (it) {
+          return isValidItem(it) && it.type === "door";
+        })
+      );
+    };
+    if (tileHasDoor(facedRow, facedCol)) {
+      return { row: facedRow, col: facedCol };
+    }
+    const keys = getNearbyTileKeys(canonical.row, canonical.col);
+    for (let i = 0; i < keys.length; i++) {
+      const parts = String(keys[i]).split("_");
+      const r = Number(parts[0]);
+      const c = Number(parts[1]);
+      if (Number.isFinite(r) && Number.isFinite(c) && tileHasDoor(r, c)) {
+        return { row: r, col: c };
+      }
+    }
+    return null;
   }
 
   const resolvedTarget = resolveActionTarget();
@@ -736,6 +808,9 @@ export function performTreeActionForUser(
       const startMessage =
         actionDefinition.execution &&
         actionDefinition.execution.startToastMessage;
+      const startMessageKey =
+        actionDefinition.execution &&
+        actionDefinition.execution.startToastMessageKey;
       return {
         status: 200,
         payload: {
@@ -744,6 +819,7 @@ export function performTreeActionForUser(
           started: true,
           ready_at: readyAt,
           ...(startMessage ? { toast_message: startMessage } : {}),
+          ...(startMessageKey ? { toast_message_key: startMessageKey } : {}),
         },
       };
     }
@@ -868,7 +944,10 @@ export function performTreeActionForUser(
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          toast_message: "You feel alive again! You are human once more.",
+          ...toastFields(
+            "tree_action.pray_revived_toast",
+            "You feel alive again! You are human once more.",
+          ),
           inventory: inv,
         }),
       };
@@ -876,7 +955,7 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You pray hard!",
+        ...toastFields("tree_action.pray_toast", "You pray hard!"),
       }),
     };
   }
@@ -908,7 +987,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You advance to level " + nextLevel + "!",
+        ...toastFields(
+          "tree_action.advance_level_toast",
+          "You advance to level " + nextLevel + "!",
+          { level: nextLevel },
+        ),
         inventory: inv,
         new_level: nextLevel,
         spent_experience: cost,
@@ -944,7 +1027,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You examine " + targetItemLabel + ".",
+        ...toastFields(
+          "tree_action.examine_toast",
+          "You examine " + targetItemLabel + ".",
+          { target: targetItemLabel },
+        ),
         target_item_id: targetItemId,
       }),
     };
@@ -992,7 +1079,7 @@ export function performTreeActionForUser(
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          toast_message: "You missed.",
+          ...toastFields("tree_action.attack_miss_toast", "You missed."),
           target_item_id: targetItemId,
         }),
       };
@@ -1030,7 +1117,11 @@ export function performTreeActionForUser(
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          toast_message: "You hit. You destroyed " + targetItemLabel + ".",
+          ...toastFields(
+            "tree_action.attack_destroy_toast",
+            "You hit. You destroyed " + targetItemLabel + ".",
+            { target: targetItemLabel },
+          ),
           target_item_id: targetItemId,
           tile_items: getTileItemsSnapshot(
             resolvedTarget.row,
@@ -1061,7 +1152,7 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You hit.",
+        ...toastFields("tree_action.attack_hit_toast", "You hit."),
         target_item_id: targetItemId,
         tile_items: getTileItemsSnapshot(
           resolvedTarget.row,
@@ -1107,7 +1198,11 @@ export function performTreeActionForUser(
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          toast_message: targetItemLabel + " is already at full health.",
+          ...toastFields(
+            "tree_action.fix_full_toast",
+            targetItemLabel + " is already at full health.",
+            { target: targetItemLabel },
+          ),
           target_item_id: targetItemId,
         }),
       };
@@ -1134,7 +1229,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You fix " + targetItemLabel + ".",
+        ...toastFields(
+          "tree_action.fix_toast",
+          "You fix " + targetItemLabel + ".",
+          { target: targetItemLabel },
+        ),
         target_item_id: targetItemId,
         tile_items: getTileItemsSnapshot(
           resolvedTarget.row,
@@ -1196,7 +1295,7 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You bury the corpse.",
+        ...toastFields("tree_action.bury_toast", "You bury the corpse."),
         target_item_id: targetItemId,
         tile_items: getTileItemsSnapshot(
           resolvedTarget.row,
@@ -1257,7 +1356,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You poke " + targetLivingLabel + ".",
+        ...toastFields(
+          "tree_action.poke_toast",
+          "You poke " + targetLivingLabel + ".",
+          { target: targetLivingLabel },
+        ),
         target_living_id: targetLivingId,
         target_living_label: targetLivingLabel,
       }),
@@ -1315,7 +1418,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You start following " + targetLivingLabel + ".",
+        ...toastFields(
+          "tree_action.follow_toast",
+          "You start following " + targetLivingLabel + ".",
+          { target: targetLivingLabel },
+        ),
         target_living_id: targetLivingId,
         target_living_label: targetLivingLabel,
       }),
@@ -1327,7 +1434,7 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You stop following.",
+        ...toastFields("tree_action.stop_follow_toast", "You stop following."),
       }),
     };
   }
@@ -1402,7 +1509,11 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You start fighting " + targetLivingLabel + ".",
+        ...toastFields(
+          "tree_action.fight_toast",
+          "You start fighting " + targetLivingLabel + ".",
+          { target: targetLivingLabel },
+        ),
         target_living_id: targetLivingId,
         target_living_label: targetLivingLabel,
       }),
@@ -1415,7 +1526,7 @@ export function performTreeActionForUser(
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        toast_message: "You stop fighting.",
+        ...toastFields("tree_action.stop_fight_toast", "You stop fighting."),
       }),
     };
   }
@@ -1573,8 +1684,9 @@ export function performTreeActionForUser(
       destination_world_type: createdInterior.world_type,
       destination_world_rows: createdInterior.rows,
       destination_world_cols: createdInterior.cols,
-      // The interior's default spawn tile (see getDefaultSpawnPosition) — where
-      // the matching return door below is placed.
+      // The interior's default spawn tile (see getDefaultSpawnPosition). The
+      // player lands here, on the wood floor, with the matching return door
+      // hung in the wall tile directly north (see below).
       destination_row: 1,
       destination_col: 1,
     };
@@ -1603,7 +1715,12 @@ export function performTreeActionForUser(
       destination_row: targetRow,
       destination_col: targetCol,
     };
-    upsertWorldItem(createdInterior.world_id, 1, 1, returnDoorItem);
+    // Hang the return door on the wall (a non-walkable house border tile),
+    // not on the open wood floor — a door needs a wall to read as a door. The
+    // interior's border ring is house tiles (WORLD_TYPE_BUILDING walls), so
+    // (0, 1) is the wall directly north of the spawn at (1, 1); door_travel
+    // finds it from the spawn since it scans the 8-neighbour radius.
+    upsertWorldItem(createdInterior.world_id, 0, 1, returnDoorItem);
 
     return {
       status: 200,

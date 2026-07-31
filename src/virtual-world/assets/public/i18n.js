@@ -41,6 +41,29 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       remove_door: "Take down door",
       open_door: "Open door",
       close_door: "Close door",
+      open_door_toast: "The door swings open.",
+      close_door_toast: "You pull the door shut.",
+      tune_toast: "The kantele strings ring clear and ready.",
+      play_tune_toast: "A kantele tune carries across the clearing.",
+      place_blessing_toast: "A rowan blessing now marks this place.",
+      summon_knife_toast: "A knife appears in your bag.",
+      craft_kantele_start_toast: "You start crafting a Kantele.",
+      craft_kantele_toast: "You finished crafting a Kantele.",
+      pray_revived_toast: "You feel alive again! You are human once more.",
+      pray_toast: "You pray hard!",
+      advance_level_toast: "You advance to level {level}!",
+      examine_toast: "You examine {target}.",
+      attack_miss_toast: "You missed.",
+      attack_destroy_toast: "You hit. You destroyed {target}.",
+      attack_hit_toast: "You hit.",
+      fix_full_toast: "{target} is already at full health.",
+      fix_toast: "You fix {target}.",
+      bury_toast: "You bury the corpse.",
+      poke_toast: "You poke {target}.",
+      follow_toast: "You start following {target}.",
+      stop_follow_toast: "You stop following.",
+      fight_toast: "You start fighting {target}.",
+      stop_fight_toast: "You stop fighting.",
       door_travel: "Enter door",
       build_portal: "Raise rune gate",
       remove_portal: "Close rune gate",
@@ -284,7 +307,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     poke: {
       pokes_you: "pokes you.",
-      you_poke_prefix: "You poke",
     },
     fight: {
       you_missed: "You missed",
@@ -350,6 +372,23 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door_closed: "The door is closed",
       door_already_open: "The door is already open",
       door_already_closed: "The door is already closed",
+      no_door_here: "No door here",
+      door_needs_wall: "A door must be hung on a house wall",
+      door_already_hangs: "A door already hangs here",
+      no_door_to_remove: "No door to take down",
+      cannot_plant_here: "Cannot plant here",
+      tree_already_exists: "Tree already exists",
+      oak_clearing_must_stay_open: "The oak clearing must remain open",
+      no_tree_to_cut: "No tree to cut",
+      tree_already_cut: "Tree already cut",
+      old_oak_stands_firm: "The old oak stands firm",
+      cannot_build_house_here: "Cannot build house here",
+      house_already_exists: "House already exists",
+      no_house_to_destroy: "No house to destroy",
+      cannot_build_portal_here: "Cannot build portal here",
+      portal_already_exists: "Portal already exists",
+      no_portal_to_remove: "No portal to remove",
+      kantele_needs_tuning: "The kantele needs tuning first",
       action_not_allowed_here: "Action not allowed here",
       action_condition_not_met: "Action condition not met",
       not_enough_experience: "Not enough experience to advance",
@@ -414,6 +453,29 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       remove_door: "Irrota ovi",
       open_door: "Avaa ovi",
       close_door: "Sulje ovi",
+      open_door_toast: "Ovi avautuu.",
+      close_door_toast: "Vedät oven kiinni.",
+      tune_toast: "Kanteleen kielet soivat kirkkaina ja valmiina.",
+      play_tune_toast: "Kanteleen sävel kantautuu yli aukion.",
+      place_blessing_toast: "Pihlajan siunaus merkitsee nyt tätä paikkaa.",
+      summon_knife_toast: "Veitsi ilmestyy laukkuusi.",
+      craft_kantele_start_toast: "Alat valmistaa kanteletta.",
+      craft_kantele_toast: "Sait kanteleen valmiiksi.",
+      pray_revived_toast: "Tunnet elävyyden taas! Olet jälleen ihminen.",
+      pray_toast: "Rukoilet hartaasti!",
+      advance_level_toast: "Nouset tasolle {level}!",
+      examine_toast: "Tutkit kohdetta {target}.",
+      attack_miss_toast: "Löit huti.",
+      attack_destroy_toast: "Osut. Tuhosit kohteen {target}.",
+      attack_hit_toast: "Osut.",
+      fix_full_toast: "{target} on jo täydessä kunnossa.",
+      fix_toast: "Korjaat kohteen {target}.",
+      bury_toast: "Hautaat ruumiin.",
+      poke_toast: "Tökkäät kohdetta {target}.",
+      follow_toast: "Alat seurata kohdetta {target}.",
+      stop_follow_toast: "Lopetat seuraamisen.",
+      fight_toast: "Alat taistella kohdetta {target} vastaan.",
+      stop_fight_toast: "Lopetat taistelun.",
       door_travel: "Astu ovesta",
       build_portal: "Nosta riimuportti",
       remove_portal: "Sulje riimuportti",
@@ -658,7 +720,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     poke: {
       pokes_you: "tökkää sinua.",
-      you_poke_prefix: "Tökkäät",
     },
     fight: {
       you_missed: "Osuit huti",
@@ -727,6 +788,23 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door_closed: "Ovi on kiinni",
       door_already_open: "Ovi on jo auki",
       door_already_closed: "Ovi on jo kiinni",
+      no_door_here: "Täällä ei ole ovea",
+      door_needs_wall: "Ovi täytyy ripustaa talon seinään",
+      door_already_hangs: "Täällä roikkuu jo ovi",
+      no_door_to_remove: "Ei ovea poistettavaksi",
+      cannot_plant_here: "Tähän ei voi istuttaa",
+      tree_already_exists: "Tässä on jo puu",
+      oak_clearing_must_stay_open: "Tammiaukion on pysyttävä avoimena",
+      no_tree_to_cut: "Ei kaadettavaa puuta",
+      tree_already_cut: "Puu on jo kaadettu",
+      old_oak_stands_firm: "Vanha tammi seisoo lujana",
+      cannot_build_house_here: "Tähän ei voi rakentaa taloa",
+      house_already_exists: "Tässä on jo talo",
+      no_house_to_destroy: "Ei purettavaa taloa",
+      cannot_build_portal_here: "Tähän ei voi rakentaa riimuporttia",
+      portal_already_exists: "Tässä on jo riimuportti",
+      no_portal_to_remove: "Ei poistettavaa riimuporttia",
+      kantele_needs_tuning: "Kantele täytyy ensin virittää",
       action_not_allowed_here: "Toiminto ei ole sallittu täällä",
       action_condition_not_met: "Toiminnon ehto ei täyty",
       not_enough_experience: "Ei tarpeeksi kokemusta tasonnousuun",
@@ -860,6 +938,45 @@ function localizeLabel(labels, labelKey, fallback) {
   return t(labelKey || "", fallback);
 }
 
+/**
+ * Like t(), but substitutes {name} placeholders from params. Used for server
+ * toasts whose message carries dynamic values (a level number, a target's
+ * name) — the server sends a key plus a params map, the localized template
+ * fills them in. Missing keys fall back to the pre-assembled English string.
+ * @param {string} key
+ * @param {string} [fallback]
+ * @param {Record<string, unknown> | null} [params]
+ * @returns {string}
+ */
+function tFormat(key, fallback, params) {
+  var msg = t(key, fallback);
+  if (params && typeof params === "object") {
+    Object.keys(params).forEach(function (name) {
+      msg = msg.split("{" + name + "}").join(String(params[name]));
+    });
+  }
+  return msg;
+}
+
+/**
+ * Localize a server action/stream result's toast. Prefers toast_message_key
+ * (+ optional toast_message_params) and falls back to the English
+ * toast_message the server always includes. Returns "" when there's no toast.
+ * @param {{ toast_message?: string, toast_message_key?: string, toast_message_params?: Record<string, unknown> } | null | undefined} result
+ * @returns {string}
+ */
+function localizeResultToast(result) {
+  if (!result) return "";
+  if (result.toast_message_key) {
+    return tFormat(
+      result.toast_message_key,
+      result.toast_message || "",
+      result.toast_message_params,
+    );
+  }
+  return result.toast_message || "";
+}
+
 function applyStaticTranslations() {
   var textEls = document.querySelectorAll("[data-i18n-key]");
   for (var i = 0; i < textEls.length; i++) {
@@ -896,12 +1013,40 @@ function humanizeType(type) {
     });
 }
 
+// Built-in door validation messages are DB-seeded as plain English (the
+// action-class backfill can't rewrite an already-seeded nested errorMessage),
+// so bridge those legacy strings to their error.* keys here. Fresh seeds emit
+// the key directly and skip this map. Extend only for messages the server
+// still sends as English.
+var LEGACY_SERVER_MESSAGE_KEYS = /** @type {Record<string, string>} */ ({
+  "No door here": "error.no_door_here",
+  "A door must be hung on a house wall": "error.door_needs_wall",
+  "A door already hangs here": "error.door_already_hangs",
+  "No door to take down": "error.no_door_to_remove",
+  "Cannot plant here": "error.cannot_plant_here",
+  "Tree already exists": "error.tree_already_exists",
+  "The oak clearing must remain open": "error.oak_clearing_must_stay_open",
+  "No tree to cut": "error.no_tree_to_cut",
+  "Tree already cut": "error.tree_already_cut",
+  "The old oak stands firm": "error.old_oak_stands_firm",
+  "Cannot build house here": "error.cannot_build_house_here",
+  "House already exists": "error.house_already_exists",
+  "No house to destroy": "error.no_house_to_destroy",
+  "Cannot build portal here": "error.cannot_build_portal_here",
+  "Portal already exists": "error.portal_already_exists",
+  "No portal to remove": "error.no_portal_to_remove",
+  "The kantele needs tuning first": "error.kantele_needs_tuning",
+});
+
 /**
  * @param {string} msg
  * @returns {string}
  */
 function translateServerMessage(msg) {
   var raw = String(msg || "");
+  if (Object.prototype.hasOwnProperty.call(LEGACY_SERVER_MESSAGE_KEYS, raw)) {
+    raw = LEGACY_SERVER_MESSAGE_KEYS[raw];
+  }
   if (raw.indexOf("error.") !== 0) return raw;
   var colonIdx = raw.indexOf(": ");
   var key = colonIdx === -1 ? raw : raw.slice(0, colonIdx);

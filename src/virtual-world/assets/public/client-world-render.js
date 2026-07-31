@@ -978,6 +978,77 @@ function clearItemMeshes() {
   }
 }
 
+/**
+ * Hang a door flush on the exposed ("front") wall of its house tile instead
+ * of floating in the middle of the tile — its back sits on the wall, matching
+ * the cosmetic house door. Returns true when the door was placed (its tile is
+ * a house tile with at least one exposed wall); false lets the caller fall
+ * back to centred placement (e.g. a door on open ground).
+ * @param {any} mesh
+ * @param {number} row
+ * @param {number} col
+ * @param {boolean} isOpen
+ * @returns {boolean}
+ */
+function placeDoorOnWall(mesh, row, col, isOpen) {
+  if (!hasHouseAt(row, col)) return false;
+  // Same priority the house mesh uses for its cosmetic door: front (south)
+  // first, then north, east, west. n = outward wall normal, t = along-wall
+  // tangent, base = closed-door Y rotation.
+  var walls = [
+    { open: !hasHouseAt(row + 1, col), nx: 0, nz: 1, tx: 1, tz: 0, base: 0 },
+    { open: !hasHouseAt(row - 1, col), nx: 0, nz: -1, tx: 1, tz: 0, base: 0 },
+    {
+      open: !hasHouseAt(row, col + 1),
+      nx: 1,
+      nz: 0,
+      tx: 0,
+      tz: 1,
+      base: Math.PI / 2,
+    },
+    {
+      open: !hasHouseAt(row, col - 1),
+      nx: -1,
+      nz: 0,
+      tx: 0,
+      tz: 1,
+      base: Math.PI / 2,
+    },
+  ];
+  var wall = null;
+  for (var i = 0; i < walls.length; i++) {
+    if (walls[i].open) {
+      wall = walls[i];
+      break;
+    }
+  }
+  if (!wall) return false;
+  // 0.79 places the door just proud of the house wall (walls sit at ±0.77).
+  var wallOffset = 0.79;
+  var px = tileX(col) + wall.nx * wallOffset;
+  var pz = tileZ(row) + wall.nz * wallOffset;
+  if (!isOpen) {
+    mesh.position.set(px, 0.5, pz);
+    mesh.rotation.y = wall.base;
+    return true;
+  }
+  // Open: swing ~70° about the hinge at one end of the wall, choosing the
+  // rotation sign that carries the free edge outward (away from the house).
+  var halfW = 0.36;
+  var swing = Math.PI * 0.39;
+  var a = swing;
+  var freeX = wall.tx * Math.cos(a) + wall.tz * Math.sin(a);
+  var freeZ = -wall.tx * Math.sin(a) + wall.tz * Math.cos(a);
+  if (freeX * wall.nx + freeZ * wall.nz < 0) a = -swing;
+  var hingeX = px - wall.tx * halfW;
+  var hingeZ = pz - wall.tz * halfW;
+  var offX = wall.tx * halfW * Math.cos(a) + wall.tz * halfW * Math.sin(a);
+  var offZ = -wall.tx * halfW * Math.sin(a) + wall.tz * halfW * Math.cos(a);
+  mesh.position.set(hingeX + offX, 0.5, hingeZ + offZ);
+  mesh.rotation.y = wall.base + a;
+  return true;
+}
+
 function rebuildItemMeshes() {
   clearItemMeshes();
   for (var tileKey in worldItemsByTile) {
@@ -996,12 +1067,18 @@ function rebuildItemMeshes() {
         isDoor ? doorGeo : itemGeo,
         isDoor ? getDoorMaterial(doorOpen) : getItemMaterial(item.type),
       );
+      if (isDoor && placeDoorOnWall(mesh, row, col, doorOpen)) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = false;
+        itemMeshGroup.add(mesh);
+        continue;
+      }
       var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
       var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
       var oy = isDoor ? 0.5 : 0.2 + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
-      // An open door swings ~70° ajar and shifts to its hinge edge; a shut
-      // door sits flush across the tile.
+      // An open door not hung on a house wall swings ~70° ajar and shifts to
+      // its hinge edge; a shut one sits flush across the tile.
       if (isDoor && doorOpen) {
         mesh.rotation.y = Math.PI * 0.39;
         mesh.position.x -= 0.28;

@@ -917,7 +917,8 @@ function initMultiplayer() {
       return;
     }
     applyItemStateFromResult(payload);
-    if (payload.toast_message) showHudToast(payload.toast_message, false);
+    var completedToast = localizeResultToast(payload);
+    if (completedToast) showHudToast(completedToast, false);
   }
 
   /** @param {any} payload */

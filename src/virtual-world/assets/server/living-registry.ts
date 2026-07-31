@@ -97,6 +97,24 @@ function defaultFatigueValueTemplate(): Record<string, unknown> {
 // adds display metadata (labels, meter ranges) for the built-in classes.
 function defaultFatigueValueSchema(): LivingValueSchema {
   return {
+    // Shared by all livings; experience/totalExperience only ever carry a
+    // value on players (see applyLivingValueDefaults in world-domain.ts), so
+    // their schema entries here are simply unused for NPC classes.
+    level: {
+      kind: "number",
+      labelKey: "living.value.level",
+      fallbackLabel: "Level",
+    },
+    experience: {
+      kind: "number",
+      labelKey: "living.value.experience",
+      fallbackLabel: "Experience",
+    },
+    totalExperience: {
+      kind: "number",
+      labelKey: "living.value.total_experience",
+      fallbackLabel: "Total experience",
+    },
     fatigue: {
       kind: "number",
       min: 0,

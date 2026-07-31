@@ -827,8 +827,27 @@ function initMultiplayer() {
     if (payload.result === "miss") {
       showHudToast(t("fight.you_missed", "You missed") + suffix + ".", false);
     } else if (payload.result === "kill") {
+      // The kill also awarded XP (scaled by the target's level); apply the
+      // updated values locally so the HUD reflects the gain immediately — the
+      // world-scoped player_values_changed event is ignored for self.
+      if (payload.values && typeof payload.values === "object") {
+        playerInventory.values = payload.values;
+        updateStatsHud();
+        if (statsPanelVisible) renderStatisticsPanel();
+      }
+      var xpSuffix =
+        typeof payload.experience_gained === "number" &&
+        payload.experience_gained > 0
+          ? " (" +
+            t("fight.gained_xp", "gained") +
+            " " +
+            payload.experience_gained +
+            " " +
+            t("fight.xp_suffix", "XP") +
+            ")"
+          : "";
       showHudToast(
-        t("fight.you_defeated", "You defeated") + suffix + "!",
+        t("fight.you_defeated", "You defeated") + suffix + "!" + xpSuffix,
         false,
       );
     } else if (payload.result === "hit") {

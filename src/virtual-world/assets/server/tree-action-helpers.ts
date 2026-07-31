@@ -160,6 +160,30 @@ export function performTreeActionForUser(
     : canonical.rotation;
   const worldItems = loadWorldItems(worldId);
 
+  // XP awarded on this action's completion, if the action is configured with a
+  // (non-onKill) `experience` amount. Tracked in the closure so it runs exactly
+  // once per action even though buildConfiguredSuccessPayload — the shared
+  // success choke point — is reached from many different return branches.
+  let experienceAwarded = false;
+  let experienceGained = 0;
+  function maybeAwardActionExperience(): void {
+    if (experienceAwarded) return;
+    experienceAwarded = true;
+    const exp = actionDefinition && actionDefinition.experience;
+    // onKill actions (fight) award via the combat resolver, scaled by the
+    // slain target's level — never on the action's own completion.
+    if (!exp || exp.onKill) return;
+    const amount = Math.floor(Number(exp.amount || 0));
+    if (!(amount > 0)) return;
+    inv.values.experience =
+      Math.floor(Number(inv.values.experience || 0)) + amount;
+    inv.values.totalExperience =
+      Math.floor(Number(inv.values.totalExperience || 0)) + amount;
+    savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    experienceGained = amount;
+  }
+
   function getTileItemsSnapshot(row: number, col: number): any[] {
     const key = row + "_" + col;
     return Array.isArray(worldItems[key]) ? worldItems[key] : [];
@@ -226,12 +250,23 @@ export function performTreeActionForUser(
   }
 
   function buildConfiguredSuccessPayload(overrides?: any): any {
+    // Award XP first so any inventory this payload carries back to the client
+    // (includeInventory, or the always-attached copy below) reflects the new
+    // experience values.
+    maybeAwardActionExperience();
     const execution = getActionExecutionConfig();
-    const payload = {
+    const payload: any = {
       ok: true,
       action: action,
       ...(overrides || {}),
     };
+    if (experienceGained > 0) {
+      payload.experience_gained = experienceGained;
+      // Ensure the acting client always sees the updated experience/HP even
+      // for actions that don't otherwise return inventory — the world-scoped
+      // player_values_changed broadcast is ignored by the actor's own client.
+      if (payload.inventory == null) payload.inventory = inv;
+    }
 
     if (!execution || !execution.successPayload) {
       return withConfiguredToastMessage(payload);

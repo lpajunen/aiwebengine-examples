@@ -11,7 +11,7 @@ import {
   savePlayerInventory,
   upsertWorldItem,
 } from "./item-storage.ts";
-import { getItemStateTemplate } from "./item-registry.ts";
+import { getActionDefinition, getItemStateTemplate } from "./item-registry.ts";
 import { getLivingClassWithRefresh } from "./living-registry.ts";
 import { deleteNPCById, loadWorldNPCs, saveWorldNPCs } from "./npc-storage.ts";
 import {
@@ -322,9 +322,41 @@ function resolveCombatHit(
   deleteFightState(fight.attacker_id);
   if (fight.attacker_type === "player") deleteFollowState(fight.attacker_id);
   if (fight.attacker_type === "player") {
+    // Award kill XP to the player attacker: the "fight" action's configured
+    // base amount scaled by the slain target's level, so higher-level targets
+    // are worth proportionally more (a level-3 wolf gives 3x a level-1 wolf).
+    const fightActionDef = getActionDefinition("fight");
+    const killExp = fightActionDef ? fightActionDef.experience : undefined;
+    const baseAmount = killExp ? Math.floor(Number(killExp.amount || 0)) : 0;
+    let experienceGained = 0;
+    let attackerValues: Record<string, unknown> | undefined;
+    if (baseAmount > 0) {
+      const targetLevel = Math.max(
+        1,
+        Math.floor(Number(targetValues.level || 1)),
+      );
+      experienceGained = baseAmount * targetLevel;
+      const attackerInv = loadPlayerInventory(fight.attacker_id);
+      attackerInv.values.experience =
+        Math.floor(Number(attackerInv.values.experience || 0)) +
+        experienceGained;
+      attackerInv.values.totalExperience =
+        Math.floor(Number(attackerInv.values.totalExperience || 0)) +
+        experienceGained;
+      savePlayerInventory(fight.attacker_id, attackerInv);
+      broadcastPlayerValuesChanged(
+        worldId,
+        fight.attacker_id,
+        attackerInv.values,
+      );
+      attackerValues = attackerInv.values;
+    }
     sendRecipientScopedStreamEvent(fight.attacker_id, "fight_tick", {
       result: "kill",
       target_label: targetLabel,
+      ...(experienceGained > 0
+        ? { experience_gained: experienceGained, values: attackerValues }
+        : {}),
     });
     sendRecipientScopedStreamEvent(fight.attacker_id, "fight_ended", {
       reason: "killed",

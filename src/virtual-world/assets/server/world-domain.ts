@@ -539,24 +539,41 @@ export function getItemsInSlotsWithTag(
 // its class doesn't declare them in valueTemplate. currentHitPoints defaults
 // to whatever maxHitPoints resolves to, so a class that only customizes
 // maxHitPoints still spawns instances at full health.
+//
+// `level` is shared by every living kind (integer, starts at 1) — a class can
+// raise it via its valueTemplate to spawn tougher, higher-XP NPCs. `experience`
+// and `totalExperience` are player-only progression counters (also integers
+// starting at 1): actions award XP into both, but only `experience` is meant
+// to be spendable/resettable later, while `totalExperience` is a lifetime tally
+// (see tree-action-helpers.ts's maybeAwardActionExperience and the combat kill
+// award in fight-helpers.ts). NPCs never accrue XP, so those two keys are only
+// defaulted for the "player" kind.
 function applyLivingValueDefaults(
   merged: Record<string, unknown>,
+  kind?: LivingKind,
 ): Record<string, unknown> {
+  if (merged.level === undefined) merged.level = 1;
   if (merged.maxHitPoints === undefined) merged.maxHitPoints = 10;
   if (merged.currentHitPoints === undefined) {
     merged.currentHitPoints = merged.maxHitPoints;
   }
   if (merged.armorClass === undefined) merged.armorClass = 10;
   if (merged.weaponClass === undefined) merged.weaponClass = 1;
+  if (kind === "player") {
+    if (merged.experience === undefined) merged.experience = 1;
+    if (merged.totalExperience === undefined) merged.totalExperience = 1;
+  }
   return merged;
 }
 
 export function normalizeLivingValues(
   values: unknown,
   valueTemplate: Record<string, unknown>,
+  kind?: LivingKind,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = applyLivingValueDefaults(
     Object.assign({}, valueTemplate || {}),
+    kind,
   );
   if (!isRecordLike(values)) return out;
   Object.keys(values).forEach(function (key) {
@@ -583,7 +600,11 @@ export function normalizeLivingState(
     livingClass.slotDefinitions,
   );
   out.slots = defaultSlots;
-  out.values = normalizeLivingValues({}, livingClass.valueTemplate || {});
+  out.values = normalizeLivingValues(
+    {},
+    livingClass.valueTemplate || {},
+    livingClass.kind,
+  );
   if (!isRecordLike(state)) return out;
 
   if (isRecordLike(state.slots)) {
@@ -603,6 +624,7 @@ export function normalizeLivingState(
   out.values = normalizeLivingValues(
     isRecordLike(state.values) ? state.values : {},
     livingClass.valueTemplate || {},
+    livingClass.kind,
   );
   return out;
 }

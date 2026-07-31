@@ -369,6 +369,14 @@ function renderLivingValueDisplay(schemaEntry, value, key) {
 function updateStatsHud() {
   var inv = normalizeClientInventory(playerInventory);
   var values = inv.values || {};
+  requireElementById("hud-level").textContent = formatLivingValue(
+    values.level,
+    "level",
+  );
+  requireElementById("hud-xp").textContent = formatLivingValue(
+    values.experience,
+    "experience",
+  );
   requireElementById("hud-hp").textContent =
     formatLivingValue(values.currentHitPoints, "currentHitPoints") +
     "/" +

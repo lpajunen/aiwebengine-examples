@@ -233,10 +233,12 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
       <span data-i18n-key="hud.world_label">World:</span> <span id="hud-world-id">${state.worldId}</span> (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
       <span data-i18n-key="hud.stats_label">Stats:</span>
+      <span class="hud-stat" data-i18n-title="living.value.level" title="Level"><span data-i18n-key="hud.level_abbr">Lvl:</span> <span id="hud-level">-</span></span>
       <span class="hud-stat" data-i18n-title="living.value.current_hit_points" title="Hit points"><span data-i18n-key="hud.hp_abbr">HP:</span> <span id="hud-hp">-/-</span></span>
       <span class="hud-stat" data-i18n-title="living.value.armor_class" title="Armor class"><span data-i18n-key="hud.ac_abbr">AC:</span> <span id="hud-ac">-</span></span>
       <span class="hud-stat" data-i18n-title="living.value.weapon_class" title="Weapon class"><span data-i18n-key="hud.wc_abbr">WC:</span> <span id="hud-wc">-</span></span>
       <span class="hud-stat" data-i18n-title="living.value.fatigue" title="Fatigue"><span data-i18n-key="hud.fatigue_abbr">F:</span> <span id="hud-fatigue">-</span></span>
+      <span class="hud-stat" data-i18n-title="living.value.experience" title="Experience"><span data-i18n-key="hud.xp_abbr">XP:</span> <span id="hud-xp">-</span></span>
     </div>
 
     <div class="hud" id="hud-tile-detail" aria-live="polite">

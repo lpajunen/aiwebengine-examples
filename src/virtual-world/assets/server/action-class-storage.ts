@@ -27,6 +27,7 @@ export function upsertActionClassRow(row: {
   logic_spec_json: string;
   cost_json: string;
   produces_json: string;
+  experience_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;

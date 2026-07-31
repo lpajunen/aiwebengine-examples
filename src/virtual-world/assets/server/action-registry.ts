@@ -34,6 +34,17 @@ export interface ActionDefinition {
   // handling at the end of performTreeActionForUser in tree-action-helpers.ts.
   removes?: Array<{ itemId: string }>;
   fatigueCost?: number;
+  // Experience points awarded to the acting player when this action completes
+  // successfully. XP is player-only (NPCs never accrue it) and feeds both the
+  // player's `experience` and `totalExperience` living values. When `onKill` is
+  // true the award is deferred to the combat kill resolver (fight-helpers.ts),
+  // which scales `amount` by the slain target's level — so merely *starting*
+  // the action (e.g. picking a fight) grants nothing. See
+  // maybeAwardActionExperience in tree-action-helpers.ts.
+  experience?: {
+    amount: number;
+    onKill?: boolean;
+  };
   // Optional real-time delay (ms) between the action starting and its
   // effects/produces resolving — see execution.startToastMessage.
   durationMs?: number;
@@ -106,6 +117,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Plant pine sapling",
     targetKind: "facing_tile",
     sourceItemIds: ["tree_planter"],
+    experience: { amount: 3 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -138,6 +150,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use woodsman's saw",
     targetKind: "facing_tile",
     sourceItemIds: ["saw"],
+    experience: { amount: 5 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -175,6 +188,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       { itemId: "juniper_bundle", count: 1 },
       { itemId: "tree_planter", count: 1 },
     ],
+    experience: { amount: 15 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -208,6 +222,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use hammer (build house)",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    experience: { amount: 20 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -267,6 +282,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Hang a door",
     targetKind: "facing_tile",
     sourceItemIds: ["hammer"],
+    experience: { amount: 15 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -331,6 +347,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Raise rune gate",
     targetKind: "facing_tile",
     sourceItemIds: ["portal_builder"],
+    experience: { amount: 25 },
     execution: {
       successPayload: {
         includeTargetPosition: true,
@@ -393,6 +410,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "self",
     sourceItemIds: ["kantele"],
     fatigueCost: 10,
+    experience: { amount: 4 },
     execution: {
       successPayload: {
         includeInventory: true,
@@ -412,6 +430,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Play kantele tune",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    experience: { amount: 4 },
     execution: {
       successPayload: {
         includeInventory: true,
@@ -450,6 +469,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Place rowan blessing",
     targetKind: "current_tile",
     sourceItemIds: ["rowan_charm"],
+    experience: { amount: 10 },
     produces: [
       { itemId: "blessing_marker", count: 1, placement: "target_tile" },
     ],
@@ -639,6 +659,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fight",
     targetKind: "living_nearby",
     sourceItemIds: ["starter_kit"],
+    // Base XP for a kill; the combat resolver multiplies this by the slain
+    // target's level (onKill defers the award off the fight-start path).
+    experience: { amount: 20, onKill: true },
   },
   stop_fight: {
     id: "stop_fight",
@@ -671,6 +694,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       { itemId: "juniper_bundle", count: 1 },
       { itemId: "rune_stone", count: 1 },
     ],
+    experience: { amount: 30 },
     produces: [{ itemId: "kantele", count: 1 }],
     durationMs: 5000,
     execution: {

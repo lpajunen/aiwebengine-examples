@@ -14,6 +14,37 @@ export const OAK_WORLD_COLS = 30;
 export const OAK_CENTER_ROW = Math.floor(OAK_WORLD_ROWS / 2);
 export const OAK_CENTER_COL = Math.floor(OAK_WORLD_COLS / 2);
 export const OAK_CLEAR_RADIUS = 5;
+// The start village (oak world) is classed as its own world class rather than
+// the bare "village" preset, so it shows in the world-type editor with a name
+// (English "Birdhaven" / Finnish "Lintukoto"). Same village terrain + spawns.
+export const BIRDHAVEN_WORLD_CLASS_ID = "birdhaven";
+
+// The Adventurer's guild is a fixed-id building world (a single small room),
+// reached through a door on a house just south of the oak clearing. Like the
+// oak/start world it uses a reserved id rather than a random one so the
+// village door can point at a stable destination and its room fixtures
+// (training post + return door) reseed to known tiles.
+export const GUILD_WORLD_ID = "10001";
+// Its own world class (empty item/NPC spawn manifests) so the room stays a
+// clean training hall instead of inheriting the busy default building preset.
+export const GUILD_WORLD_CLASS_ID = "adventurers_guild";
+export const GUILD_WORLD_ROWS = 10;
+export const GUILD_WORLD_COLS = 10;
+export const GUILD_CENTER_ROW = Math.floor(GUILD_WORLD_ROWS / 2);
+export const GUILD_CENTER_COL = Math.floor(GUILD_WORLD_COLS / 2);
+// Where a player lands when entering the guild (its default spawn, see
+// getDefaultSpawnPosition for non-oak worlds) — the return door sits here.
+export const GUILD_SPAWN_ROW = 1;
+export const GUILD_SPAWN_COL = 1;
+
+// The village-side guild entrance: a house wall tile one row south of the oak
+// clearing edge, with the door hung on it. The approach tile is the clearing
+// tile directly north of the door (guaranteed walkable by the oak
+// reservation), where the return door drops the player back off.
+export const VILLAGE_GUILD_DOOR_ROW = OAK_CENTER_ROW + OAK_CLEAR_RADIUS + 1;
+export const VILLAGE_GUILD_DOOR_COL = OAK_CENTER_COL;
+export const VILLAGE_GUILD_APPROACH_ROW = OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
+export const VILLAGE_GUILD_APPROACH_COL = OAK_CENTER_COL;
 
 export const WORLD_MOD_LAYER_TERRAIN = "terrain";
 export const WORLD_MOD_LAYER_OBJECT = "object";
@@ -289,7 +320,9 @@ export function normalizeWorldType(
 export function getDefaultWorldTypeForWorldId(
   worldId: string | number,
 ): WorldType {
-  return isOakWorld(worldId) ? WORLD_TYPE_VILLAGE : WORLD_TYPE_FOREST;
+  if (isOakWorld(worldId)) return WORLD_TYPE_VILLAGE;
+  if (isGuildWorld(worldId)) return WORLD_TYPE_BUILDING;
+  return WORLD_TYPE_FOREST;
 }
 
 export function getWorldFloorTileName(worldType: string): WorldTileName {
@@ -343,6 +376,10 @@ export function createWorldId(): string {
 
 export function isOakWorld(worldId: string | number): boolean {
   return String(worldId) === OAK_WORLD_ID;
+}
+
+export function isGuildWorld(worldId: string | number): boolean {
+  return String(worldId) === GUILD_WORLD_ID;
 }
 
 export function oakDistanceSquared(row: number, col: number): number {

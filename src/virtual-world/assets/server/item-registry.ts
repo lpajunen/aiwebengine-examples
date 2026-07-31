@@ -244,6 +244,18 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: ["pray"],
   },
+  training_dummy: {
+    id: "training_dummy",
+    kind: "placeable",
+    nonDroppable: true,
+    nonPickable: true,
+    visuals: {
+      color: 0xb08968,
+      labelKey: "item.training_dummy.name",
+      fallbackLabel: "Training post",
+    },
+    actionIds: ["advance_level"],
+  },
   npc_corpse: {
     id: "npc_corpse",
     kind: "placeable",

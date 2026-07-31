@@ -6,8 +6,15 @@ import {
 import {
   getEffectiveMap,
   getWorldClassForWorld,
+  getWorldInfo,
   resolvePortalDestinationWorldType,
+  saveWorldType,
 } from "./world-bootstrap.ts";
+import { loadWorldHouses, saveWorldHouses } from "./world-mod-storage.ts";
+import {
+  getWorldClassWithRefresh,
+  upsertWorldClass,
+} from "./world-class-storage.ts";
 import {
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
@@ -15,16 +22,31 @@ import {
 } from "./runtime-config.ts";
 import {
   createEmptyLivingState,
+  GUILD_CENTER_COL,
+  GUILD_CENTER_ROW,
+  GUILD_SPAWN_COL,
+  GUILD_SPAWN_ROW,
+  GUILD_WORLD_CLASS_ID,
+  GUILD_WORLD_COLS,
+  GUILD_WORLD_ID,
+  GUILD_WORLD_ROWS,
+  isGuildWorld,
   isOakWorld,
   isValidItem,
   isWorldTileWalkable,
   OAK_CENTER_COL,
   OAK_CENTER_ROW,
+  OAK_WORLD_ID,
   LivingState,
   normalizeLivingState,
   normalizeWorldType,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
+  VILLAGE_GUILD_APPROACH_COL,
+  VILLAGE_GUILD_APPROACH_ROW,
+  VILLAGE_GUILD_DOOR_COL,
+  VILLAGE_GUILD_DOOR_ROW,
+  WORLD_TYPE_BUILDING,
 } from "./world-domain.ts";
 import {
   getDefaultPlayerLivingClassId,
@@ -444,6 +466,194 @@ export function ensureOldOakItem(worldId: string): void {
   });
 }
 
+// Ensures exactly one world item matching `matchFn` exists in `worldId`, sitting
+// at (row,col). Self-heals duplicates (keeps the lowest/oldest id, deletes the
+// rest) the same way ensureOldOakItem does for the oak singleton, but matches on
+// a predicate rather than a bare type so a fixture (e.g. a tagged guild door)
+// can coexist with player-built items of the same type without clobbering them.
+// A matching item already on the target tile is left untouched, preserving any
+// state a player has toggled on it (e.g. a closed door).
+function ensureSingletonWorldItem(
+  worldId: string,
+  row: number,
+  col: number,
+  matchFn: (item: any) => boolean,
+  buildItem: () => Record<string, unknown>,
+): void {
+  const items = loadWorldItems(worldId);
+  const found: Array<{ item: any; tileKey: string }> = [];
+  for (const tileKey of Object.keys(items)) {
+    for (const item of items[tileKey]) {
+      if (item && matchFn(item)) found.push({ item, tileKey });
+    }
+  }
+  found.sort(function (a, b) {
+    return String(a.item.id).localeCompare(String(b.item.id));
+  });
+  const canonical = found.length > 0 ? found[0] : null;
+  for (let i = 1; i < found.length; i++) {
+    deleteWorldItemById(String(found[i].item.id));
+  }
+
+  const targetTileKey = row + "_" + col;
+  if (canonical && canonical.tileKey === targetTileKey) return;
+
+  const base = buildItem();
+  upsertWorldItem(
+    worldId,
+    row,
+    col,
+    Object.assign(
+      {
+        id: canonical
+          ? canonical.item.id
+          : "w" + worldId + "_i" + nextWorldItemId(worldId),
+        created_at: Date.now(),
+      },
+      base,
+    ),
+  );
+}
+
+function isGuildDoorFixture(item: any, fixture: string): boolean {
+  return (
+    !!item &&
+    item.type === "door" &&
+    !!item.state &&
+    item.state.fixture === fixture
+  );
+}
+
+// Seeds the Adventurer's guild room's fixtures: a training post at the centre
+// (its advance_level action lets a player spend experience to level up) and a
+// return door at the spawn tile leading back to the village clearing. Called
+// from ensureWorldItems, so both survive the guild world's periodic reseed.
+export function ensureGuildRoomItems(worldId: string): void {
+  if (!isGuildWorld(worldId)) return;
+  // Guarantee the type/dimension row exists even if the guild is somehow loaded
+  // before the village writes it (self-corrects the map on the next load).
+  ensureAdventurersGuildWorld();
+  ensureSingletonWorldItem(
+    worldId,
+    GUILD_CENTER_ROW,
+    GUILD_CENTER_COL,
+    function (item) {
+      return item.type === "training_dummy";
+    },
+    function () {
+      return { type: "training_dummy", non_droppable: true };
+    },
+  );
+  ensureSingletonWorldItem(
+    worldId,
+    GUILD_SPAWN_ROW,
+    GUILD_SPAWN_COL,
+    function (item) {
+      return isGuildDoorFixture(item, "guild_return");
+    },
+    function () {
+      return {
+        type: "door",
+        state: { open: true, fixture: "guild_return" },
+        destination_world_id: OAK_WORLD_ID,
+        destination_row: VILLAGE_GUILD_APPROACH_ROW,
+        destination_col: VILLAGE_GUILD_APPROACH_COL,
+      };
+    },
+  );
+}
+
+// Writes the guild world's class + type/dimensions rows once per process so the
+// village door below points at a real building world with empty spawn manifests
+// (its room fixtures seed lazily on first entry, via ensureGuildRoomItems inside
+// ensureWorldItems).
+let guildWorldConfigEnsured = false;
+function ensureAdventurersGuildWorld(): void {
+  if (guildWorldConfigEnsured) return;
+  // A dedicated world class with empty item/NPC spawns keeps the room clean
+  // rather than inheriting the busy default building preset. The English name is
+  // in fallbackLabel and the Finnish name in the labels map (so the world-type
+  // editor's "Name (Finnish)" field shows/round-trips it — that field reads
+  // only labels.fi, not the i18n bundle). Re-upsert when either drifts so an
+  // already-seeded row self-heals.
+  const guildFallbackLabel = "Adventurers' guild";
+  const guildLabelFi = "Seikkailijoiden kilta";
+  const existingGuildClass = getWorldClassWithRefresh(GUILD_WORLD_CLASS_ID);
+  if (
+    !existingGuildClass ||
+    existingGuildClass.fallbackLabel !== guildFallbackLabel ||
+    !existingGuildClass.labels ||
+    existingGuildClass.labels.fi !== guildLabelFi
+  ) {
+    upsertWorldClass({
+      id: GUILD_WORLD_CLASS_ID,
+      baseType: WORLD_TYPE_BUILDING,
+      rows: GUILD_WORLD_ROWS,
+      cols: GUILD_WORLD_COLS,
+      labelKey: "world_class." + GUILD_WORLD_CLASS_ID + ".name",
+      fallbackLabel: guildFallbackLabel,
+      itemSpawns: [],
+      npcSpawns: [],
+      ownerIds: [],
+      labels: { fi: guildLabelFi },
+    });
+  }
+  const info = getWorldInfo(GUILD_WORLD_ID);
+  if (
+    info.world_type !== WORLD_TYPE_BUILDING ||
+    info.rows !== GUILD_WORLD_ROWS ||
+    info.cols !== GUILD_WORLD_COLS ||
+    info.world_class_id !== GUILD_WORLD_CLASS_ID
+  ) {
+    saveWorldType(
+      GUILD_WORLD_ID,
+      WORLD_TYPE_BUILDING,
+      { rows: GUILD_WORLD_ROWS, cols: GUILD_WORLD_COLS },
+      GUILD_WORLD_CLASS_ID,
+    );
+  }
+  guildWorldConfigEnsured = true;
+}
+
+// Seeds the village-side guild entrance: a house wall just south of the oak
+// clearing with a door hung on it that leads into the Adventurer's guild.
+// Called from ensureWorldItems for the oak world so it self-heals like the oak.
+export function ensureVillageGuildEntrance(worldId: string): void {
+  if (!isOakWorld(worldId)) return;
+  ensureAdventurersGuildWorld();
+
+  // Merge the entrance house into the existing house mods rather than replacing
+  // them, so player-built village houses are preserved.
+  const doorTileKey = VILLAGE_GUILD_DOOR_ROW + "_" + VILLAGE_GUILD_DOOR_COL;
+  const houses = loadWorldHouses(worldId);
+  if (!houses[doorTileKey]) {
+    houses[doorTileKey] = {
+      built_by: undefined,
+      actor_type: undefined,
+      timestamp: Date.now(),
+    };
+    saveWorldHouses(worldId, houses);
+  }
+
+  ensureSingletonWorldItem(
+    worldId,
+    VILLAGE_GUILD_DOOR_ROW,
+    VILLAGE_GUILD_DOOR_COL,
+    function (item) {
+      return isGuildDoorFixture(item, "guild_entrance");
+    },
+    function () {
+      return {
+        type: "door",
+        state: { open: true, fixture: "guild_entrance" },
+        destination_world_id: GUILD_WORLD_ID,
+        destination_row: GUILD_SPAWN_ROW,
+        destination_col: GUILD_SPAWN_COL,
+      };
+    },
+  );
+}
+
 // Finds a random walkable+empty tile and places one instance of itemType
 // there, mutating `items` (tileKey -> item[]) in place. Shared by the initial
 // world seed loop and the respawn-timer single-item spawn.
@@ -488,6 +698,12 @@ export const WORLD_ITEM_SEED_VERSION = 4;
 
 export function ensureWorldItems(worldId: string): void {
   ensureOldOakItem(worldId);
+  // Self-heal the reserved-world fixtures every call (each no-ops unless it's
+  // the world it belongs to), so the guild room and village entrance appear on
+  // already-seeded worlds without needing a seed-version bump — same rationale
+  // as the unconditional ensureOldOakItem above.
+  ensureGuildRoomItems(worldId);
+  ensureVillageGuildEntrance(worldId);
 
   const meta = loadWorldItemMeta(worldId);
   if (meta.seeded === WORLD_ITEM_SEED_VERSION) return;
@@ -507,6 +723,8 @@ export function ensureWorldItems(worldId: string): void {
       JSON.stringify({ world_id: String(worldId) }),
     );
     ensureOldOakItem(worldId);
+    ensureGuildRoomItems(worldId);
+    ensureVillageGuildEntrance(worldId);
 
     const worldClass = getWorldClassForWorld(worldId);
     const itemSpawns = worldClass ? worldClass.itemSpawns : [];

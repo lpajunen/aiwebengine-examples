@@ -936,6 +936,7 @@ function itemTypeColor(type) {
   if (type === "blessing_marker") return 0xb54434;
   if (type === "portal") return 0x5ad7ff;
   if (type === "door") return 0x9c6b3f;
+  if (type === "training_dummy") return 0xb08968;
   return 0xf3ca40;
 }
 

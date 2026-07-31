@@ -8,6 +8,7 @@ import { loadWorldMods } from "./world-mod-storage.ts";
 import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
 import {
   applyOakReservation,
+  BIRDHAVEN_WORLD_CLASS_ID,
   createWorldId,
   COLS,
   getDefaultWorldTypeForWorldId,
@@ -48,19 +49,26 @@ function ensureOakWorldConfig(worldId: string): void {
   if (!isOakWorld(worldId)) return;
   const defaultType = getDefaultWorldTypeForWorldId(worldId);
   const info = getWorldInfo(worldId);
-  if (
+  const shapeMatches =
     info.world_type === defaultType &&
     info.rows === OAK_WORLD_ROWS &&
-    info.cols === OAK_WORLD_COLS
-  ) {
+    info.cols === OAK_WORLD_COLS;
+  // The start world is classed as its own "birdhaven" world class (so it shows
+  // in the world-type editor with a name) rather than the bare "village" preset.
+  const classMatches = info.world_class_id === BIRDHAVEN_WORLD_CLASS_ID;
+  if (shapeMatches && classMatches) {
     return;
   }
   saveWorldType(
     worldId,
     defaultType,
     { rows: OAK_WORLD_ROWS, cols: OAK_WORLD_COLS },
-    defaultType,
+    BIRDHAVEN_WORLD_CLASS_ID,
   );
+  // Only the item map depends on the world's shape/type. If just the world
+  // class id changed (migrating an existing start world village -> birdhaven),
+  // leave the seeded items (oak, guild door, ...) in place — no reseed needed.
+  if (shapeMatches) return;
   // The stored map just changed shape/type. Any items seeded against the old
   // map are now at coordinates that may fall outside the new bounds, and the
   // world's "seeded" marker would otherwise stop ensureWorldItems from ever

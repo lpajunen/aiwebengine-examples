@@ -21,6 +21,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Rowan blessing" },
       creator_stone: { name: "Creator's stone" },
       old_oak: { name: "Old oak" },
+      training_dummy: { name: "Training post" },
       npc_corpse: { name: "Corpse" },
       chest: { name: "Wooden chest" },
       unknown: { name: "Unknown item" },
@@ -49,6 +50,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_travel: "Enter rune gate",
       return_home: "Travel to the old oak",
       pray: "Pray",
+      advance_level: "Advance level",
       stop_follow: "Stop following",
       stop_fight: "Stop fighting",
       summon_knife: "Summon knife",
@@ -318,6 +320,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       island: { name: "Island" },
       cave: { name: "Cave" },
       building: { name: "Building" },
+      village: { name: "Village" },
+      birdhaven: { name: "Birdhaven" },
+      adventurers_guild: { name: "Adventurers' guild" },
     },
     error: {
       editing_rights_required: "Editing rights required",
@@ -346,6 +351,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door_already_closed: "The door is already closed",
       action_not_allowed_here: "Action not allowed here",
       action_condition_not_met: "Action condition not met",
+      not_enough_experience: "Not enough experience to advance",
       nickname_empty: "Nickname cannot be empty",
       not_in_world: "Not in a world",
       message_empty: "Message cannot be empty",
@@ -387,6 +393,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Pihlajansiunaus" },
       creator_stone: { name: "Luojan kivi" },
       old_oak: { name: "Vanha tammi" },
+      training_dummy: { name: "Harjoituspaalu" },
       npc_corpse: { name: "Ruumis" },
       chest: { name: "Puuarkku" },
       unknown: { name: "Tuntematon esine" },
@@ -415,6 +422,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_travel: "Astu riimuporttiin",
       return_home: "Matkaa vanhalle tammelle",
       pray: "Rukoile",
+      advance_level: "Nouse tasolla",
       stop_follow: "Lopeta seuraaminen",
       stop_fight: "Lopeta taistelu",
       summon_knife: "Kutsu puukko",
@@ -688,6 +696,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       island: { name: "Saari" },
       cave: { name: "Luola" },
       building: { name: "Rakennus" },
+      village: { name: "Kylä" },
+      birdhaven: { name: "Lintukoto" },
+      adventurers_guild: { name: "Seikkailijoiden kilta" },
     },
     error: {
       editing_rights_required: "Muokkausoikeudet vaaditaan",
@@ -716,6 +727,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door_already_closed: "Ovi on jo kiinni",
       action_not_allowed_here: "Toiminto ei ole sallittu täällä",
       action_condition_not_met: "Toiminnon ehto ei täyty",
+      not_enough_experience: "Ei tarpeeksi kokemusta tasonnousuun",
       nickname_empty: "Nimimerkki ei voi olla tyhjä",
       not_in_world: "Et ole maailmassa",
       message_empty: "Viesti ei voi olla tyhjä",
@@ -918,5 +930,6 @@ function itemTypeToLabelKey(type) {
   if (type === "starter_kit") return "item.starter_kit.name";
   if (type === "creator_stone") return "item.creator_stone.name";
   if (type === "old_oak") return "item.old_oak.name";
+  if (type === "training_dummy") return "item.training_dummy.name";
   return "item.unknown.name";
 }

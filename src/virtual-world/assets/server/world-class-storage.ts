@@ -1,9 +1,12 @@
 import { VWORLD_WORLD_CLASS_TABLE } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import {
+  BIRDHAVEN_WORLD_CLASS_ID,
   COLS,
   normalizeWorldDimension,
   normalizeWorldType,
+  OAK_WORLD_COLS,
+  OAK_WORLD_ROWS,
   ROWS,
   WORLD_TYPE_VILLAGE,
   WORLD_TYPES,
@@ -66,6 +69,18 @@ function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
   });
 }
 
+// Finnish display names for the built-in world classes, mirroring the
+// world_class.<type>.name i18n entries. Stored in each built-in class's
+// `labels.fi` so the world-type editor's Name(Finnish) field (which reads only
+// labels.fi, not the i18n bundle) shows and round-trips them.
+const BUILTIN_WORLD_CLASS_LABELS_FI: Record<string, string> = {
+  forest: "Metsä",
+  island: "Saari",
+  cave: "Luola",
+  building: "Rakennus",
+  village: "Kylä",
+};
+
 function normalizeOwnerIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
@@ -111,8 +126,33 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     itemSpawns: defaultItemSpawns(),
     npcSpawns: defaultNPCSpawns(worldType),
     ownerIds: [],
-    labels: {},
+    labels: BUILTIN_WORLD_CLASS_LABELS_FI[worldType]
+      ? { fi: BUILTIN_WORLD_CLASS_LABELS_FI[worldType] }
+      : {},
   };
+}
+
+// System world classes that aren't generation presets (not in WORLD_TYPES) but
+// are still seeded/backfilled like built-ins so they show in the world-type
+// editor. Birdhaven is the start village's own class (village terrain + spawns,
+// pinned to the oak world's 30x30 size).
+function birdhavenWorldClassRecord(): WorldClassRecord {
+  return {
+    id: BIRDHAVEN_WORLD_CLASS_ID,
+    baseType: WORLD_TYPE_VILLAGE,
+    rows: OAK_WORLD_ROWS,
+    cols: OAK_WORLD_COLS,
+    labelKey: "world_class." + BIRDHAVEN_WORLD_CLASS_ID + ".name",
+    fallbackLabel: "Birdhaven",
+    itemSpawns: defaultItemSpawns(),
+    npcSpawns: defaultNPCSpawns(WORLD_TYPE_VILLAGE),
+    ownerIds: [],
+    labels: { fi: "Lintukoto" },
+  };
+}
+
+function systemWorldClassRecords(): WorldClassRecord[] {
+  return [birdhavenWorldClassRecord()];
 }
 
 export function normalizeWorldClassRecord(record: {
@@ -248,6 +288,7 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       insertedDefaults++;
       continue;
     }
+    let changed = false;
     // Rows seeded before item/npc spawn manifests existed have empty arrays
     // here (JSON.parse fallback) — backfill built-in defaults so previously
     // seeded worlds keep spawning items/NPCs after this migration.
@@ -255,6 +296,18 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       const defaults = builtinWorldClassRecord(worldType);
       existing.itemSpawns = defaults.itemSpawns;
       existing.npcSpawns = defaults.npcSpawns;
+      changed = true;
+    }
+    // Backfill the built-in Finnish name onto rows seeded before it existed,
+    // without overwriting a non-empty value a creator may have set.
+    const desiredLabelFi = BUILTIN_WORLD_CLASS_LABELS_FI[worldType];
+    if (desiredLabelFi && !(existing.labels && existing.labels.fi)) {
+      existing.labels = Object.assign({}, existing.labels || {}, {
+        fi: desiredLabelFi,
+      });
+      changed = true;
+    }
+    if (changed) {
       upsertWorldRow(
         VWORLD_WORLD_CLASS_TABLE,
         ["class_id"],
@@ -263,6 +316,49 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       patchedSpawns++;
     }
   }
+
+  // Seed/backfill non-preset system classes (e.g. birdhaven, the start
+  // village's class) the same way, so they appear in the editor.
+  const systemRecords = systemWorldClassRecords();
+  for (let i = 0; i < systemRecords.length; i++) {
+    const desired = systemRecords[i];
+    const existing = cache[desired.id];
+    if (!existing) {
+      upsertWorldRow(
+        VWORLD_WORLD_CLASS_TABLE,
+        ["class_id"],
+        worldClassToDbRow(desired, now),
+      );
+      cache[desired.id] = desired;
+      insertedDefaults++;
+      continue;
+    }
+    let changed = false;
+    if (existing.itemSpawns.length === 0 && existing.npcSpawns.length === 0) {
+      existing.itemSpawns = desired.itemSpawns;
+      existing.npcSpawns = desired.npcSpawns;
+      changed = true;
+    }
+    if (desired.labels.fi && !(existing.labels && existing.labels.fi)) {
+      existing.labels = Object.assign({}, existing.labels || {}, {
+        fi: desired.labels.fi,
+      });
+      changed = true;
+    }
+    if (existing.fallbackLabel !== desired.fallbackLabel) {
+      existing.fallbackLabel = desired.fallbackLabel;
+      changed = true;
+    }
+    if (changed) {
+      upsertWorldRow(
+        VWORLD_WORLD_CLASS_TABLE,
+        ["class_id"],
+        worldClassToDbRow(existing, now),
+      );
+      patchedSpawns++;
+    }
+  }
+
   if (logSeed && dbRows.length === 0) {
     vwLog("world class repository seeded", { count: insertedDefaults });
   } else if (insertedDefaults > 0 || patchedSpawns > 0) {

@@ -503,6 +503,24 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "current_tile",
     sourceItemIds: ["old_oak"],
   },
+  advance_level: {
+    id: "advance_level",
+    labelKey: "tree_action.advance_level",
+    fallbackLabel: "Advance level",
+    // Used while standing at the guild training post (source item is the
+    // non-pickable training_dummy on/next to the actor's tile). The escalating
+    // free-experience cost and level bump live in the advance_level branch of
+    // tree-action-helpers.ts (it mutates a player living value, which the
+    // item-state logicSpec can't express).
+    targetKind: "current_tile",
+    sourceItemIds: ["training_dummy"],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+        includeWorldId: true,
+      },
+    },
+  },
   portal_travel: {
     id: "portal_travel",
     labelKey: "tree_action.portal_travel",

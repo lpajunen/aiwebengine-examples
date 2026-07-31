@@ -33,7 +33,10 @@ import {
 } from "./player-snapshots.ts";
 import { getEffectiveNick } from "./social-state.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
-import { NEARBY_TARGET_TILE_DISTANCE } from "./runtime-config.ts";
+import {
+  ADVANCE_LEVEL_COST_PER_LEVEL,
+  NEARBY_TARGET_TILE_DISTANCE,
+} from "./runtime-config.ts";
 import {
   getActionDefinition,
   getItemDefinition,
@@ -874,6 +877,41 @@ export function performTreeActionForUser(
       status: 200,
       payload: buildConfiguredSuccessPayload({
         toast_message: "You pray hard!",
+      }),
+    };
+  }
+
+  if (action === "advance_level") {
+    // Spend free experience to gain a level at the guild training post. The
+    // cost scales with the current level (level 1 -> 2 costs one unit, 2 -> 3
+    // two units, ...), draining only the spendable `experience` value while
+    // leaving the lifetime `totalExperience` tally untouched.
+    const currentLevel = Math.max(1, Math.floor(Number(inv.values.level || 1)));
+    const cost = currentLevel * ADVANCE_LEVEL_COST_PER_LEVEL;
+    const freeExperience = Math.floor(Number(inv.values.experience || 0));
+    if (freeExperience < cost) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: "error.not_enough_experience",
+          required_experience: cost,
+          current_experience: freeExperience,
+        },
+      };
+    }
+    const nextLevel = currentLevel + 1;
+    inv.values.experience = freeExperience - cost;
+    inv.values.level = nextLevel;
+    savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        toast_message: "You advance to level " + nextLevel + "!",
+        inventory: inv,
+        new_level: nextLevel,
+        spent_experience: cost,
       }),
     };
   }

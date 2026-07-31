@@ -11,6 +11,13 @@ export const RESPAWN_DELAY_MS = 30 * 60 * 1000;
 // Idle fatigue recovery rate shared by players and NPCs so both take the
 // same calendar time to idle from a given fatigue value down to 0.
 export const FATIGUE_RECOVERY_PER_SECOND = 0.5;
+// Free experience it costs to advance to the next level at the Adventurer's
+// guild training post: the first upgrade (level 1 -> 2) costs 1 x this, the
+// second (2 -> 3) costs 2 x, the third 3 x, and so on — i.e. currentLevel x
+// this. Only the spendable `experience` value is reduced; `totalExperience`
+// (the lifetime tally) is left untouched. See the advance_level branch in
+// tree-action-helpers.ts.
+export const ADVANCE_LEVEL_COST_PER_LEVEL = 1000;
 export const VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 
 export const WORLD_CHAT_MAX = 100;

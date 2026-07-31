@@ -5,3 +5,6 @@ schemas/token.json
 node_modules/
 .env
 .vscode/mcp.json
+.claude/projects/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

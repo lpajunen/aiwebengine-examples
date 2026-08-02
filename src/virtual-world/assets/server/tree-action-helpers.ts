@@ -50,7 +50,9 @@ import {
   getActionDefinition,
   getItemDefinition,
   getItemStateTemplate,
+  isPickableWorldItem,
 } from "./item-registry.ts";
+import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
 import {
   broadcastItemChange,
   broadcastPlayerValuesChanged,
@@ -1367,6 +1369,83 @@ export function performTreeActionForUser(
       payload: buildConfiguredSuccessPayload({
         ...toastFields("tree_action.bury_toast", "You bury the corpse."),
         target_item_id: targetItemId,
+        tile_items: getTileItemsSnapshot(
+          resolvedTarget.row,
+          resolvedTarget.col,
+        ),
+      }),
+    };
+  }
+
+  if (action === "pick_item") {
+    const targetItemId = String((body && body.target_item_id) || "");
+    if (!targetItemId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_required" },
+      };
+    }
+    const pickTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
+    const targetItem = getTileItemsSnapshot(
+      resolvedTarget.row,
+      resolvedTarget.col,
+    ).find(function (item) {
+      return item && String(item.id) === targetItemId;
+    });
+    if (!targetItem) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    if (!isPickableWorldItem(targetItem)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_pickable" },
+      };
+    }
+    // Claim by delete (same as the tile-level "pick all") so a concurrent
+    // pickup of the same item cannot dupe it: only grant the item if this
+    // request's delete actually removed its row.
+    const claimed = deleteWorldItems([targetItem]);
+    if (claimed.length === 0) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_item_not_found" },
+      };
+    }
+    const claimedItem = claimed[0];
+    if (Array.isArray(worldItems[pickTileKey])) {
+      worldItems[pickTileKey] = worldItems[pickTileKey].filter(function (item) {
+        return item && String(item.id) !== targetItemId;
+      });
+      if (worldItems[pickTileKey].length === 0) {
+        delete worldItems[pickTileKey];
+      }
+    }
+    inv.bag.push(claimedItem);
+    savePlayerInventory(userId, inv);
+    const pickChange = getItemChangeDefinition("pick");
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      pickChange ? pickChange.id : "pick",
+      resolvedTarget.row,
+      resolvedTarget.col,
+      [claimedItem],
+    );
+    scheduleRespawnIfManifestTracked(
+      worldId,
+      "item",
+      String(claimedItem.type || ""),
+    );
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields("tree_action.pick_item_toast", "You pick up the item."),
+        target_item_id: targetItemId,
+        inventory: inv,
         tile_items: getTileItemsSnapshot(
           resolvedTarget.row,
           resolvedTarget.col,

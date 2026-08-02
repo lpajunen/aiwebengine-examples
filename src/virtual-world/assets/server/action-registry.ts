@@ -713,6 +713,17 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     sourceItemIds: ["starter_kit"],
     targeting: WALK_ADJACENT_TARGETING,
   },
+  // Individual pick: walk to one chosen item and take just that item — the
+  // per-item counterpart to the tile-level "pick all" HUD button (the "pick"
+  // item-action in item-action-helpers.ts, which grabs every item underfoot).
+  pick_item: {
+    id: "pick_item",
+    labelKey: "tree_action.pick_item",
+    fallbackLabel: "Pick up",
+    targetKind: "item",
+    sourceItemIds: ["starter_kit"],
+    targeting: WALK_ADJACENT_TARGETING,
+  },
   poke: {
     id: "poke",
     labelKey: "tree_action.poke",

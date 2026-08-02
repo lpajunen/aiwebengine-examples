@@ -176,8 +176,9 @@ the actor toward the target's current tile each world tick (shared stepper in
 `fix`/`examine`/`break`/`bury` are flipped to `walk_adjacent` (range 5) via a
 shared `WALK_ADJACENT_TARGETING` — "point at a moving NPC or a distant item,
 the game closes the gap and acts"; the client offers same-tile
-`walk_adjacent` actions at nearby distance too. Remaining: wire individual
-item pick (a non-action-class path today) onto the same mechanism.
+`walk_adjacent` actions at nearby distance too. Individual item pick is a
+second `pick_item` action-class (walk to one chosen item and take just it)
+alongside the unchanged tile-level "pick all" HUD button.
 
 ### 3. `validWhen` gating + valid-target highlight
 

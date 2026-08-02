@@ -204,6 +204,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "break",
       "fix",
       "bury",
+      "pick_item",
       "poke",
       "follow",
       "stop_follow",

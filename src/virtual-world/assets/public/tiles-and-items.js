@@ -573,7 +573,7 @@ function portalDestinationLabel(item) {
 
 /**
  * @param {string} type
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, action_ids?: string[], kind?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}
  */
 function getRegistryItemDef(type) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;
@@ -587,6 +587,17 @@ function getRegistryItemDef(type) {
 function isContainerItemType(type) {
   var def = getRegistryItemDef(type);
   return !!def && def.kind === "container";
+}
+
+/**
+ * Whether a world item of this type can be picked up. Unknown types (no
+ * registry def) default to pickable, matching the server's isPickableWorldItem.
+ * @param {string} type
+ * @returns {boolean}
+ */
+function isPickableItemType(type) {
+  var def = getRegistryItemDef(type);
+  return !def || !def.non_pickable;
 }
 
 /**

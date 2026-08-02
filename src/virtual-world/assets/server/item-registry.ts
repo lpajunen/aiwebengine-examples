@@ -345,6 +345,7 @@ export function getBootstrapRegistry(): {
       color: number;
       action_ids: string[];
       kind: string;
+      non_pickable?: boolean;
     }
   >;
   actions: Record<
@@ -376,6 +377,7 @@ export function getBootstrapRegistry(): {
       color: number;
       action_ids: string[];
       kind: string;
+      non_pickable?: boolean;
     }
   > = {};
   const actions: Record<
@@ -408,6 +410,7 @@ export function getBootstrapRegistry(): {
         color: cls.visuals.color,
         action_ids: cls.actionIds.slice(),
         kind: cls.kind,
+        non_pickable: !!cls.nonPickable,
       };
     });
   } else {
@@ -420,6 +423,7 @@ export function getBootstrapRegistry(): {
         color: item.visuals.color,
         action_ids: item.actionIds.slice(),
         kind: item.kind,
+        non_pickable: !!item.nonPickable,
       };
     });
   }

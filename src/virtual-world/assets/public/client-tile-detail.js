@@ -273,13 +273,20 @@ function renderTileDetailPanel() {
             escHtml(t("inventory.open", "Open")) +
             "</button> "
           : "";
+      // Hide the individual-pick button on items that can't be picked up
+      // (portals, doors, the old oak, …); other item actions still apply.
+      var thisItemActions = isPickableItemType(itm.type)
+        ? itemActionIds
+        : itemActionIds.filter(function (a) {
+            return a !== "pick_item";
+          });
       html +=
         '<div class="tile-row">' +
         escHtml(label) +
         " " +
         containerOpenBtn +
         entityActionButtons(
-          itemActionIds,
+          thisItemActions,
           "target-item-id",
           String(itm.id),
           "postItemTargetedAction",

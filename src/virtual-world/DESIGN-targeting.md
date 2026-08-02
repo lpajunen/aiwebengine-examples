@@ -166,17 +166,18 @@ backfill that both seeds it and later adopts a newly-declared built-in
 targeting over that derived default (the class-DB-persistence gotcha). Range
 resolves from the granting item when `rangeFrom: "item"`.
 
-### 2. Auto-walk-then-act for `approach: walk_adjacent` ✅ done (poke)
+### 2. Auto-walk-then-act for `approach: walk_adjacent` ✅ done
 
 An out-of-range target chosen for a `walk_adjacent` action enqueues an
 approach on `pending-action-storage`; `resolvePendingActionsForWorld` steps
 the actor toward the target's current tile each world tick (shared stepper in
 `pursuit-movement.ts`) and re-runs the action on arrival, bounded by
-`APPROACH_ACTION_MAX_MS`. `poke` is flipped to `walk_adjacent` (range 5) —
-"point at a moving NPC, the game closes the gap and pokes"; the client offers
-same-tile `walk_adjacent` actions at nearby distance too. Remaining: flip the
-item-targeted actions (`fix`, `examine`, `break`, `bury`) and wire individual
-item pick onto the same mechanism.
+`APPROACH_ACTION_MAX_MS`. `poke` and the item-targeted actions
+`fix`/`examine`/`break`/`bury` are flipped to `walk_adjacent` (range 5) via a
+shared `WALK_ADJACENT_TARGETING` — "point at a moving NPC or a distant item,
+the game closes the gap and acts"; the client offers same-tile
+`walk_adjacent` actions at nearby distance too. Remaining: wire individual
+item pick (a non-action-class path today) onto the same mechanism.
 
 ### 3. `validWhen` gating + valid-target highlight
 

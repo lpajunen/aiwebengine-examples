@@ -151,6 +151,18 @@ export interface ActionDefinition {
   targeting?: ActionTargeting;
 }
 
+// Shared targeting for melee/manipulation actions (poke and the item-targeted
+// examine/break/fix/bury): a target chosen up to NEARBY_TARGET_TILE_DISTANCE
+// tiles away is pursued and the action resolves on the actor's own tile once
+// co-located, rather than requiring the exact tile up front — see
+// DESIGN-targeting.md step 2 and maybeBeginApproachAction in
+// tree-action-helpers.ts.
+const WALK_ADJACENT_TARGETING: ActionTargeting = {
+  range: NEARBY_TARGET_TILE_DISTANCE,
+  rangeShape: "adjacent",
+  approach: "walk_adjacent",
+};
+
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   plant: {
     id: "plant",
@@ -674,6 +686,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Examine",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
+    // Walk to the item, then examine it (DESIGN-targeting.md step 2).
+    targeting: WALK_ADJACENT_TARGETING,
   },
   break: {
     id: "break",
@@ -681,6 +695,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Break",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
+    targeting: WALK_ADJACENT_TARGETING,
   },
   fix: {
     id: "fix",
@@ -688,6 +703,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fix",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
+    targeting: WALK_ADJACENT_TARGETING,
   },
   bury: {
     id: "bury",
@@ -695,6 +711,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Bury",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
+    targeting: WALK_ADJACENT_TARGETING,
   },
   poke: {
     id: "poke",
@@ -702,15 +719,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Poke",
     targetKind: "living",
     sourceItemIds: ["starter_kit"],
-    // Walk-then-act (DESIGN-targeting.md step 2): poke still resolves on the
-    // actor's own tile, but a target chosen up to `range` tiles away is now
-    // pursued — the actor steps toward it each tick and pokes on arrival,
-    // instead of the click being rejected because the NPC has since moved.
-    targeting: {
-      range: NEARBY_TARGET_TILE_DISTANCE,
-      rangeShape: "adjacent",
-      approach: "walk_adjacent",
-    },
+    // Pursue a living chosen up to range tiles away, then poke on arrival.
+    targeting: WALK_ADJACENT_TARGETING,
   },
   follow: {
     id: "follow",

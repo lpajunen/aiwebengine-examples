@@ -354,6 +354,7 @@ export function getBootstrapRegistry(): {
       labels: ClassLabels;
       canonical_id: string;
       target_kind: string;
+      targeting?: ActionDefinition["targeting"];
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -384,6 +385,7 @@ export function getBootstrapRegistry(): {
       labels: ClassLabels;
       canonical_id: string;
       target_kind: string;
+      targeting?: ActionDefinition["targeting"];
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -433,6 +435,7 @@ export function getBootstrapRegistry(): {
       labels: normalizeClassLabels((action as ActionClassRecord).labels),
       canonical_id: action.canonicalId || action.id,
       target_kind: action.targetKind,
+      targeting: action.targeting,
       tree_action: worldMutation ? worldMutation.treeAction : undefined,
       house_action: worldMutation ? worldMutation.houseAction : undefined,
     };
@@ -883,6 +886,24 @@ function actionClassToDbRow(
   };
 }
 
+// Shallow-compares two targeting specs over their known scalar fields, used to
+// tell whether a seeded row still holds the auto-derived default (and may adopt
+// a newly-declared built-in targeting) or a creator's customization.
+function targetingEquals(
+  a: ActionDefinition["targeting"] | undefined,
+  b: ActionDefinition["targeting"] | undefined,
+): boolean {
+  const x = a || {};
+  const y = b || {};
+  return (
+    x.range === y.range &&
+    x.rangeShape === y.rangeShape &&
+    x.approach === y.approach &&
+    x.areaRadius === y.areaRadius &&
+    x.rangeFrom === y.rangeFrom
+  );
+}
+
 // Seeds missing built-in action rows from ACTION_DEFINITIONS, and patches
 // rows that already exist but predate a field's DB column (e.g. rows seeded
 // before logic_spec_json existed never got a logicSpec) — without touching
@@ -1007,9 +1028,20 @@ function backfillActionClassDefaults(
     // Backfill the aiming spec (DESIGN-targeting.md) onto rows seeded before
     // the targeting_json column existed, using the action's own targeting or
     // the behavior-preserving default for its targetKind.
+    const derivedTargeting = defaultTargetingForTargetKind(def.targetKind);
     if (existing.targeting === undefined) {
-      existing.targeting =
-        def.targeting || defaultTargetingForTargetKind(def.targetKind);
+      existing.targeting = def.targeting || derivedTargeting;
+      changed = true;
+    } else if (
+      def.targeting &&
+      targetingEquals(existing.targeting, derivedTargeting)
+    ) {
+      // The row still carries the auto-derived default seeded before this
+      // built-in declared an explicit targeting (e.g. poke gaining
+      // walk_adjacent in step 2). Adopt the declared spec. A creator who
+      // customized targeting has a value that differs from the derived
+      // default, so their edit is left untouched.
+      existing.targeting = Object.assign({}, derivedTargeting, def.targeting);
       changed = true;
     }
     if (changed) {

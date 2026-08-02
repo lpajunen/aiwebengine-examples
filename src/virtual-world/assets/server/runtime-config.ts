@@ -62,6 +62,12 @@ export const NPC_AGGRO_CHANCE = 0.4;
 // "living_nearby" (e.g. follow, fight) — see resolveActionTarget() in
 // tree-action-helpers.ts and isWithinTileDistance() in world-domain.ts.
 export const NEARBY_TARGET_TILE_DISTANCE = 5;
+// Give-up deadline for a walk-then-act approach (DESIGN-targeting.md step 2):
+// how long the actor keeps stepping toward a target chosen for an action with
+// targeting.approach "walk_adjacent" before the queued action is abandoned
+// (target unreachable, blocked, or fleeing faster than we close). See
+// resolvePendingActionsForWorld in tree-action-helpers.ts.
+export const APPROACH_ACTION_MAX_MS = 15000;
 // Max items a single container-kind item (e.g. chest) can hold — keeps
 // state_json payloads and container UI bounded. Containers cannot nest, so
 // this is also the effective bound on total items reachable through one

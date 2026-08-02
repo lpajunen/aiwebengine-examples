@@ -157,21 +157,26 @@ Layered, each cutting the item × action cross-product:
 
 Ordered highest-leverage-first; also the suggested implementation order.
 
-### 1. Add the `targeting` spec to action classes
+### 1. Add the `targeting` spec to action classes ✅ done
 
-Add the descriptor above to `action-class-storage`, resolve `range` from the
-granting item when `rangeFrom: "item"`. Nothing visible yet, but every step
-below keys off it. Built-in classes are DB-seeded, so seeding/migration must
-set defaults on existing actions (poke/fix → `walk_adjacent`, range 1).
+Added the descriptor above (`targeting_json` column, `resolveActionTargeting`
+/ `resolveEffectiveActionRange` in `action-registry.ts`), with a
+behavior-preserving default derived from each action's `targetKind` and a
+backfill that both seeds it and later adopts a newly-declared built-in
+targeting over that derived default (the class-DB-persistence gotcha). Range
+resolves from the granting item when `rangeFrom: "item"`.
 
-### 2. Auto-walk-then-act for `approach: walk_adjacent`
+### 2. Auto-walk-then-act for `approach: walk_adjacent` ✅ done (poke)
 
-Selecting an out-of-range `item`/`tile`/`living` target enqueues
-_pathfind-adjacent → execute action_ on `pending-action-storage`. This alone
-fixes poke, fix and individual-pick, and makes tile-clicking forgiving —
-"point at a place/thing, the game figures out reach and pathing". Removes
-the click-then-race-the-NPC problem for melee/manipulation without building
-any combat aiming yet.
+An out-of-range target chosen for a `walk_adjacent` action enqueues an
+approach on `pending-action-storage`; `resolvePendingActionsForWorld` steps
+the actor toward the target's current tile each world tick (shared stepper in
+`pursuit-movement.ts`) and re-runs the action on arrival, bounded by
+`APPROACH_ACTION_MAX_MS`. `poke` is flipped to `walk_adjacent` (range 5) —
+"point at a moving NPC, the game closes the gap and pokes"; the client offers
+same-tile `walk_adjacent` actions at nearby distance too. Remaining: flip the
+item-targeted actions (`fix`, `examine`, `break`, `bury`) and wire individual
+item pick onto the same mechanism.
 
 ### 3. `validWhen` gating + valid-target highlight
 

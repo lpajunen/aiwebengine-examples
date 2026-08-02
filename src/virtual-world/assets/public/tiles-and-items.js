@@ -591,7 +591,7 @@ function isContainerItemType(type) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -658,7 +658,22 @@ function actionsAvailableForTargetKind(targetKind, nearbyOnly) {
       var actionId = itemActions[i];
       if (seen[actionId]) continue;
       var def = getRegistryActionDef(actionId);
-      if (!def || acceptedKinds.indexOf(def.target_kind || "") === -1) continue;
+      if (!def) continue;
+      var kind = def.target_kind || "";
+      var accepted = acceptedKinds.indexOf(kind) !== -1;
+      // A same-tile action (target_kind "item"/"living") whose targeting uses
+      // walk_adjacent is also offered at nearby distance: the server walks the
+      // actor to the target and runs it on arrival (DESIGN-targeting.md step 2).
+      if (
+        !accepted &&
+        nearbyOnly &&
+        kind === targetKind &&
+        def.targeting &&
+        def.targeting.approach === "walk_adjacent"
+      ) {
+        accepted = true;
+      }
+      if (!accepted) continue;
       seen[actionId] = true;
       result.push(actionId);
     }

@@ -702,6 +702,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Poke",
     targetKind: "living",
     sourceItemIds: ["starter_kit"],
+    // Walk-then-act (DESIGN-targeting.md step 2): poke still resolves on the
+    // actor's own tile, but a target chosen up to `range` tiles away is now
+    // pursued — the actor steps toward it each tick and pokes on arrival,
+    // instead of the click being rejected because the NPC has since moved.
+    targeting: {
+      range: NEARBY_TARGET_TILE_DISTANCE,
+      rangeShape: "adjacent",
+      approach: "walk_adjacent",
+    },
   },
   follow: {
     id: "follow",

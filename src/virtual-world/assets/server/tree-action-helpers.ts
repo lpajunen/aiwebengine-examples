@@ -35,8 +35,17 @@ import { getEffectiveNick } from "./social-state.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
 import {
   ADVANCE_LEVEL_COST_PER_LEVEL,
+  APPROACH_ACTION_MAX_MS,
   NEARBY_TARGET_TILE_DISTANCE,
 } from "./runtime-config.ts";
+import {
+  resolveActionTargeting,
+  resolveEffectiveActionRange,
+} from "./action-registry.ts";
+import {
+  resolveApproachTargetTile,
+  stepActorTowardTile,
+} from "./pursuit-movement.ts";
 import {
   getActionDefinition,
   getItemDefinition,
@@ -836,6 +845,67 @@ export function performTreeActionForUser(
       },
     };
   }
+
+  // Walk-then-act (DESIGN-targeting.md step 2): for an action whose targeting
+  // approach is "walk_adjacent", a target chosen up to `range` tiles away but
+  // not yet on the actor's tile is pursued instead of rejected — enqueue an
+  // approach that steps the actor toward it each world tick and re-runs the
+  // action on arrival (see resolvePendingActionsForWorld). Skipped when
+  // resuming an approach step, so the on-arrival re-run executes normally.
+  function maybeBeginApproachAction(): { status: number; payload: any } | null {
+    if (options && options.resuming) return null;
+    if (body && body.__approach) return null;
+    if (!actionDefinition) return null;
+    const targeting = resolveActionTargeting(actionDefinition);
+    if (targeting.approach !== "walk_adjacent") return null;
+    const targetTile = resolveApproachTargetTile(worldId, body);
+    // No locatable target (or the target is already on the actor's tile): let
+    // the action's own handler run now and respond.
+    if (!targetTile) return null;
+    if (targetTile.row === canonical.row && targetTile.col === canonical.col) {
+      return null;
+    }
+    const reach = resolveEffectiveActionRange(targeting, null);
+    if (
+      !isWithinTileDistance(
+        targetTile.row,
+        targetTile.col,
+        canonical.row,
+        canonical.col,
+        reach,
+      )
+    ) {
+      // Out of reach — fall through so the handler reports its own
+      // target-not-found/out-of-range error.
+      return null;
+    }
+    addPendingAction(
+      worldId,
+      userId,
+      action,
+      {
+        ...body,
+        __approach: true,
+        __approach_deadline: Date.now() + APPROACH_ACTION_MAX_MS,
+      },
+      Date.now(),
+    );
+    return {
+      status: 200,
+      payload: {
+        ok: true,
+        action: action,
+        approaching: true,
+        ...toastFields(
+          "tree_action.approaching_toast",
+          "You move toward the target.",
+        ),
+      },
+    };
+  }
+
+  const approachStart = maybeBeginApproachAction();
+  if (approachStart) return approachStart;
 
   // Evaluate item-state conditions (logicSpec) and collect the source item
   let logicSourceItem: any | null = null;
@@ -1924,6 +1994,12 @@ export function resolvePendingActionsForWorld(
       deletePendingAction(row.id);
       return;
     }
+    if (body && body.__approach) {
+      // A walk-then-act approach (DESIGN-targeting.md step 2), not a
+      // durationMs resume — step toward the target and re-run on arrival.
+      advanceApproachAction(worldId, row, body, now);
+      return;
+    }
     const result = runInWorldTransaction(
       "pending_action:" + String(row.id),
       function () {
@@ -1937,4 +2013,61 @@ export function resolvePendingActionsForWorld(
       result.payload,
     );
   });
+}
+
+// Advances one walk-then-act approach by a single tick: locate the target's
+// current tile, and either run the action (arrived), abandon it (target gone,
+// or the give-up deadline passed), or take one step toward the target and
+// re-queue for the next tick. The pending row is consumed each tick and only
+// re-added while still walking, so a completed/abandoned approach leaves no row
+// behind. Called only from resolvePendingActionsForWorld, itself lease-guarded
+// per world, so a given approach is advanced by one instance at a time.
+function advanceApproachAction(
+  worldId: string,
+  row: { id: number; user_id: string; action: string },
+  body: any,
+  now: number,
+): void {
+  const userId = String(row.user_id);
+  deletePendingAction(row.id);
+
+  const targetTile = resolveApproachTargetTile(worldId, body);
+  if (!targetTile) {
+    sendRecipientScopedStreamEvent(userId, "action_completed", {
+      ok: false,
+      action: row.action,
+      error: "error.approach_target_gone",
+    });
+    return;
+  }
+
+  const canonical = getCanonicalPlayerState(worldId, userId);
+  if (targetTile.row === canonical.row && targetTile.col === canonical.col) {
+    // Arrived. Re-run the action for real; the __approach marker stays in the
+    // body so this run does not start a fresh approach (maybeBeginApproachAction
+    // is a no-op for it) even if the target drifts a tile as we act.
+    const result = runInWorldTransaction(
+      "approach_action:" + String(row.id),
+      function () {
+        return performTreeActionForUser(userId, body, {});
+      },
+    );
+    sendRecipientScopedStreamEvent(userId, "action_completed", result.payload);
+    return;
+  }
+
+  const deadline = Number(body.__approach_deadline || 0);
+  if (deadline && now > deadline) {
+    sendRecipientScopedStreamEvent(userId, "action_completed", {
+      ok: false,
+      action: row.action,
+      error: "error.could_not_reach_target",
+    });
+    return;
+  }
+
+  stepActorTowardTile(worldId, userId, targetTile.row, targetTile.col, now);
+  // Keep pursuing next tick whether or not this step advanced (a transient
+  // obstacle may clear); the deadline above bounds a hopeless chase.
+  addPendingAction(worldId, userId, String(row.action), body, now);
 }

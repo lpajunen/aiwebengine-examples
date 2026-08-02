@@ -5,7 +5,10 @@ import {
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import { ITEM_CHANGE_DEFINITIONS } from "./item-events.ts";
-import { ACTION_DEFINITIONS } from "./action-registry.ts";
+import {
+  ACTION_DEFINITIONS,
+  defaultTargetingForTargetKind,
+} from "./action-registry.ts";
 import { ActionDefinition } from "./action-registry.ts";
 import {
   loadAllItemClassRows,
@@ -795,6 +798,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["validation"] | undefined,
     logicSpec: parseJson(row.logic_spec_json, undefined) as
       ActionDefinition["logicSpec"] | undefined,
+    targeting: parseJson(row.targeting_json, undefined) as
+      ActionDefinition["targeting"] | undefined,
     cost: parseJson(row.cost_json, undefined) as
       ActionDefinition["cost"] | undefined,
     produces: parseJson(row.produces_json, undefined) as
@@ -832,6 +837,7 @@ function actionClassToDbRow(
   execution_json: string;
   validation_json: string;
   logic_spec_json: string;
+  targeting_json: string;
   cost_json: string;
   produces_json: string;
   removes_json: string;
@@ -854,6 +860,7 @@ function actionClassToDbRow(
     execution_json: record.execution ? JSON.stringify(record.execution) : "",
     validation_json: record.validation ? JSON.stringify(record.validation) : "",
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
+    targeting_json: record.targeting ? JSON.stringify(record.targeting) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
     removes_json: record.removes ? JSON.stringify(record.removes) : "",
@@ -896,6 +903,9 @@ function backfillActionClassDefaults(
         { ownerIds: [], labels: {} },
         def,
       );
+      if (record.targeting === undefined) {
+        record.targeting = defaultTargetingForTargetKind(record.targetKind);
+      }
       upsertActionClassRow(actionClassToDbRow(record, now));
       cache[record.id] = record;
       inserted++;
@@ -992,6 +1002,14 @@ function backfillActionClassDefaults(
     }
     if (existing.durationMs === undefined && def.durationMs !== undefined) {
       existing.durationMs = def.durationMs;
+      changed = true;
+    }
+    // Backfill the aiming spec (DESIGN-targeting.md) onto rows seeded before
+    // the targeting_json column existed, using the action's own targeting or
+    // the behavior-preserving default for its targetKind.
+    if (existing.targeting === undefined) {
+      existing.targeting =
+        def.targeting || defaultTargetingForTargetKind(def.targetKind);
       changed = true;
     }
     if (changed) {

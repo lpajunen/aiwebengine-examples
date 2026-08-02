@@ -967,6 +967,7 @@ export function ensureWorldDatabaseSchema(): void {
     ["addTextColumn", "execution_json", true],
     ["addTextColumn", "validation_json", true],
     ["addTextColumn", "logic_spec_json", true],
+    ["addTextColumn", "targeting_json", true],
     ["addTextColumn", "cost_json", true],
     ["addTextColumn", "produces_json", true],
     ["addTextColumn", "removes_json", true],

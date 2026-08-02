@@ -1,4 +1,36 @@
 import { ActionLogicSpec } from "./action-logic-interpreter.ts";
+import { NEARBY_TARGET_TILE_DISTANCE } from "./runtime-config.ts";
+
+// Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
+// aimed and how far it reaches, independent of the existing `targetKind` (which
+// says *what/where* is targeted). Step 1 adds this data + a resolver; it does
+// not yet change any behavior, so the built-in defaults below merely describe
+// how each `targetKind` already behaves today.
+export interface ActionTargeting {
+  // Reach in tiles from the actor. 0 = same tile, 1 = adjacent, N = ranged.
+  range?: number;
+  // How range is measured / previewed: "adjacent" (melee/manipulate),
+  // "line" (ranged single target), "radius" (area effect around the point).
+  rangeShape?: "adjacent" | "line" | "radius";
+  // Whether the actor walks into range before the action resolves.
+  // "walk_adjacent" enqueues path-then-act; "none" acts from the current tile.
+  approach?: "walk_adjacent" | "none";
+  // For rangeShape "radius": tiles affected around the resolved target point.
+  areaRadius?: number;
+  // Who supplies the effective range: the action's own `range`, or the stat of
+  // the item that granted the action (e.g. a longbow overrides a shortbow).
+  rangeFrom?: "action" | "item";
+}
+
+// Same shape as ActionTargeting but with every field resolved to a concrete
+// value — the return type of resolveActionTargeting().
+export interface ResolvedActionTargeting {
+  range: number;
+  rangeShape: "adjacent" | "line" | "radius";
+  approach: "walk_adjacent" | "none";
+  areaRadius: number;
+  rangeFrom: "action" | "item";
+}
 
 export interface ActionDefinition {
   id: string;
@@ -114,6 +146,9 @@ export interface ActionDefinition {
     }>;
   };
   logicSpec?: ActionLogicSpec;
+  // Aiming/reach spec (DESIGN-targeting.md). Optional: when omitted, the
+  // action inherits defaultTargetingForTargetKind(targetKind).
+  targeting?: ActionTargeting;
 }
 
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
@@ -738,3 +773,89 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     },
   },
 };
+
+// Default aiming spec for an action that doesn't declare its own `targeting`.
+// These describe how each `targetKind` already behaves today, so seeding them
+// (see backfillActionClassDefaults) is behavior-preserving. Later design steps
+// change specific actions' targeting deliberately (e.g. poke/fix ->
+// walk_adjacent); they do so by setting `targeting` explicitly, not by editing
+// these defaults.
+export function defaultTargetingForTargetKind(
+  // Accepts a plain string (not just the ActionDefinition union) because
+  // ActionClassRecord widens targetKind to string — the switch's default
+  // covers any unrecognized kind.
+  targetKind: string,
+): ActionTargeting {
+  switch (targetKind) {
+    case "item_nearby":
+    case "living_nearby":
+      // follow/fight already reach up to NEARBY_TARGET_TILE_DISTANCE tiles and
+      // act from where the actor stands (they pursue on their own tick after).
+      return {
+        range: NEARBY_TARGET_TILE_DISTANCE,
+        rangeShape: "line",
+        approach: "none",
+      };
+    case "facing_tile":
+    case "facing_or_current_tile":
+      // The actor is already adjacent by virtue of facing the target tile.
+      return { range: 1, rangeShape: "adjacent", approach: "none" };
+    case "item":
+    case "living":
+    case "self":
+    case "inventory":
+    case "current_tile":
+    default:
+      // Plain targeted / self / tile actions resolve on the actor's own tile
+      // today (step 2 of DESIGN-targeting.md flips item/living to
+      // walk_adjacent with a wider reach).
+      return { range: 0, rangeShape: "adjacent", approach: "none" };
+  }
+}
+
+// Resolves an action's targeting to concrete values, filling any unset field
+// from defaultTargetingForTargetKind(targetKind).
+export function resolveActionTargeting(action: {
+  targetKind: string;
+  targeting?: ActionTargeting;
+}): ResolvedActionTargeting {
+  const base = defaultTargetingForTargetKind(action.targetKind);
+  const t = action.targeting || {};
+  const rangeShape = t.rangeShape || base.rangeShape || "adjacent";
+  return {
+    range:
+      t.range !== undefined
+        ? t.range
+        : base.range !== undefined
+          ? base.range
+          : 0,
+    rangeShape: rangeShape,
+    approach: t.approach || base.approach || "none",
+    areaRadius:
+      t.areaRadius !== undefined
+        ? t.areaRadius
+        : base.areaRadius !== undefined
+          ? base.areaRadius
+          : 0,
+    rangeFrom: t.rangeFrom || base.rangeFrom || "action",
+  };
+}
+
+// Effective reach for a resolved targeting spec. When rangeFrom is "item", a
+// numeric `range` on the granting item's state overrides the action's range
+// (e.g. a longbow reaches farther than a shortbow granting the same action);
+// otherwise the action's own range is used.
+export function resolveEffectiveActionRange(
+  targeting: ResolvedActionTargeting,
+  sourceItem?: { state?: Record<string, unknown> | null } | null,
+): number {
+  if (targeting.rangeFrom === "item" && sourceItem && sourceItem.state) {
+    const itemRange = Number(
+      (sourceItem.state as Record<string, unknown>).range,
+    );
+    if (Number.isFinite(itemRange) && itemRange >= 0) {
+      return itemRange;
+    }
+  }
+  return targeting.range;
+}

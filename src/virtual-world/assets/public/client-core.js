@@ -473,15 +473,10 @@ var ACTIVE_ACTION_PREFIX_KEYS = {
 
 function renderActiveActionsList() {
   var container = requireElementById("hud-active-actions");
-  if (!activeActions.length) {
-    container.style.display = "none";
-    container.innerHTML = "";
-    return;
-  }
   var sorted = activeActions.slice().sort(function (a, b) {
     return a.started_ts - b.started_ts;
   });
-  container.innerHTML = sorted
+  var html = sorted
     .map(function (entry) {
       // follow/fight carry their own prefix; any other action_id is an
       // in-flight walk-then-act approach ("Approaching <target>").
@@ -506,6 +501,15 @@ function renderActiveActionsList() {
       );
     })
     .join("");
+  // The armed-but-uncast action (aiming) shares this panel so stop and cancel
+  // live in one place (UI phase 4).
+  if (typeof aimActiveRowHtml === "function") html += aimActiveRowHtml();
+  if (!html) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = html;
   container.style.display = "flex";
 }
 

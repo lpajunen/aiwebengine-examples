@@ -92,7 +92,7 @@ function armAimAction(actionId) {
     aimTargetRing.visible = false;
     aimAreaDisc.visible = false;
   }
-  renderAimBanner();
+  renderActiveActionsList();
 }
 
 function cancelAiming() {
@@ -102,7 +102,7 @@ function cancelAiming() {
   for (var i = 0; i < aimHighlightRings.length; i++) {
     aimHighlightRings[i].visible = false;
   }
-  renderAimBanner();
+  renderActiveActionsList();
 }
 
 /**
@@ -185,34 +185,27 @@ function confirmAimFromEvent(clientX, clientY) {
   return true;
 }
 
-// ── Aiming banner (only visible while an action is armed) ─────────────────
-// Shows the armed action + a Cancel button and a hint, so touch users (who
-// have no Esc/right-click) can back out of an aim. The entry point for arming
-// is the unified action palette (the Use picker), not a persistent bar.
-
-function renderAimBanner() {
-  var banner = document.getElementById("hud-aim-banner");
-  if (!banner) return;
+// ── Aim row in the active-actions panel (UI phase 4) ──────────────────────
+// The armed-but-uncast action shows as a row in the same panel as ongoing
+// follow/fight/approaches, so "what am I doing / stop it" lives in one place.
+// A Cancel button (plus the hint) lets touch users back out without
+// Esc/right-click. Returns "" when not aiming so the panel omits the row.
+function aimActiveRowHtml() {
   var action = armedAimAction;
-  if (!action) {
-    banner.style.display = "none";
-    banner.innerHTML = "";
-    return;
-  }
+  if (!action) return "";
   var hint =
     aimModeFor(action) === "reticle"
       ? t("hud.aim_hint", "tap a tile to cast")
       : t("hud.aim_hint_target", "tap a highlighted target");
-  banner.innerHTML =
-    "<span>" +
+  return (
+    '<div class="active-action-row active-action-aim"><span>' +
     escapeHtml(treeActionLabel(action)) +
     " · " +
     escapeHtml(hint) +
-    "</span>" +
-    '<button onclick="cancelAiming()">' +
+    '</span><button onclick="cancelAiming()">' +
     escapeHtml(t("hud.cancel", "Cancel")) +
-    "</button>";
-  banner.style.display = "flex";
+    "</button></div>"
+  );
 }
 
 // Pulses a ring under every valid target of an armed entity action. Called each

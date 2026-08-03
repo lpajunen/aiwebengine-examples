@@ -249,32 +249,12 @@ canvas {
   background: rgba(178, 50, 50, 1);
 }
 
-#hud-aim-banner {
-  bottom: 92px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: none;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  pointer-events: auto;
-  z-index: 1020;
-  background: rgba(150, 60, 40, 0.9);
-}
-#hud-aim-banner button {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
+/* The aiming row in the active-actions panel is tinted to distinguish an
+   armed-but-uncast action from ongoing follow/fight/approaches. */
+.active-action-aim {
+  background: rgba(150, 90, 40, 0.55);
   border-radius: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #fff;
-  background: rgba(0, 0, 0, 0.35);
-}
-#hud-aim-banner button:hover {
-  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 6px;
 }
 
 #hud-world-info-panel {

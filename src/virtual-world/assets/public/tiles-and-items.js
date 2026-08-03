@@ -601,6 +601,30 @@ function isPickableItemType(type) {
 }
 
 /**
+ * Context-ranks action ids so contextually-relevant actions come first
+ * (DESIGN-targeting.md step 3): any action carrying a validWhen precondition is
+ * only offered when that condition currently holds (the buttons are pre-filtered
+ * by actionValidForTarget), so its mere presence means "relevant right now" —
+ * float it above the always-available verbs. Stable otherwise, preserving the
+ * incoming (alphabetical) order within each group.
+ * @param {string[]} actionIds
+ * @returns {string[]}
+ */
+function rankActionsByContext(actionIds) {
+  /** @param {string} id */
+  function isContextual(id) {
+    var def = getRegistryActionDef(id);
+    return !!(def && Array.isArray(def.valid_when) && def.valid_when.length);
+  }
+  return actionIds.slice().sort(function (a, b) {
+    var ca = isContextual(a);
+    var cb = isContextual(b);
+    if (ca === cb) return 0;
+    return ca ? -1 : 1;
+  });
+}
+
+/**
  * Reads a dotted path (e.g. "state.currentHitPoints") out of a context object.
  * @param {Record<string, *>} ctx
  * @param {string} path

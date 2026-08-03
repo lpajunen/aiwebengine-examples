@@ -178,7 +178,12 @@ shared `WALK_ADJACENT_TARGETING` — "point at a moving NPC or a distant item,
 the game closes the gap and acts"; the client offers same-tile
 `walk_adjacent` actions at nearby distance too. Individual item pick is a
 second `pick_item` action-class (walk to one chosen item and take just it)
-alongside the unchanged tile-level "pick all" HUD button.
+alongside the unchanged tile-level "pick all" HUD button. An in-flight
+approach is cancelable: it shows in the active-actions panel (like
+follow/fight) with a Stop button that posts `cancel_approach`, which deletes
+the pending row and halts the per-tick stepping. The approach row is enqueued
+once as always-due and left in place while walking (deleted only on
+arrival/abandon/cancel), so cancelling is race-free like stopping a follow.
 
 ### 3. `validWhen` gating + valid-target highlight ✅ gating done
 

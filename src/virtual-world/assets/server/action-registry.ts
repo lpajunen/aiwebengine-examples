@@ -762,6 +762,15 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
   },
+  // Stops any in-flight walk-then-act approach (see cancel_approach handler in
+  // tree-action-helpers.ts) — the Stop button on an approaching active-action.
+  cancel_approach: {
+    id: "cancel_approach",
+    labelKey: "tree_action.cancel_approach",
+    fallbackLabel: "Stop moving",
+    targetKind: "self",
+    sourceItemIds: ["starter_kit"],
+  },
   fight: {
     id: "fight",
     labelKey: "tree_action.fight",

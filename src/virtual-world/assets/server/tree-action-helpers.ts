@@ -25,6 +25,7 @@ import {
   addPendingAction,
   deletePendingAction,
   loadDuePendingActions,
+  loadUserApproachActions,
 } from "./pending-action-storage.ts";
 import {
   getCanonicalPlayerState,
@@ -881,6 +882,7 @@ export function performTreeActionForUser(
       // target-not-found/out-of-range error.
       return null;
     }
+    const targetLabel = resolveApproachTargetLabel();
     addPendingAction(
       worldId,
       userId,
@@ -889,6 +891,7 @@ export function performTreeActionForUser(
         ...body,
         __approach: true,
         __approach_deadline: Date.now() + APPROACH_ACTION_MAX_MS,
+        __approach_label: targetLabel,
       },
       Date.now(),
     );
@@ -898,12 +901,44 @@ export function performTreeActionForUser(
         ok: true,
         action: action,
         approaching: true,
+        approach_target_label: targetLabel,
         ...toastFields(
           "tree_action.approaching_toast",
           "You move toward the target.",
         ),
       },
     };
+  }
+
+  // Best-effort display name for the approach target, resolved once at enqueue
+  // and stored in the pending body so the active-actions panel (client and
+  // getActiveActionsForUser) can label the in-flight approach: a living by its
+  // nick/NPC name, a world item by its type's label.
+  function resolveApproachTargetLabel(): string {
+    const livingId =
+      body && body.target_living_id ? String(body.target_living_id) : "";
+    if (livingId) {
+      const npcs = loadWorldNPCs(worldId);
+      if (npcs[livingId]) return getNPCDisplayName(worldId, livingId);
+      return getEffectiveNick(livingId);
+    }
+    const itemId =
+      body && body.target_item_id ? String(body.target_item_id) : "";
+    if (itemId) {
+      const keys = Object.keys(worldItems);
+      for (let i = 0; i < keys.length; i++) {
+        const arr = worldItems[keys[i]];
+        if (!Array.isArray(arr)) continue;
+        const found = arr.find(function (it) {
+          return it && String(it.id) === itemId;
+        });
+        if (found) {
+          const def = getItemDefinition(String(found.type || ""));
+          return def ? def.visuals.fallbackLabel : String(found.type || "");
+        }
+      }
+    }
+    return "";
   }
 
   const approachStart = maybeBeginApproachAction();
@@ -1588,6 +1623,27 @@ export function performTreeActionForUser(
     };
   }
 
+  if (action === "cancel_approach") {
+    // Stop any in-flight walk-then-act approach: deleting the pending rows
+    // halts the per-tick stepping (the approach's own row is what keeps it
+    // walking — see advanceApproachAction), like stop_follow deletes the
+    // follow row.
+    const approaches = loadUserApproachActions(worldId, userId);
+    for (let i = 0; i < approaches.length; i++) {
+      deletePendingAction(approaches[i].id);
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.cancel_approach_toast",
+          "You stop moving toward the target.",
+        ),
+        cancelled_count: approaches.length,
+      }),
+    };
+  }
+
   if (action === "fight") {
     if (inv.class_id === "player_ghost") {
       return {
@@ -2095,12 +2151,14 @@ export function resolvePendingActionsForWorld(
 }
 
 // Advances one walk-then-act approach by a single tick: locate the target's
-// current tile, and either run the action (arrived), abandon it (target gone,
-// or the give-up deadline passed), or take one step toward the target and
-// re-queue for the next tick. The pending row is consumed each tick and only
-// re-added while still walking, so a completed/abandoned approach leaves no row
-// behind. Called only from resolvePendingActionsForWorld, itself lease-guarded
-// per world, so a given approach is advanced by one instance at a time.
+// current tile, and either run the action (arrived), abandon it (target gone or
+// the give-up deadline passed), or take one step toward the target. The pending
+// row is enqueued once as always-due (ready_at in the past) and left in place
+// while walking, then deleted only on completion/abandon — so it is advanced
+// once per tick with no re-enqueue churn, and deleting the row (see the
+// cancel_approach handler, or the player leaving the world) cleanly stops it,
+// exactly like a follow row. Called only from resolvePendingActionsForWorld,
+// itself lease-guarded per world.
 function advanceApproachAction(
   worldId: string,
   row: { id: number; user_id: string; action: string },
@@ -2108,10 +2166,10 @@ function advanceApproachAction(
   now: number,
 ): void {
   const userId = String(row.user_id);
-  deletePendingAction(row.id);
 
   const targetTile = resolveApproachTargetTile(worldId, body);
   if (!targetTile) {
+    deletePendingAction(row.id);
     sendRecipientScopedStreamEvent(userId, "action_completed", {
       ok: false,
       action: row.action,
@@ -2125,6 +2183,7 @@ function advanceApproachAction(
     // Arrived. Re-run the action for real; the __approach marker stays in the
     // body so this run does not start a fresh approach (maybeBeginApproachAction
     // is a no-op for it) even if the target drifts a tile as we act.
+    deletePendingAction(row.id);
     const result = runInWorldTransaction(
       "approach_action:" + String(row.id),
       function () {
@@ -2137,6 +2196,7 @@ function advanceApproachAction(
 
   const deadline = Number(body.__approach_deadline || 0);
   if (deadline && now > deadline) {
+    deletePendingAction(row.id);
     sendRecipientScopedStreamEvent(userId, "action_completed", {
       ok: false,
       action: row.action,
@@ -2145,8 +2205,6 @@ function advanceApproachAction(
     return;
   }
 
+  // Still walking: step one tile and leave the row in place for next tick.
   stepActorTowardTile(worldId, userId, targetTile.row, targetTile.col, now);
-  // Keep pursuing next tick whether or not this step advanced (a transient
-  // obstacle may clear); the deadline above bounds a hopeless chase.
-  addPendingAction(worldId, userId, String(row.action), body, now);
 }

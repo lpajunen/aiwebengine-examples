@@ -427,7 +427,7 @@ function showHudToast(message, isError) {
 }
 
 /**
- * @typedef {{action_id: string, target_id: string, target_label: string, started_ts: number}} ActiveActionEntry
+ * @typedef {{action_id: string, target_id: string, target_label: string, started_ts: number, stop_action_id?: string}} ActiveActionEntry
  */
 
 /** @type {ActiveActionEntry[]} */
@@ -451,11 +451,13 @@ function renderActiveActionsList() {
   });
   container.innerHTML = sorted
     .map(function (entry) {
-      var prefixInfo =
-        ACTIVE_ACTION_PREFIX_KEYS[entry.action_id] || entry.action_id;
-      var prefix = Array.isArray(prefixInfo)
+      // follow/fight carry their own prefix; any other action_id is an
+      // in-flight walk-then-act approach ("Approaching <target>").
+      var prefixInfo = ACTIVE_ACTION_PREFIX_KEYS[entry.action_id];
+      var prefix = prefixInfo
         ? t(prefixInfo[0], prefixInfo[1])
-        : prefixInfo;
+        : t("hud.approaching_prefix", "Approaching");
+      var stopAction = entry.stop_action_id || "stop_" + entry.action_id;
       return (
         '<div class="active-action-row">' +
         "<span>" +
@@ -463,9 +465,9 @@ function renderActiveActionsList() {
         " " +
         escapeHtml(entry.target_label) +
         "</span>" +
-        '<button data-action-id="' +
-        escapeHtml(entry.action_id) +
-        '" onclick="stopActiveAction(this.dataset.actionId)">' +
+        '<button data-stop-action="' +
+        escapeHtml(stopAction) +
+        '" onclick="stopActiveAction(this.dataset.stopAction)">' +
         escapeHtml(t("hud.stop_action", "Stop")) +
         "</button>" +
         "</div>"
@@ -502,15 +504,30 @@ function removeActiveAction(actionId) {
   renderActiveActionsList();
 }
 
+// Clears in-flight walk-then-act approach rows (everything that isn't the
+// follow/fight entry) — used when an approach is cancelled or completes, ahead
+// of the next server active-actions snapshot.
+function removeApproachActiveActions() {
+  var before = activeActions.length;
+  activeActions = activeActions.filter(function (a) {
+    return a.action_id === "follow" || a.action_id === "fight";
+  });
+  if (activeActions.length !== before) renderActiveActionsList();
+}
+
 /** @param {ActiveActionEntry[]} list */
 function applyActiveActionsSnapshot(list) {
   activeActions = Array.isArray(list) ? list.slice() : [];
   renderActiveActionsList();
 }
 
-/** @param {string} actionId */
-function stopActiveAction(actionId) {
-  postTreeAction("stop_" + actionId, {});
+/**
+ * @param {string} stopActionId The tree-action to post (e.g. "stop_follow",
+ *   "stop_fight", "cancel_approach").
+ */
+function stopActiveAction(stopActionId) {
+  if (!stopActionId) return;
+  postTreeAction(stopActionId, {});
 }
 
 applyActiveActionsSnapshot(INITIAL_ACTIVE_ACTIONS || []);

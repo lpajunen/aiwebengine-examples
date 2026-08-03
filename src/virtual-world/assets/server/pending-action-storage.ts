@@ -48,3 +48,33 @@ export function loadDuePendingActions(
 export function deletePendingAction(id: number): void {
   deleteWorldRow(VWORLD_PENDING_ACTION_TABLE, id);
 }
+
+// A user's in-flight walk-then-act approaches in a world (body.__approach set)
+// — used to surface them in the active-actions panel and to cancel them (see
+// getActiveActionsForUser and the cancel_approach handler). Unlike
+// loadDuePendingActions this ignores ready_at (approaches are always "due").
+export function loadUserApproachActions(
+  worldId: string,
+  userId: string,
+): Array<{
+  id: number;
+  user_id: string;
+  action: string;
+  body_json: string;
+  created_at: number;
+}> {
+  const rows = queryWorldRows(
+    VWORLD_PENDING_ACTION_TABLE,
+    JSON.stringify({ world_id: String(worldId), user_id: String(userId) }),
+    1000,
+    "created_at",
+    "asc",
+  );
+  return rows.filter(function (row) {
+    try {
+      return !!JSON.parse(row.body_json || "{}").__approach;
+    } catch (e) {
+      return false;
+    }
+  });
+}

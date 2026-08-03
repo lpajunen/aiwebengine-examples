@@ -223,6 +223,18 @@ function postTreeAction(action, extras) {
         removeActiveAction("follow");
       } else if (result.action === "stop_fight") {
         removeActiveAction("fight");
+      } else if (result.action === "cancel_approach") {
+        removeApproachActiveActions();
+      } else if (result.approaching && result.action) {
+        // Walk-then-act started: show it in the active-actions panel with a
+        // Stop button (cancel_approach) while the actor walks to the target.
+        upsertActiveAction({
+          action_id: result.action,
+          target_id: "",
+          target_label: result.approach_target_label || "",
+          started_ts: Date.now(),
+          stop_action_id: "cancel_approach",
+        });
       }
       var actionToast = localizeResultToast(result);
       if (actionToast) showHudToast(actionToast, false);

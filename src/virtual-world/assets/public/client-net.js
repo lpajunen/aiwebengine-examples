@@ -911,6 +911,9 @@ function initMultiplayer() {
    */
   function handleActionCompletedEvent(payload) {
     if (!payload) return;
+    // An approach resolved (arrived and acted, or was abandoned) — clear its
+    // active-actions row ahead of the next snapshot.
+    removeApproachActiveActions();
     if (payload.ok === false) {
       if (payload.error)
         showHudToast(translateServerMessage(payload.error), true);

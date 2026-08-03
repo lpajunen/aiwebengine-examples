@@ -7,6 +7,7 @@ import { vwLog } from "./diagnostics.ts";
 import { ITEM_CHANGE_DEFINITIONS } from "./item-events.ts";
 import {
   ACTION_DEFINITIONS,
+  actionCategory,
   defaultTargetingForTargetKind,
 } from "./action-registry.ts";
 import { ActionDefinition } from "./action-registry.ts";
@@ -361,6 +362,7 @@ export function getBootstrapRegistry(): {
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
+      category?: string;
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -394,6 +396,7 @@ export function getBootstrapRegistry(): {
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
+      category?: string;
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -447,6 +450,7 @@ export function getBootstrapRegistry(): {
       target_kind: action.targetKind,
       targeting: action.targeting,
       valid_when: action.validWhen,
+      category: actionCategory(actionId),
       tree_action: worldMutation ? worldMutation.treeAction : undefined,
       house_action: worldMutation ? worldMutation.houseAction : undefined,
     };

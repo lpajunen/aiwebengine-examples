@@ -702,7 +702,7 @@ function actionValidForTarget(actionId, target) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, category?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -736,6 +736,28 @@ function actionEffectiveRange(action) {
 function actionNeedsAiming(action) {
   var def = getRegistryActionDef(action);
   return !!def && def.target_kind === "point";
+}
+
+// Display grouping order for the action palette (UI phase 2). Actions carry a
+// server-assigned category (bootstrap registry); anything unknown falls to
+// "misc".
+var ACTION_CATEGORY_ORDER = [
+  "combat",
+  "magic",
+  "build",
+  "craft",
+  "gather",
+  "travel",
+  "misc",
+];
+
+/**
+ * @param {string} action
+ * @returns {string}
+ */
+function actionCategoryOf(action) {
+  var def = getRegistryActionDef(action);
+  return (def && def.category) || "misc";
 }
 
 /**

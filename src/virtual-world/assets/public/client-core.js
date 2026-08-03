@@ -93,22 +93,50 @@ function updateUseButtonState() {
 function openUsePicker(actions) {
   var container = requireElementById("use-picker-actions");
   container.innerHTML = "";
+
+  // Bucket actions by their category, then render one labelled section per
+  // non-empty category in ACTION_CATEGORY_ORDER (UI phase 2), so a long list
+  // stops being one flat scroll.
+  /** @type {Record<string, string[]>} */
+  var byCategory = {};
   for (var i = 0; i < actions.length; i++) {
-    var action = actions[i];
-    var needsAim = actionNeedsAiming(action);
-    var btn = document.createElement("button");
-    // A target/aim badge marks actions that open a reticle to be aimed after
-    // selection, rather than firing immediately.
-    btn.textContent = (needsAim ? "🎯 " : "") + treeActionLabel(action);
-    btn.onclick = (function (a, aim) {
-      return function () {
-        closeUsePicker();
-        if (aim) armAimAction(a);
-        else postTreeAction(a);
-      };
-    })(action, needsAim);
-    container.appendChild(btn);
+    var cat = actionCategoryOf(actions[i]);
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(actions[i]);
   }
+  var cats = Object.keys(byCategory).sort(function (a, b) {
+    var ia = ACTION_CATEGORY_ORDER.indexOf(a);
+    var ib = ACTION_CATEGORY_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  var multipleCategories = cats.length > 1;
+  for (var c = 0; c < cats.length; c++) {
+    if (multipleCategories) {
+      var header = document.createElement("div");
+      header.className = "use-picker-category";
+      header.textContent = t("action_category." + cats[c], cats[c]);
+      container.appendChild(header);
+    }
+    var group = byCategory[cats[c]];
+    for (var g = 0; g < group.length; g++) {
+      var action = group[g];
+      var needsAim = actionNeedsAiming(action);
+      var btn = document.createElement("button");
+      // A target/aim badge marks actions that open a reticle to be aimed after
+      // selection, rather than firing immediately.
+      btn.textContent = (needsAim ? "🎯 " : "") + treeActionLabel(action);
+      btn.onclick = (function (a, aim) {
+        return function () {
+          closeUsePicker();
+          if (aim) armAimAction(a);
+          else postTreeAction(a);
+        };
+      })(action, needsAim);
+      container.appendChild(btn);
+    }
+  }
+
   usePickerVisible = true;
   requireElementById("hud-use-picker").style.display = "block";
 }

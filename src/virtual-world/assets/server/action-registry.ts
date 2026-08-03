@@ -869,6 +869,58 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   },
 };
 
+// Display category for grouping actions in the client action palette (UI phase
+// 2). Purely organizational — it does not affect behavior — so it lives as a
+// central map shipped in the bootstrap registry rather than a per-action DB
+// column. Unlisted (e.g. creator-defined) actions fall back to "misc".
+export const ACTION_CATEGORIES: Record<string, string> = {
+  // build & terrain
+  plant: "build",
+  cut: "build",
+  grow_pine_tree: "build",
+  build_house: "build",
+  destroy_house: "build",
+  build_door: "build",
+  remove_door: "build",
+  build_portal: "build",
+  remove_portal: "build",
+  place_blessing: "build",
+  // craft
+  craft_kantele: "craft",
+  summon_knife: "craft",
+  // magic / music
+  tune: "magic",
+  play_tune: "magic",
+  // combat
+  fight: "combat",
+  stop_fight: "combat",
+  poke: "combat",
+  firebolt: "combat",
+  fireball: "combat",
+  follow: "combat",
+  stop_follow: "combat",
+  cancel_approach: "combat",
+  break: "combat",
+  bury: "combat",
+  // gather / manipulate
+  pick_item: "gather",
+  fix: "gather",
+  examine: "gather",
+  // travel
+  portal_travel: "travel",
+  door_travel: "travel",
+  open_door: "travel",
+  close_door: "travel",
+  return_home: "travel",
+  // misc
+  pray: "misc",
+  advance_level: "misc",
+};
+
+export function actionCategory(actionId: string): string {
+  return ACTION_CATEGORIES[String(actionId || "")] || "misc";
+}
+
 // Default aiming spec for an action that doesn't declare its own `targeting`.
 // These describe how each `targetKind` already behaves today, so seeding them
 // (see backfillActionClassDefaults) is behavior-preserving. Later design steps

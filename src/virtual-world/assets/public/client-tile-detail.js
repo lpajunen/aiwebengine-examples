@@ -273,13 +273,15 @@ function renderTileDetailPanel() {
             escHtml(t("inventory.open", "Open")) +
             "</button> "
           : "";
-      // Hide the individual-pick button on items that can't be picked up
-      // (portals, doors, the old oak, …); other item actions still apply.
-      var thisItemActions = isPickableItemType(itm.type)
-        ? itemActionIds
-        : itemActionIds.filter(function (a) {
-            return a !== "pick_item";
-          });
+      // Per-item button gating: hide the individual-pick button on
+      // non-pickable items, and hide any action whose validWhen precondition
+      // fails for this item (e.g. Fix only on a damaged item, Bury only on a
+      // corpse) — DESIGN-targeting.md step 3.
+      var itmTarget = { type: itm.type, state: itm.state };
+      var thisItemActions = itemActionIds.filter(function (a) {
+        if (a === "pick_item" && !isPickableItemType(itm.type)) return false;
+        return actionValidForTarget(a, itmTarget);
+      });
       html +=
         '<div class="tile-row">' +
         escHtml(label) +
@@ -354,6 +356,13 @@ function renderTileDetailPanel() {
         ppData.slots && typeof ppData.slots === "object" ? ppData.slots : {};
       var ppValues =
         ppData.values && typeof ppData.values === "object" ? ppData.values : {};
+      var ppActions = livingActionIds.filter(function (a) {
+        return actionValidForTarget(a, {
+          type: ppData.class_id,
+          state: ppData.state,
+          values: ppValues,
+        });
+      });
       html += '<div class="tile-living-entry">';
       html +=
         '<div class="tile-living-name' +
@@ -367,7 +376,7 @@ function renderTileDetailPanel() {
           : escHtml(getNickForPlayer(pp.id))) +
         " " +
         entityActionButtons(
-          livingActionIds,
+          ppActions,
           "target-living-id",
           String(pp.id),
           "postLivingTargetedAction",
@@ -436,13 +445,20 @@ function renderTileDetailPanel() {
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
           : {};
+      var npcActions = livingActionIds.filter(function (a) {
+        return actionValidForTarget(a, {
+          type: npcData.class_id,
+          state: npcData.state,
+          values: npcValues,
+        });
+      });
       html += '<div class="tile-living-entry">';
       html +=
         '<div class="tile-living-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
         " " +
         entityActionButtons(
-          livingActionIds,
+          npcActions,
           "target-living-id",
           String(npcEntry.id),
           "postLivingTargetedAction",

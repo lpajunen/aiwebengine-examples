@@ -292,6 +292,7 @@ export function createActionClassHandler(context: any) {
     validation: body && body.validation ? body.validation : undefined,
     logicSpec: body && body.logicSpec ? body.logicSpec : undefined,
     targeting: body && body.targeting ? body.targeting : undefined,
+    validWhen: body && body.validWhen ? body.validWhen : undefined,
     cost: body && body.cost ? body.cost : undefined,
     produces: body && body.produces ? body.produces : undefined,
     removes: body && body.removes ? body.removes : undefined,
@@ -392,6 +393,10 @@ export function updateActionClassHandler(context: any) {
       body && body.targeting !== undefined
         ? body.targeting
         : existing.targeting,
+    validWhen:
+      body && body.validWhen !== undefined
+        ? body.validWhen
+        : existing.validWhen,
     cost: body && body.cost !== undefined ? body.cost : existing.cost,
     produces:
       body && body.produces !== undefined ? body.produces : existing.produces,

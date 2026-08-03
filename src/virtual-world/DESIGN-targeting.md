@@ -180,10 +180,17 @@ the game closes the gap and acts"; the client offers same-tile
 second `pick_item` action-class (walk to one chosen item and take just it)
 alongside the unchanged tile-level "pick all" HUD button.
 
-### 3. `validWhen` gating + valid-target highlight
+### 3. `validWhen` gating + valid-target highlight ✅ gating done
 
-Shrinks the panel and delivers discoverability in one move. Purely a
-consumer of data added in step 1 plus existing condition logic.
+`validWhen` is a list of `ActionCondition`s on the _target_ (extended with an
+optional `ref` so a field can be compared to another field, e.g.
+currentHitPoints < maxHitPoints). Stored in `valid_when_json`, shipped in the
+class bootstrap, and evaluated client-side (`actionValidForTarget` mirrors the
+server's `evaluateTargetConditions`) to hide inapplicable buttons: Fix shows
+only on a damaged item, Bury only on a corpse. The action's own handler
+remains the server-side authority — validWhen is client gating, not
+enforcement. Remaining: the 3D **valid-target highlight** (outline/pulse the
+entities a held/armed action applies to) and context-ranking of the panel.
 
 ### 4. Action-first aiming mode for `line` / `radius`
 

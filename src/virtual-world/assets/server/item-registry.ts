@@ -357,6 +357,7 @@ export function getBootstrapRegistry(): {
       canonical_id: string;
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
+      valid_when?: ActionDefinition["validWhen"];
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -389,6 +390,7 @@ export function getBootstrapRegistry(): {
       canonical_id: string;
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
+      valid_when?: ActionDefinition["validWhen"];
       tree_action?: "plant" | "cut";
       house_action?: "build_house" | "destroy_house";
     }
@@ -441,6 +443,7 @@ export function getBootstrapRegistry(): {
       canonical_id: action.canonicalId || action.id,
       target_kind: action.targetKind,
       targeting: action.targeting,
+      valid_when: action.validWhen,
       tree_action: worldMutation ? worldMutation.treeAction : undefined,
       house_action: worldMutation ? worldMutation.houseAction : undefined,
     };
@@ -808,6 +811,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["logicSpec"] | undefined,
     targeting: parseJson(row.targeting_json, undefined) as
       ActionDefinition["targeting"] | undefined,
+    validWhen: parseJson(row.valid_when_json, undefined) as
+      ActionDefinition["validWhen"] | undefined,
     cost: parseJson(row.cost_json, undefined) as
       ActionDefinition["cost"] | undefined,
     produces: parseJson(row.produces_json, undefined) as
@@ -846,6 +851,7 @@ function actionClassToDbRow(
   validation_json: string;
   logic_spec_json: string;
   targeting_json: string;
+  valid_when_json: string;
   cost_json: string;
   produces_json: string;
   removes_json: string;
@@ -869,6 +875,7 @@ function actionClassToDbRow(
     validation_json: record.validation ? JSON.stringify(record.validation) : "",
     logic_spec_json: record.logicSpec ? JSON.stringify(record.logicSpec) : "",
     targeting_json: record.targeting ? JSON.stringify(record.targeting) : "",
+    valid_when_json: record.validWhen ? JSON.stringify(record.validWhen) : "",
     cost_json: record.cost ? JSON.stringify(record.cost) : "",
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
     removes_json: record.removes ? JSON.stringify(record.removes) : "",
@@ -1047,6 +1054,13 @@ function backfillActionClassDefaults(
       // customized targeting has a value that differs from the derived
       // default, so their edit is left untouched.
       existing.targeting = Object.assign({}, derivedTargeting, def.targeting);
+      changed = true;
+    }
+    // Seed the target precondition (DESIGN-targeting.md step 3) onto rows that
+    // predate it. Fill-only-if-absent, like logicSpec — a creator who cleared
+    // or customized validWhen is left untouched.
+    if (existing.validWhen === undefined && def.validWhen !== undefined) {
+      existing.validWhen = def.validWhen;
       changed = true;
     }
     if (changed) {

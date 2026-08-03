@@ -601,8 +601,84 @@ function isPickableItemType(type) {
 }
 
 /**
+ * Reads a dotted path (e.g. "state.currentHitPoints") out of a context object.
+ * @param {Record<string, *>} ctx
+ * @param {string} path
+ * @returns {*}
+ */
+function getValidWhenField(ctx, path) {
+  var parts = String(path || "").split(".");
+  /** @type {*} */
+  var cur = ctx;
+  for (var i = 0; i < parts.length; i++) {
+    if (cur === null || cur === undefined || typeof cur !== "object")
+      return undefined;
+    cur = cur[parts[i]];
+  }
+  return cur;
+}
+
+/**
+ * Client mirror of evaluateTargetConditions (action-logic-interpreter.ts):
+ * whether an action's validWhen precondition holds for a given target, used to
+ * hide inapplicable action buttons (DESIGN-targeting.md step 3). Conditions may
+ * read the target's `type`, `state.*` and `values.*`, comparing `field` to a
+ * literal `value` or another field via `ref`. No validWhen => always shown.
+ * @param {string} actionId
+ * @param {{type?: *, state?: Record<string, *>, values?: Record<string, *>}} target
+ * @returns {boolean}
+ */
+function actionValidForTarget(actionId, target) {
+  var def = getRegistryActionDef(actionId);
+  var conds = def && def.valid_when;
+  if (!Array.isArray(conds) || conds.length === 0) return true;
+  var ctx = {
+    type: target && target.type,
+    state:
+      target && target.state && typeof target.state === "object"
+        ? target.state
+        : {},
+    values:
+      target && target.values && typeof target.values === "object"
+        ? target.values
+        : {},
+  };
+  for (var i = 0; i < conds.length; i++) {
+    var cond = conds[i];
+    var actual = getValidWhenField(ctx, cond.field);
+    var expected =
+      cond.ref !== undefined ? getValidWhenField(ctx, cond.ref) : cond.value;
+    var pass = false;
+    switch (cond.op) {
+      case "eq":
+        pass = actual === expected;
+        break;
+      case "ne":
+        pass = actual !== expected;
+        break;
+      case "gt":
+        pass = Number(actual) > Number(expected);
+        break;
+      case "lt":
+        pass = Number(actual) < Number(expected);
+        break;
+      case "gte":
+        pass = Number(actual) >= Number(expected);
+        break;
+      case "lte":
+        pass = Number(actual) <= Number(expected);
+        break;
+      default:
+        pass = false;
+    }
+    if (!pass) return false;
+  }
+  return true;
+}
+
+/**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;

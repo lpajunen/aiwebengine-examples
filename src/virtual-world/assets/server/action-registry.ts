@@ -1,4 +1,7 @@
-import { ActionLogicSpec } from "./action-logic-interpreter.ts";
+import {
+  ActionCondition,
+  ActionLogicSpec,
+} from "./action-logic-interpreter.ts";
 import { NEARBY_TARGET_TILE_DISTANCE } from "./runtime-config.ts";
 
 // Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
@@ -149,6 +152,12 @@ export interface ActionDefinition {
   // Aiming/reach spec (DESIGN-targeting.md). Optional: when omitted, the
   // action inherits defaultTargetingForTargetKind(targetKind).
   targeting?: ActionTargeting;
+  // Precondition on the *target* for the action to be offered at all
+  // (DESIGN-targeting.md step 3): all conditions must pass against the target
+  // entity or the action's button is hidden. Client-evaluated gating (the
+  // action's own handler remains the server-side authority); conditions may
+  // reference the target's `type`, `state.*` (items) and `values.*` (livings).
+  validWhen?: ActionCondition[];
 }
 
 // Shared targeting for melee/manipulation actions (poke and the item-targeted
@@ -704,6 +713,10 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
     targeting: WALK_ADJACENT_TARGETING,
+    // Only offer Fix on a damaged item (current below max HP).
+    validWhen: [
+      { field: "state.currentHitPoints", op: "lt", ref: "state.maxHitPoints" },
+    ],
   },
   bury: {
     id: "bury",
@@ -712,6 +725,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
     targeting: WALK_ADJACENT_TARGETING,
+    // Only offer Bury on a corpse.
+    validWhen: [{ field: "type", op: "eq", value: "npc_corpse" }],
   },
   // Individual pick: walk to one chosen item and take just that item — the
   // per-item counterpart to the tile-level "pick all" HUD button (the "pick"

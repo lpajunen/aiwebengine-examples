@@ -1,7 +1,11 @@
 export interface ActionCondition {
   field: string;
   op: "eq" | "ne" | "gt" | "lt" | "gte" | "lte";
-  value: unknown;
+  // Compare `field` against this literal, OR — when `ref` is set — against the
+  // value at another field path (e.g. currentHitPoints < maxHitPoints). `ref`
+  // takes precedence over `value` when both are present.
+  value?: unknown;
+  ref?: string;
   errorMessage?: string;
 }
 
@@ -101,6 +105,63 @@ export function evaluateConditions(
     }
   }
   return { ok: true };
+}
+
+// Evaluates a `validWhen` precondition list against a *target* entity (a world
+// item or a living), used to decide whether an action is offered against that
+// target (DESIGN-targeting.md step 3). Unlike evaluateConditions (which reads
+// only item.state and skips stateless items), the context here also exposes the
+// target's `type` and living `values`, and each condition may compare `field`
+// to a literal `value` or — via `ref` — to another field. Returns true when
+// every condition passes (or there are none). Pure and dependency-free so the
+// browser client mirrors it in evaluateActionValidWhen (tiles-and-items.js).
+export function evaluateTargetConditions(
+  conditions: ActionCondition[] | undefined,
+  target: {
+    type?: unknown;
+    state?: Record<string, unknown>;
+    values?: Record<string, unknown>;
+    [key: string]: unknown;
+  },
+): boolean {
+  if (!conditions || conditions.length === 0) return true;
+  const context: Record<string, unknown> = {
+    type: target.type,
+    state: target.state && typeof target.state === "object" ? target.state : {},
+    values:
+      target.values && typeof target.values === "object" ? target.values : {},
+  };
+  for (let i = 0; i < conditions.length; i++) {
+    const cond = conditions[i];
+    const actual = getFieldValue(context, cond.field);
+    const expected =
+      cond.ref !== undefined ? getFieldValue(context, cond.ref) : cond.value;
+    let pass = false;
+    switch (cond.op) {
+      case "eq":
+        pass = actual === expected;
+        break;
+      case "ne":
+        pass = actual !== expected;
+        break;
+      case "gt":
+        pass = Number(actual) > Number(expected);
+        break;
+      case "lt":
+        pass = Number(actual) < Number(expected);
+        break;
+      case "gte":
+        pass = Number(actual) >= Number(expected);
+        break;
+      case "lte":
+        pass = Number(actual) <= Number(expected);
+        break;
+      default:
+        pass = false;
+    }
+    if (!pass) return false;
+  }
+  return true;
 }
 
 export function applyEffects(

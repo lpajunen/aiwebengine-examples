@@ -12,6 +12,12 @@ var aimCol = -1;
 /** @type {any} */ var aimTargetRing = null;
 /** @type {any} */ var aimAreaDisc = null;
 
+// Pool of pulsing rings drawn under every valid target while an entity action
+// is armed, so the (possibly moving) targets are obvious to tap.
+/** @type {any[]} */ var aimHighlightRings = [];
+/** @type {any} */ var aimHighlightGeo = null;
+/** @type {any} */ var aimHighlightMat = null;
+
 function ensureAimMeshes() {
   if (aimTargetRing) return;
   aimTargetRing = new THREE.Mesh(
@@ -69,16 +75,23 @@ function positionAimMeshes() {
 function armAimAction(actionId) {
   ensureAimMeshes();
   armedAimAction = actionId;
-  var r = actionAreaRadius(actionId);
-  // A Chebyshev radius r covers a (2r+1)-tile square; a disc of radius
-  // (r+0.5)*TILE roughly encloses it for the preview.
-  aimAreaDisc.geometry.dispose();
-  aimAreaDisc.geometry = new THREE.CircleGeometry((r + 0.5) * TILE, 40);
-  aimRow = avatarRow;
-  aimCol = avatarCol;
-  positionAimMeshes();
-  aimTargetRing.visible = true;
-  aimAreaDisc.visible = r > 0;
+  if (aimModeFor(actionId) === "reticle") {
+    var r = actionAreaRadius(actionId);
+    // A Chebyshev radius r covers a (2r+1)-tile square; a disc of radius
+    // (r+0.5)*TILE roughly encloses it for the preview.
+    aimAreaDisc.geometry.dispose();
+    aimAreaDisc.geometry = new THREE.CircleGeometry((r + 0.5) * TILE, 40);
+    aimRow = avatarRow;
+    aimCol = avatarCol;
+    positionAimMeshes();
+    aimTargetRing.visible = true;
+    aimAreaDisc.visible = r > 0;
+  } else {
+    // Entity mode: no reticle — the pulsing target highlights (game loop) show
+    // what can be tapped.
+    aimTargetRing.visible = false;
+    aimAreaDisc.visible = false;
+  }
   renderAimBanner();
 }
 
@@ -86,6 +99,9 @@ function cancelAiming() {
   armedAimAction = null;
   if (aimTargetRing) aimTargetRing.visible = false;
   if (aimAreaDisc) aimAreaDisc.visible = false;
+  for (var i = 0; i < aimHighlightRings.length; i++) {
+    aimHighlightRings[i].visible = false;
+  }
   renderAimBanner();
 }
 
@@ -95,7 +111,7 @@ function cancelAiming() {
  */
 function updateAimFromEvent(clientX, clientY) {
   var action = armedAimAction;
-  if (!action) return;
+  if (!action || aimModeFor(action) !== "reticle") return;
   var tile = pickTileFromEvent(clientX, clientY);
   if (!tile) return;
   var range = actionEffectiveRange(action);
@@ -108,18 +124,64 @@ function updateAimFromEvent(clientX, clientY) {
 }
 
 /**
+ * @param {string} action
+ * @param {string} kind "living" or "item"
+ * @param {string} id
+ */
+function invokeAimTarget(action, kind, id) {
+  if (kind === "living") postTreeAction(action, { target_living_id: id });
+  else postTreeAction(action, { target_item_id: id });
+}
+
+/**
+ * Chooser-button handler (from showTargetChooser): invoke the armed action on
+ * the chosen target, then close the chooser and end aiming.
+ * @param {HTMLElement} btn
+ */
+function chooseAimTarget(btn) {
+  var action = String(btn.dataset.actionId || "");
+  var kind = btn.dataset.kind === "living" ? "living" : "item";
+  var id = String(btn.dataset.id || "");
+  if (!action || !id) return;
+  invokeAimTarget(action, kind, id);
+  cancelAiming();
+  closeTileDetail();
+}
+
+/**
+ * Handle a tap/click while aiming.
  * @param {number} clientX
  * @param {number} clientY
- * @returns {boolean} true if a cast was fired (caller should not also select a tile)
+ * @returns {boolean} true when the tap was consumed by aiming (caller must not
+ *   also select a tile).
  */
 function confirmAimFromEvent(clientX, clientY) {
   var action = armedAimAction;
   if (!action) return false;
-  updateAimFromEvent(clientX, clientY);
-  var row = aimRow;
-  var col = aimCol;
-  cancelAiming();
-  postTreeAction(action, { row: row, col: col });
+  if (aimModeFor(action) === "reticle") {
+    updateAimFromEvent(clientX, clientY);
+    var row = aimRow;
+    var col = aimCol;
+    cancelAiming();
+    postTreeAction(action, { row: row, col: col });
+    return true;
+  }
+  // Entity mode: resolve the valid targets on the tapped tile.
+  var tile = pickTileFromEvent(clientX, clientY);
+  if (!tile) return true;
+  var tapRow = tile.row;
+  var tapCol = tile.col;
+  var onTile = collectAimTargets(action).filter(function (target) {
+    return target.row === tapRow && target.col === tapCol;
+  });
+  if (onTile.length === 0) return true; // mis-tap; stay armed for another try
+  if (onTile.length === 1) {
+    invokeAimTarget(action, onTile[0].kind, onTile[0].id);
+    cancelAiming();
+    return true;
+  }
+  // Several valid targets share the tile — disambiguate via the tile panel.
+  showTargetChooser(action, onTile);
   return true;
 }
 
@@ -137,14 +199,71 @@ function renderAimBanner() {
     banner.innerHTML = "";
     return;
   }
+  var hint =
+    aimModeFor(action) === "reticle"
+      ? t("hud.aim_hint", "tap a tile to cast")
+      : t("hud.aim_hint_target", "tap a highlighted target");
   banner.innerHTML =
     "<span>" +
     escapeHtml(treeActionLabel(action)) +
     " · " +
-    escapeHtml(t("hud.aim_hint", "tap a tile to cast")) +
+    escapeHtml(hint) +
     "</span>" +
     '<button onclick="cancelAiming()">' +
     escapeHtml(t("hud.cancel", "Cancel")) +
     "</button>";
   banner.style.display = "flex";
+}
+
+// Pulses a ring under every valid target of an armed entity action. Called each
+// frame from the game loop; recomputes targets so rings track moving livings.
+// A no-op unless an entity action is armed.
+/** @param {number} nowMs */
+function updateAimTargetHighlights(nowMs) {
+  var action = armedAimAction;
+  if (!action || aimModeFor(action) !== "entity") {
+    for (var h = 0; h < aimHighlightRings.length; h++) {
+      aimHighlightRings[h].visible = false;
+    }
+    return;
+  }
+  if (!aimHighlightGeo) {
+    aimHighlightGeo = new THREE.RingGeometry(0.5, 0.74, 24);
+    aimHighlightMat = new THREE.MeshBasicMaterial({
+      color: 0x49d0ff,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+  }
+  // One ring per distinct target tile.
+  var targets = collectAimTargets(action);
+  /** @type {Record<string, boolean>} */ var seen = {};
+  /** @type {Array<{row: number, col: number}>} */ var tiles = [];
+  for (var i = 0; i < targets.length; i++) {
+    var key = targets[i].row + "_" + targets[i].col;
+    if (seen[key]) continue;
+    seen[key] = true;
+    tiles.push({ row: targets[i].row, col: targets[i].col });
+  }
+  while (aimHighlightRings.length < tiles.length) {
+    var ring = new THREE.Mesh(aimHighlightGeo, aimHighlightMat);
+    ring.rotation.x = -Math.PI / 2;
+    scene.add(ring);
+    aimHighlightRings.push(ring);
+  }
+  aimHighlightMat.opacity = 0.4 + 0.3 * (0.5 + 0.5 * Math.sin(nowMs * 0.006));
+  for (var r = 0; r < aimHighlightRings.length; r++) {
+    if (r < tiles.length) {
+      aimHighlightRings[r].position.set(
+        tileX(tiles[r].col),
+        0.08,
+        tileZ(tiles[r].row),
+      );
+      aimHighlightRings[r].visible = true;
+    } else {
+      aimHighlightRings[r].visible = false;
+    }
+  }
 }

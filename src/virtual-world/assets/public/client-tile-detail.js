@@ -68,6 +68,58 @@ function refreshTileDetailIfOpen() {
   renderTileDetailPanel();
 }
 
+/**
+ * @param {number} row
+ * @param {number} col
+ * @param {string} id
+ * @returns {string} label for a world item by id on a tile, id as fallback.
+ */
+function aimItemLabelOnTile(row, col, id) {
+  var arr = worldItemsByTile[row + "_" + col];
+  if (Array.isArray(arr)) {
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].id) === id) return inventoryItemLabel(arr[i]);
+    }
+  }
+  return id;
+}
+
+/**
+ * Disambiguation chooser (UI phase 3): when an armed entity action has several
+ * valid targets on the tapped tile, reuse the tile panel to list them so the
+ * player picks which one; choosing invokes the armed action on it
+ * (chooseAimTarget in client-aiming.js).
+ * @param {string} action
+ * @param {Array<{kind:"living"|"item", id:string, row:number, col:number}>} targets
+ */
+function showTargetChooser(action, targets) {
+  requireElementById("tile-detail-title").textContent =
+    t("tile.choose_target", "Choose target") + " — " + treeActionLabel(action);
+  var html = '<div class="tile-section">';
+  for (var i = 0; i < targets.length; i++) {
+    var tgt = targets[i];
+    var label =
+      tgt.kind === "living"
+        ? npcAvatars[tgt.id]
+          ? npcDisplayName(tgt.id)
+          : getNickForPlayer(tgt.id)
+        : aimItemLabelOnTile(tgt.row, tgt.col, tgt.id);
+    html +=
+      '<div class="tile-row"><button data-action-id="' +
+      escHtml(action) +
+      '" data-kind="' +
+      escHtml(tgt.kind) +
+      '" data-id="' +
+      escHtml(tgt.id) +
+      '" onclick="chooseAimTarget(this)">' +
+      escHtml(label) +
+      "</button></div>";
+  }
+  html += "</div>";
+  requireElementById("tile-detail-body").innerHTML = html;
+  requireElementById("hud-tile-detail").style.display = "block";
+}
+
 /** @param {any} str */
 function escHtml(str) {
   return String(str)
@@ -148,49 +200,10 @@ function renderTileDetailPanel() {
 
   var tileItems = worldItemsByTile[key] || [];
 
-  // Each targeted action shows out to its own effective range (DESIGN-
-  // targeting.md step 4): manipulation/melee actions reach 0–5 tiles (poke/fix
-  // walk in; follow/fight pursue), a ranged action like firebolt reaches
-  // farther. So gate every available action by this tile's distance vs the
-  // action's actionEffectiveRange, rather than one fixed nearby radius.
+  // Inspector only (UI phase 3): the tile panel shows what's here; actions are
+  // invoked from the action palette's aim step. The container Open button is
+  // the one exception (it opens a panel, it doesn't act on the world).
   var isOwnTile = row === avatarRow && col === avatarCol;
-  var tileDist = Math.max(Math.abs(row - avatarRow), Math.abs(col - avatarCol));
-  /** @param {string[]} ids @returns {string[]} */
-  var withinReach = function (ids) {
-    return ids.filter(function (a) {
-      return tileDist <= actionEffectiveRange(a);
-    });
-  };
-  var itemActionIds = withinReach(actionsAvailableForTargetKind("item", false));
-  var livingActionIds = withinReach(
-    actionsAvailableForTargetKind("living", false),
-  );
-
-  /**
-   * @param {string[]} actionIds
-   * @param {string} datasetAttr
-   * @param {string} targetId
-   * @param {string} handlerName
-   * @returns {string}
-   */
-  function entityActionButtons(actionIds, datasetAttr, targetId, handlerName) {
-    var btns = "";
-    for (var a = 0; a < actionIds.length; a++) {
-      btns +=
-        '<button data-action-id="' +
-        escHtml(actionIds[a]) +
-        '" data-' +
-        datasetAttr +
-        '="' +
-        escHtml(targetId) +
-        '" onclick="' +
-        handlerName +
-        '(this)">' +
-        escHtml(treeActionLabel(actionIds[a])) +
-        "</button> ";
-    }
-    return btns;
-  }
 
   /**
    * Joins already-escaped "label: value" strings into a single dense row
@@ -268,28 +281,14 @@ function renderTileDetailPanel() {
             escHtml(t("inventory.open", "Open")) +
             "</button> "
           : "";
-      // Per-item button gating: hide the individual-pick button on
-      // non-pickable items, and hide any action whose validWhen precondition
-      // fails for this item (e.g. Fix only on a damaged item, Bury only on a
-      // corpse) — DESIGN-targeting.md step 3.
-      var itmTarget = { type: itm.type, state: itm.state };
-      var thisItemActions = rankActionsByContext(
-        itemActionIds.filter(function (a) {
-          if (a === "pick_item" && !isPickableItemType(itm.type)) return false;
-          return actionValidForTarget(a, itmTarget);
-        }),
-      );
+      // Inspector only (UI phase 3): item actions are invoked from the action
+      // palette's aim step now, not per-row here. The container Open button
+      // stays — it opens a panel rather than acting on the world.
       html +=
         '<div class="tile-row">' +
         escHtml(label) +
         " " +
         containerOpenBtn +
-        entityActionButtons(
-          thisItemActions,
-          "target-item-id",
-          String(itm.id),
-          "postItemTargetedAction",
-        ) +
         "</div>";
       if (itm.type === "portal" || itm.type === "door") {
         html +=
@@ -353,15 +352,6 @@ function renderTileDetailPanel() {
         ppData.slots && typeof ppData.slots === "object" ? ppData.slots : {};
       var ppValues =
         ppData.values && typeof ppData.values === "object" ? ppData.values : {};
-      var ppActions = rankActionsByContext(
-        livingActionIds.filter(function (a) {
-          return actionValidForTarget(a, {
-            type: ppData.class_id,
-            state: ppData.state,
-            values: ppValues,
-          });
-        }),
-      );
       html += '<div class="tile-living-entry">';
       html +=
         '<div class="tile-living-name' +
@@ -373,13 +363,6 @@ function renderTileDetailPanel() {
             escHtml(getNickForPlayer(pp.id)) +
             ")"
           : escHtml(getNickForPlayer(pp.id))) +
-        " " +
-        entityActionButtons(
-          ppActions,
-          "target-living-id",
-          String(pp.id),
-          "postLivingTargetedAction",
-        ) +
         "</div>";
       if (ppData.class_id) {
         html +=
@@ -444,26 +427,10 @@ function renderTileDetailPanel() {
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
           : {};
-      var npcActions = rankActionsByContext(
-        livingActionIds.filter(function (a) {
-          return actionValidForTarget(a, {
-            type: npcData.class_id,
-            state: npcData.state,
-            values: npcValues,
-          });
-        }),
-      );
       html += '<div class="tile-living-entry">';
       html +=
         '<div class="tile-living-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
-        " " +
-        entityActionButtons(
-          npcActions,
-          "target-living-id",
-          String(npcEntry.id),
-          "postLivingTargetedAction",
-        ) +
         "</div>";
       if (npcData.class_id) {
         html +=

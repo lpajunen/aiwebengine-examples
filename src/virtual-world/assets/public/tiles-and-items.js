@@ -761,6 +761,104 @@ function actionCategoryOf(action) {
 }
 
 /**
+ * How an action is aimed from the palette (UI phase 3): "reticle" for area/point
+ * actions (fireball), "entity" for item/living targeted actions (pick a target
+ * on tap), "none" for self/facing/inventory actions that fire immediately.
+ * @param {string} action
+ * @returns {"reticle" | "entity" | "none"}
+ */
+function aimModeFor(action) {
+  var def = getRegistryActionDef(action);
+  var k = def && def.target_kind;
+  if (k === "point") return "reticle";
+  if (
+    k === "item" ||
+    k === "item_nearby" ||
+    k === "living" ||
+    k === "living_nearby"
+  )
+    return "entity";
+  return "none";
+}
+
+/**
+ * Every valid target for an entity-aimed action currently in range: livings for
+ * a living action, world items for an item action, filtered by the action's
+ * effective range and its validWhen precondition. Used both to context-filter
+ * the palette (only offer an entity action when something is targetable) and to
+ * resolve/disambiguate a tap during aiming, and to highlight targets.
+ * @param {string} action
+ * @returns {Array<{kind: "living" | "item", id: string, row: number, col: number}>}
+ */
+function collectAimTargets(action) {
+  var def = getRegistryActionDef(action);
+  if (!def) return [];
+  var kind = def.target_kind || "";
+  var range = actionEffectiveRange(action);
+  /** @type {Array<{kind: "living" | "item", id: string, row: number, col: number}>} */
+  var out = [];
+  /** @param {number} r @param {number} c */
+  function inRange(r, c) {
+    return Math.max(Math.abs(r - avatarRow), Math.abs(c - avatarCol)) <= range;
+  }
+  if (kind === "living" || kind === "living_nearby") {
+    for (var nid in npcAvatars) {
+      var na = npcAvatars[nid];
+      if (!na || !inRange(na.row, na.col)) continue;
+      if (
+        !actionValidForTarget(action, {
+          type: na.class_id,
+          state: na.state,
+          values: na.values,
+        })
+      )
+        continue;
+      out.push({ kind: "living", id: nid, row: na.row, col: na.col });
+    }
+    for (var rpid in remoteAvatars) {
+      if (rpid === playerId) continue;
+      var ra = remoteAvatars[rpid];
+      if (!ra || !inRange(ra.row, ra.col)) continue;
+      if (
+        !actionValidForTarget(action, {
+          type: ra.class_id,
+          state: ra.state,
+          values: ra.values,
+        })
+      )
+        continue;
+      out.push({ kind: "living", id: rpid, row: ra.row, col: ra.col });
+    }
+  } else if (kind === "item" || kind === "item_nearby") {
+    for (var key in worldItemsByTile) {
+      var parts = key.split("_");
+      var r = Number(parts[0]);
+      var c = Number(parts[1]);
+      if (!isFinite(r) || !isFinite(c) || !inRange(r, c)) continue;
+      var arr = worldItemsByTile[key];
+      if (!Array.isArray(arr)) continue;
+      for (var i = 0; i < arr.length; i++) {
+        var it = arr[i];
+        if (!it) continue;
+        if (action === "pick_item" && !isPickableItemType(it.type)) continue;
+        if (!actionValidForTarget(action, { type: it.type, state: it.state }))
+          continue;
+        out.push({ kind: "item", id: String(it.id), row: r, col: c });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {string} action
+ * @returns {boolean} whether the entity-aimed action has any valid target in range now.
+ */
+function hasValidAimTarget(action) {
+  return collectAimTargets(action).length > 0;
+}
+
+/**
  * @param {string} action
  * @returns {boolean}
  */
@@ -983,8 +1081,14 @@ function getOwnedTreeActions() {
     if (!Array.isArray(actions)) continue;
     for (var m = 0; m < actions.length; m++) {
       if (!actions[m]) continue;
-      if (isEntityTargetedAction(actions[m])) continue;
-      if (!isNearbyItemActionApplicable(all[j], actions[m])) continue;
+      if (isEntityTargetedAction(actions[m])) {
+        // Entity-aimed actions (poke/fight/fix/…) now live in the palette too,
+        // but only when something is actually targetable in range — so the
+        // list stays contextual (UI phase 3).
+        if (!hasValidAimTarget(actions[m])) continue;
+      } else if (!isNearbyItemActionApplicable(all[j], actions[m])) {
+        continue;
+      }
       actionsByType[actions[m]] = true;
     }
   }

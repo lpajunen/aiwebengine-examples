@@ -126,6 +126,7 @@ function animate() {
   targetIndicator.position.z = tileZ(targetRow);
 
   updateItemHighlights(performance.now());
+  updateAimTargetHighlights(performance.now());
 
   updateCamera();
   renderer.render(scene, camera);

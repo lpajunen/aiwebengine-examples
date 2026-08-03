@@ -196,6 +196,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       approaching_prefix: "Approaching",
       stop_action: "Stop",
       aim_hint: "tap a tile to cast",
+      aim_hint_target: "tap a highlighted target",
     },
     action_category: {
       combat: "Combat",
@@ -323,6 +324,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     tile: {
       square: "Square",
+      choose_target: "Choose target",
       terrain_section: "Terrain",
       built_by: "Built by",
       items_section: "Items",
@@ -646,6 +648,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       approaching_prefix: "Lähestyt:",
       stop_action: "Lopeta",
       aim_hint: "napauta ruutua ampuaksesi",
+      aim_hint_target: "napauta korostettua kohdetta",
     },
     action_category: {
       combat: "Taistelu",
@@ -774,6 +777,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     tile: {
       square: "Ruutu",
+      choose_target: "Valitse kohde",
       terrain_section: "Maasto",
       built_by: "Rakentanut",
       items_section: "Esineet",

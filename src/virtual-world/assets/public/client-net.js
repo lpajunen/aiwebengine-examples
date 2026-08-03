@@ -499,6 +499,9 @@ function swapToWorld(state) {
   if (state.playerInventory) {
     playerInventory = normalizeClientInventory(state.playerInventory);
   }
+  // Refresh the cast bar in case the new world's inventory changed which
+  // point-targeted actions are available (client-aiming.js).
+  if (typeof renderCastBar === "function") renderCastBar();
   // Paint the world-mod overlay (houses, planted trees, tile mods) into the new
   // MAP — these live in WORLD_MODS/HOUSE_MODS/TREE_MODS, not the base map, so
   // they must be re-applied on every swap the way boot does.

@@ -249,6 +249,35 @@ canvas {
   background: rgba(178, 50, 50, 1);
 }
 
+#hud-cast-bar {
+  bottom: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: row;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 1020;
+}
+#hud-cast-bar button {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  background: rgba(60, 60, 82, 0.85);
+}
+#hud-cast-bar button:hover {
+  background: rgba(84, 84, 116, 1);
+}
+#hud-cast-bar button.cast-armed {
+  background: rgba(220, 90, 50, 0.95);
+  border-color: #ffcaa8;
+}
+
 #hud-world-info-panel {
   top: 14px;
   right: 14px;

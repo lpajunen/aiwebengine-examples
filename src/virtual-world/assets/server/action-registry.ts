@@ -51,6 +51,10 @@ export interface ActionDefinition {
     // own tile — see resolveActionTarget() in tree-action-helpers.ts.
     | "item_nearby"
     | "living_nearby"
+    // A free tile chosen by the client (body.row/col), used by area attacks
+    // whose reticle is placed within range — see the fireball handler and
+    // resolveActionTarget() in tree-action-helpers.ts.
+    | "point"
     | "inventory";
   sourceItemIds: string[];
   cost?: Array<{ itemId: string; count: number }>;
@@ -803,6 +807,25 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targeting: {
       range: 8,
       rangeShape: "line",
+      approach: "none",
+    },
+  },
+  // Area attack (DESIGN-targeting.md step 4, `radius` shape): a reticle is
+  // placed on any tile within `range`, and every living within `areaRadius`
+  // tiles of it is struck. Point-targeted (client sends body.row/col); resolves
+  // from the caster's tile with no walking. NPCs only for now (no player
+  // friendly-fire). See the fireball handler in tree-action-helpers.ts.
+  fireball: {
+    id: "fireball",
+    labelKey: "tree_action.fireball",
+    fallbackLabel: "Fireball",
+    targetKind: "point",
+    sourceItemIds: ["starter_kit"],
+    experience: { amount: 20, onKill: true },
+    targeting: {
+      range: 8,
+      rangeShape: "radius",
+      areaRadius: 2,
       approach: "none",
     },
   },

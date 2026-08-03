@@ -276,6 +276,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <div class="hud" id="hud-toast" aria-live="polite"></div>
 
   <div class="hud" id="hud-active-actions" style="display:none;"></div>
+  <div class="hud" id="hud-cast-bar" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
@@ -547,6 +548,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <script src="/virtual-world/client-chat.js"></script>
   <script src="/virtual-world/client-item-actions.js"></script>
   <script src="/virtual-world/client-tile-detail.js"></script>
+  <script src="/virtual-world/client-aiming.js"></script>
   <script src="/virtual-world/client-input.js"></script>
   <script src="/virtual-world/client-editors.js"></script>
   <script src="/virtual-world/client-main.js"></script>

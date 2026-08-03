@@ -212,6 +212,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "fight",
       "stop_fight",
       "firebolt",
+      "fireball",
       "summon_knife",
       "craft_kantele",
     ],

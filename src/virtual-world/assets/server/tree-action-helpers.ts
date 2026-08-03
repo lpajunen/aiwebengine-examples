@@ -596,6 +596,24 @@ export function performTreeActionForUser(
       };
     }
 
+    // A client-placed point (area attacks): the reticle tile from body.row/col.
+    if (targetKind === "point") {
+      const pr = Number(body && body.row);
+      const pc = Number(body && body.col);
+      const dims = getWorldDimensions(worldId);
+      return {
+        row: pr,
+        col: pc,
+        inBounds:
+          Number.isFinite(pr) &&
+          Number.isFinite(pc) &&
+          pr >= 0 &&
+          pr < dims.rows &&
+          pc >= 0 &&
+          pc < dims.cols,
+      };
+    }
+
     const targetTile = getTargetTileFromRotation(
       playerRow,
       playerCol,
@@ -1840,6 +1858,123 @@ export function performTreeActionForUser(
         damage: hit.damage,
         ...(hit.experience_gained
           ? { experience_gained: hit.experience_gained, values: hit.values }
+          : {}),
+      }),
+    };
+  }
+
+  if (action === "fireball") {
+    if (inv.class_id === "player_ghost") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.ghost_cannot_fight" },
+      };
+    }
+    if (!resolvedTarget.inBounds) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_out_of_bounds" },
+      };
+    }
+    const fireballTargeting = actionDefinition
+      ? resolveActionTargeting(actionDefinition)
+      : null;
+    const reach = fireballTargeting
+      ? resolveEffectiveActionRange(fireballTargeting, null)
+      : NEARBY_TARGET_TILE_DISTANCE;
+    const areaRadius = fireballTargeting
+      ? Math.max(0, Math.floor(Number(fireballTargeting.areaRadius) || 0))
+      : 0;
+    // The reticle tile must be within casting range of the caster.
+    if (
+      !isWithinTileDistance(
+        resolvedTarget.row,
+        resolvedTarget.col,
+        canonical.row,
+        canonical.col,
+        reach,
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_out_of_range" },
+      };
+    }
+    const fireballExp =
+      actionDefinition && actionDefinition.experience
+        ? actionDefinition.experience
+        : undefined;
+    const killBase =
+      fireballExp && fireballExp.onKill
+        ? Math.floor(Number(fireballExp.amount || 0))
+        : 0;
+    // Strike every NPC within areaRadius (Chebyshev) of the reticle tile. Keys
+    // are captured up front; a lethal strike deletes its NPC, which the next
+    // strike's fresh load simply won't find.
+    const npcsInBlast = loadWorldNPCs(worldId);
+    let struckCount = 0;
+    let killCount = 0;
+    let totalDamage = 0;
+    let totalXp = 0;
+    let latestValues: Record<string, unknown> | undefined;
+    Object.keys(npcsInBlast).forEach(function (npcId) {
+      const npc = npcsInBlast[npcId];
+      if (!npc) return;
+      if (
+        !isWithinTileDistance(
+          npc.row,
+          npc.col,
+          resolvedTarget.row,
+          resolvedTarget.col,
+          areaRadius,
+        )
+      ) {
+        return;
+      }
+      const hit = applyRangedHitToLiving(
+        worldId,
+        userId,
+        npcId,
+        "npc",
+        killBase,
+      );
+      if (hit.result === "hit" || hit.result === "kill") {
+        struckCount++;
+        totalDamage += hit.damage;
+      }
+      if (hit.result === "kill") {
+        killCount++;
+        if (hit.experience_gained) {
+          totalXp += hit.experience_gained;
+          latestValues = hit.values;
+        }
+      }
+    });
+    const toastKey =
+      struckCount > 0
+        ? "tree_action.fireball_toast"
+        : "tree_action.fireball_miss_toast";
+    const toastFallback =
+      struckCount > 0
+        ? "Your fireball erupts — " +
+          struckCount +
+          " struck, " +
+          killCount +
+          " slain."
+        : "Your fireball scorches empty ground.";
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(toastKey, toastFallback, {
+          struck: String(struckCount),
+          kills: String(killCount),
+        }),
+        result: struckCount > 0 ? "hit" : "miss",
+        struck_count: struckCount,
+        kill_count: killCount,
+        total_damage: totalDamage,
+        ...(totalXp > 0
+          ? { experience_gained: totalXp, values: latestValues }
           : {}),
       }),
     };

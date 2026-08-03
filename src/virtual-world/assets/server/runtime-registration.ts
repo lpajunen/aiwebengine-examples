@@ -581,6 +581,7 @@ export function registerVirtualWorldRuntime(): void {
     "client-chat.js",
     "client-item-actions.js",
     "client-tile-detail.js",
+    "client-aiming.js",
     "client-input.js",
     "client-editors.js",
     "client-main.js",

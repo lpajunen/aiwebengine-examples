@@ -43,6 +43,10 @@ document.addEventListener("keydown", function (e) {
     e.preventDefault();
     toggleInventoryPanel();
   }
+  if (e.key === "Escape" && isAiming()) {
+    e.preventDefault();
+    cancelAiming();
+  }
 });
 document.addEventListener("keyup", function (e) {
   if (isTypingTarget(document.activeElement)) return;
@@ -72,6 +76,11 @@ document.addEventListener("mousedown", function (e) {
   }
 });
 document.addEventListener("mousemove", function (e) {
+  // While aiming, the pointer positions the cast reticle instead of orbiting.
+  if (isAiming()) {
+    updateAimFromEvent(e.clientX, e.clientY);
+    return;
+  }
   if (!isDragging) return;
   var dx = e.clientX - lastMouseX;
   var dy = e.clientY - lastMouseY;
@@ -81,6 +90,14 @@ document.addEventListener("mousemove", function (e) {
   cameraOrbit.phi = Math.max(0.15, Math.min(1.4, cameraOrbit.phi - dy * 0.004));
 });
 document.addEventListener("mouseup", function (e) {
+  // A left-click while aiming confirms the cast at the reticle tile.
+  if (isAiming()) {
+    if (e.button === 0 && !isClickOnHUD(e)) {
+      confirmAimFromEvent(e.clientX, e.clientY);
+    }
+    isDragging = false;
+    return;
+  }
   if (isDragging && e.button === 0 && !isClickOnHUD(e)) {
     var ddx = e.clientX - mouseClickStartX;
     var ddy = e.clientY - mouseClickStartY;
@@ -90,6 +107,14 @@ document.addEventListener("mouseup", function (e) {
     }
   }
   isDragging = false;
+});
+
+// Right-click cancels an in-progress cast instead of opening the context menu.
+document.addEventListener("contextmenu", function (e) {
+  if (isAiming()) {
+    e.preventDefault();
+    cancelAiming();
+  }
 });
 document.addEventListener("mouseleave", function () {
   isDragging = false;
@@ -211,6 +236,15 @@ document.addEventListener(
   "touchend",
   function (e) {
     if (e.touches.length === 0) {
+      // A tap while aiming casts at the tapped tile.
+      if (isAiming() && e.changedTouches.length > 0) {
+        var ctA = e.changedTouches[0];
+        if (!isTouchOnButtons(ctA) && !isTouchOnJoystick(ctA)) {
+          confirmAimFromEvent(ctA.clientX, ctA.clientY);
+        }
+        isTouchRotating = false;
+        return;
+      }
       if (isTouchRotating && e.changedTouches.length > 0) {
         var ct = e.changedTouches[0];
         var tdx = ct.clientX - touchTapStartX;

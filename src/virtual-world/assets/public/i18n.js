@@ -184,6 +184,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       action_types: "Action types",
       living_types: "Living types",
       world_types: "World types",
+      following_prefix: "Following",
+      fighting_prefix: "Fighting",
+      approaching_prefix: "Approaching",
+      stop_action: "Stop",
     },
     legend: {
       title: "Legend",
@@ -612,6 +616,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       action_types: "Toimintotyypit",
       living_types: "Olentotyypit",
       world_types: "Maailmatyypit",
+      following_prefix: "Seuraat:",
+      fighting_prefix: "Taistelet:",
+      approaching_prefix: "Lähestyt:",
+      stop_action: "Lopeta",
     },
     legend: {
       title: "Selite",

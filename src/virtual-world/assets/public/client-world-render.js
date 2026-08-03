@@ -910,6 +910,74 @@ var itemMatCache = {};
 var itemMeshGroup = new THREE.Group();
 scene.add(itemMeshGroup);
 
+// Contextual-action highlight (DESIGN-targeting.md step 3): a pulsing ring on
+// the ground under any world item that an available validWhen-gated action
+// currently applies to — a damaged item (Fix) or a corpse (Bury) — so the
+// opportunity is discoverable in the world without opening the tile panel.
+var highlightMeshGroup = new THREE.Group();
+scene.add(highlightMeshGroup);
+var highlightRingGeo = new THREE.RingGeometry(0.3, 0.44, 28);
+var highlightRingMat = new THREE.MeshBasicMaterial({
+  color: 0xffd54a,
+  transparent: true,
+  opacity: 0.5,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+/** @type {any[]} */
+var itemHighlightMeshes = [];
+
+function clearItemHighlights() {
+  while (highlightMeshGroup.children.length > 0) {
+    var child = highlightMeshGroup.children.pop();
+    if (child) highlightMeshGroup.remove(child);
+  }
+  itemHighlightMeshes = [];
+}
+
+/**
+ * Whether an available item-targeted action carrying a validWhen precondition
+ * currently applies to this world item (Fix on a damaged item, Bury on a
+ * corpse). Distance-agnostic: an out-of-reach match still glows, since
+ * walk-then-act will close the gap when the player acts.
+ * @param {any} item
+ * @returns {boolean}
+ */
+function itemHasContextualAction(item) {
+  if (!item) return false;
+  var actionIds = actionsAvailableForTargetKind("item", false);
+  var target = { type: item.type, state: item.state };
+  for (var i = 0; i < actionIds.length; i++) {
+    var def = getRegistryActionDef(actionIds[i]);
+    if (!def || !Array.isArray(def.valid_when) || def.valid_when.length === 0)
+      continue;
+    if (actionValidForTarget(actionIds[i], target)) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {number} x
+ * @param {number} z
+ */
+function addItemHighlightAt(x, z) {
+  var ring = new THREE.Mesh(highlightRingGeo, highlightRingMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.06, z);
+  highlightMeshGroup.add(ring);
+  itemHighlightMeshes.push(ring);
+}
+
+/**
+ * Breathes the shared highlight material's opacity so the rings pulse. Called
+ * each frame from the game loop; a no-op when nothing is highlighted.
+ * @param {number} nowMs
+ */
+function updateItemHighlights(nowMs) {
+  if (itemHighlightMeshes.length === 0) return;
+  highlightRingMat.opacity = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(nowMs * 0.005));
+}
+
 /**
  * @param {string} type
  * @returns {number}
@@ -1051,6 +1119,7 @@ function placeDoorOnWall(mesh, row, col, isOpen) {
 
 function rebuildItemMeshes() {
   clearItemMeshes();
+  clearItemHighlights();
   for (var tileKey in worldItemsByTile) {
     var parts = tileKey.split("_");
     var row = Number(parts[0]);
@@ -1086,6 +1155,9 @@ function rebuildItemMeshes() {
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       itemMeshGroup.add(mesh);
+      if (itemHasContextualAction(item)) {
+        addItemHighlightAt(tileX(col) + ox, tileZ(row) + oz);
+      }
     }
   }
 }

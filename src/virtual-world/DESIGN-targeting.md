@@ -185,7 +185,7 @@ the pending row and halts the per-tick stepping. The approach row is enqueued
 once as always-due and left in place while walking (deleted only on
 arrival/abandon/cancel), so cancelling is race-free like stopping a follow.
 
-### 3. `validWhen` gating + valid-target highlight ✅ gating done
+### 3. `validWhen` gating + valid-target highlight ✅ gating + highlight done
 
 `validWhen` is a list of `ActionCondition`s on the _target_ (extended with an
 optional `ref` so a field can be compared to another field, e.g.
@@ -194,8 +194,12 @@ class bootstrap, and evaluated client-side (`actionValidForTarget` mirrors the
 server's `evaluateTargetConditions`) to hide inapplicable buttons: Fix shows
 only on a damaged item, Bury only on a corpse. The action's own handler
 remains the server-side authority — validWhen is client gating, not
-enforcement. Remaining: the 3D **valid-target highlight** (outline/pulse the
-entities a held/armed action applies to) and context-ranking of the panel.
+enforcement. The **valid-target highlight** is a pulsing gold ring on the
+ground under any world item a satisfied-validWhen action currently applies to
+(damaged item → Fix, corpse → Bury; `itemHasContextualAction` +
+`updateItemHighlights` in client-world-render.js) so the opportunity is
+discoverable without opening the panel. Remaining: context-ranking of the
+panel button order.
 
 ### 4. Action-first aiming mode for `line` / `radius`
 

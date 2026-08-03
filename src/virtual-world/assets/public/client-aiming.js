@@ -79,14 +79,14 @@ function armAimAction(actionId) {
   positionAimMeshes();
   aimTargetRing.visible = true;
   aimAreaDisc.visible = r > 0;
-  renderCastBar();
+  renderAimBanner();
 }
 
 function cancelAiming() {
   armedAimAction = null;
   if (aimTargetRing) aimTargetRing.visible = false;
   if (aimAreaDisc) aimAreaDisc.visible = false;
-  renderCastBar();
+  renderAimBanner();
 }
 
 /**
@@ -123,76 +123,28 @@ function confirmAimFromEvent(clientX, clientY) {
   return true;
 }
 
-// ── Cast bar (arm point-targeted actions) ─────────────────────────────────
+// ── Aiming banner (only visible while an action is armed) ─────────────────
+// Shows the armed action + a Cancel button and a hint, so touch users (who
+// have no Esc/right-click) can back out of an aim. The entry point for arming
+// is the unified action palette (the Use picker), not a persistent bar.
 
-/** @returns {string[]} Point-targeted actions the held items grant, sorted. */
-function availablePointActions() {
-  var inv = normalizeClientInventory(playerInventory);
-  /** @type {Record<string, boolean>} */ var seen = {};
-  /** @type {string[]} */ var result = [];
-  /** @param {any} item */
-  function collect(item) {
-    if (!item) return;
-    var ids = treeActionsForItemType(item.type);
-    for (var i = 0; i < ids.length; i++) {
-      if (seen[ids[i]]) continue;
-      var def = getRegistryActionDef(ids[i]);
-      if (!def || def.target_kind !== "point") continue;
-      seen[ids[i]] = true;
-      result.push(ids[i]);
-    }
-  }
-  if (Array.isArray(inv.bag)) {
-    for (var b = 0; b < inv.bag.length; b++) collect(inv.bag[b]);
-  }
-  if (inv.slots && typeof inv.slots === "object") {
-    var sids = Object.keys(inv.slots);
-    for (var s = 0; s < sids.length; s++) collect(inv.slots[sids[s]]);
-  }
-  return result.sort(function (a, b) {
-    return treeActionLabel(a).localeCompare(treeActionLabel(b));
-  });
-}
-
-function renderCastBar() {
-  var bar = document.getElementById("hud-cast-bar");
-  if (!bar) return;
-  var actions = availablePointActions();
-  if (actions.length === 0) {
-    bar.style.display = "none";
-    bar.innerHTML = "";
+function renderAimBanner() {
+  var banner = document.getElementById("hud-aim-banner");
+  if (!banner) return;
+  var action = armedAimAction;
+  if (!action) {
+    banner.style.display = "none";
+    banner.innerHTML = "";
     return;
   }
-  var html = actions
-    .map(function (a) {
-      var armed = a === armedAimAction;
-      return (
-        '<button data-cast-action="' +
-        escapeHtml(a) +
-        '"' +
-        (armed ? ' class="cast-armed"' : "") +
-        ' onclick="toggleCastAction(this.dataset.castAction)">' +
-        escapeHtml(treeActionLabel(a)) +
-        "</button>"
-      );
-    })
-    .join("");
-  if (isAiming()) {
-    html +=
-      '<button onclick="cancelAiming()">' +
-      escapeHtml(t("hud.cancel", "Cancel")) +
-      "</button>";
-  }
-  bar.innerHTML = html;
-  bar.style.display = "flex";
+  banner.innerHTML =
+    "<span>" +
+    escapeHtml(treeActionLabel(action)) +
+    " · " +
+    escapeHtml(t("hud.aim_hint", "tap a tile to cast")) +
+    "</span>" +
+    '<button onclick="cancelAiming()">' +
+    escapeHtml(t("hud.cancel", "Cancel")) +
+    "</button>";
+  banner.style.display = "flex";
 }
-
-/** @param {string} actionId */
-function toggleCastAction(actionId) {
-  if (armedAimAction === actionId) cancelAiming();
-  else armAimAction(actionId);
-}
-
-// Initial paint; PLAYER_INV / ITEM_REGISTRY are embedded in the page before
-// this module loads. Re-rendered on world switch via client-net's state apply.
-renderCastBar();

@@ -273,7 +273,8 @@ function useItem() {
   }
   if (actions.length === 1) {
     closeUsePicker();
-    postTreeAction(actions[0]);
+    if (actionNeedsAiming(actions[0])) armAimAction(actions[0]);
+    else postTreeAction(actions[0]);
     return;
   }
   if (usePickerVisible) {

@@ -195,6 +195,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       fighting_prefix: "Fighting",
       approaching_prefix: "Approaching",
       stop_action: "Stop",
+      aim_hint: "tap a tile to cast",
     },
     legend: {
       title: "Legend",
@@ -635,6 +636,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       fighting_prefix: "Taistelet:",
       approaching_prefix: "Lähestyt:",
       stop_action: "Lopeta",
+      aim_hint: "napauta ruutua ampuaksesi",
     },
     legend: {
       title: "Selite",

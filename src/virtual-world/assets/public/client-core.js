@@ -95,14 +95,18 @@ function openUsePicker(actions) {
   container.innerHTML = "";
   for (var i = 0; i < actions.length; i++) {
     var action = actions[i];
+    var needsAim = actionNeedsAiming(action);
     var btn = document.createElement("button");
-    btn.textContent = treeActionLabel(action);
-    btn.onclick = (function (a) {
+    // A target/aim badge marks actions that open a reticle to be aimed after
+    // selection, rather than firing immediately.
+    btn.textContent = (needsAim ? "🎯 " : "") + treeActionLabel(action);
+    btn.onclick = (function (a, aim) {
       return function () {
         closeUsePicker();
-        postTreeAction(a);
+        if (aim) armAimAction(a);
+        else postTreeAction(a);
       };
-    })(action);
+    })(action, needsAim);
     container.appendChild(btn);
   }
   usePickerVisible = true;

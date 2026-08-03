@@ -726,6 +726,19 @@ function actionEffectiveRange(action) {
 }
 
 /**
+ * Whether invoking this action from the action palette needs an on-screen aim
+ * step (a reticle) before it fires, rather than resolving immediately. Today
+ * that's point-targeted (area) actions like fireball; the palette arms these
+ * into aiming mode instead of posting them straight away.
+ * @param {string} action
+ * @returns {boolean}
+ */
+function actionNeedsAiming(action) {
+  var def = getRegistryActionDef(action);
+  return !!def && def.target_kind === "point";
+}
+
+/**
  * @param {string} action
  * @returns {boolean}
  */

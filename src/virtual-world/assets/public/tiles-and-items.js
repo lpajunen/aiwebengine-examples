@@ -727,15 +727,14 @@ function actionEffectiveRange(action) {
 
 /**
  * Whether invoking this action from the action palette needs an on-screen aim
- * step (a reticle) before it fires, rather than resolving immediately. Today
- * that's point-targeted (area) actions like fireball; the palette arms these
- * into aiming mode instead of posting them straight away.
+ * step before it fires, rather than resolving immediately: area actions open a
+ * reticle, item/living actions enter target-pick mode. Self/facing/inventory
+ * actions fire straight away. See aimModeFor for the mode.
  * @param {string} action
  * @returns {boolean}
  */
 function actionNeedsAiming(action) {
-  var def = getRegistryActionDef(action);
-  return !!def && def.target_kind === "point";
+  return aimModeFor(action) !== "none";
 }
 
 // Display grouping order for the action palette (UI phase 2). Actions carry a

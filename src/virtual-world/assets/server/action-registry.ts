@@ -788,6 +788,24 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
   },
+  // Ranged single-target attack (DESIGN-targeting.md step 4, `line` shape): a
+  // one-shot strike on a living up to `range` tiles away, resolved from the
+  // caster's tile without walking (approach "none"). Kill XP works like fight
+  // (base scaled by target level). rangeFrom stays "action" here; a bow/wand
+  // that overrides range via rangeFrom "item" is a later slice.
+  firebolt: {
+    id: "firebolt",
+    labelKey: "tree_action.firebolt",
+    fallbackLabel: "Firebolt",
+    targetKind: "living_nearby",
+    sourceItemIds: ["starter_kit"],
+    experience: { amount: 20, onKill: true },
+    targeting: {
+      range: 8,
+      rangeShape: "line",
+      approach: "none",
+    },
+  },
   summon_knife: {
     id: "summon_knife",
     labelKey: "tree_action.summon_knife",

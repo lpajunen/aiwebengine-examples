@@ -148,28 +148,23 @@ function renderTileDetailPanel() {
 
   var tileItems = worldItemsByTile[key] || [];
 
-  // Plain "item"/"living" targeted actions (e.g. poke) require the entity on
-  // the actor's own tile. "item_nearby"/"living_nearby" actions (e.g. follow,
-  // fight) also work up to NEARBY_ACTION_TILE_DISTANCE tiles away — see
-  // isWithinTileDistance() in tree-action-helpers.ts on the server.
+  // Each targeted action shows out to its own effective range (DESIGN-
+  // targeting.md step 4): manipulation/melee actions reach 0–5 tiles (poke/fix
+  // walk in; follow/fight pursue), a ranged action like firebolt reaches
+  // farther. So gate every available action by this tile's distance vs the
+  // action's actionEffectiveRange, rather than one fixed nearby radius.
   var isOwnTile = row === avatarRow && col === avatarCol;
-  var isNearbyTile = isWithinTileDistance(
-    row,
-    col,
-    avatarRow,
-    avatarCol,
-    NEARBY_ACTION_TILE_DISTANCE,
+  var tileDist = Math.max(Math.abs(row - avatarRow), Math.abs(col - avatarCol));
+  /** @param {string[]} ids @returns {string[]} */
+  var withinReach = function (ids) {
+    return ids.filter(function (a) {
+      return tileDist <= actionEffectiveRange(a);
+    });
+  };
+  var itemActionIds = withinReach(actionsAvailableForTargetKind("item", false));
+  var livingActionIds = withinReach(
+    actionsAvailableForTargetKind("living", false),
   );
-  var itemActionIds = isOwnTile
-    ? actionsAvailableForTargetKind("item", false)
-    : isNearbyTile
-      ? actionsAvailableForTargetKind("item", true)
-      : [];
-  var livingActionIds = isOwnTile
-    ? actionsAvailableForTargetKind("living", false)
-    : isNearbyTile
-      ? actionsAvailableForTargetKind("living", true)
-      : [];
 
   /**
    * @param {string[]} actionIds

@@ -203,12 +203,29 @@ discoverable without opening the panel. The panel is context-ranked too
 floats above the always-available verbs (Fix ahead of Examine/Break on a
 damaged item).
 
-### 4. Action-first aiming mode for `line` / `radius`
+### 4. Ranged `line` / area `radius` attacks 🚧 line (single-target) done
 
-Unlocks bow, firebolt and fireball as pure content (new item/action classes)
-with no further engine changes: highlight-and-tap for `line`, reticle + ring
-for `radius`. Variable range (longbow) is already covered by `rangeFrom` from
-step 1.
+**Done — ranged single-target (`line`):** `firebolt` is a one-shot ranged
+attack (targetKind `living_nearby`, targeting `range 8 / line / approach none`,
+granted by starter_kit). Its handler resolves a living within the action's
+effective range and applies a single strike via `applyRangedHitToLiving`
+(fight-helpers.ts) — a standalone mirror of the fight tick's per-round math
+(d20 vs armorClass, weaponClass damage, corpse/ghost death, level-scaled kill
+XP) so the fight loop is untouched. The tile inspector now gates every action
+button by its own `actionEffectiveRange` (targeting.range) instead of one fixed
+5-tile radius, so a ranged action's button shows out to its range. Target-first
+aiming (click the living → Firebolt) is the interaction; it resolves from the
+caster's tile with no walking.
+
+**Remaining:**
+
+- **Item-derived range (`rangeFrom: "item"`, longbow > shortbow):** the client
+  `actionEffectiveRange` still reads the action's own range; wire it to the held
+  weapon's range stat, and add a bow/wand item that carries one.
+- **Area `radius` (fireball):** a point/tile-targeted action that hits every
+  living within `areaRadius`, with a reticle + ring-preview aiming UI.
+- **Action-first hotbar:** arm an action, then aim (highlight-and-tap for
+  `line`, reticle for `radius`) as an alternative to target-first.
 
 Steps 1–2 are the highest leverage: together they make the whole interaction
 "point at a place or thing; the game resolves reach and pathing", which is

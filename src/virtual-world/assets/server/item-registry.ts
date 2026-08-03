@@ -211,6 +211,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "cancel_approach",
       "fight",
       "stop_fight",
+      "firebolt",
       "summon_knife",
       "craft_kantele",
     ],

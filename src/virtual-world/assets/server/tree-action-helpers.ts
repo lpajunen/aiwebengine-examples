@@ -20,6 +20,7 @@ import {
 import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import { deleteFightState, saveFightState } from "./fight-storage.ts";
+import { applyRangedHitToLiving } from "./fight-helpers.ts";
 import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
 import {
   addPendingAction,
@@ -1732,6 +1733,114 @@ export function performTreeActionForUser(
       status: 200,
       payload: buildConfiguredSuccessPayload({
         ...toastFields("tree_action.stop_fight_toast", "You stop fighting."),
+      }),
+    };
+  }
+
+  if (action === "firebolt") {
+    if (inv.class_id === "player_ghost") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.ghost_cannot_fight" },
+      };
+    }
+    const targetLivingId = String((body && body.target_living_id) || "");
+    if (!targetLivingId || targetLivingId === userId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_required" },
+      };
+    }
+    const reach = actionDefinition
+      ? resolveEffectiveActionRange(
+          resolveActionTargeting(actionDefinition),
+          null,
+        )
+      : NEARBY_TARGET_TILE_DISTANCE;
+    const npcsHere = loadWorldNPCs(worldId);
+    const targetNpc = npcsHere[targetLivingId];
+    let targetKind: "player" | "npc" | null = null;
+    if (
+      targetNpc &&
+      isWithinTileDistance(
+        targetNpc.row,
+        targetNpc.col,
+        canonical.row,
+        canonical.col,
+        reach,
+      )
+    ) {
+      targetKind = "npc";
+    } else {
+      const worldPlayers = loadWorldPlayers(worldId);
+      const targetPlayer = worldPlayers[targetLivingId];
+      if (
+        targetPlayer &&
+        isWithinTileDistance(
+          targetPlayer.row,
+          targetPlayer.col,
+          canonical.row,
+          canonical.col,
+          reach,
+        )
+      ) {
+        targetKind = "player";
+      }
+    }
+    if (!targetKind) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    if (
+      targetKind === "player" &&
+      loadPlayerInventory(targetLivingId).class_id === "player_ghost"
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_is_ghost" },
+      };
+    }
+    // Kill XP: firebolt's configured base scaled by target level, same as fight.
+    const fireboltExp =
+      actionDefinition && actionDefinition.experience
+        ? actionDefinition.experience
+        : undefined;
+    const killBase =
+      fireboltExp && fireboltExp.onKill
+        ? Math.floor(Number(fireboltExp.amount || 0))
+        : 0;
+    const hit = applyRangedHitToLiving(
+      worldId,
+      userId,
+      targetLivingId,
+      targetKind,
+      killBase,
+    );
+    const toastKey =
+      hit.result === "kill"
+        ? "tree_action.firebolt_kill_toast"
+        : hit.result === "hit"
+          ? "tree_action.firebolt_hit_toast"
+          : "tree_action.firebolt_miss_toast";
+    const toastFallback =
+      hit.result === "kill"
+        ? "Your firebolt burns " + hit.target_label + " to ash!"
+        : hit.result === "hit"
+          ? "Your firebolt scorches " + hit.target_label + "."
+          : "Your firebolt fizzles past " + hit.target_label + ".";
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(toastKey, toastFallback, { target: hit.target_label }),
+        target_living_id: targetLivingId,
+        target_living_label: hit.target_label,
+        result: hit.result,
+        damage: hit.damage,
+        ...(hit.experience_gained
+          ? { experience_gained: hit.experience_gained, values: hit.values }
+          : {}),
       }),
     };
   }

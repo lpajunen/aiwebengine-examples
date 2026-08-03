@@ -710,6 +710,22 @@ function getRegistryActionDef(action) {
 }
 
 /**
+ * Effective reach (in tiles) an action can target from the actor, driving how
+ * far its button shows in the tile inspector (DESIGN-targeting.md step 4). Reads
+ * the action's targeting.range; melee/manipulate actions are 0–5, ranged ones
+ * (firebolt) more. rangeFrom "item" would override from the held weapon's range
+ * — not yet modelled client-side, so the action's own range is used.
+ * @param {string} action
+ * @returns {number}
+ */
+function actionEffectiveRange(action) {
+  var def = getRegistryActionDef(action);
+  var tgt = def && def.targeting;
+  if (tgt && typeof tgt.range === "number") return tgt.range;
+  return 0;
+}
+
+/**
  * @param {string} action
  * @returns {boolean}
  */

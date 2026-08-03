@@ -233,6 +233,113 @@ function resolvePlayerDeath(
   });
 }
 
+// One-shot ranged hit for line-shape attacks (firebolt/bow): a single strike
+// resolved from the caster's current tile with no persistent fight and no
+// pursuit. The per-strike math mirrors resolveCombatHit (d20 vs armorClass,
+// 1..weaponClass damage, corpse/ghost death, level-scaled kill XP) but stands
+// alone so the fight tick is untouched. Attacker is always a player; the caller
+// has already validated the target exists and is within range.
+export function applyRangedHitToLiving(
+  worldId: string,
+  attackerId: string,
+  targetId: string,
+  targetType: "npc" | "player",
+  killExperienceBase: number,
+): {
+  result: "miss" | "hit" | "kill";
+  damage: number;
+  target_label: string;
+  experience_gained?: number;
+  values?: Record<string, unknown>;
+} {
+  const attackerWeaponClass = Math.max(
+    1,
+    Number((loadPlayerInventory(attackerId).values || {}).weaponClass || 0),
+  );
+  const targetLabel =
+    targetType === "npc"
+      ? getNPCDisplayName(worldId, targetId)
+      : getEffectiveNick(targetId);
+
+  const npcs = targetType === "npc" ? loadWorldNPCs(worldId) : {};
+  const targetNpc = targetType === "npc" ? npcs[targetId] : null;
+  const targetInv =
+    targetType === "player" ? loadPlayerInventory(targetId) : null;
+  const targetValues = targetInv
+    ? targetInv.values || {}
+    : targetNpc
+      ? targetNpc.values || {}
+      : {};
+  const armorClass = Number(targetValues.armorClass) || 0;
+
+  const attackRoll = 1 + Math.floor(Math.random() * 20);
+  const isHit =
+    attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+  if (!isHit) {
+    return { result: "miss", damage: 0, target_label: targetLabel };
+  }
+
+  const damage = 1 + Math.floor(Math.random() * attackerWeaponClass);
+  const currentHitPoints = Number(targetValues.currentHitPoints) || 0;
+  const nextHitPoints = Math.max(0, currentHitPoints - damage);
+
+  if (nextHitPoints > 0) {
+    if (targetType === "npc" && targetNpc) {
+      targetNpc.values = Object.assign({}, targetValues, {
+        currentHitPoints: nextHitPoints,
+      });
+      saveWorldNPCs(worldId, { [targetId]: targetNpc });
+      broadcastNPCValuesChanged(worldId, targetId, targetNpc.values);
+    } else if (targetInv) {
+      targetInv.values = Object.assign({}, targetValues, {
+        currentHitPoints: nextHitPoints,
+      });
+      savePlayerInventory(targetId, targetInv);
+      broadcastPlayerValuesChanged(worldId, targetId, targetInv.values);
+      sendRecipientScopedStreamEvent(targetId, "fight_hit_taken", {
+        attacker_label: getEffectiveNick(attackerId),
+        damage: damage,
+      });
+    }
+    return { result: "hit", damage: damage, target_label: targetLabel };
+  }
+
+  // Lethal strike: award level-scaled kill XP, then resolve the death.
+  let experienceGained = 0;
+  let attackerValues: Record<string, unknown> | undefined;
+  if (killExperienceBase > 0) {
+    const targetLevel = Math.max(
+      1,
+      Math.floor(Number(targetValues.level || 1)),
+    );
+    experienceGained = killExperienceBase * targetLevel;
+    const attackerInv = loadPlayerInventory(attackerId);
+    attackerInv.values.experience =
+      Math.floor(Number(attackerInv.values.experience || 0)) + experienceGained;
+    attackerInv.values.totalExperience =
+      Math.floor(Number(attackerInv.values.totalExperience || 0)) +
+      experienceGained;
+    savePlayerInventory(attackerId, attackerInv);
+    broadcastPlayerValuesChanged(worldId, attackerId, attackerInv.values);
+    attackerValues = attackerInv.values;
+  }
+  if (targetType === "npc" && targetNpc) {
+    resolveNPCDeath(worldId, targetId, targetNpc);
+  } else if (targetInv) {
+    const players = loadWorldPlayers(worldId);
+    const pos = players[targetId] || { row: 0, col: 0, seq: 0, rotation: 0 };
+    resolvePlayerDeath(worldId, targetId, pos, targetInv);
+  }
+  return {
+    result: "kill",
+    damage: damage,
+    target_label: targetLabel,
+    ...(experienceGained > 0
+      ? { experience_gained: experienceGained, values: attackerValues }
+      : {}),
+  };
+}
+
 function resolveCombatHit(
   worldId: string,
   fight: FightStateRow,

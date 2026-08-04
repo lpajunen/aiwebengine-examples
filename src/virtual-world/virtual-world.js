@@ -573,18 +573,50 @@ function virtualWorldManageWorldClassesToolHandler(context) {
 }
 
 function init() {
-  ensureWorldDatabaseSchema();
-  ensureChatDatabaseSchema();
-  bootstrapItemClassesImpl();
-  bootstrapActionClassesImpl();
-  bootstrapLivingClassesImpl();
-  bootstrapWorldClassesImpl();
+  // Registration goes FIRST, before any database work. The engine kills init()
+  // at 5000ms and logs "FATAL Init timeout (5000ms)"; everything below this
+  // line is DB round-trips, so a slow startup used to kill init() before it
+  // ever reached registration and the script came up with no routes at all.
+  // Registering first makes a slow startup degrade into "routes up, caches
+  // cold" instead of "script entirely absent". It needs no schema:
+  // getAllActionIds() falls back to the built-in ACTION_DEFINITIONS when the
+  // class table is unreadable.
+  //
+  // Timings go to console.log, not vwLog — vwLog is gated behind VW_DEBUG
+  // (off) and this is the one measurement that has to survive in production,
+  // because it is what says how much of the 5000ms budget startup is using.
+  // Kept quiet on purpose: a bulk `make upload-virtual-world` re-inits the
+  // script once per uploaded file (~70 inits), so a chatty init floods the
+  // log store. One summary line per init, plus a line for any single phase
+  // over SLOW_PHASE_MS so a regression still says which phase caused it.
+  var SLOW_PHASE_MS = 250;
+  var initStartedAt = Date.now();
+  /**
+   * @param {string} name
+   * @param {() => void} run
+   */
+  var phase = function (name, run) {
+    var startedAt = Date.now();
+    run();
+    var elapsed = Date.now() - startedAt;
+    if (elapsed >= SLOW_PHASE_MS) {
+      console.log("[vworld] init slow phase " + name + " " + elapsed + "ms");
+    }
+  };
+
+  phase("register", registerVirtualWorldRuntimeImpl);
+  phase("world_schema", ensureWorldDatabaseSchema);
+  phase("chat_schema", ensureChatDatabaseSchema);
+  phase("item_classes", bootstrapItemClassesImpl);
+  phase("action_classes", bootstrapActionClassesImpl);
+  phase("living_classes", bootstrapLivingClassesImpl);
+  phase("world_classes", bootstrapWorldClassesImpl);
   vwDiag("init", {
     item_class_table: VWORLD_ITEM_CLASS_TABLE,
     action_class_table: VWORLD_ACTION_CLASS_TABLE,
     living_class_table: VWORLD_LIVING_CLASS_TABLE,
     world_class_table: VWORLD_WORLD_CLASS_TABLE,
   });
-  startNPCTicker();
-  registerVirtualWorldRuntimeImpl();
+  phase("npc_ticker", startNPCTicker);
+  console.log("[vworld] init done " + (Date.now() - initStartedAt) + "ms");
 }

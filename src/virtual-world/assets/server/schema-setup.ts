@@ -1,6 +1,12 @@
 import { vwLog } from "./diagnostics.ts";
-import { parseWorldDbResult } from "./world-db.ts";
 import {
+  parseWorldDbResult,
+  queryWorldRows,
+  upsertWorldRow,
+} from "./world-db.ts";
+import {
+  VWORLD_SCHEMA_VERSION,
+  VWORLD_SCHEMA_VERSION_TABLE,
   VWORLD_ACTION_CLASS_TABLE,
   VWORLD_ADMIN_TABLE,
   VWORLD_CHAT_TABLE,
@@ -102,6 +108,110 @@ export function runChatSchemaStep(
   collector?: Array<any>,
 ): any {
   return executeSchemaStep("chat", op, tableName, run, columnName, collector);
+}
+
+// ── Schema version marker ────────────────────────────────────────────────────
+//
+// The migration lists below are individually idempotent, but each statement is
+// its own database round-trip and there are ~200 of them. The engine gives
+// init() a 5000ms budget, and re-running the whole list on every process start
+// blew it ("FATAL Init timeout (5000ms)" in the script log) — which left the
+// script with NO routes registered at all, so every game route 404'd for a
+// minute or more after each deploy until some later init happened to squeak in
+// under the budget.
+//
+// So the steady state is now a single query: skip the list while the persisted
+// marker matches VWORLD_SCHEMA_VERSION. The marker is written only after the
+// list runs to completion, so an init killed mid-migration leaves it stale and
+// the next start retries — the guard can never mark a half-applied schema as
+// done. Bump VWORLD_SCHEMA_VERSION in runtime-config.ts when adding DDL.
+
+function ensureSchemaVersionTable(): void {
+  runWorldSchemaStep("createTable", VWORLD_SCHEMA_VERSION_TABLE, function () {
+    return database.createTable(VWORLD_SCHEMA_VERSION_TABLE);
+  });
+  runWorldSchemaStep(
+    "addTextColumn",
+    VWORLD_SCHEMA_VERSION_TABLE,
+    function () {
+      return database.addTextColumn(
+        VWORLD_SCHEMA_VERSION_TABLE,
+        "scope",
+        false,
+      );
+    },
+    "scope",
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_SCHEMA_VERSION_TABLE,
+    function () {
+      return database.addIntegerColumn(
+        VWORLD_SCHEMA_VERSION_TABLE,
+        "version",
+        false,
+      );
+    },
+    "version",
+  );
+  runWorldSchemaStep(
+    "addIntegerColumn",
+    VWORLD_SCHEMA_VERSION_TABLE,
+    function () {
+      return database.addIntegerColumn(
+        VWORLD_SCHEMA_VERSION_TABLE,
+        "applied_at",
+        false,
+      );
+    },
+    "applied_at",
+  );
+  runWorldSchemaStep(
+    "addUniqueIndex",
+    VWORLD_SCHEMA_VERSION_TABLE,
+    function () {
+      return database.addUniqueIndex(
+        VWORLD_SCHEMA_VERSION_TABLE,
+        JSON.stringify(["scope"]),
+      );
+    },
+  );
+}
+
+// True when this scope's migration list has already run to completion at the
+// current version. Fail-open: any doubt (missing marker table, unreadable row,
+// older version) re-runs the idempotent list rather than skipping it.
+function schemaVersionIsCurrent(scope: "world" | "chat"): boolean {
+  const rows = queryWorldRows(
+    VWORLD_SCHEMA_VERSION_TABLE,
+    JSON.stringify({ scope: scope }),
+    1,
+    "id",
+    "desc",
+  );
+  if (rows.length === 0) return false;
+  return Number(rows[0].version) === VWORLD_SCHEMA_VERSION;
+}
+
+function recordSchemaVersion(scope: "world" | "chat"): void {
+  const result = upsertWorldRow(VWORLD_SCHEMA_VERSION_TABLE, ["scope"], {
+    scope: scope,
+    version: VWORLD_SCHEMA_VERSION,
+    applied_at: Date.now(),
+  });
+  if (!result || result.error) {
+    // Non-fatal: the next start just pays for the migration list again.
+    vwLog("schema version marker write failed", {
+      scope: scope,
+      version: VWORLD_SCHEMA_VERSION,
+      error: String(result && result.error ? result.error : "unknown"),
+    });
+    return;
+  }
+  vwLog("schema migration applied", {
+    scope: scope,
+    version: VWORLD_SCHEMA_VERSION,
+  });
 }
 
 // Re-ensures just the world-item + item-meta tables. init()'s
@@ -462,6 +572,13 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
 }
 
 export function ensureWorldDatabaseSchema(): void {
+  if (schemaVersionIsCurrent("world")) return;
+  ensureSchemaVersionTable();
+  runWorldDatabaseMigration();
+  recordSchemaVersion("world");
+}
+
+function runWorldDatabaseMigration(): void {
   const step = function (
     op: string,
     tableName: string,
@@ -1238,6 +1355,19 @@ export function ensureWorldDatabaseSchema(): void {
 }
 
 export function ensureChatDatabaseSchema(collector?: Array<any>): void {
+  // A collector means a caller wants every step reported back, so run the list
+  // unconditionally for it; the version gate is only for the init() fast path.
+  if (!collector) {
+    if (schemaVersionIsCurrent("chat")) return;
+    ensureSchemaVersionTable();
+    runChatDatabaseMigration(undefined);
+    recordSchemaVersion("chat");
+    return;
+  }
+  runChatDatabaseMigration(collector);
+}
+
+function runChatDatabaseMigration(collector: Array<any> | undefined): void {
   const step = function (
     op: string,
     tableName: string,

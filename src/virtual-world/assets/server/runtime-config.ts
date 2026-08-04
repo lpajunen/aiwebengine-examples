@@ -86,6 +86,15 @@ export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 export const VWORLD_ADMIN_TABLE = "vworld_admins";
 export const VWORLD_SPAWN_TIMER_TABLE = "vworld_spawn_timers";
 export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
+// Marker table recording which schema revision has been fully applied, so
+// init() can skip the ~200 idempotent DDL round-trips in schema-setup.ts on
+// every process start. See ensureWorldDatabaseSchema().
+export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
+// BUMP THIS whenever any DDL in schema-setup.ts changes — a new table, column,
+// or index. The migration list is skipped entirely while the persisted marker
+// matches this number, so a forgotten bump means the new column is never
+// created on an already-migrated database.
+export const VWORLD_SCHEMA_VERSION = 1;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

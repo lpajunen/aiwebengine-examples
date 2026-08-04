@@ -195,7 +195,7 @@ function itemStateStatParts(state, allStats) {
 }
 
 /**
- * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
+ * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, size?: string, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
  */
 
 /**
@@ -233,6 +233,16 @@ function showExaminedItemPanel(info) {
       escHtml(
         t("item.kind." + String(info.kind), humanizeType(String(info.kind))),
       ) +
+      "</div>";
+  }
+  // Only worth a row when the item isn't the default size — every class was
+  // "medium" before sizes existed, so saying so adds noise.
+  if (info.size && String(info.size) !== "medium") {
+    html +=
+      '<div class="tile-row">' +
+      escHtml(t("examine.size_label", "Size:")) +
+      " " +
+      escHtml(t("size." + String(info.size), humanizeType(String(info.size)))) +
       "</div>";
   }
   if (info.destination_world_id || info.destination_world_type) {

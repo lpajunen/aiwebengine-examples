@@ -96,6 +96,7 @@ import {
   getPrimaryActionForItemType,
   normalizeItemState,
 } from "./item-registry.ts";
+import { ClassSize } from "./class-size.ts";
 
 export {
   getActionDefinition,
@@ -176,6 +177,10 @@ export interface LivingClassRecord {
   // English name stays in fallbackLabel. Optional so built-in literals — which
   // translate via labelKey — need not declare it. See class-labels.ts.
   labels?: Record<string, string>;
+  // How big this living renders, purely cosmetically — a "large" class is a
+  // double-scale version of the same avatar mesh. Optional; missing ==
+  // "medium" (unchanged appearance). See class-size.ts.
+  size?: ClassSize;
 }
 
 export interface LivingState {

@@ -22,6 +22,7 @@ import {
   deleteActionClassRow,
 } from "./action-class-storage.ts";
 import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
+import { ClassSize, normalizeClassSize } from "./class-size.ts";
 
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
@@ -37,6 +38,9 @@ export interface ItemDefinition {
     color: number;
     labelKey: string;
     fallbackLabel: string;
+    // How big the item's mesh renders; missing == "medium" (unchanged
+    // appearance). Cosmetic only — see class-size.ts.
+    size?: ClassSize;
   };
   actionIds: string[];
 }
@@ -50,6 +54,7 @@ export interface ItemClassRecord {
     color: number;
     labelKey: string;
     fallbackLabel: string;
+    size: ClassSize;
   };
   actionIds: string[];
   stateTemplate: Record<string, unknown>;
@@ -382,6 +387,7 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       labels: ClassLabels;
       color: number;
+      size: ClassSize;
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
@@ -416,6 +422,7 @@ export function getBootstrapRegistry(): {
       fallback_label: string;
       labels: ClassLabels;
       color: number;
+      size: ClassSize;
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
@@ -451,6 +458,7 @@ export function getBootstrapRegistry(): {
         fallback_label: cls.visuals.fallbackLabel,
         labels: normalizeClassLabels(cls.labels),
         color: cls.visuals.color,
+        size: normalizeClassSize(cls.visuals.size),
         action_ids: cls.actionIds.slice(),
         kind: cls.kind,
         non_pickable: !!cls.nonPickable,
@@ -464,6 +472,7 @@ export function getBootstrapRegistry(): {
         fallback_label: item.visuals.fallbackLabel,
         labels: {},
         color: item.visuals.color,
+        size: normalizeClassSize(item.visuals.size),
         action_ids: item.actionIds.slice(),
         kind: item.kind,
         non_pickable: !!item.nonPickable,
@@ -519,6 +528,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
       color: def.visuals.color,
       labelKey: def.visuals.labelKey,
       fallbackLabel: def.visuals.fallbackLabel,
+      size: normalizeClassSize(def.visuals.size),
     },
     actionIds: def.actionIds.slice(),
     stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
@@ -548,6 +558,7 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
       color: Number(row.color || 0),
       labelKey: String(row.label_key || ""),
       fallbackLabel: String(row.fallback_label || ""),
+      size: normalizeClassSize(row.size),
     },
     actionIds: (function () {
       try {
@@ -584,6 +595,7 @@ function itemClassToDbRow(
   non_droppable: number;
   non_pickable: number;
   color: number;
+  size: string;
   label_key: string;
   fallback_label: string;
   action_ids_json: string;
@@ -606,6 +618,7 @@ function itemClassToDbRow(
     non_droppable: record.nonDroppable ? 1 : 0,
     non_pickable: record.nonPickable ? 1 : 0,
     color: record.visuals.color,
+    size: normalizeClassSize(record.visuals.size),
     label_key: record.visuals.labelKey,
     fallback_label: record.visuals.fallbackLabel,
     action_ids_json: JSON.stringify(record.actionIds),
@@ -621,6 +634,8 @@ function itemClassToDbRow(
 // actionIds on rows that already exist but predate a static definition
 // change (e.g. tree_planter gaining "grow_pine_tree") — union-merges
 // missing static action ids in without dropping any a creator added.
+// Everything else (colors, labels, visuals.size) is seed-only: an already
+// stored row keeps whatever a creator last saved.
 function backfillItemClassDefaults(
   cache: Record<string, ItemClassRecord>,
   now: number,
@@ -839,6 +854,7 @@ export interface ItemInspection {
   label_key: string;
   fallback_label: string;
   labels: ClassLabels;
+  size: ClassSize;
   non_pickable: boolean;
   non_droppable: boolean;
   state: Record<string, unknown>;
@@ -886,6 +902,9 @@ export function buildItemInspection(
         ? def.visuals.fallbackLabel
         : type,
     labels: normalizeClassLabels(cls ? cls.labels : {}),
+    size: normalizeClassSize(
+      cls ? cls.visuals.size : def ? def.visuals.size : undefined,
+    ),
     non_pickable: cls ? !!cls.nonPickable : !!(def && def.nonPickable),
     non_droppable: !!(item && item.non_droppable),
     state: state,

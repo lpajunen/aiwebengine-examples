@@ -49,6 +49,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       item_section: "Item",
       properties_section: "Properties",
       kind_label: "Kind:",
+      size_label: "Size:",
       contents_label: "Contents:",
       no_properties: "Nothing else stands out.",
       on_ground: "On the ground",
@@ -160,13 +161,23 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     stats: {
       empty: "No statistics.",
     },
+    // Class sizes (item + living), see class-size.ts.
+    size: {
+      tiny: "Tiny",
+      small: "Small",
+      medium: "Medium",
+      large: "Large",
+      huge: "Huge",
+    },
     living: {
       class: {
         player_human: "Human",
         player_elf: "Elf",
         player_hobbit: "Hobbit",
         player_ghost: "Ghost",
+        player_giant: "Giant",
         npc_human: "Human",
+        npc_giant: "Giant",
         npc_archer: "Archer",
         npc_wolf: "Wolf",
         npc_bear: "Bear",
@@ -305,6 +316,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       label_label: "Name (English)",
       name_fi_label: "Name (Finnish)",
       kind_label: "Kind",
+      size_label: "Size",
       target_kind_label: "Target kind",
       non_droppable: "Non-droppable",
       non_pickable: "Non-pickable",
@@ -534,6 +546,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       item_section: "Esine",
       properties_section: "Ominaisuudet",
       kind_label: "Laji:",
+      size_label: "Koko:",
       contents_label: "Sisältö:",
       no_properties: "Muuta erikoista ei ole.",
       on_ground: "Maassa",
@@ -645,13 +658,22 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     stats: {
       empty: "Ei tilastoja.",
     },
+    size: {
+      tiny: "Pikkuruinen",
+      small: "Pieni",
+      medium: "Keskikokoinen",
+      large: "Suuri",
+      huge: "Valtava",
+    },
     living: {
       class: {
         player_human: "Ihminen",
         player_elf: "Haltia",
         player_hobbit: "Hobitti",
         player_ghost: "Aave",
+        player_giant: "Jättiläinen",
         npc_human: "Ihminen",
+        npc_giant: "Jättiläinen",
         npc_archer: "Jousimies",
         npc_wolf: "Susi",
         npc_bear: "Karhu",
@@ -790,6 +812,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       label_label: "Nimi (englanti)",
       name_fi_label: "Nimi (suomi)",
       kind_label: "Laji",
+      size_label: "Koko",
       target_kind_label: "Kohteen tyyppi",
       non_droppable: "Ei pudotettavissa",
       non_pickable: "Ei poimittavissa",

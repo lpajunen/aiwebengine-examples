@@ -71,6 +71,20 @@ function syncLocalAvatarGhostVisual() {
   );
 }
 
+/**
+ * Keeps the local avatar's scale in step with its living class's size (a
+ * player_giant body is twice the height of a player_human one). Called from
+ * updateStatsHud() alongside the other playerInventory-changed avatar hooks.
+ */
+function syncLocalAvatarSize() {
+  setAvatarSizeFromClass(
+    avatar,
+    playerInventory && playerInventory.class_id
+      ? String(playerInventory.class_id)
+      : "",
+  );
+}
+
 // ── Target indicator (shows where tree actions will occur) ───────────────
 var targetIndicatorGeo = new THREE.BoxGeometry(TILE * 0.9, 0.3, TILE * 0.9);
 var targetIndicatorMat = new THREE.MeshBasicMaterial({
@@ -133,6 +147,10 @@ function syncAvatarEquippedItems(entry, slots) {
     if (existing) entry.group.remove(existing.mesh);
     var point = SLOT_ATTACH_POINTS[slotId] || DEFAULT_SLOT_ATTACH_POINT;
     var mesh = new THREE.Mesh(equipItemGeo, getItemMaterial(itemType));
+    // The item's own class size; the wielder's size then scales this along
+    // with the rest of the avatar group, so a giant's sword reads as giant.
+    var itemScale = itemSizeScale(itemType);
+    if (itemScale !== 1) mesh.scale.setScalar(itemScale);
     mesh.position.set(point.x, point.y, point.z);
     entry.group.add(mesh);
     entry.equipMeshes[slotId] = { mesh: mesh, itemType: itemType };
@@ -142,6 +160,19 @@ function syncAvatarEquippedItems(entry, slots) {
     entry.group.remove(entry.equipMeshes[knownSlotId].mesh);
     delete entry.equipMeshes[knownSlotId];
   }
+}
+
+/**
+ * Scales a whole avatar group (body parts and any equipped-item meshes) by its
+ * living class's size, so one mesh recipe covers e.g. npc_human and the
+ * double-scale npc_giant. A "medium" class — every class that predates sizes —
+ * scales by 1 and renders exactly as before.
+ * @param {any} group
+ * @param {string} classId
+ */
+function setAvatarSizeFromClass(group, classId) {
+  if (!group) return;
+  group.scale.setScalar(livingSizeScale(classId));
 }
 
 var GHOST_BODY_COLOR = 0xdbeeff;
@@ -288,6 +319,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
     };
     syncAvatarEquippedItems(remoteAvatars[pid], remoteAvatars[pid].slots);
     setAvatarGhostly(g, remoteAvatars[pid].class_id === "player_ghost");
+    setAvatarSizeFromClass(g, remoteAvatars[pid].class_id);
   } else {
     var knownSeq = Number(remoteAvatars[pid].seq || 0);
     // Position updates are seq-gated, but inventory payloads (e.g. from a
@@ -357,6 +389,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
         remoteAvatars[pid].group,
         playerData.class_id === "player_ghost",
       );
+      setAvatarSizeFromClass(remoteAvatars[pid].group, playerData.class_id);
     }
     if (seqAdvanced || appliedLivingData) refreshTileDetailIfOpen();
   }
@@ -715,6 +748,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
     var g = makeNPCAvatar(npcId, initialClassId);
     g.position.set(tx, 0, tz);
     g.rotation.y = hasIncomingRot ? incomingRot : 0;
+    setAvatarSizeFromClass(g, initialClassId);
     scene.add(g);
     npcAvatars[npcId] = {
       group: g,
@@ -764,6 +798,7 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
       var newGroup = makeNPCAvatar(npcId, npcData.class_id);
       newGroup.position.copy(oldGroup.position);
       newGroup.rotation.y = oldGroup.rotation.y;
+      setAvatarSizeFromClass(newGroup, npcData.class_id);
       scene.remove(oldGroup);
       scene.add(newGroup);
       entry.group = newGroup;

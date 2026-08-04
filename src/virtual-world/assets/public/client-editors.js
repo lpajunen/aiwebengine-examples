@@ -217,6 +217,8 @@ function editItemClass(id) {
         String((ic.labels && ic.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
         String(ic.kind || "tool");
+      /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
+        String((ic.visuals && ic.visuals.size) || "medium");
       /** @type {HTMLInputElement} */ (
         requireElementById("ic-non-droppable")
       ).checked = !!ic.nonDroppable;
@@ -252,6 +254,8 @@ function cancelItemClassEdit() {
   /** @type {HTMLInputElement} */ (requireElementById("ic-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
     "tool";
+  /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
+    "medium";
   /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked = false;
@@ -287,6 +291,8 @@ function submitItemClassForm() {
     requireElementById("ic-name-fi")
   ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-kind"))
+    .value;
+  var sizeVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-size"))
     .value;
   var nonDroppableVal = /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
@@ -326,7 +332,7 @@ function submitItemClassForm() {
     kind: kindVal,
     nonDroppable: nonDroppableVal,
     nonPickable: nonPickableVal,
-    visuals: { fallbackLabel: labelVal || idVal },
+    visuals: { fallbackLabel: labelVal || idVal, size: sizeVal },
     actionIds: actionIds,
     stateTemplate: stateTemplate,
     labels: buildLabelsPayload(nameFiVal),
@@ -786,6 +792,8 @@ function editLivingClass(id) {
         String((lc.labels && lc.labels.fi) || "");
       /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
         String(lc.kind || "creature");
+      /** @type {HTMLSelectElement} */ (requireElementById("lc-size")).value =
+        String(lc.size || "medium");
       /** @type {HTMLTextAreaElement} */ (
         requireElementById("lc-slot-definitions")
       ).value =
@@ -835,6 +843,8 @@ function cancelLivingClassEdit() {
   /** @type {HTMLInputElement} */ (requireElementById("lc-name-fi")).value = "";
   /** @type {HTMLSelectElement} */ (requireElementById("lc-kind")).value =
     "creature";
+  /** @type {HTMLSelectElement} */ (requireElementById("lc-size")).value =
+    "medium";
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
   ).value = "";
@@ -874,6 +884,8 @@ function submitLivingClassForm() {
     requireElementById("lc-name-fi")
   ).value.trim();
   var kindVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-kind"))
+    .value;
+  var sizeVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-size"))
     .value;
   var slotDefinitionsRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
@@ -960,6 +972,7 @@ function submitLivingClassForm() {
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,
     aggressive: aggressiveVal,
+    size: sizeVal,
     defaultItems: defaultItems,
     labels: buildLabelsPayload(nameFiVal),
   };

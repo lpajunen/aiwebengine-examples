@@ -38,6 +38,7 @@ import {
 } from "./living-registry.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import { normalizeClassSize } from "./class-size.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import {
@@ -297,6 +298,10 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
         color: Number(args.color || 0),
         labelKey: String(args.labelKey || ""),
         fallbackLabel: String(args.fallbackLabel || id),
+        size: normalizeClassSize(
+          args.size,
+          existing ? existing.visuals.size : undefined,
+        ),
       },
       actionIds: Array.isArray(args.actionIds) ? args.actionIds : [],
       stateTemplate:
@@ -511,6 +516,10 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? existing.aggressive
             : false,
+      size: normalizeClassSize(
+        args.size,
+        existing ? normalizeClassSize(existing.size) : undefined,
+      ),
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

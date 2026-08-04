@@ -33,6 +33,7 @@ import {
 } from "./http-handler-helpers.ts";
 import { getAllLivingClasses } from "./living-registry.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import { normalizeClassSize } from "./class-size.ts";
 
 const CLASS_OWNER_ERROR = { error: "error.not_class_owner" };
 
@@ -89,6 +90,7 @@ export function createItemClassHandler(context: any) {
       fallbackLabel: String(
         (body && body.visuals && body.visuals.fallbackLabel) || id,
       ),
+      size: normalizeClassSize(body && body.visuals && body.visuals.size),
     },
     actionIds: Array.isArray(body && body.actionIds) ? body.actionIds : [],
     stateTemplate:
@@ -174,6 +176,10 @@ export function updateItemClassHandler(context: any) {
       fallbackLabel: String(
         (body && body.visuals && body.visuals.fallbackLabel) ||
           existing.visuals.fallbackLabel,
+      ),
+      size: normalizeClassSize(
+        body && body.visuals && body.visuals.size,
+        existing.visuals.size,
       ),
     },
     actionIds: Array.isArray(body && body.actionIds)
@@ -533,6 +539,7 @@ export function createLivingClassHandler(context: any) {
         ? body.valueSchema
         : undefined,
     aggressive: !!(body && body.aggressive),
+    size: normalizeClassSize(body && body.size),
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : [],
@@ -617,6 +624,10 @@ export function updateLivingClassHandler(context: any) {
       body && body.aggressive !== undefined
         ? !!body.aggressive
         : existing.aggressive,
+    size: normalizeClassSize(
+      body && body.size,
+      normalizeClassSize(existing.size),
+    ),
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : existing.defaultItems,

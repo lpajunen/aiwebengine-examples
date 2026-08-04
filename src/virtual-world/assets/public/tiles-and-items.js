@@ -571,9 +571,53 @@ function portalDestinationLabel(item) {
   return worldLabel + " " + worldSuffix;
 }
 
+// ── Class size (visual scale) ────────────────────────────────────────────
+// Item and living classes carry a size id (see class-size.ts server-side);
+// each step doubles the rendered scale, with "medium" the neutral value every
+// class had before sizes existed. Nothing else depends on it — reach,
+// blocking and combat are size-agnostic.
+/** @type {Record<string, number>} */
+var CLASS_SIZE_SCALES = {
+  tiny: 0.25,
+  small: 0.5,
+  medium: 1,
+  large: 2,
+  huge: 4,
+};
+
+/**
+ * @param {string | undefined | null} size
+ * @returns {number}
+ */
+function classSizeScale(size) {
+  var scale = CLASS_SIZE_SCALES[String(size || "")];
+  return typeof scale === "number" ? scale : 1;
+}
+
+/**
+ * Mesh scale for an item type, from its registry class.
+ * @param {string} type
+ * @returns {number}
+ */
+function itemSizeScale(type) {
+  var def = getRegistryItemDef(type);
+  return classSizeScale(def && def.size);
+}
+
+/**
+ * Mesh scale for a living class id (player or NPC).
+ * @param {string} classId
+ * @returns {number}
+ */
+function livingSizeScale(classId) {
+  var classes = getLivingRegistryClasses();
+  var cls = classes[String(classId || "")];
+  return classSizeScale(cls && cls.size);
+}
+
 /**
  * @param {string} type
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, size?: string, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}
  */
 function getRegistryItemDef(type) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;

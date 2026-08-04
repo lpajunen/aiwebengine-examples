@@ -428,6 +428,7 @@ function updateStatsHud() {
   updateUseButtonState();
   syncLocalAvatarEquippedItems();
   syncLocalAvatarGhostVisual();
+  syncLocalAvatarSize();
 }
 
 var logoutClickCount = 0;

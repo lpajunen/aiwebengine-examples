@@ -1056,9 +1056,10 @@ function clearItemMeshes() {
  * @param {number} row
  * @param {number} col
  * @param {boolean} isOpen
+ * @param {number} scale visual size scale of the door's item class
  * @returns {boolean}
  */
-function placeDoorOnWall(mesh, row, col, isOpen) {
+function placeDoorOnWall(mesh, row, col, isOpen, scale) {
   if (!hasHouseAt(row, col)) return false;
   // Same priority the house mesh uses for its cosmetic door: front (south)
   // first, then north, east, west. n = outward wall normal, t = along-wall
@@ -1096,13 +1097,13 @@ function placeDoorOnWall(mesh, row, col, isOpen) {
   var px = tileX(col) + wall.nx * wallOffset;
   var pz = tileZ(row) + wall.nz * wallOffset;
   if (!isOpen) {
-    mesh.position.set(px, 0.5, pz);
+    mesh.position.set(px, 0.5 * scale, pz);
     mesh.rotation.y = wall.base;
     return true;
   }
   // Open: swing ~70° about the hinge at one end of the wall, choosing the
   // rotation sign that carries the free edge outward (away from the house).
-  var halfW = 0.36;
+  var halfW = 0.36 * scale;
   var swing = Math.PI * 0.39;
   var a = swing;
   var freeX = wall.tx * Math.cos(a) + wall.tz * Math.sin(a);
@@ -1112,7 +1113,7 @@ function placeDoorOnWall(mesh, row, col, isOpen) {
   var hingeZ = pz - wall.tz * halfW;
   var offX = wall.tx * halfW * Math.cos(a) + wall.tz * halfW * Math.sin(a);
   var offZ = -wall.tx * halfW * Math.sin(a) + wall.tz * halfW * Math.cos(a);
-  mesh.position.set(hingeX + offX, 0.5, hingeZ + offZ);
+  mesh.position.set(hingeX + offX, 0.5 * scale, hingeZ + offZ);
   mesh.rotation.y = wall.base + a;
   return true;
 }
@@ -1136,7 +1137,11 @@ function rebuildItemMeshes() {
         isDoor ? doorGeo : itemGeo,
         isDoor ? getDoorMaterial(doorOpen) : getItemMaterial(item.type),
       );
-      if (isDoor && placeDoorOnWall(mesh, row, col, doorOpen)) {
+      // The item class's size scales the shared geometry (see classSizeScale
+      // in tiles-and-items.js); "medium" is 1, leaving the mesh as before.
+      var sizeScale = itemSizeScale(item.type);
+      if (sizeScale !== 1) mesh.scale.setScalar(sizeScale);
+      if (isDoor && placeDoorOnWall(mesh, row, col, doorOpen, sizeScale)) {
         mesh.castShadow = true;
         mesh.receiveShadow = false;
         itemMeshGroup.add(mesh);
@@ -1144,13 +1149,17 @@ function rebuildItemMeshes() {
       }
       var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
       var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
-      var oy = isDoor ? 0.5 : 0.2 + Math.floor(i / 9) * 0.16;
+      // A scaled cube must rest on the ground, not sink into it: its half
+      // height is 0.17 * scale, so the medium case still lands on 0.2.
+      var oy = isDoor
+        ? 0.5 * sizeScale
+        : 0.03 + 0.17 * sizeScale + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
       // An open door not hung on a house wall swings ~70° ajar and shifts to
       // its hinge edge; a shut one sits flush across the tile.
       if (isDoor && doorOpen) {
         mesh.rotation.y = Math.PI * 0.39;
-        mesh.position.x -= 0.28;
+        mesh.position.x -= 0.28 * sizeScale;
       }
       mesh.castShadow = true;
       mesh.receiveShadow = false;

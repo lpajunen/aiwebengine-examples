@@ -64,9 +64,16 @@ function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
     worldType === WORLD_TYPE_VILLAGE
       ? ["npc_human", "npc_dog", "npc_chicken"]
       : ["npc_human", "npc_wolf", "npc_bear", "npc_archer"];
-  return speciesIds.map(function (id) {
-    return { id: id, count: 5 };
-  });
+  return speciesIds
+    .map(function (id) {
+      return { id: id, count: 5 };
+    })
+    .concat(
+      // Giants (a "large"-size living class, see living-registry.ts) are a
+      // rare wilderness landmark rather than a fifth common species, so the
+      // wild presets get a couple and villages none.
+      worldType === WORLD_TYPE_VILLAGE ? [] : [{ id: "npc_giant", count: 2 }],
+    );
 }
 
 // Finnish display names for the built-in world classes, mirroring the
@@ -393,7 +400,11 @@ export function refreshWorldClassCache(): void {
   rebuildWorldClassCache(false);
 }
 
+// Same cache-miss tolerance as the item/living registries: an instance whose
+// init() timed out before bootstrapWorldClasses() would otherwise report that
+// no world classes exist, taking the spawn manifests with it.
 export function getAllWorldClasses(): WorldClassRecord[] {
+  if (!_worldClassCache) refreshWorldClassCache();
   if (!_worldClassCache) return [];
   return Object.keys(_worldClassCache).map(function (id) {
     return (_worldClassCache as Record<string, WorldClassRecord>)[id];
@@ -401,6 +412,7 @@ export function getAllWorldClasses(): WorldClassRecord[] {
 }
 
 export function getWorldClass(classId: string): WorldClassRecord | null {
+  if (!_worldClassCache) refreshWorldClassCache();
   if (!_worldClassCache) return null;
   return _worldClassCache[String(classId || "")] || null;
 }

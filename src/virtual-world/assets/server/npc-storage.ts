@@ -11,6 +11,7 @@ import {
   createLivingSlotsFromDefinitions,
   fromStoredWorldTimestamp,
   getItemsInSlotsWithTag,
+  isWorldTileWalkable,
   normalizeLivingState,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
@@ -481,7 +482,12 @@ function placeNPCAtRandomTile(
     const row = 1 + Math.floor(Math.random() * (mapRows - 2));
     const col = 1 + Math.floor(Math.random() * (mapCols - 2));
     const tileKey = row + "_" + col;
-    if (map[row][col] !== 0 || occupied[tileKey]) continue;
+    // Any walkable terrain, not just plain forest ground: a cave is paved in
+    // cave_floor, an island in sand, a building in wood_floor, so a
+    // ground-only test left every non-forest world with zero NPCs however
+    // full its spawn manifest was. Matches the walkability rule NPC movement
+    // and world-item spawning already use.
+    if (!isWorldTileWalkable(map[row][col]) || occupied[tileKey]) continue;
     occupied[tileKey] = true;
     const npcId =
       "npc_" + worldId + "_" + index + "_" + Date.now().toString(36);

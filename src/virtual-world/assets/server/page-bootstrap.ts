@@ -387,6 +387,15 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="furniture">furniture</option>
           </select>
         </label>
+        <label><span data-i18n-key="class_editor.size_label">Size</span>
+          <select id="ic-size">
+            <option value="tiny" data-i18n-key="size.tiny">Tiny</option>
+            <option value="small" data-i18n-key="size.small">Small</option>
+            <option value="medium" data-i18n-key="size.medium">Medium</option>
+            <option value="large" data-i18n-key="size.large">Large</option>
+            <option value="huge" data-i18n-key="size.huge">Huge</option>
+          </select>
+        </label>
         <label><input id="ic-non-droppable" type="checkbox"> <span data-i18n-key="class_editor.non_droppable">Non-droppable</span></label>
         <label><input id="ic-non-pickable" type="checkbox"> <span data-i18n-key="class_editor.non_pickable">Non-pickable</span></label>
         <label><span data-i18n-key="class_editor.action_ids_label">Action IDs (comma-sep)</span> <input id="ic-action-ids" type="text" placeholder="tune,play_tune" autocomplete="off"></label>
@@ -451,6 +460,15 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="player">player</option>
             <option value="npc">npc</option>
             <option value="creature">creature</option>
+          </select>
+        </label>
+        <label><span data-i18n-key="class_editor.size_label">Size</span>
+          <select id="lc-size">
+            <option value="tiny" data-i18n-key="size.tiny">Tiny</option>
+            <option value="small" data-i18n-key="size.small">Small</option>
+            <option value="medium" data-i18n-key="size.medium">Medium</option>
+            <option value="large" data-i18n-key="size.large">Large</option>
+            <option value="huge" data-i18n-key="size.huge">Huge</option>
           </select>
         </label>
         <label><span data-i18n-key="class_editor.slot_definitions_label">Slot definitions (JSON)</span> <textarea id="lc-slot-definitions" rows="3" placeholder='[{"id":"left_hand","labelKey":"living.slot.left_hand","fallbackLabel":"Left hand","tags":["hand"]}]'></textarea></label>

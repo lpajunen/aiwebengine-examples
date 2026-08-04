@@ -11,6 +11,7 @@ import {
   upsertLivingClassRow,
 } from "./living-class-storage.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import { normalizeClassSize } from "./class-size.ts";
 
 function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   return [
@@ -175,6 +176,19 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
   },
+  // The player-side counterpart to npc_giant: an ordinary human avatar at
+  // double scale. Nothing assigns it automatically (new players start as
+  // player_human); it exists so a creator can hand out a large body.
+  player_giant: {
+    id: "player_giant",
+    kind: "player",
+    labelKey: "living.class.player_giant",
+    fallbackLabel: "Giant",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    size: "large",
+  },
   player_ghost: {
     id: "player_ghost",
     kind: "player",
@@ -206,6 +220,21 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
     defaultItems: ["shortbow"],
+  },
+  // Same humanoid mesh as npc_human, rendered at double scale by its "large"
+  // size — the built-in demonstration that size is a class-level visual knob
+  // rather than a per-species mesh. Peaceful by design: it only fights back,
+  // so dropping giants into the wild preset changes the skyline, not the
+  // difficulty.
+  npc_giant: {
+    id: "npc_giant",
+    kind: "npc",
+    labelKey: "living.class.npc_giant",
+    fallbackLabel: "Giant",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    size: "large",
   },
   npc_wolf: {
     id: "npc_wolf",
@@ -358,6 +387,7 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
       }
     })(),
     labels: normalizeClassLabels(row.labels_json),
+    size: normalizeClassSize(row.size),
   };
 }
 
@@ -376,6 +406,7 @@ function livingClassToDbRow(
   default_items_json: string;
   owner_ids_json: string;
   labels_json: string;
+  size: string;
   created_at: number;
   updated_at: number;
 } {
@@ -383,6 +414,7 @@ function livingClassToDbRow(
   return {
     class_id: record.id,
     kind: record.kind,
+    size: normalizeClassSize(record.size),
     label_key: record.labelKey || "",
     fallback_label: record.fallbackLabel || "",
     slot_definitions_json: JSON.stringify(record.slotDefinitions || []),
@@ -421,6 +453,7 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
       ? cls.defaultItems.slice()
       : [],
     ownerIds: [],
+    size: normalizeClassSize(cls.size),
   };
 }
 
@@ -471,7 +504,14 @@ export function refreshLivingClassCache(): void {
   bootstrapLivingClasses();
 }
 
+// A null cache means this instance never got through bootstrapLivingClasses()
+// — init() can time out on a slow schema migration — so build it on demand
+// rather than reporting "no living classes". Without this the page bootstrap
+// shipped an empty LIVING_REGISTRY to the client, which silently disabled
+// every class-driven visual (sizes, slot labels).
+// Mirrors getAllItemClasses()/getAllActionClasses() in item-registry.ts.
 export function getAllLivingClasses(): LivingClassRecord[] {
+  if (!_livingClassCache) refreshLivingClassCache();
   if (!_livingClassCache) return [];
   return Object.keys(_livingClassCache).map(function (classId) {
     return (_livingClassCache as Record<string, LivingClassRecord>)[classId];
@@ -480,6 +520,7 @@ export function getAllLivingClasses(): LivingClassRecord[] {
 
 export function getLivingClass(classId: string): LivingClassRecord | null {
   const lookupId = String(classId || "");
+  if (!_livingClassCache) refreshLivingClassCache();
   if (_livingClassCache && _livingClassCache[lookupId]) {
     return _livingClassCache[lookupId];
   }

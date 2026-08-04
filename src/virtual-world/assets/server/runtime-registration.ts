@@ -294,6 +294,11 @@ export function registerVirtualWorldRuntime(): void {
         type: "number",
         description: "Hex color integer for the item (e.g. 0xffa500)",
       },
+      size: {
+        type: "string",
+        description:
+          "Visual size of the item: tiny, small, medium (default), large or huge — each step doubles the rendered scale",
+      },
       actionIds: {
         type: "array",
         items: { type: "string" },
@@ -490,6 +495,11 @@ export function registerVirtualWorldRuntime(): void {
         type: "boolean",
         description:
           "Whether NPCs of this class autonomously start a fight against any player standing on their tile",
+      },
+      size: {
+        type: "string",
+        description:
+          "Visual size of the living: tiny, small, medium (default), large or huge — each step doubles the rendered scale",
       },
     },
   });

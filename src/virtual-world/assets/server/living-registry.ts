@@ -192,11 +192,20 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
-    // Humans spawn wielding a shortbow (NPC_DEFAULT_EQUIPMENT) and engage
-    // players within its range — aggression is gated on the NPC's weapon
-    // attack range, so an armed human opens fire from afar while unarmed/melee
-    // NPCs still only aggro a co-located player (see maybeStartNPCAggression).
+  },
+  // A hostile biped that spawns wielding a shortbow (auto-equipped from
+  // defaultItems) and opens fire on players within its bow range — the
+  // ranged-NPC counterpart to the melee wolf/bear.
+  npc_archer: {
+    id: "npc_archer",
+    kind: "npc",
+    labelKey: "living.class.npc_archer",
+    fallbackLabel: "Archer",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
+    defaultItems: ["shortbow"],
   },
   npc_wolf: {
     id: "npc_wolf",
@@ -332,6 +341,14 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     valueTemplate: parseValueTemplate(String(row.value_template_json || "{}")),
     valueSchema: parseValueSchema(String(row.value_schema_json || "{}")),
     aggressive: row.aggressive === 1 || row.aggressive === true,
+    defaultItems: (function () {
+      try {
+        const parsed = JSON.parse(row.default_items_json || "[]");
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch (e) {
+        return [];
+      }
+    })(),
     ownerIds: (function () {
       try {
         const parsed = JSON.parse(row.owner_ids_json || "[]");
@@ -356,6 +373,7 @@ function livingClassToDbRow(
   value_template_json: string;
   value_schema_json: string;
   aggressive: number;
+  default_items_json: string;
   owner_ids_json: string;
   labels_json: string;
   created_at: number;
@@ -371,6 +389,7 @@ function livingClassToDbRow(
     value_template_json: JSON.stringify(record.valueTemplate || {}),
     value_schema_json: JSON.stringify(record.valueSchema || {}),
     aggressive: record.aggressive ? 1 : 0,
+    default_items_json: JSON.stringify(record.defaultItems || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
     created_at: storedTs,
@@ -398,6 +417,9 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     valueTemplate: Object.assign({}, cls.valueTemplate || {}),
     valueSchema: cls.valueSchema ? Object.assign({}, cls.valueSchema) : {},
     aggressive: !!cls.aggressive,
+    defaultItems: Array.isArray(cls.defaultItems)
+      ? cls.defaultItems.slice()
+      : [],
     ownerIds: [],
   };
 }

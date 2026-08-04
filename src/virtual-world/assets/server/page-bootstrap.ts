@@ -457,6 +457,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.value_template_label">Value template (JSON)</span> <textarea id="lc-value-template" rows="2" placeholder='{"fatigue": 0}'></textarea></label>
         <label><span data-i18n-key="class_editor.value_schema_label">Value schema (JSON)</span> <textarea id="lc-value-schema" rows="3" placeholder='{"fatigue":{"kind":"number","min":0,"max":100}}'></textarea></label>
         <label><input id="lc-aggressive" type="checkbox"> <span data-i18n-key="class_editor.aggressive">Aggressive (NPC auto-attacks players on its tile)</span></label>
+        <label><span data-i18n-key="class_editor.default_items_label">Default items (comma-separated types; weapons are auto-wielded)</span> <input id="lc-default-items" type="text" placeholder="shortbow"></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitLivingClassForm()" data-i18n-key="class_editor.save">Save</button>

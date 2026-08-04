@@ -807,6 +807,11 @@ function editLivingClass(id) {
       /** @type {HTMLInputElement} */ (
         requireElementById("lc-aggressive")
       ).checked = !!lc.aggressive;
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-default-items")
+      ).value = Array.isArray(lc.defaultItems)
+        ? lc.defaultItems.join(", ")
+        : "";
       requireElementById("living-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -842,6 +847,9 @@ function cancelLivingClassEdit() {
   /** @type {HTMLInputElement} */ (
     requireElementById("lc-aggressive")
   ).checked = false;
+  /** @type {HTMLInputElement} */ (
+    requireElementById("lc-default-items")
+  ).value = "";
   requireElementById("living-class-form-title").textContent = t(
     "class_editor.new_living_type",
     "New living type",
@@ -934,6 +942,16 @@ function submitLivingClassForm() {
   var aggressiveVal = /** @type {HTMLInputElement} */ (
     requireElementById("lc-aggressive")
   ).checked;
+  var defaultItems = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-default-items")
+  ).value
+    .split(",")
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(function (s) {
+      return s.length > 0;
+    });
   var record = {
     id: idVal,
     kind: kindVal,
@@ -942,6 +960,7 @@ function submitLivingClassForm() {
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,
     aggressive: aggressiveVal,
+    defaultItems: defaultItems,
     labels: buildLabelsPayload(nameFiVal),
   };
   var url = livingClassEditId

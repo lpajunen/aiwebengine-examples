@@ -412,35 +412,57 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
 // Finds a random walkable+unoccupied tile and builds a fresh NPC of classId
 // there, marking the tile occupied. Shared by the initial world seed loop
 // and the respawn-timer single-NPC spawn.
-// Default weapon loadout given to a newly-spawned NPC of a class: the item is
-// placed in the named hand slot with its state template (so its weaponClass /
-// weaponRange drive the NPC's damage and attack range, exactly like a player's
-// wielded weapon — see fight-helpers.ts). Only slots the class actually defines
-// are filled, so a quadruped without hands is skipped. Code-side (not a
-// per-class DB field) for now; only new/respawned NPCs pick it up.
-const NPC_DEFAULT_EQUIPMENT: Record<
-  string,
-  Array<{ slot: string; itemType: string }>
-> = {
-  npc_human: [{ slot: "right_hand", itemType: "shortbow" }],
-};
-
-function applyNPCEquipment(
+// Distributes a class's defaultItems onto a freshly-spawned NPC: a weapon
+// (state.weaponClass > 0) is auto-wielded into a free hand/manipulator slot,
+// an item a slot explicitly `accepts` goes to that slot, and everything else
+// (or a weapon with no free hand) lands in the bag. So a class-level loadout
+// gives the NPC the same wielded-weapon combat stats a player would have (see
+// fight-helpers.ts). Mutates `slots` and returns the bag.
+function applyNPCDefaultItems(
   worldId: string,
-  classId: string,
+  livingClass: any,
   slots: Record<string, any>,
-): void {
-  const loadout = NPC_DEFAULT_EQUIPMENT[classId];
-  if (!loadout) return;
-  loadout.forEach(function (entry) {
-    if (!(entry.slot in slots)) return;
-    slots[entry.slot] = {
+): any[] {
+  const bag: any[] = [];
+  const itemTypes =
+    livingClass && Array.isArray(livingClass.defaultItems)
+      ? livingClass.defaultItems
+      : [];
+  const slotDefs =
+    livingClass && Array.isArray(livingClass.slotDefinitions)
+      ? livingClass.slotDefinitions
+      : [];
+  itemTypes.forEach(function (itemType: unknown) {
+    const type = String(itemType || "");
+    if (!type) return;
+    const state = getItemStateTemplate(type);
+    const item = {
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: entry.itemType,
+      type: type,
       created_at: Date.now(),
-      state: getItemStateTemplate(entry.itemType),
+      state: state,
     };
+    const isWeapon = Number(state.weaponClass) > 0;
+    let targetSlot: string | null = null;
+    for (let i = 0; i < slotDefs.length; i++) {
+      const sd = slotDefs[i];
+      const sid = String(sd && sd.id);
+      if (!sid || slots[sid]) continue;
+      const explicitlyAccepts =
+        Array.isArray(sd.accepts) && sd.accepts.indexOf(type) !== -1;
+      const isHand =
+        Array.isArray(sd.tags) &&
+        (sd.tags.indexOf("hand") !== -1 ||
+          sd.tags.indexOf("manipulator") !== -1);
+      if (explicitlyAccepts || (isWeapon && isHand)) {
+        targetSlot = sid;
+        break;
+      }
+    }
+    if (targetSlot) slots[targetSlot] = item;
+    else bag.push(item);
   });
+  return bag;
 }
 
 function placeNPCAtRandomTile(
@@ -467,7 +489,9 @@ function placeNPCAtRandomTile(
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
       : {};
-    applyNPCEquipment(worldId, classId, slots);
+    const bag = livingClass
+      ? applyNPCDefaultItems(worldId, livingClass, slots)
+      : [];
     return {
       npcId: npcId,
       npc: {
@@ -479,7 +503,7 @@ function placeNPCAtRandomTile(
         ts: Date.now(),
         class_id: classId,
         slots: slots,
-        bag: [],
+        bag: bag,
         values: livingClass
           ? Object.assign({}, livingClass.valueTemplate || {})
           : {},

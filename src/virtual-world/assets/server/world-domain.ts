@@ -164,6 +164,11 @@ export interface LivingClassRecord {
   // standing on their tile (see fight-helpers.ts's maybeStartNPCAggression).
   // Meaningless for kind "player".
   aggressive?: boolean;
+  // Item types a fresh NPC of this class spawns with. Weapons (state.weaponClass
+  // > 0) are auto-wielded into a free hand/manipulator slot; anything else (and
+  // any weapon with no free hand) goes to the bag. See applyNPCDefaultItems in
+  // npc-storage.ts. Optional; missing == [].
+  defaultItems?: string[];
   // Optional so the built-in DEFAULT_LIVING_CLASSES literals don't need to
   // declare it; treat missing the same as [] (admin-only, see canManageClass).
   ownerIds?: string[];

@@ -145,6 +145,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         player_hobbit: "Hobbit",
         player_ghost: "Ghost",
         npc_human: "Human",
+        npc_archer: "Archer",
         npc_wolf: "Wolf",
         npc_bear: "Bear",
         npc_dog: "Dog",
@@ -291,6 +292,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       value_template_label: "Value template (JSON)",
       value_schema_label: "Value schema (JSON)",
       aggressive: "Aggressive (NPC auto-attacks players on its tile)",
+      default_items_label:
+        "Default items (comma-separated types; weapons are auto-wielded)",
       item_spawns_label: "Item spawns (JSON)",
       npc_spawns_label: "NPC spawns (JSON)",
       save: "Save",
@@ -603,6 +606,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         player_hobbit: "Hobitti",
         player_ghost: "Aave",
         npc_human: "Ihminen",
+        npc_archer: "Jousimies",
         npc_wolf: "Susi",
         npc_bear: "Karhu",
         npc_dog: "Koira",
@@ -749,6 +753,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       value_template_label: "Arvomalli (JSON)",
       value_schema_label: "Arvokaavio (JSON)",
       aggressive: "Aggressiivinen (NPC hyökkää pelaajien kimppuun ruudullaan)",
+      default_items_label:
+        "Oletusesineet (pilkuin erotellut tyypit; aseet otetaan käyttöön)",
       item_spawns_label: "Esineiden ilmestyminen (JSON)",
       npc_spawns_label: "NPC:iden ilmestyminen (JSON)",
       save: "Tallenna",

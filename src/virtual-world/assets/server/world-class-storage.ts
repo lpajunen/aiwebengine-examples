@@ -63,7 +63,7 @@ function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
   const speciesIds =
     worldType === WORLD_TYPE_VILLAGE
       ? ["npc_human", "npc_dog", "npc_chicken"]
-      : ["npc_human", "npc_wolf", "npc_bear"];
+      : ["npc_human", "npc_wolf", "npc_bear", "npc_archer"];
   return speciesIds.map(function (id) {
     return { id: id, count: 5 };
   });
@@ -297,6 +297,20 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       existing.itemSpawns = defaults.itemSpawns;
       existing.npcSpawns = defaults.npcSpawns;
       changed = true;
+    } else {
+      // Add any built-in default NPC species missing from an already-populated
+      // manifest (e.g. npc_archer added to the wild preset after this world was
+      // seeded) — appends only, so counts and creator-added species are kept.
+      const defaultNpcs = builtinWorldClassRecord(worldType).npcSpawns;
+      defaultNpcs.forEach(function (entry) {
+        const present = existing.npcSpawns.some(function (e) {
+          return e.id === entry.id;
+        });
+        if (!present) {
+          existing.npcSpawns.push(entry);
+          changed = true;
+        }
+      });
     }
     // Backfill the built-in Finnish name onto rows seeded before it existed,
     // without overwriting a non-empty value a creator may have set.

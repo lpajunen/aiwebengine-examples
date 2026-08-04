@@ -533,6 +533,9 @@ export function createLivingClassHandler(context: any) {
         ? body.valueSchema
         : undefined,
     aggressive: !!(body && body.aggressive),
+    defaultItems: Array.isArray(body && body.defaultItems)
+      ? body.defaultItems.map(String)
+      : [],
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
   };
@@ -614,6 +617,9 @@ export function updateLivingClassHandler(context: any) {
       body && body.aggressive !== undefined
         ? !!body.aggressive
         : existing.aggressive,
+    defaultItems: Array.isArray(body && body.defaultItems)
+      ? body.defaultItems.map(String)
+      : existing.defaultItems,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
     labels:

@@ -175,6 +175,16 @@ export function registerVirtualWorldRuntime(): void {
         type: "number",
         description: "Optional player col; defaults to canonical player col",
       },
+      target_item_id: {
+        type: "string",
+        description:
+          "Optional target item id for item-targeted actions (examine, fix, break, bury, pick_item); an item lying on a tile, or one the player carries when the action's targeting scope allows it",
+      },
+      target_living_id: {
+        type: "string",
+        description:
+          "Optional target living id (player or NPC) for living-targeted actions such as poke, follow or fight",
+      },
       destination_world_type: {
         type: "string",
         enum: ["forest", "island", "cave", "building", "village"],

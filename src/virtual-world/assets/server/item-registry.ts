@@ -821,6 +821,92 @@ export function normalizeItemState(
   return out;
 }
 
+// What an examined item reveals: the same facts the tile inspector shows for
+// an item lying on a square (class label, kind, stats, container fill, portal
+// destination), resolved server-side so both the game client and the MCP tool
+// path see one authoritative answer. See the examine action in
+// tree-action-helpers.ts.
+export interface ItemInspection {
+  id: string;
+  type: string;
+  // Where the examined item was found: lying in the world, or carried by the
+  // examining living (bag or equipped slot).
+  source: "tile" | "inventory";
+  row?: number;
+  col?: number;
+  slot_id?: string;
+  kind: string;
+  label_key: string;
+  fallback_label: string;
+  labels: ClassLabels;
+  non_pickable: boolean;
+  non_droppable: boolean;
+  state: Record<string, unknown>;
+  // Containers only: how full the item is (contents are listed by the
+  // container panel, not repeated here).
+  contents_count?: number;
+  // Portals/doors only, mirroring the tile inspector's "Leads to" row.
+  destination_world_id?: string;
+  destination_world_type?: string;
+}
+
+export function buildItemInspection(
+  item: {
+    id?: unknown;
+    type?: unknown;
+    state?: unknown;
+    non_droppable?: unknown;
+    destination_world_id?: unknown;
+    destination_world_type?: unknown;
+  },
+  location: {
+    source: "tile" | "inventory";
+    row?: number;
+    col?: number;
+    slotId?: string;
+  },
+): ItemInspection {
+  const type = String((item && item.type) || "");
+  const cls = getItemClass(type);
+  const def = getItemDefinition(type);
+  const state = normalizeItemState(type, item && item.state);
+  const inspection: ItemInspection = {
+    id: String((item && item.id) || ""),
+    type: type,
+    source: location.source,
+    kind: cls ? cls.kind : def ? def.kind : "misc",
+    label_key: cls
+      ? cls.visuals.labelKey
+      : def
+        ? def.visuals.labelKey
+        : "item." + type,
+    fallback_label: cls
+      ? cls.visuals.fallbackLabel
+      : def
+        ? def.visuals.fallbackLabel
+        : type,
+    labels: normalizeClassLabels(cls ? cls.labels : {}),
+    non_pickable: cls ? !!cls.nonPickable : !!(def && def.nonPickable),
+    non_droppable: !!(item && item.non_droppable),
+    state: state,
+  };
+  if (location.row !== undefined) inspection.row = location.row;
+  if (location.col !== undefined) inspection.col = location.col;
+  if (location.slotId) inspection.slot_id = location.slotId;
+  if (inspection.kind === "container") {
+    inspection.contents_count = Array.isArray(state.contents)
+      ? state.contents.length
+      : 0;
+  }
+  if (item && item.destination_world_id !== undefined) {
+    inspection.destination_world_id = String(item.destination_world_id);
+  }
+  if (item && item.destination_world_type !== undefined) {
+    inspection.destination_world_type = String(item.destination_world_type);
+  }
+  return inspection;
+}
+
 // ── Action class repository (dynamic, DB-backed) ─────────────────────────────
 
 export interface ActionClassRecord extends Omit<
@@ -961,7 +1047,8 @@ function targetingEquals(
     x.rangeShape === y.rangeShape &&
     x.approach === y.approach &&
     x.areaRadius === y.areaRadius &&
-    x.rangeFrom === y.rangeFrom
+    x.rangeFrom === y.rangeFrom &&
+    x.targetScope === y.targetScope
   );
 }
 
@@ -1086,23 +1173,31 @@ function backfillActionClassDefaults(
       existing.durationMs = def.durationMs;
       changed = true;
     }
-    // Backfill the aiming spec (DESIGN-targeting.md) onto rows seeded before
-    // the targeting_json column existed, using the action's own targeting or
-    // the behavior-preserving default for its targetKind.
+    // Keep the aiming spec (DESIGN-targeting.md) in sync with the code for
+    // every built-in row nobody owns. Such a row is code-owned — this backfill
+    // seeded it, and only an admin can edit a built-in through the class CRUD
+    // route (canManageClass) — so a declared targeting always wins over what is
+    // stored. Resyncing rather than adopting-once is what lets a built-in
+    // change its spec more than once (poke gaining walk_adjacent in step 2,
+    // then examine becoming a no-approach look in step 5); the older
+    // adopt-only-if-still-derived rule could not, because the first adoption
+    // made the row look customized. An owned row belongs to a creator and is
+    // left untouched — an admin who wants a built-in's spec to survive deploys
+    // takes ownership of the row by setting its ownerIds.
     const derivedTargeting = defaultTargetingForTargetKind(def.targetKind);
+    const declaredTargeting = def.targeting
+      ? Object.assign({}, derivedTargeting, def.targeting)
+      : derivedTargeting;
+    const targetingIsCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
     if (existing.targeting === undefined) {
-      existing.targeting = def.targeting || derivedTargeting;
+      existing.targeting = declaredTargeting;
       changed = true;
     } else if (
-      def.targeting &&
-      targetingEquals(existing.targeting, derivedTargeting)
+      targetingIsCodeOwned &&
+      !targetingEquals(existing.targeting, declaredTargeting)
     ) {
-      // The row still carries the auto-derived default seeded before this
-      // built-in declared an explicit targeting (e.g. poke gaining
-      // walk_adjacent in step 2). Adopt the declared spec. A creator who
-      // customized targeting has a value that differs from the derived
-      // default, so their edit is left untouched.
-      existing.targeting = Object.assign({}, derivedTargeting, def.targeting);
+      existing.targeting = declaredTargeting;
       changed = true;
     }
     // Seed the target precondition (DESIGN-targeting.md step 3) onto rows that

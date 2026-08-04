@@ -9,6 +9,30 @@ function renderInventoryPanel() {
   var slotIds = getInventorySlotIds(inv);
 
   /**
+   * Buttons for the item-targeted actions that reach into the inventory (e.g.
+   * Examine), invoked directly on this carried item — targeting a bag item
+   * needs no aim step, since there is no tile to tap.
+   * @param {ClientItem | null} item
+   * @returns {string}
+   */
+  function targetActionButtons(item) {
+    if (!item) return "";
+    var actions = inventoryTargetActionsForItem(item);
+    var html = "";
+    for (var i = 0; i < actions.length; i++) {
+      html +=
+        "<button onclick=\"postTreeAction('" +
+        escHtml(actions[i]) +
+        "', { target_item_id: '" +
+        escHtml(String(item.id)) +
+        "' })\">" +
+        escHtml(treeActionLabel(actions[i])) +
+        "</button> ";
+    }
+    return html;
+  }
+
+  /**
    * @param {string} title
    * @param {string} slot
    * @param {ClientItem | null} item
@@ -39,6 +63,7 @@ function renderInventoryPanel() {
         "')\">" +
         escHtml(t("inventory.store", "Store")) +
         "</button>";
+      html += targetActionButtons(item);
     }
     html += "</div>";
     return html;
@@ -128,6 +153,7 @@ function renderInventoryPanel() {
             "</button> ") +
         putInChestBtn +
         actionBtns +
+        targetActionButtons(item) +
         "</span>" +
         "</div>";
     }

@@ -23,6 +23,12 @@ export interface ActionTargeting {
   // Who supplies the effective range: the action's own `range`, or the stat of
   // the item that granted the action (e.g. a longbow overrides a shortbow).
   rangeFrom?: "action" | "item";
+  // Where an item target may live: "world" (items lying on tiles, the default
+  // and what every item-targeted action did before this field existed),
+  // "inventory" (only items the actor carries), or "any" (both — examine reads
+  // a rock underfoot and the sword in your bag alike). Range/approach apply to
+  // world targets only; a carried item is always in reach.
+  targetScope?: "world" | "inventory" | "any";
 }
 
 // Same shape as ActionTargeting but with every field resolved to a concrete
@@ -33,6 +39,7 @@ export interface ResolvedActionTargeting {
   approach: "walk_adjacent" | "none";
   areaRadius: number;
   rangeFrom: "action" | "item";
+  targetScope: "world" | "inventory" | "any";
 }
 
 export interface ActionDefinition {
@@ -174,6 +181,18 @@ const WALK_ADJACENT_TARGETING: ActionTargeting = {
   range: NEARBY_TARGET_TILE_DISTANCE,
   rangeShape: "adjacent",
   approach: "walk_adjacent",
+};
+
+// Examining is a look, not a touch: the target may be any item within reach —
+// on the actor's own tile, on a neighbouring one, or carried in their bag — and
+// the actor never walks to it. Walking would make the most examinable things
+// unreachable, since a fixture like the old oak, a door on a wall or a portal
+// on a blocked square sits on a tile nobody can stand on.
+const LOOK_AT_TARGETING: ActionTargeting = {
+  range: NEARBY_TARGET_TILE_DISTANCE,
+  rangeShape: "line",
+  approach: "none",
+  targetScope: "any",
 };
 
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
@@ -699,8 +718,9 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Examine",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
-    // Walk to the item, then examine it (DESIGN-targeting.md step 2).
-    targeting: WALK_ADJACENT_TARGETING,
+    // Look at any item within reach — a neighbouring tile's fixture or one
+    // straight out of the bag (DESIGN-targeting.md step 5).
+    targeting: LOOK_AT_TARGETING,
   },
   break: {
     id: "break",
@@ -1018,7 +1038,25 @@ export function resolveActionTargeting(action: {
           ? base.areaRadius
           : 0,
     rangeFrom: t.rangeFrom || base.rangeFrom || "action",
+    targetScope: t.targetScope || base.targetScope || "world",
   };
+}
+
+// Whether an action may target an item the actor carries (bag or equipped
+// slot) — the server-side counterpart of the client's actionTargetsInventory.
+export function targetingAllowsInventory(
+  targeting: ResolvedActionTargeting,
+): boolean {
+  return (
+    targeting.targetScope === "inventory" || targeting.targetScope === "any"
+  );
+}
+
+// Whether an action may target an item lying in the world.
+export function targetingAllowsWorld(
+  targeting: ResolvedActionTargeting,
+): boolean {
+  return targeting.targetScope !== "inventory";
 }
 
 // Effective reach for a resolved targeting spec. When rangeFrom is "item", a

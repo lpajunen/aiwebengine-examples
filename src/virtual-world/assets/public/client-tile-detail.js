@@ -88,22 +88,27 @@ function aimItemLabelOnTile(row, col, id) {
  * Disambiguation chooser (UI phase 3): when an armed entity action has several
  * valid targets on the tapped tile, reuse the tile panel to list them so the
  * player picks which one; choosing invokes the armed action on it
- * (chooseAimTarget in client-aiming.js).
+ * (chooseAimTarget in client-aiming.js). Also serves the bag chooser, whose
+ * targets carry their own `label` and have no tile.
  * @param {string} action
- * @param {Array<{kind:"living"|"item", id:string, row:number, col:number}>} targets
+ * @param {Array<{kind:"living"|"item", id:string, row?:number, col?:number, label?:string}>} targets
+ * @param {string} [title] Panel heading; defaults to "Choose target".
  */
-function showTargetChooser(action, targets) {
+function showTargetChooser(action, targets, title) {
   requireElementById("tile-detail-title").textContent =
-    t("tile.choose_target", "Choose target") + " — " + treeActionLabel(action);
+    (title || t("tile.choose_target", "Choose target")) +
+    " — " +
+    treeActionLabel(action);
   var html = '<div class="tile-section">';
   for (var i = 0; i < targets.length; i++) {
     var tgt = targets[i];
-    var label =
-      tgt.kind === "living"
+    var label = tgt.label
+      ? tgt.label
+      : tgt.kind === "living"
         ? npcAvatars[tgt.id]
           ? npcDisplayName(tgt.id)
           : getNickForPlayer(tgt.id)
-        : aimItemLabelOnTile(tgt.row, tgt.col, tgt.id);
+        : aimItemLabelOnTile(Number(tgt.row), Number(tgt.col), tgt.id);
     html +=
       '<div class="tile-row"><button data-action-id="' +
       escHtml(action) +
@@ -118,6 +123,182 @@ function showTargetChooser(action, targets) {
   html += "</div>";
   requireElementById("tile-detail-body").innerHTML = html;
   requireElementById("hud-tile-detail").style.display = "block";
+}
+
+/**
+ * Joins already-escaped "label: value" strings into a single dense row instead
+ * of one row per attribute, so a stat-heavy entity doesn't push the panel to
+ * dozens of rows. Returns "" (no row) when there's nothing to show.
+ * @param {string[]} parts
+ * @returns {string}
+ */
+function tileCompactRow(parts) {
+  if (!parts.length) return "";
+  return '<div class="tile-row">' + parts.join(" &middot; ") + "</div>";
+}
+
+/**
+ * Escaped "label: value" fragments for an item's stats, shared by the tile
+ * inspector and the examine panel. currentHitPoints/maxHitPoints collapse into
+ * one "Hit points: cur/max" fragment. With allStats every other scalar state
+ * key (a weapon's range, a creator class's own stat) is listed too; without it
+ * only the fixed hit points / armor class / weapon class set is shown.
+ * @param {Record<string, unknown> | null | undefined} state
+ * @param {boolean} [allStats]
+ * @returns {string[]}
+ */
+function itemStateStatParts(state, allStats) {
+  var st = state && typeof state === "object" ? state : {};
+  /** @type {string[]} */
+  var parts = [];
+  /**
+   * @param {string} key
+   * @param {string} value
+   */
+  function addPart(key, value) {
+    parts.push(escHtml(itemStateValueLabel(key)) + ": " + escHtml(value));
+  }
+  if ("currentHitPoints" in st || typeof st.maxHitPoints === "number") {
+    addPart(
+      "currentHitPoints",
+      formatLivingValue(st.currentHitPoints, "currentHitPoints") +
+        "/" +
+        formatLivingValue(st.maxHitPoints, "maxHitPoints"),
+    );
+  }
+  if ("armorClass" in st) {
+    addPart("armorClass", formatLivingValue(st.armorClass, "armorClass"));
+  }
+  if ("weaponClass" in st) {
+    addPart("weaponClass", formatLivingValue(st.weaponClass, "weaponClass"));
+  }
+  if (!allStats) return parts;
+  /** @type {Record<string, boolean>} */
+  var shown = {
+    currentHitPoints: true,
+    maxHitPoints: true,
+    armorClass: true,
+    weaponClass: true,
+    // Container fill gets its own row; the contents themselves belong to the
+    // container panel, not a stat line.
+    contents: true,
+  };
+  var keys = Object.keys(st).sort();
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    if (shown[key]) continue;
+    var value = st[key];
+    if (value === null || typeof value === "object") continue;
+    addPart(key, formatLivingValue(value, key));
+  }
+  return parts;
+}
+
+/**
+ * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
+ */
+
+/**
+ * Renders the examine action's result: the same facts the tile inspector shows
+ * for an item on a square, for the one item examined — including one carried in
+ * the bag, which no tile lists. Reuses the tile detail panel so "what is this
+ * thing" always appears in the same place on screen.
+ * @param {ExaminedItem} info
+ */
+function showExaminedItemPanel(info) {
+  if (!info || !info.type) return;
+  // Leaving tile-inspector mode: a later tile refresh must not overwrite the
+  // examine result with the square's contents.
+  selectedTileRow = -1;
+  selectedTileCol = -1;
+  var label = localizeLabel(
+    info.labels,
+    info.label_key,
+    info.fallback_label || humanizeType(String(info.type)),
+  );
+  requireElementById("tile-detail-title").textContent =
+    t("examine.title", "Examined") + " — " + label;
+
+  var html = '<div class="tile-section">';
+  html +=
+    '<div class="tile-section-label">' +
+    escHtml(t("examine.item_section", "Item")) +
+    "</div>";
+  html += '<div class="tile-row">' + escHtml(label) + "</div>";
+  if (info.kind) {
+    html +=
+      '<div class="tile-row">' +
+      escHtml(t("examine.kind_label", "Kind:")) +
+      " " +
+      escHtml(
+        t("item.kind." + String(info.kind), humanizeType(String(info.kind))),
+      ) +
+      "</div>";
+  }
+  if (info.destination_world_id || info.destination_world_type) {
+    html +=
+      '<div class="tile-row">' +
+      escHtml(t("tile.leads_to", "Leads to")) +
+      " " +
+      escHtml(portalDestinationLabel(info)) +
+      "</div>";
+  }
+  if (typeof info.contents_count === "number") {
+    html +=
+      '<div class="tile-row">' +
+      escHtml(t("examine.contents_label", "Contents:")) +
+      " " +
+      escHtml(String(info.contents_count)) +
+      "</div>";
+  }
+  html +=
+    '<div class="tile-row">' + escHtml(examineLocationText(info)) + "</div>";
+  html += "</div>";
+
+  html += '<div class="tile-section">';
+  html +=
+    '<div class="tile-section-label">' +
+    escHtml(t("examine.properties_section", "Properties")) +
+    "</div>";
+  var statParts = itemStateStatParts(info.state, true);
+  if (statParts.length === 0) {
+    html +=
+      '<div class="tile-empty">' +
+      escHtml(t("examine.no_properties", "Nothing else stands out.")) +
+      "</div>";
+  } else {
+    html += tileCompactRow(statParts);
+  }
+  html += "</div>";
+
+  requireElementById("tile-detail-body").innerHTML = html;
+  requireElementById("hud-tile-detail").style.display = "block";
+}
+
+/**
+ * Where the examined item was found, as a display string.
+ * @param {ExaminedItem} info
+ * @returns {string}
+ */
+function examineLocationText(info) {
+  if (info.source === "inventory") {
+    if (info.slot_id) {
+      return tFormat("examine.equipped", "Equipped in {slot}", {
+        slot: inventorySlotLabel(
+          normalizeClientInventory(playerInventory),
+          String(info.slot_id),
+        ),
+      });
+    }
+    return t("examine.in_bag", "Carried in your bag");
+  }
+  if (typeof info.row === "number" && typeof info.col === "number") {
+    return tFormat("examine.on_ground_at", "On the ground at ({col}, {row})", {
+      col: info.col,
+      row: info.row,
+    });
+  }
+  return t("examine.on_ground", "On the ground");
 }
 
 /** @param {any} str */
@@ -205,19 +386,6 @@ function renderTileDetailPanel() {
   // the one exception (it opens a panel, it doesn't act on the world).
   var isOwnTile = row === avatarRow && col === avatarCol;
 
-  /**
-   * Joins already-escaped "label: value" strings into a single dense row
-   * instead of one row per attribute, so an equipped/stat-heavy entity
-   * doesn't push the panel to dozens of rows. Returns "" (no row) when
-   * there's nothing to show.
-   * @param {string[]} parts
-   * @returns {string}
-   */
-  function tileCompactRow(parts) {
-    if (!parts.length) return "";
-    return '<div class="tile-row">' + parts.join(" &middot; ") + "</div>";
-  }
-
   var playersHere = [];
   if (avatarRow === row && avatarCol === col) {
     playersHere.push({ id: playerId, isMe: true });
@@ -298,38 +466,7 @@ function renderTileDetailPanel() {
           escHtml(portalDestinationLabel(itm)) +
           "</div>";
       }
-      var itmState =
-        itm.state && typeof itm.state === "object" ? itm.state : {};
-      var itmStatParts = [];
-      if (
-        "currentHitPoints" in itmState ||
-        typeof itmState.maxHitPoints === "number"
-      ) {
-        itmStatParts.push(
-          escHtml(itemStateValueLabel("currentHitPoints")) +
-            ": " +
-            escHtml(
-              formatLivingValue(itmState.currentHitPoints, "currentHitPoints"),
-            ) +
-            "/" +
-            escHtml(formatLivingValue(itmState.maxHitPoints, "maxHitPoints")),
-        );
-      }
-      if ("armorClass" in itmState) {
-        itmStatParts.push(
-          escHtml(itemStateValueLabel("armorClass")) +
-            ": " +
-            escHtml(formatLivingValue(itmState.armorClass, "armorClass")),
-        );
-      }
-      if ("weaponClass" in itmState) {
-        itmStatParts.push(
-          escHtml(itemStateValueLabel("weaponClass")) +
-            ": " +
-            escHtml(formatLivingValue(itmState.weaponClass, "weaponClass")),
-        );
-      }
-      html += tileCompactRow(itmStatParts);
+      html += tileCompactRow(itemStateStatParts(itm.state));
     }
   }
   html += "</div>";

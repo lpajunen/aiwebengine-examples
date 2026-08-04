@@ -923,6 +923,9 @@ function initMultiplayer() {
       return;
     }
     applyItemStateFromResult(payload);
+    // An examine that had to walk to its target resolves here rather than in
+    // the original request's response — show its details the same way.
+    if (payload.examined_item) showExaminedItemPanel(payload.examined_item);
     var completedToast = localizeResultToast(payload);
     if (completedToast) showHudToast(completedToast, false);
   }

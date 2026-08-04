@@ -48,15 +48,16 @@ Every action class gains a targeting descriptor. It is **data** on the
 action (and, where noted, the granting item) — no per-name branches, in
 keeping with the generalize-hardcoded-behavior initiative.
 
-| field        | meaning                                  | examples                                               |
-| ------------ | ---------------------------------------- | ------------------------------------------------------ |
-| `targetKind` | what you aim at                          | `self` · `item` · `living` · `tile` · `point`          |
-| `range`      | reach, in tiles                          | poke/fix = 1, bow = 6, longbow = 10                    |
-| `rangeShape` | how range is measured & drawn            | `adjacent` · `line` (ranged single) · `radius` (AoE)   |
-| `approach`   | walk into range before acting?           | `walk_adjacent` (melee/manipulate) · `none` (ranged)   |
-| `areaRadius` | for AoE, tiles affected around the point | fireball = 2                                           |
-| `rangeFrom`  | who supplies `range`                     | `action` · `item` (longbow overrides bow)              |
-| `validWhen`  | precondition for **offering** the action | item is damaged, target is a living, target below X HP |
+| field         | meaning                                  | examples                                               |
+| ------------- | ---------------------------------------- | ------------------------------------------------------ |
+| `targetKind`  | what you aim at                          | `self` · `item` · `living` · `tile` · `point`          |
+| `range`       | reach, in tiles                          | poke/fix = 1, bow = 6, longbow = 10                    |
+| `rangeShape`  | how range is measured & drawn            | `adjacent` · `line` (ranged single) · `radius` (AoE)   |
+| `approach`    | walk into range before acting?           | `walk_adjacent` (melee/manipulate) · `none` (ranged)   |
+| `areaRadius`  | for AoE, tiles affected around the point | fireball = 2                                           |
+| `rangeFrom`   | who supplies `range`                     | `action` · `item` (longbow overrides bow)              |
+| `targetScope` | where an item target may live            | `world` (default) · `inventory` · `any` (examine)      |
+| `validWhen`   | precondition for **offering** the action | item is damaged, target is a living, target below X HP |
 
 Coverage:
 
@@ -173,7 +174,7 @@ approach on `pending-action-storage`; `resolvePendingActionsForWorld` steps
 the actor toward the target's current tile each world tick (shared stepper in
 `pursuit-movement.ts`) and re-runs the action on arrival, bounded by
 `APPROACH_ACTION_MAX_MS`. `poke` and the item-targeted actions
-`fix`/`examine`/`break`/`bury` are flipped to `walk_adjacent` (range 5) via a
+`fix`/`break`/`bury` are flipped to `walk_adjacent` (range 5) via a
 shared `WALK_ADJACENT_TARGETING` — "point at a moving NPC or a distant item,
 the game closes the gap and acts"; the client offers same-tile
 `walk_adjacent` actions at nearby distance too. Individual item pick is a
@@ -237,6 +238,40 @@ through client-input.js (pointer positions the reticle, click/tap confirms).
 - **Action-first aiming for `line`:** firebolt is target-first today; the
   highlight-and-tap/cycle aiming mode for single-target ranged is not built.
 - **Player friendly-fire / PvP AoE:** fireball hits NPCs only for now.
+
+### 5. Inspecting a target: `examine` + inventory-scoped targeting ✅ done
+
+`examine` is the read-only verb of the targeting system: it resolves the chosen
+item server-side and answers with the same facts the tile inspector shows for a
+square's contents — class label, item kind, hit points / armor class / weapon
+class (plus any other scalar state key), container fill, portal destination —
+as a structured `examined_item` (`buildItemInspection` in `item-registry.ts`).
+The client renders it in the tile detail panel (`showExaminedItemPanel`), which
+now shares its stat-row rendering with the tile inspector, so "what is this
+thing" always appears in the same place.
+
+Targets are no longer world-only. `targeting.targetScope` (`world` | `inventory`
+| `any`) says where an item-targeted action may look; `examine` declares `any`,
+so it reads a rock underfoot and the sword in your bag alike (`resolveTargetedItem`
+in `tree-action-helpers.ts` searches the resolved tile, then every tile within
+the action's reach, then the actor's slots and bag).
+
+Examining is also a **look, not a touch**: `LOOK_AT_TARGETING` gives it
+`approach: "none"` at the nearby range, so it resolves from where the actor
+stands instead of walking. That is what makes fixtures examinable at all — the
+old oak, a door on a wall, a portal on a blocked square all sit on non-walkable
+tiles, so a `walk_adjacent` approach could never arrive and would burn
+`APPROACH_ACTION_MAX_MS` before giving up. The tile-range search in
+`resolveTargetedItem` only ever runs for such no-approach actions; the
+walk-then-act ones are intercepted by `maybeBeginApproachAction` first.
+
+Two client paths reach a carried item, since it has no tile to tap: the
+inventory panel renders a per-item button for every inventory-scoped action
+valid for that item (`inventoryTargetActionsForItem`), and the armed-action aim
+row grows a **Bag** button that lists the carried candidates
+(`collectInventoryAimTargets` → the existing target chooser). The MCP
+`virtualWorldAct` tool now also forwards `target_item_id`/`target_living_id`, so
+every entity-targeted action is drivable from the tool path.
 
 Steps 1–2 are the highest leverage: together they make the whole interaction
 "point at a place or thing; the game resolves reach and pathing", which is

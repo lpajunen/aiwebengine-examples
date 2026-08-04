@@ -236,6 +236,9 @@ function postTreeAction(action, extras) {
           stop_action_id: "cancel_approach",
         });
       }
+      // Examine answers with the item's details — show them in the tile panel
+      // (the inspector's usual home) instead of only a toast.
+      if (result.examined_item) showExaminedItemPanel(result.examined_item);
       var actionToast = localizeResultToast(result);
       if (actionToast) showHudToast(actionToast, false);
       if (result.switched_world) {

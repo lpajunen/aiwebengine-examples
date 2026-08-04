@@ -678,7 +678,7 @@ function actionValidForTarget(actionId, target) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, category?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string, targetScope?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, category?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -829,7 +829,10 @@ function collectAimTargets(action) {
         continue;
       out.push({ kind: "living", id: rpid, row: ra.row, col: ra.col });
     }
-  } else if (kind === "item" || kind === "item_nearby") {
+  } else if (
+    (kind === "item" || kind === "item_nearby") &&
+    actionTargetScope(action) !== "inventory"
+  ) {
     for (var key in worldItemsByTile) {
       var parts = key.split("_");
       var r = Number(parts[0]);
@@ -851,11 +854,104 @@ function collectAimTargets(action) {
 }
 
 /**
+ * Where an item-targeted action may look for its target: "world" (items lying
+ * on tiles, the default), "inventory" (only carried items) or "any" (both).
+ * Mirrors ActionTargeting.targetScope on the server.
+ * @param {string} action
+ * @returns {string}
+ */
+function actionTargetScope(action) {
+  var def = getRegistryActionDef(action);
+  var tgt = def && def.targeting;
+  return (tgt && tgt.targetScope) || "world";
+}
+
+/**
+ * @param {string} action
+ * @returns {boolean} whether the action can target an item the player carries.
+ */
+function actionTargetsInventory(action) {
+  var scope = actionTargetScope(action);
+  return scope === "inventory" || scope === "any";
+}
+
+/**
+ * Every carried item (equipped slots + bag) an inventory-scoped item action
+ * currently applies to, filtered by the action's validWhen precondition — the
+ * inventory counterpart of collectAimTargets. Carried items have no tile, so
+ * they are picked from a list rather than tapped on the ground.
+ * @param {string} action
+ * @returns {Array<{kind: "item", id: string, label: string, slot_id: string}>}
+ */
+function collectInventoryAimTargets(action) {
+  var def = getRegistryActionDef(action);
+  if (!def || !actionTargetsInventory(action)) return [];
+  var kind = def.target_kind || "";
+  if (kind !== "item" && kind !== "item_nearby") return [];
+  var inv = normalizeClientInventory(playerInventory);
+  /** @type {Array<{kind: "item", id: string, label: string, slot_id: string}>} */
+  var out = [];
+  /**
+   * @param {ClientItem | null} item
+   * @param {string} slotId
+   */
+  function consider(item, slotId) {
+    if (!item || !item.id) return;
+    if (!actionValidForTarget(action, { type: item.type, state: item.state }))
+      return;
+    out.push({
+      kind: "item",
+      id: String(item.id),
+      label: inventoryItemLabel(item),
+      slot_id: slotId,
+    });
+  }
+  var slotIds = getInventorySlotIds(inv);
+  for (var s = 0; s < slotIds.length; s++) {
+    consider(inv.slots ? inv.slots[slotIds[s]] : null, slotIds[s]);
+  }
+  if (Array.isArray(inv.bag)) {
+    for (var b = 0; b < inv.bag.length; b++) consider(inv.bag[b], "");
+  }
+  return out;
+}
+
+/**
+ * Item-targeted actions the player can invoke on one carried item right now:
+ * granted by something they hold, scoped to reach inventory items, and passing
+ * the action's validWhen precondition for this item. Drives the per-item
+ * buttons in the inventory panel — the target-first way into a bag item.
+ * @param {ClientItem | null | undefined} item
+ * @returns {string[]}
+ */
+function inventoryTargetActionsForItem(item) {
+  if (!item || !item.id) return [];
+  var candidates = actionsAvailableForTargetKind("item", false);
+  /** @type {string[]} */
+  var out = [];
+  for (var i = 0; i < candidates.length; i++) {
+    if (!actionTargetsInventory(candidates[i])) continue;
+    if (
+      !actionValidForTarget(candidates[i], {
+        type: item.type,
+        state: item.state,
+      })
+    )
+      continue;
+    out.push(candidates[i]);
+  }
+  return out;
+}
+
+/**
  * @param {string} action
  * @returns {boolean} whether the entity-aimed action has any valid target in range now.
  */
 function hasValidAimTarget(action) {
-  return collectAimTargets(action).length > 0;
+  return (
+    collectAimTargets(action).length > 0 ||
+    collectInventoryAimTargets(action).length > 0
+  );
 }
 
 /**

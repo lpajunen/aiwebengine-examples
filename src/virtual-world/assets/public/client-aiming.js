@@ -193,18 +193,48 @@ function confirmAimFromEvent(clientX, clientY) {
 function aimActiveRowHtml() {
   var action = armedAimAction;
   if (!action) return "";
+  // A carried item has no tile to tap, so an inventory-scoped action gets a
+  // Bag button that lists the valid items to pick from instead.
+  var bagTargets = collectInventoryAimTargets(action);
   var hint =
     aimModeFor(action) === "reticle"
       ? t("hud.aim_hint", "tap a tile to cast")
-      : t("hud.aim_hint_target", "tap a highlighted target");
+      : bagTargets.length > 0
+        ? t("hud.aim_hint_target_or_bag", "tap a target, or pick from your bag")
+        : t("hud.aim_hint_target", "tap a highlighted target");
+  var bagButton =
+    bagTargets.length > 0
+      ? '<button onclick="showBagTargetChooser()">' +
+        escapeHtml(t("hud.aim_bag", "Bag")) +
+        "</button>"
+      : "";
   return (
     '<div class="active-action-row active-action-aim"><span>' +
     escapeHtml(treeActionLabel(action)) +
     " · " +
     escapeHtml(hint) +
-    '</span><button onclick="cancelAiming()">' +
+    "</span>" +
+    bagButton +
+    '<button onclick="cancelAiming()">' +
     escapeHtml(t("hud.cancel", "Cancel")) +
     "</button></div>"
+  );
+}
+
+/**
+ * Bag chooser for the armed action: lists the carried items it currently
+ * applies to, so a target that lives in the inventory rather than on a tile can
+ * still be picked (choosing runs the action through chooseAimTarget).
+ */
+function showBagTargetChooser() {
+  var action = armedAimAction;
+  if (!action) return;
+  var targets = collectInventoryAimTargets(action);
+  if (targets.length === 0) return;
+  showTargetChooser(
+    action,
+    targets,
+    t("examine.choose_carried", "Choose a carried item"),
   );
 }
 

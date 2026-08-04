@@ -164,6 +164,10 @@ export function virtualWorldActToolHandler(context: any): string {
     rotation: Number.isFinite(Number(args.rotation))
       ? Number(args.rotation)
       : canonical.rotation,
+    // Item/living-targeted actions (examine, fix, poke, fight, …) name their
+    // target by id, exactly as the game client's tree-action request does.
+    target_item_id: args.target_item_id,
+    target_living_id: args.target_living_id,
     destination_world_type: args.destination_world_type,
     destination_world_rows: args.destination_world_rows,
     destination_world_cols: args.destination_world_cols,

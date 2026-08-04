@@ -54,6 +54,14 @@ real regression this way (the `bury` bug). Still unconfirmed in a real browser:
 
 ## Design tradeoffs / smaller limitations
 
+- **Touch actions can't reach an item on a non-walkable tile.** `walk_adjacent`
+  resolves the target only once the actor stands on the item's own tile, so the
+  old oak, a door on a wall, a portal on a blocked square and every other
+  fixture is unreachable for fix/break/bury — the approach walks until
+  `APPROACH_ACTION_MAX_MS` and gives up. `examine` was fixed by making it a
+  no-approach action that resolves any item within reach; the touch actions
+  would need approach to stop at an _adjacent_ tile rather than the target's
+  own tile.
 - **NPCs don't retaliate when attacked.** Only `aggressive` classes initiate; a
   peaceful NPC you attack won't fight back.
 - **`defaultItems` "wieldable" is weapon-only.** Weapons auto-equip to a hand

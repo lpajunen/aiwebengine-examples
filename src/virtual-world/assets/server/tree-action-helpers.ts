@@ -43,12 +43,15 @@ import {
 import {
   resolveActionTargeting,
   resolveEffectiveActionRange,
+  targetingAllowsInventory,
+  targetingAllowsWorld,
 } from "./action-registry.ts";
 import {
   resolveApproachTargetTile,
   stepActorTowardTile,
 } from "./pursuit-movement.ts";
 import {
+  buildItemInspection,
   getActionDefinition,
   getItemDefinition,
   getItemStateTemplate,
@@ -103,6 +106,7 @@ import {
   countItemsByType,
   countLivingItemsByType,
   findFirstLivingItemByTypes,
+  findLivingItemById,
   getNPCDisplayName,
   isValidItem,
   LivingState,
@@ -224,6 +228,102 @@ export function performTreeActionForUser(
   function getTileItemsSnapshot(row: number, col: number): any[] {
     const key = row + "_" + col;
     return Array.isArray(worldItems[key]) ? worldItems[key] : [];
+  }
+
+  // Locates the item an item-targeted action was aimed at, honouring the
+  // action's targeting scope (see ActionTargeting.targetScope): a "world"
+  // target lies on the action's resolved tile, an "inventory" target is
+  // carried in an equipped slot or the bag. Returns null when the id matches
+  // nothing the scope allows, so callers report target_item_not_found.
+  function resolveTargetedItem(targetItemId: string): {
+    item: any;
+    source: "tile" | "inventory";
+    row?: number;
+    col?: number;
+    slotId?: string;
+  } | null {
+    const id = String(targetItemId || "");
+    if (!id) return null;
+    const targeting = actionDefinition
+      ? resolveActionTargeting(actionDefinition)
+      : null;
+    const allowWorld = !targeting || targetingAllowsWorld(targeting);
+    const allowInventory = !!targeting && targetingAllowsInventory(targeting);
+    if (allowWorld) {
+      const itemsHere = getTileItemsSnapshot(
+        resolvedTarget.row,
+        resolvedTarget.col,
+      );
+      const found = itemsHere.find(function (item) {
+        return item && String(item.id) === id;
+      });
+      if (found) {
+        return {
+          item: found,
+          source: "tile",
+          row: resolvedTarget.row,
+          col: resolvedTarget.col,
+        };
+      }
+      // Not underfoot: search every tile within the action's reach. Actions
+      // that walk to their target (approach "walk_adjacent") never get here —
+      // maybeBeginApproachAction intercepts them first — so this is the reach
+      // of the act-from-where-you-stand actions like examine, which must work
+      // across a gap: an item on a non-walkable tile (the old oak, a door on a
+      // wall, a portal on a blocked square) has no tile to walk onto.
+      const reach = targeting
+        ? resolveEffectiveActionRange(targeting, wieldedWeapon(inv))
+        : 0;
+      if (reach > 0) {
+        const tileKeys = Object.keys(worldItems);
+        for (let i = 0; i < tileKeys.length; i++) {
+          const parts = String(tileKeys[i]).split("_");
+          const tileRow = Number(parts[0]);
+          const tileCol = Number(parts[1]);
+          if (!Number.isFinite(tileRow) || !Number.isFinite(tileCol)) continue;
+          if (
+            !isWithinTileDistance(
+              tileRow,
+              tileCol,
+              canonical.row,
+              canonical.col,
+              reach,
+            )
+          ) {
+            continue;
+          }
+          const tileItems = worldItems[tileKeys[i]];
+          if (!Array.isArray(tileItems)) continue;
+          const nearby = tileItems.find(function (item) {
+            return item && String(item.id) === id;
+          });
+          if (nearby) {
+            return {
+              item: nearby,
+              source: "tile",
+              row: tileRow,
+              col: tileCol,
+            };
+          }
+        }
+      }
+    }
+    if (allowInventory) {
+      const carried = findLivingItemById(inv, id);
+      if (carried) {
+        const slotIds = Object.keys(inv.slots || {});
+        let slotId = "";
+        for (let i = 0; i < slotIds.length; i++) {
+          const slotItem = inv.slots[slotIds[i]];
+          if (slotItem && String(slotItem.id) === id) {
+            slotId = slotIds[i];
+            break;
+          }
+        }
+        return { item: carried, source: "inventory", slotId: slotId };
+      }
+    }
+    return null;
   }
 
   function getActionExecutionConfig(): {
@@ -1126,6 +1226,9 @@ export function performTreeActionForUser(
   }
 
   if (action === "examine") {
+    // Examine reports what the tile inspector would show for the item — class,
+    // kind, combat stats, container fill, portal destination — for an item on
+    // the ground *or* one the examiner carries (targeting targetScope "any").
     const targetItemId = String((body && body.target_item_id) || "");
     if (!targetItemId) {
       return {
@@ -1133,32 +1236,29 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_item_required" },
       };
     }
-    const itemsHere = getTileItemsSnapshot(
-      resolvedTarget.row,
-      resolvedTarget.col,
-    );
-    const targetItem = itemsHere.find(function (item) {
-      return item && String(item.id) === targetItemId;
-    });
-    if (!targetItem) {
+    const located = resolveTargetedItem(targetItemId);
+    if (!located) {
       return {
         status: 200,
         payload: { ok: false, error: "error.target_item_not_found" },
       };
     }
-    const targetItemDef = getItemDefinition(String(targetItem.type || ""));
-    const targetItemLabel = targetItemDef
-      ? targetItemDef.visuals.fallbackLabel
-      : String(targetItem.type || "item");
+    const inspection = buildItemInspection(located.item, {
+      source: located.source,
+      row: located.row,
+      col: located.col,
+      slotId: located.slotId,
+    });
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
         ...toastFields(
           "tree_action.examine_toast",
-          "You examine " + targetItemLabel + ".",
-          { target: targetItemLabel },
+          "You examine " + inspection.fallback_label + ".",
+          { target: inspection.fallback_label },
         ),
         target_item_id: targetItemId,
+        examined_item: inspection,
       }),
     };
   }

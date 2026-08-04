@@ -793,6 +793,23 @@ export function findFirstLivingItemByTypes(
   return null;
 }
 
+// Locates a carried item by id across both equipped slots and the bag — the
+// inventory-side counterpart of looking a world item up on a tile, used by
+// item-targeted actions whose targeting scope includes the actor's own items
+// (see targetingAllowsInventory in action-registry.ts).
+export function findLivingItemById(
+  inv: unknown,
+  itemId: string,
+): InventoryItem | null {
+  const wanted = String(itemId || "");
+  if (!wanted) return null;
+  const candidates = getAllLivingItems(inv);
+  for (let i = 0; i < candidates.length; i++) {
+    if (String(candidates[i].id || "") === wanted) return candidates[i];
+  }
+  return null;
+}
+
 export function replaceLivingItemById(
   inv: unknown,
   itemId: string,

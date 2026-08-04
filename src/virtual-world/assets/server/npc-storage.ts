@@ -13,6 +13,7 @@ import {
   getItemsInSlotsWithTag,
   isWorldTileWalkable,
   normalizeLivingState,
+  stripClassOwnedLivingState,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
@@ -136,6 +137,10 @@ export function saveWorldNPCs(
       const safeCol = normalizeSafeInt(npc.col, 1, 0, 99);
       const safeSeq = normalizeSafeInt(npc.seq, 0, 0, 2147483647);
 
+      // Persist only what the instance owns — class tuning knobs are
+      // re-resolved from the living/item class on every load.
+      const persisted = stripClassOwnedLivingState(living);
+
       const rowData = {
         npc_id: String(npcId),
         world_id: String(worldId),
@@ -150,9 +155,9 @@ export function saveWorldNPCs(
           Number.isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),
         ),
         living_class_id: living.class_id || classId,
-        slots_json: JSON.stringify(living.slots || {}),
-        bag_json: JSON.stringify(living.bag || []),
-        values_json: JSON.stringify(living.values || {}),
+        slots_json: JSON.stringify(persisted.slots),
+        bag_json: JSON.stringify(persisted.bag),
+        values_json: JSON.stringify(persisted.values),
       };
       const existingRow = querySingleWorldRow(
         VWORLD_NPC_TABLE,

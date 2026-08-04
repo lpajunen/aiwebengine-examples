@@ -95,7 +95,9 @@ import {
   getAllItemTypeIds,
   getPrimaryActionForItemType,
   normalizeItemState,
+  stripClassOwnedItemState,
 } from "./item-registry.ts";
+import { CLASS_OWNED_LIVING_VALUE_KEYS } from "./runtime-config.ts";
 import { ClassSize } from "./class-size.ts";
 
 export {
@@ -613,6 +615,14 @@ function applyLivingValueDefaults(
   return merged;
 }
 
+export function isClassOwnedLivingValueKey(key: string): boolean {
+  return CLASS_OWNED_LIVING_VALUE_KEYS.indexOf(key) !== -1;
+}
+
+// Class-owned keys are NOT overlaid from stored values: for those the class's
+// valueTemplate (plus the shared defaults above) wins, so editing a living
+// class re-tunes livings that were saved back when the merged snapshot was
+// still being flattened into the row. See CLASS_OWNED_LIVING_VALUE_KEYS.
 export function normalizeLivingValues(
   values: unknown,
   valueTemplate: Record<string, unknown>,
@@ -624,9 +634,57 @@ export function normalizeLivingValues(
   );
   if (!isRecordLike(values)) return out;
   Object.keys(values).forEach(function (key) {
+    if (isClassOwnedLivingValueKey(key)) return;
     out[key] = values[key];
   });
+  // maxHitPoints is class-owned while currentHitPoints is instance-owned, so
+  // lowering a class's maxHitPoints can leave an existing living holding more
+  // current hit points than its class now allows — clamp rather than letting a
+  // >100% health meter reach the HUD.
+  const max = Number(out.maxHitPoints);
+  const current = Number(out.currentHitPoints);
+  if (Number.isFinite(max) && Number.isFinite(current) && current > max) {
+    out.currentHitPoints = max;
+  }
   return out;
+}
+
+/**
+ * Strips class-owned keys from a living's persisted shape: its own values
+ * (CLASS_OWNED_LIVING_VALUE_KEYS) plus the item state of everything it carries
+ * in slots and bag (CLASS_OWNED_ITEM_STATE_KEYS). Save paths call this right
+ * before serializing so rows carry only instance-owned data.
+ */
+export function stripClassOwnedLivingState(living: LivingState): {
+  slots: Record<string, unknown>;
+  bag: unknown[];
+  values: Record<string, unknown>;
+} {
+  const values: Record<string, unknown> = {};
+  const srcValues = isRecordLike(living.values) ? living.values : {};
+  Object.keys(srcValues).forEach(function (key) {
+    if (isClassOwnedLivingValueKey(key)) return;
+    values[key] = srcValues[key];
+  });
+
+  const stripItem = function (item: InventoryItem) {
+    return Object.assign({}, item, {
+      state: stripClassOwnedItemState(item.state),
+    });
+  };
+
+  const slots: Record<string, unknown> = {};
+  const srcSlots = isRecordLike(living.slots) ? living.slots : {};
+  Object.keys(srcSlots).forEach(function (slotId) {
+    const item = srcSlots[slotId];
+    slots[slotId] = isValidItem(item) ? stripItem(item) : null;
+  });
+
+  const bag = Array.isArray(living.bag)
+    ? living.bag.filter(isValidItem).map(stripItem)
+    : [];
+
+  return { slots: slots, bag: bag, values: values };
 }
 
 // Backfills an item's stat defaults (see normalizeItemState) the same way

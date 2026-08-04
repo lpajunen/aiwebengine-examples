@@ -2,6 +2,7 @@ import {
   getItemClass,
   getItemStateTemplate,
   normalizeItemState,
+  stripClassOwnedItemState,
 } from "./item-registry.ts";
 import {
   getEffectiveMap,
@@ -40,6 +41,7 @@ import {
   LivingState,
   normalizeLivingState,
   normalizeWorldType,
+  stripClassOwnedLivingState,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
   VILLAGE_GUILD_APPROACH_COL,
@@ -121,12 +123,16 @@ export function savePlayerInventory(userId: string, inventory: unknown): void {
     ? normalizeLivingState(incoming, livingClass)
     : createEmptyLivingState(classId);
 
+  // Persist only what the instance owns — class tuning knobs are re-resolved
+  // from the living/item class on every load (see stripClassOwnedLivingState).
+  const persisted = stripClassOwnedLivingState(normalized);
+
   upsertWorldRow(VWORLD_PLAYER_INVENTORY_TABLE, ["user_id"], {
     user_id: String(userId),
     living_class_id: String(normalized.class_id || classId),
-    slots_json: JSON.stringify(normalized.slots || {}),
-    bag_json: JSON.stringify(normalized.bag || []),
-    values_json: JSON.stringify(normalized.values || {}),
+    slots_json: JSON.stringify(persisted.slots),
+    bag_json: JSON.stringify(persisted.bag),
+    values_json: JSON.stringify(persisted.values),
     updated_ts: toStoredWorldTimestamp(Date.now()),
   });
 }
@@ -271,10 +277,10 @@ export function saveWorldItems(
           typeof item.destination_world_type === "string"
             ? normalizeWorldType(item.destination_world_type)
             : null,
-        state_json:
-          item.state && typeof item.state === "object"
-            ? JSON.stringify(item.state)
-            : null,
+        state_json: (function () {
+          const owned = stripClassOwnedItemState(item.state);
+          return owned ? JSON.stringify(owned) : null;
+        })(),
       });
     });
   });
@@ -320,10 +326,10 @@ export function upsertWorldItem(
       typeof item.destination_world_type === "string"
         ? normalizeWorldType(item.destination_world_type)
         : null,
-    state_json:
-      item.state && typeof item.state === "object"
-        ? JSON.stringify(item.state)
-        : null,
+    state_json: (function () {
+      const owned = stripClassOwnedItemState(item.state);
+      return owned ? JSON.stringify(owned) : null;
+    })(),
   };
   if (Number.isFinite(Number(item.destination_row))) {
     row_data.destination_row = Number(item.destination_row);

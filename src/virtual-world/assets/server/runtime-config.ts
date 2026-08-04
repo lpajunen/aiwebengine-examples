@@ -20,6 +20,40 @@ export const FATIGUE_RECOVERY_PER_SECOND = 0.5;
 export const ADVANCE_LEVEL_COST_PER_LEVEL = 1000;
 export const VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 
+// Class-owned stat keys: tuning knobs the CLASS owns, never the instance.
+//
+// Item state / living values otherwise work like prototype delegation — an
+// instance stores its own copy of a key and the class template only fills in
+// what the instance is missing (see normalizeItemState in item-registry.ts and
+// normalizeLivingValues in world-domain.ts). That works on a fresh instance,
+// but the save path used to persist the fully MERGED snapshot, so the first
+// write baked every class value into the row and froze it there: raising a
+// class's maxHitPoints left every already-saved instance on the old number,
+// indistinguishable from a deliberate override.
+//
+// The keys below are the ones no gameplay code ever writes — they are pure
+// class tuning. For them the relationship is inverted: the class value always
+// wins on read, and the save path strips them from the row entirely, so
+// editing a class immediately re-tunes every existing instance and rows slim
+// down as they are rewritten. Every other key (currentHitPoints, contents,
+// fatigue, level, experience, totalExperience, and anything a creator's action
+// effects write) stays instance-owned and is persisted normally.
+//
+// Only add a key here once nothing mutates it at runtime — a key listed here
+// silently discards writes. `level` in particular does NOT belong: the
+// advance_level action writes it (tree-action-helpers.ts).
+export const CLASS_OWNED_ITEM_STATE_KEYS = [
+  "maxHitPoints",
+  "armorClass",
+  "weaponClass",
+  "weaponRange",
+];
+export const CLASS_OWNED_LIVING_VALUE_KEYS = [
+  "maxHitPoints",
+  "armorClass",
+  "weaponClass",
+];
+
 export const WORLD_CHAT_MAX = 100;
 export const DM_MAX = 200;
 

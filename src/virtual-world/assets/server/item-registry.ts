@@ -1,4 +1,5 @@
 import {
+  CLASS_OWNED_ITEM_STATE_KEYS,
   MAX_CONTAINER_ITEMS,
   VWORLD_ACTION_CLASS_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
@@ -788,6 +789,17 @@ function applyItemStateDefaults(
   return merged;
 }
 
+// maxHitPoints is class-owned while currentHitPoints is instance-owned, so
+// lowering a class's maxHitPoints can leave an existing instance holding more
+// current hit points than its class now allows. Clamp on the way out rather
+// than letting a >100% health meter reach the HUD.
+function clampCurrentHitPoints(merged: Record<string, unknown>): void {
+  const max = Number(merged.maxHitPoints);
+  const current = Number(merged.currentHitPoints);
+  if (!Number.isFinite(max) || !Number.isFinite(current)) return;
+  if (current > max) merged.currentHitPoints = max;
+}
+
 export function getItemStateTemplate(itemId: string): Record<string, unknown> {
   const cls = getItemClass(itemId);
   const classTemplate = cls && cls.stateTemplate ? cls.stateTemplate : {};
@@ -808,17 +820,63 @@ function isValidContentItem(
   );
 }
 
+export function isClassOwnedItemStateKey(key: string): boolean {
+  return CLASS_OWNED_ITEM_STATE_KEYS.indexOf(key) !== -1;
+}
+
+/**
+ * Drops the class-owned tuning keys (see CLASS_OWNED_ITEM_STATE_KEYS) from an
+ * item state before it is persisted, so the row carries only what the instance
+ * actually owns and later class edits keep flowing through. Recurses one level
+ * into container contents, which hold whole item objects with their own state.
+ * Returns null when nothing instance-owned is left, so the caller can store a
+ * null state_json instead of an empty object.
+ */
+export function stripClassOwnedItemState(
+  state: unknown,
+  depth?: number,
+): Record<string, unknown> | null {
+  if (!state || typeof state !== "object") return null;
+  const src = state as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  let kept = 0;
+  Object.keys(src).forEach(function (key) {
+    if (isClassOwnedItemStateKey(key)) return;
+    if (key === "contents" && Array.isArray(src[key]) && (depth || 0) < 1) {
+      out[key] = (src[key] as unknown[]).map(function (entry) {
+        if (!isValidContentItem(entry)) return entry;
+        const contentItem = entry as unknown as Record<string, unknown>;
+        return Object.assign({}, contentItem, {
+          state: stripClassOwnedItemState(contentItem.state, (depth || 0) + 1),
+        });
+      });
+      kept++;
+      return;
+    }
+    out[key] = src[key];
+    kept++;
+  });
+  return kept > 0 ? out : null;
+}
+
 // Merges stored item state over the class's current state template, so an
 // item created before a stat was added (or before a class's stateTemplate
 // was edited) still reads with the up-to-date defaults — the same backfill
 // normalizeLivingValues does for living values on every load/save.
+//
+// Class-owned keys are the exception and are NOT overlaid: for those the
+// class template wins over whatever the row happens to carry, so editing a
+// class re-tunes instances that were saved back when the old value was still
+// being flattened into the row. See CLASS_OWNED_ITEM_STATE_KEYS.
 export function normalizeItemState(
   itemId: string,
   state: unknown,
+  depth?: number,
 ): Record<string, unknown> {
   const out = getItemStateTemplate(itemId);
   if (state && typeof state === "object") {
     Object.keys(state as Record<string, unknown>).forEach(function (key) {
+      if (isClassOwnedItemStateKey(key)) return;
       out[key] = (state as Record<string, unknown>)[key];
     });
   }
@@ -831,8 +889,23 @@ export function normalizeItemState(
     const rawContents = Array.isArray(out.contents) ? out.contents : [];
     out.contents = rawContents
       .filter(isValidContentItem)
-      .slice(0, MAX_CONTAINER_ITEMS);
+      .slice(0, MAX_CONTAINER_ITEMS)
+      // Contained items are stored inline in the container's own state, so
+      // they need the same class-value refresh. The depth guard stops a
+      // malformed container-in-container row from recursing forever.
+      .map(function (entry) {
+        if ((depth || 0) >= 1) return entry;
+        const contentItem = entry as unknown as Record<string, unknown>;
+        return Object.assign({}, contentItem, {
+          state: normalizeItemState(
+            String(contentItem.type || ""),
+            contentItem.state,
+            (depth || 0) + 1,
+          ),
+        });
+      });
   }
+  clampCurrentHitPoints(out);
   return out;
 }
 

@@ -192,6 +192,11 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    // Humans spawn wielding a shortbow (NPC_DEFAULT_EQUIPMENT) and engage
+    // players within its range — aggression is gated on the NPC's weapon
+    // attack range, so an armed human opens fire from afar while unarmed/melee
+    // NPCs still only aggro a co-located player (see maybeStartNPCAggression).
+    aggressive: true,
   },
   npc_wolf: {
     id: "npc_wolf",

@@ -18,6 +18,8 @@ import {
   getDefaultNPCLivingClassId,
   getLivingClass,
 } from "./living-registry.ts";
+import { getItemStateTemplate } from "./item-registry.ts";
+import { nextWorldItemId } from "./item-storage.ts";
 import {
   insertWorldRow,
   updateWorldRow,
@@ -410,6 +412,37 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
 // Finds a random walkable+unoccupied tile and builds a fresh NPC of classId
 // there, marking the tile occupied. Shared by the initial world seed loop
 // and the respawn-timer single-NPC spawn.
+// Default weapon loadout given to a newly-spawned NPC of a class: the item is
+// placed in the named hand slot with its state template (so its weaponClass /
+// weaponRange drive the NPC's damage and attack range, exactly like a player's
+// wielded weapon — see fight-helpers.ts). Only slots the class actually defines
+// are filled, so a quadruped without hands is skipped. Code-side (not a
+// per-class DB field) for now; only new/respawned NPCs pick it up.
+const NPC_DEFAULT_EQUIPMENT: Record<
+  string,
+  Array<{ slot: string; itemType: string }>
+> = {
+  npc_human: [{ slot: "right_hand", itemType: "shortbow" }],
+};
+
+function applyNPCEquipment(
+  worldId: string,
+  classId: string,
+  slots: Record<string, any>,
+): void {
+  const loadout = NPC_DEFAULT_EQUIPMENT[classId];
+  if (!loadout) return;
+  loadout.forEach(function (entry) {
+    if (!(entry.slot in slots)) return;
+    slots[entry.slot] = {
+      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+      type: entry.itemType,
+      created_at: Date.now(),
+      state: getItemStateTemplate(entry.itemType),
+    };
+  });
+}
+
 function placeNPCAtRandomTile(
   worldId: string,
   map: number[][],
@@ -434,6 +467,7 @@ function placeNPCAtRandomTile(
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
       : {};
+    applyNPCEquipment(worldId, classId, slots);
     return {
       npcId: npcId,
       npc: {

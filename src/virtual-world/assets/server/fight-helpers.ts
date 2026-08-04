@@ -115,9 +115,13 @@ function maybeStartNPCAggression(
     if (!npc || alreadyFighting.has(npcId)) return;
     const livingClass = getLivingClassWithRefresh(String(npc.class_id || ""));
     if (!livingClass || !livingClass.aggressive) return;
+    // Engage a player within the NPC's weapon attack range: 0 (same tile) for
+    // an unarmed/melee NPC keeps the original co-location behavior, while an
+    // NPC wielding a bow opens fire from up to its weaponRange away.
+    const reach = attackRange(npc);
     const targetPlayerId = Object.keys(players).find(function (pid) {
       const p = players[pid];
-      return p && p.row === npc.row && p.col === npc.col;
+      return p && chebyshev(p.row, p.col, npc.row, npc.col) <= reach;
     });
     if (!targetPlayerId) return;
     // Ghosts cannot be fought — including being aggro'd by a hostile NPC.

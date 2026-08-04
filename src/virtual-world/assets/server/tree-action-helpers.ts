@@ -20,7 +20,7 @@ import {
 import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import { deleteFightState, saveFightState } from "./fight-storage.ts";
-import { applyRangedHitToLiving } from "./fight-helpers.ts";
+import { applyRangedHitToLiving, wieldedWeapon } from "./fight-helpers.ts";
 import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
 import {
   addPendingAction,
@@ -1677,6 +1677,14 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_living_required" },
       };
     }
+    // Engagement range is weapon-derived: a bow lets you open the fight from
+    // farther away (rangeFrom "item"), a melee weapon keeps the base reach.
+    const fightReach = actionDefinition
+      ? resolveEffectiveActionRange(
+          resolveActionTargeting(actionDefinition),
+          wieldedWeapon(inv),
+        )
+      : NEARBY_TARGET_TILE_DISTANCE;
     const npcsHere = loadWorldNPCs(worldId);
     const targetNpc = npcsHere[targetLivingId];
     let targetLivingLabel = "";
@@ -1688,7 +1696,7 @@ export function performTreeActionForUser(
         targetNpc.col,
         canonical.row,
         canonical.col,
-        NEARBY_TARGET_TILE_DISTANCE,
+        fightReach,
       )
     ) {
       targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
@@ -1703,7 +1711,7 @@ export function performTreeActionForUser(
           targetPlayer.col,
           canonical.row,
           canonical.col,
-          NEARBY_TARGET_TILE_DISTANCE,
+          fightReach,
         )
       ) {
         targetLivingLabel = getEffectiveNick(targetLivingId);

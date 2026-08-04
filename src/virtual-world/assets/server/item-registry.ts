@@ -78,6 +78,40 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: [],
   },
+  // Weapons: when held in a hand slot their state.weaponClass sets the wielder's
+  // effective weapon class (damage) and state.weaponRange sets attack range —
+  // a large range makes it a ranged weapon (attack from afar), range 1 a melee
+  // weapon (must close to adjacent). See fight-helpers.ts.
+  sword: {
+    id: "sword",
+    kind: "tool",
+    visuals: {
+      color: 0xbfc6d0,
+      labelKey: "item.sword.name",
+      fallbackLabel: "Sword",
+    },
+    actionIds: [],
+  },
+  shortbow: {
+    id: "shortbow",
+    kind: "tool",
+    visuals: {
+      color: 0xa9752f,
+      labelKey: "item.shortbow.name",
+      fallbackLabel: "Shortbow",
+    },
+    actionIds: [],
+  },
+  longbow: {
+    id: "longbow",
+    kind: "tool",
+    visuals: {
+      color: 0x7a5220,
+      labelKey: "item.longbow.name",
+      fallbackLabel: "Longbow",
+    },
+    actionIds: [],
+  },
   flower: {
     id: "flower",
     kind: "world_item",
@@ -215,6 +249,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "firebolt",
       "fireball",
       "summon_knife",
+      "summon_weapons",
       "craft_kantele",
     ],
   },
@@ -496,6 +531,11 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
 const DEFAULT_STATE_TEMPLATES: Record<string, Record<string, unknown>> = {
   kantele: { tuned: false, playsLeft: 0 },
   chest: { contents: [] },
+  // Melee weapon: reach 1 (must be adjacent).
+  sword: { weaponClass: 4, weaponRange: 1 },
+  // Ranged weapons: attack from up to weaponRange tiles away.
+  shortbow: { weaponClass: 3, weaponRange: 5 },
+  longbow: { weaponClass: 4, weaponRange: 10 },
 };
 
 function itemClassFromDbRow(row: any): ItemClassRecord {
@@ -728,6 +768,8 @@ function applyItemStateDefaults(
   }
   if (merged.armorClass === undefined) merged.armorClass = 10;
   if (merged.weaponClass === undefined) merged.weaponClass = 0;
+  // Reach in tiles when this item is wielded as a weapon (0 for non-weapons).
+  if (merged.weaponRange === undefined) merged.weaponRange = 0;
   return merged;
 }
 

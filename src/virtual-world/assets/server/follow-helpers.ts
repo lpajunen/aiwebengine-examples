@@ -2,6 +2,8 @@ import {
   deleteFollowState,
   loadActiveFollowsForWorld,
 } from "./follow-storage.ts";
+import { loadFightState } from "./fight-storage.ts";
+import { attackRange } from "./fight-helpers.ts";
 import { loadPlayerInventory, savePlayerInventory } from "./item-storage.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
 import {
@@ -70,7 +72,16 @@ export function tickFollowForWorld(worldId: string, now: number): void {
 
     const dr = target.row - follower.row;
     const dc = target.col - follower.col;
-    if (dr === 0 && dc === 0) {
+    // A plain follow closes to the same tile. A follow backing a fight stops at
+    // the fighter's weapon attack range, so a bow-wielder holds position and
+    // shoots rather than walking into melee (option A, computed live so a
+    // weapon swap mid-fight takes effect next tick).
+    let stopDistance = 0;
+    const activeFight = loadFightState(followerId);
+    if (activeFight && activeFight.target_id === follow.target_id) {
+      stopDistance = attackRange(loadPlayerInventory(followerId));
+    }
+    if (Math.max(Math.abs(dr), Math.abs(dc)) <= stopDistance) {
       return;
     }
 

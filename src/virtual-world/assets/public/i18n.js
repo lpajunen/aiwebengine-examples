@@ -6,6 +6,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     item: {
       saw: { name: "Woodsman's saw" },
       knife: { name: "Knife" },
+      sword: { name: "Sword" },
+      shortbow: { name: "Shortbow" },
+      longbow: { name: "Longbow" },
       hammer: { name: "Hammer" },
       flower: { name: "Forest flower" },
       tree_planter: { name: "Pine sapling" },
@@ -47,6 +50,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       play_tune_toast: "A kantele tune carries across the clearing.",
       place_blessing_toast: "A rowan blessing now marks this place.",
       summon_knife_toast: "A knife appears in your bag.",
+      summon_weapons_toast:
+        "A sword, a shortbow and a longbow appear in your bag.",
       craft_kantele_start_toast: "You start crafting a Kantele.",
       craft_kantele_toast: "You finished crafting a Kantele.",
       pray_revived_toast: "You feel alive again! You are human once more.",
@@ -87,6 +92,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       stop_follow: "Stop following",
       stop_fight: "Stop fighting",
       summon_knife: "Summon knife",
+      summon_weapons: "Summon weapons",
       examine: "Examine",
       break: "Break",
       fix: "Fix",
@@ -458,6 +464,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     item: {
       saw: { name: "Metsurin saha" },
       knife: { name: "Puukko" },
+      sword: { name: "Miekka" },
+      shortbow: { name: "Lyhytjousi" },
+      longbow: { name: "Pitkäjousi" },
       hammer: { name: "Vasara" },
       flower: { name: "Metsakukka" },
       tree_planter: { name: "Männyn taimi" },
@@ -499,6 +508,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       play_tune_toast: "Kanteleen sävel kantautuu yli aukion.",
       place_blessing_toast: "Pihlajan siunaus merkitsee nyt tätä paikkaa.",
       summon_knife_toast: "Veitsi ilmestyy laukkuusi.",
+      summon_weapons_toast:
+        "Miekka, lyhytjousi ja pitkäjousi ilmestyvät laukkuusi.",
       craft_kantele_start_toast: "Alat valmistaa kanteletta.",
       craft_kantele_toast: "Sait kanteleen valmiiksi.",
       pray_revived_toast: "Tunnet elävyyden taas! Olet jälleen ihminen.",
@@ -539,6 +550,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       stop_follow: "Lopeta seuraaminen",
       stop_fight: "Lopeta taistelu",
       summon_knife: "Kutsu puukko",
+      summon_weapons: "Kutsu aseet",
       examine: "Tutki",
       break: "Riko",
       fix: "Korjaa",

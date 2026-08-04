@@ -784,6 +784,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     // Base XP for a kill; the combat resolver multiplies this by the slain
     // target's level (onKill defers the award off the fight-start path).
     experience: { amount: 20, onKill: true },
+    // Engagement range comes from the wielded weapon (rangeFrom "item"): a bow
+    // lets you start a fight from afar, a melee weapon only up close. `range`
+    // is the unarmed fallback. The fight then pursues to the weapon's attack
+    // range and strikes — see fight-helpers.ts and follow-helpers.ts.
+    targeting: {
+      range: NEARBY_TARGET_TILE_DISTANCE,
+      rangeShape: "line",
+      approach: "none",
+      rangeFrom: "item",
+    },
   },
   stop_fight: {
     id: "stop_fight",
@@ -843,6 +853,28 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       toastMessageKey: "tree_action.summon_knife_toast",
     },
   },
+  // Test/convenience: conjure the weapon set so wielding melee vs ranged
+  // weapons can be tried (equip one to a hand slot). Uses the produces
+  // machinery — no cost.
+  summon_weapons: {
+    id: "summon_weapons",
+    labelKey: "tree_action.summon_weapons",
+    fallbackLabel: "Summon weapons",
+    targetKind: "inventory",
+    sourceItemIds: ["starter_kit"],
+    produces: [
+      { itemId: "sword", count: 1 },
+      { itemId: "shortbow", count: 1 },
+      { itemId: "longbow", count: 1 },
+    ],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      toastMessage: "A sword, a shortbow and a longbow appear in your bag.",
+      toastMessageKey: "tree_action.summon_weapons_toast",
+    },
+  },
   craft_kantele: {
     id: "craft_kantele",
     labelKey: "recipe.craft_kantele",
@@ -888,6 +920,7 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   // craft
   craft_kantele: "craft",
   summon_knife: "craft",
+  summon_weapons: "craft",
   // magic / music
   tune: "magic",
   play_tune: "magic",
@@ -997,11 +1030,15 @@ export function resolveEffectiveActionRange(
   sourceItem?: { state?: Record<string, unknown> | null } | null,
 ): number {
   if (targeting.rangeFrom === "item" && sourceItem && sourceItem.state) {
+    const st = sourceItem.state as Record<string, unknown>;
+    // A wielded weapon exposes its reach as state.weaponRange (state.range is
+    // accepted as a fallback for a generic ranged item).
     const itemRange = Number(
-      (sourceItem.state as Record<string, unknown>).range,
+      st.weaponRange !== undefined ? st.weaponRange : st.range,
     );
-    if (Number.isFinite(itemRange) && itemRange >= 0) {
-      return itemRange;
+    if (Number.isFinite(itemRange) && itemRange > 0) {
+      // Extend the action's base reach, never shorten it below it.
+      return Math.max(targeting.range, itemRange);
     }
   }
   return targeting.range;

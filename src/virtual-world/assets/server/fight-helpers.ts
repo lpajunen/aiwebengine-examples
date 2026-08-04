@@ -41,6 +41,62 @@ function directionToRotation(dr: number, dc: number): number {
   return 0;
 }
 
+// ── Wielded-weapon combat stats ───────────────────────────────────────────
+// A living's effective weapon class and attack range come from the weapon held
+// in a hand slot (an item with state.weaponClass > 0); unarmed falls back to the
+// living's own weaponClass value and same-tile reach.
+
+/** @returns the stronger hand-slot weapon, or null when unarmed. */
+export function wieldedWeapon(living: any): any | null {
+  const slots = living && living.slots;
+  if (!slots || typeof slots !== "object") return null;
+  let best: any = null;
+  ["left_hand", "right_hand"].forEach(function (hand) {
+    const item = slots[hand];
+    const wc = item && item.state ? Number(item.state.weaponClass) || 0 : 0;
+    if (
+      item &&
+      wc > 0 &&
+      (!best || wc > (Number(best.state.weaponClass) || 0))
+    ) {
+      best = item;
+    }
+  });
+  return best;
+}
+
+/** Effective weapon class (damage) — wielded weapon's, else the living's own. */
+export function effectiveWeaponClass(living: any): number {
+  const weapon = wieldedWeapon(living);
+  if (weapon) return Math.max(1, Number(weapon.state.weaponClass) || 0);
+  return Math.max(
+    1,
+    Number((living && living.values && living.values.weaponClass) || 0),
+  );
+}
+
+/**
+ * Attack range in tiles: the wielded weapon's weaponRange (1 = melee/adjacent,
+ * larger = ranged), or 0 (same tile) when unarmed.
+ */
+export function attackRange(living: any): number {
+  const weapon = wieldedWeapon(living);
+  if (weapon && weapon.state) {
+    const wr = Number(weapon.state.weaponRange);
+    if (Number.isFinite(wr) && wr > 0) return wr;
+  }
+  return 0;
+}
+
+function chebyshev(
+  aRow: number,
+  aCol: number,
+  bRow: number,
+  bCol: number,
+): number {
+  return Math.max(Math.abs(aRow - bRow), Math.abs(aCol - bCol));
+}
+
 // NPCs whose living class has the "aggressive" flag set (see
 // LivingClassRecord.aggressive in world-domain.ts) start a fight on their own
 // against any player found standing on their tile, mirroring the same-tile
@@ -252,9 +308,8 @@ export function applyRangedHitToLiving(
   experience_gained?: number;
   values?: Record<string, unknown>;
 } {
-  const attackerWeaponClass = Math.max(
-    1,
-    Number((loadPlayerInventory(attackerId).values || {}).weaponClass || 0),
+  const attackerWeaponClass = effectiveWeaponClass(
+    loadPlayerInventory(attackerId),
   );
   const targetLabel =
     targetType === "npc"
@@ -347,19 +402,11 @@ function resolveCombatHit(
   target: any,
   npcs: Record<string, any>,
 ): void {
-  const attackerWeaponClass =
+  const attackerWeaponClass = effectiveWeaponClass(
     fight.attacker_type === "npc"
-      ? Math.max(
-          1,
-          Number((attacker.values && attacker.values.weaponClass) || 0),
-        )
-      : Math.max(
-          1,
-          Number(
-            (loadPlayerInventory(fight.attacker_id).values || {}).weaponClass ||
-              0,
-          ),
-        );
+      ? attacker
+      : loadPlayerInventory(fight.attacker_id),
+  );
 
   const targetInv =
     fight.target_type === "player"
@@ -548,10 +595,19 @@ function processFight(
     return;
   }
 
-  const coLocated = attacker.row === target.row && attacker.col === target.col;
-  if (!coLocated) {
-    // Player attackers are chased into range by tickFollowForWorld (started
-    // alongside this fight); only NPC attackers need to step here.
+  // Strike when the target is within the attacker's weapon attack range (0 =
+  // same tile for unarmed, 1 for a melee weapon, more for a bow); otherwise
+  // close the distance. Player attackers are chased into range by
+  // tickFollowForWorld (started alongside this fight, and stopped at attack
+  // range there); only NPC attackers step here.
+  const attackerLiving =
+    fight.attacker_type === "npc"
+      ? attacker
+      : loadPlayerInventory(fight.attacker_id);
+  const reach = attackRange(attackerLiving);
+  const withinReach =
+    chebyshev(attacker.row, attacker.col, target.row, target.col) <= reach;
+  if (!withinReach) {
     if (fight.attacker_type === "npc") {
       stepNPCTowardTarget(
         worldId,

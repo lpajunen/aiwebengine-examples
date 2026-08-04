@@ -697,8 +697,33 @@ function getRegistryActionDef(action) {
 function actionEffectiveRange(action) {
   var def = getRegistryActionDef(action);
   var tgt = def && def.targeting;
-  if (tgt && typeof tgt.range === "number") return tgt.range;
-  return 0;
+  if (!tgt || typeof tgt.range !== "number") return 0;
+  // rangeFrom "item": a wielded weapon extends the reach (e.g. fight with a
+  // bow). Mirrors resolveEffectiveActionRange on the server.
+  if (tgt.rangeFrom === "item") {
+    var wr = wieldedWeaponRange();
+    if (wr > 0) return Math.max(tgt.range, wr);
+  }
+  return tgt.range;
+}
+
+/**
+ * weaponRange of the strongest weapon (state.weaponClass > 0) held in a hand
+ * slot, or 0 when unarmed. Matches wieldedWeapon() on the server.
+ * @returns {number}
+ */
+function wieldedWeaponRange() {
+  var inv = normalizeClientInventory(playerInventory);
+  var slots = inv && inv.slots;
+  if (!slots || typeof slots !== "object") return 0;
+  /** @type {any} */ var best = null;
+  ["left_hand", "right_hand"].forEach(function (hand) {
+    var item = slots[hand];
+    var wc = item && item.state ? Number(item.state.weaponClass) || 0 : 0;
+    if (item && wc > 0 && (!best || wc > (Number(best.state.weaponClass) || 0)))
+      best = item;
+  });
+  return best ? Number(best.state.weaponRange) || 0 : 0;
 }
 
 /**

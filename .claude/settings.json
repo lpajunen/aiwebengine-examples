@@ -12,10 +12,20 @@
       "Bash(make upload-virtual-world-dry-run)",
       "Bash(make upload-virtual-world-dry-run *)",
       "Bash(make typecheck)",
+      "Bash(make typecheck *)",
+      "Bash(make lint)",
+      "Bash(make lint *)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run typecheck:js)",
+      "Bash(npm run typecheck:ts)",
+      "Bash(npm run verify)",
       "mcp__softagen__virtualWorldGetState",
       "mcp__softagen__read_logs",
       "mcp__softagen__read_asset",
-      "mcp__softagen__list_files"
+      "mcp__softagen__read_file",
+      "mcp__softagen__list_files",
+      "mcp__softagen__list_assets",
+      "mcp__softagen__search_files"
     ]
   }
 }

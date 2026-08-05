@@ -41,6 +41,8 @@ import { normalizeClassLabels } from "./class-labels.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
+  normalizeColorNumber,
+  normalizeItemVisualStyle,
   normalizeLivingVisualStyle,
 } from "./class-visual.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
@@ -299,12 +301,24 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
       nonDroppable: !!args.nonDroppable,
       nonPickable: !!args.nonPickable,
       visuals: {
-        color: Number(args.color || 0),
+        color: normalizeColorNumber(
+          args.color !== undefined
+            ? args.color
+            : existing
+              ? existing.visuals.color
+              : 0,
+        ),
         labelKey: String(args.labelKey || ""),
         fallbackLabel: String(args.fallbackLabel || id),
         size: normalizeClassSize(
           args.size,
           existing ? existing.visuals.size : undefined,
+        ),
+        style: normalizeItemVisualStyle(
+          args.style,
+          existing
+            ? normalizeItemVisualStyle(existing.visuals.style)
+            : undefined,
         ),
       },
       actionIds: Array.isArray(args.actionIds) ? args.actionIds : [],

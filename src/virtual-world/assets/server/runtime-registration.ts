@@ -292,12 +292,29 @@ export function registerVirtualWorldRuntime(): void {
       },
       color: {
         type: "number",
-        description: "Hex color integer for the item (e.g. 0xffa500)",
+        description:
+          'Hex color for the item, as an integer (e.g. 0xffa500) or a "#rrggbb" string; 0/omitted leaves it automatic (the client\'s per-type default)',
       },
       size: {
         type: "string",
         description:
           "Visual size of the item: tiny, small, medium (default), large or huge — each step doubles the rendered scale",
+      },
+      style: {
+        type: "string",
+        enum: [
+          "block",
+          "blade",
+          "bow",
+          "chest",
+          "door",
+          "staff",
+          "orb",
+          "plant",
+          "scroll",
+        ],
+        description:
+          "Mesh recipe the client renders for this item: block (default cube), blade (knife/sword), bow, chest, door, staff (hammer/tool), orb (charm/stone), plant (flower/sapling) or scroll",
       },
       actionIds: {
         type: "array",

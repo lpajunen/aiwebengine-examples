@@ -219,6 +219,12 @@ function editItemClass(id) {
         String(ic.kind || "tool");
       /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
         String((ic.visuals && ic.visuals.size) || "medium");
+      /** @type {HTMLSelectElement} */ (requireElementById("ic-style")).value =
+        String((ic.visuals && ic.visuals.style) || "block");
+      setClassColorField(
+        "ic",
+        itemColorNumberToHex(ic.visuals && ic.visuals.color),
+      );
       /** @type {HTMLInputElement} */ (
         requireElementById("ic-non-droppable")
       ).checked = !!ic.nonDroppable;
@@ -256,6 +262,9 @@ function cancelItemClassEdit() {
     "tool";
   /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
     "medium";
+  /** @type {HTMLSelectElement} */ (requireElementById("ic-style")).value =
+    "block";
+  setClassColorField("ic", "");
   /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked = false;
@@ -294,6 +303,10 @@ function submitItemClassForm() {
     .value;
   var sizeVal = /** @type {HTMLSelectElement} */ (requireElementById("ic-size"))
     .value;
+  var styleVal = /** @type {HTMLSelectElement} */ (
+    requireElementById("ic-style")
+  ).value;
+  var colorVal = readClassColorField("ic");
   var nonDroppableVal = /** @type {HTMLInputElement} */ (
     requireElementById("ic-non-droppable")
   ).checked;
@@ -332,7 +345,12 @@ function submitItemClassForm() {
     kind: kindVal,
     nonDroppable: nonDroppableVal,
     nonPickable: nonPickableVal,
-    visuals: { fallbackLabel: labelVal || idVal, size: sizeVal },
+    visuals: {
+      fallbackLabel: labelVal || idVal,
+      size: sizeVal,
+      style: styleVal,
+      color: colorVal,
+    },
     actionIds: actionIds,
     stateTemplate: stateTemplate,
     labels: buildLabelsPayload(nameFiVal),
@@ -759,16 +777,18 @@ function renderLivingClassList() {
     });
 }
 
-// ── Living class color field ─────────────────────────────────────────────
-// The class's primary body/fur/feather color, typed as hex or picked from the
-// swatch. Blank means "automatic": the visual style then shades each living
-// from its own palette (see makeLivingAvatarGroup in client-avatars.js).
+// ── Class color field ────────────────────────────────────────────────────
+// A class's primary color, typed as hex or picked from the swatch. Blank
+// means "automatic": the visual style then picks the color itself (a shade
+// from its own palette for livings, the client's per-type default for items).
+// Shared by the living ("lc") and item ("ic") editors, which have identical
+// <prefix>-color / <prefix>-color-picker fields.
 
 /**
  * @param {string} raw
  * @returns {string} "#rrggbb", or "" for blank/unparseable input
  */
-function normalizeLivingClassColorInput(raw) {
+function normalizeClassColorInput(raw) {
   var value = String(raw || "")
     .trim()
     .toLowerCase()
@@ -782,35 +802,71 @@ function normalizeLivingClassColorInput(raw) {
   return "";
 }
 
-/** @param {string} color "#rrggbb" or "" for automatic */
-function setLivingClassColorField(color) {
-  var normalized = normalizeLivingClassColorInput(color);
-  /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value =
-    normalized;
-  syncLivingClassColorPicker();
+/**
+ * @param {string} prefix editor field prefix, "lc" or "ic"
+ * @param {string} color "#rrggbb" or "" for automatic
+ */
+function setClassColorField(prefix, color) {
+  var normalized = normalizeClassColorInput(color);
+  /** @type {HTMLInputElement} */ (
+    requireElementById(prefix + "-color")
+  ).value = normalized;
+  syncClassColorPicker(prefix);
 }
 
-/** Keeps the swatch in step with a hex typed into the text field. */
-function syncLivingClassColorPicker() {
-  var normalized = normalizeLivingClassColorInput(
-    /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value,
+/**
+ * The saved value, as the server wants it: "" for automatic.
+ * @param {string} prefix
+ * @returns {string}
+ */
+function readClassColorField(prefix) {
+  return normalizeClassColorInput(
+    /** @type {HTMLInputElement} */ (requireElementById(prefix + "-color"))
+      .value,
   );
+}
+
+/**
+ * Keeps the swatch in step with a hex typed into the text field.
+ * @param {string} prefix
+ */
+function syncClassColorPicker(prefix) {
+  var normalized = readClassColorField(prefix);
   /** @type {HTMLInputElement} */ (
-    requireElementById("lc-color-picker")
+    requireElementById(prefix + "-color-picker")
   ).value = normalized || "#a0522d";
 }
 
-/** Writes the swatch's color into the text field (the saved value). */
-function syncLivingClassColorFromPicker() {
-  /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value =
-    /** @type {HTMLInputElement} */ (
-      requireElementById("lc-color-picker")
-    ).value;
+/**
+ * Writes the swatch's color into the text field (the saved value).
+ * @param {string} prefix
+ */
+function syncClassColorFromPicker(prefix) {
+  /** @type {HTMLInputElement} */ (
+    requireElementById(prefix + "-color")
+  ).value = /** @type {HTMLInputElement} */ (
+    requireElementById(prefix + "-color-picker")
+  ).value;
 }
 
-/** Clears the color back to automatic. */
-function clearLivingClassColor() {
-  setLivingClassColorField("");
+/**
+ * Clears the color back to automatic.
+ * @param {string} prefix
+ */
+function clearClassColor(prefix) {
+  setClassColorField(prefix, "");
+}
+
+/**
+ * Item classes store their color as an integer (0 = automatic); the shared
+ * field speaks "#rrggbb"/"".
+ * @param {number | undefined} color
+ * @returns {string}
+ */
+function itemColorNumberToHex(color) {
+  var value = Number(color);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return "#" + ("000000" + Math.floor(value).toString(16)).slice(-6);
 }
 
 /** @param {string} id */
@@ -851,7 +907,7 @@ function editLivingClass(id) {
       /** @type {HTMLSelectElement} */ (
         requireElementById("lc-visual-style")
       ).value = String(lc.visualStyle || "humanoid");
-      setLivingClassColorField(String(lc.color || ""));
+      setClassColorField("lc", String(lc.color || ""));
       /** @type {HTMLTextAreaElement} */ (
         requireElementById("lc-slot-definitions")
       ).value =
@@ -906,7 +962,7 @@ function cancelLivingClassEdit() {
   /** @type {HTMLSelectElement} */ (
     requireElementById("lc-visual-style")
   ).value = "humanoid";
-  setLivingClassColorField("");
+  setClassColorField("lc", "");
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
   ).value = "";
@@ -952,9 +1008,7 @@ function submitLivingClassForm() {
   var visualStyleVal = /** @type {HTMLSelectElement} */ (
     requireElementById("lc-visual-style")
   ).value;
-  var colorVal = normalizeLivingClassColorInput(
-    /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value,
-  );
+  var colorVal = readClassColorField("lc");
   var slotDefinitionsRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
   ).value.trim();

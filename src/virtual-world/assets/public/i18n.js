@@ -178,6 +178,18 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       birdlike: "Birdlike (two-legged bird)",
       equine: "Equine (horse-like)",
     },
+    // Item mesh recipes, see class-visual.ts.
+    item_style: {
+      block: "Block (cube)",
+      blade: "Blade (knife, sword)",
+      bow: "Bow",
+      chest: "Chest",
+      door: "Door",
+      staff: "Staff (hammer, tool)",
+      orb: "Orb (charm, stone)",
+      plant: "Plant (flower, sapling)",
+      scroll: "Scroll",
+    },
     living: {
       class: {
         player_human: "Human",
@@ -687,6 +699,17 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       doggish: "Koiramainen (pieni nelijalkainen)",
       birdlike: "Linnunkaltainen (kaksijalkainen lintu)",
       equine: "Hevosmainen",
+    },
+    item_style: {
+      block: "Kuutio",
+      blade: "Terä (puukko, miekka)",
+      bow: "Jousi",
+      chest: "Arkku",
+      door: "Ovi",
+      staff: "Varsi (vasara, työkalu)",
+      orb: "Pallo (amuletti, kivi)",
+      plant: "Kasvi (kukka, taimi)",
+      scroll: "Kääry",
     },
     living: {
       class: {

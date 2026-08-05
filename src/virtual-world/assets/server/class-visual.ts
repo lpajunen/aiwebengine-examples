@@ -37,6 +37,48 @@ export function normalizeLivingVisualStyle(
     : (value as LivingVisualStyle);
 }
 
+// The same idea for item classes: a style names one of the client's item mesh
+// recipes (see ITEM_VISUAL_STYLE_SPECS in client-world-render.js), so a new
+// sabre is the `blade` recipe in another color and size rather than new
+// geometry. "block" is the plain cube every item rendered as before styles
+// existed, and stays the neutral default.
+export type ItemVisualStyle =
+  | "block"
+  | "blade"
+  | "bow"
+  | "chest"
+  | "door"
+  | "staff"
+  | "orb"
+  | "plant"
+  | "scroll";
+
+export const ITEM_VISUAL_STYLES: ItemVisualStyle[] = [
+  "block",
+  "blade",
+  "bow",
+  "chest",
+  "door",
+  "staff",
+  "orb",
+  "plant",
+  "scroll",
+];
+
+export const DEFAULT_ITEM_VISUAL_STYLE: ItemVisualStyle = "block";
+
+export function normalizeItemVisualStyle(
+  raw: unknown,
+  fallback: ItemVisualStyle = DEFAULT_ITEM_VISUAL_STYLE,
+): ItemVisualStyle {
+  const value = String(raw || "")
+    .trim()
+    .toLowerCase();
+  return ITEM_VISUAL_STYLES.indexOf(value as ItemVisualStyle) === -1
+    ? fallback
+    : (value as ItemVisualStyle);
+}
+
 // Class colors are stored as "#rrggbb" text (or "" for "let the client pick"),
 // not as an integer column, so that "no color chosen" survives a round trip —
 // see the null-into-INTEGER note in living-class-storage.ts's sibling tables.
@@ -57,4 +99,18 @@ export function normalizeClassColor(raw: unknown, fallback = ""): string {
   }
   if (/^[0-9a-f]{6}$/.test(value)) return "#" + value;
   return fallback;
+}
+
+// Item classes predate the text column and store their color as an integer
+// (0xrrggbb), so this is the numeric counterpart of normalizeClassColor:
+// accepts the same "#rrggbb"/"rgb"/number inputs and returns 0 — the value
+// the client reads as "automatic" — for anything it can't parse.
+export function normalizeColorNumber(raw: unknown, fallback = 0): number {
+  if (typeof raw === "number") {
+    return Number.isFinite(raw)
+      ? Math.max(0, Math.min(0xffffff, Math.floor(raw)))
+      : fallback;
+  }
+  const hex = normalizeClassColor(raw, "");
+  return hex ? parseInt(hex.slice(1), 16) : fallback;
 }

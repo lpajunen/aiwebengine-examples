@@ -901,9 +901,8 @@ function updateTerrainFeatureMeshes() {
 }
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────
-var itemGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
 // A door reads as a tall thin panel standing on its tile, rather than the
-// small ground-item cube used for everything else.
+// small ground-item meshes used for everything else.
 var doorGeo = new THREE.BoxGeometry(0.72, 1.0, 0.16);
 /** @type {Record<string, any>} */
 var itemMatCache = {};
@@ -987,7 +986,10 @@ function itemTypeColor(type) {
     ITEM_REGISTRY && ITEM_REGISTRY.items
       ? ITEM_REGISTRY.items[String(type || "")]
       : null;
-  if (registryItem && Number.isFinite(Number(registryItem.color))) {
+  // 0 means the class left its color automatic (see normalizeColorNumber in
+  // class-visual.ts) — fall through to the per-type defaults below rather
+  // than painting the item black.
+  if (registryItem && Number(registryItem.color)) {
     return Number(registryItem.color);
   }
   if (type === "saw") return 0xbfc6d0;
@@ -1019,6 +1021,175 @@ function getItemMaterial(type) {
     });
   }
   return itemMatCache[type];
+}
+
+// ── Item visual styles ──────────────────────────────────────────────────
+// An item class names one of these mesh recipes (style) and a color; see
+// class-visual.ts server-side. A recipe is a flat parts list rather than
+// code so the geometry can be built once per style and shared by every item
+// of every class using it — colors are the only thing that varies per class.
+//
+// Part shades: "main" is the class's own color, "dark"/"light" are that color
+// stepped down/up, and a numeric shade is a fixed color for something the
+// class color shouldn't drive (a leather grip, a bowstring). Every recipe
+// stands on y=0 so a ground item can simply be dropped at tile height.
+
+/** @type {Record<string, any[]>} */
+var ITEM_VISUAL_STYLE_SPECS = {
+  // The plain cube every item rendered as before styles existed.
+  block: [{ w: 0.34, h: 0.34, d: 0.34, y: 0.17 }],
+  // Knife/sword/saw: grip, guard, blade — stood upright so the silhouette
+  // reads from the game's camera angle.
+  blade: [
+    { w: 0.06, h: 0.15, d: 0.06, y: 0.075, shade: 0x4a3728 },
+    { w: 0.2, h: 0.04, d: 0.06, y: 0.17, shade: "dark" },
+    { w: 0.07, h: 0.4, d: 0.03, y: 0.39 },
+    { w: 0.05, h: 0.06, d: 0.03, y: 0.61, shade: "light" },
+  ],
+  // Two limbs tilted into an arc, a grip between them and a pale string.
+  bow: [
+    { w: 0.05, h: 0.24, d: 0.05, x: -0.03, y: 0.42, rotZ: 0.32 },
+    { w: 0.05, h: 0.24, d: 0.05, x: -0.03, y: 0.14, rotZ: -0.32 },
+    { w: 0.06, h: 0.12, d: 0.06, y: 0.28, shade: "dark" },
+    { w: 0.014, h: 0.52, d: 0.014, x: 0.06, y: 0.28, shade: 0xe8e2d2 },
+  ],
+  chest: [
+    { w: 0.34, h: 0.18, d: 0.24, y: 0.09 },
+    { w: 0.36, h: 0.1, d: 0.26, y: 0.23, shade: "light" },
+    { w: 0.07, h: 0.08, d: 0.03, y: 0.19, z: 0.13, shade: "dark" },
+  ],
+  // Hammer/tool: a long shaft with a head across the top.
+  staff: [
+    { w: 0.05, h: 0.48, d: 0.05, y: 0.24, shade: 0x6b4f32 },
+    { w: 0.18, h: 0.11, d: 0.11, y: 0.52 },
+  ],
+  // Charms and stones: a floating sphere over a small dark base.
+  orb: [
+    { kind: "sphere", r: 0.14, y: 0.22 },
+    { w: 0.16, h: 0.06, d: 0.16, y: 0.03, shade: "dark" },
+  ],
+  // Flower/sapling: green stem and leaves under a bloom in the class color.
+  plant: [
+    { w: 0.04, h: 0.28, d: 0.04, y: 0.14, shade: 0x3f7a3a },
+    { w: 0.14, h: 0.03, d: 0.06, x: -0.07, y: 0.19, shade: 0x4f8f45 },
+    { w: 0.14, h: 0.03, d: 0.06, x: 0.07, y: 0.13, shade: 0x4f8f45 },
+    { w: 0.17, h: 0.13, d: 0.17, y: 0.35 },
+  ],
+  // A rolled sheet lying on its side, tied with two dark bands.
+  scroll: [
+    { kind: "cylinder", r: 0.07, h: 0.32, y: 0.07, rotZ: Math.PI / 2 },
+    {
+      kind: "cylinder",
+      r: 0.075,
+      h: 0.03,
+      x: -0.09,
+      y: 0.07,
+      rotZ: Math.PI / 2,
+      shade: "dark",
+    },
+    {
+      kind: "cylinder",
+      r: 0.075,
+      h: 0.03,
+      x: 0.09,
+      y: 0.07,
+      rotZ: Math.PI / 2,
+      shade: "dark",
+    },
+  ],
+};
+
+// Geometry is per style+part and never varies, so build each part's geometry
+// once and let every item mesh share it — a world full of dropped items costs
+// one geometry per distinct part, as the single shared cube used to.
+/** @type {Record<string, any[]>} */
+var itemStyleGeoCache = {};
+
+/**
+ * @param {string} style
+ * @returns {any[]} geometries positionally matching the style's parts list
+ */
+function getItemStyleGeometries(style) {
+  if (!itemStyleGeoCache[style]) {
+    var parts = ITEM_VISUAL_STYLE_SPECS[style] || ITEM_VISUAL_STYLE_SPECS.block;
+    itemStyleGeoCache[style] = parts.map(function (part) {
+      if (part.kind === "sphere") {
+        return new THREE.SphereGeometry(part.r, 12, 10);
+      }
+      if (part.kind === "cylinder") {
+        return new THREE.CylinderGeometry(part.r, part.r, part.h, 12);
+      }
+      return new THREE.BoxGeometry(part.w, part.h, part.d);
+    });
+  }
+  return itemStyleGeoCache[style];
+}
+
+// Materials keyed by item type and shade, so the recipes' dark/light steps
+// (and any fixed part color) are allocated once, like getItemMaterial's.
+/** @type {Record<string, any>} */
+var itemShadeMatCache = {};
+
+/**
+ * @param {string} type
+ * @param {string | number | undefined} shade "main"/"dark"/"light" or a hex color
+ * @returns {any}
+ */
+function getItemPartMaterial(type, shade) {
+  if (typeof shade === "number") {
+    var fixedKey = "#" + shade;
+    if (!itemShadeMatCache[fixedKey]) {
+      itemShadeMatCache[fixedKey] = new THREE.MeshLambertMaterial({
+        color: shade,
+      });
+    }
+    return itemShadeMatCache[fixedKey];
+  }
+  if (!shade || shade === "main") return getItemMaterial(type);
+  var key = type + "|" + shade;
+  if (!itemShadeMatCache[key]) {
+    var base = new THREE.Color(itemTypeColor(type));
+    var hsl = { h: 0, s: 0, l: 0 };
+    base.getHSL(hsl);
+    var delta = shade === "light" ? 0.12 : -0.12;
+    itemShadeMatCache[key] = new THREE.MeshLambertMaterial({
+      color: new THREE.Color().setHSL(
+        hsl.h,
+        hsl.s,
+        Math.max(0, Math.min(1, hsl.l + delta)),
+      ),
+    });
+  }
+  return itemShadeMatCache[key];
+}
+
+/**
+ * Builds the mesh group for an item type from its class's visual style and
+ * color. Shared by ground items (client-world-render.js) and the small
+ * equipped-item meshes on avatars (client-avatars.js), so a sword looks like
+ * a sword whether it is lying on a tile or held in a hand.
+ * @param {string} type
+ * @returns {any} a group standing on y=0
+ */
+function makeItemObject(type) {
+  var style = itemVisualStyle(type);
+  var parts = ITEM_VISUAL_STYLE_SPECS[style] || ITEM_VISUAL_STYLE_SPECS.block;
+  var geometries = getItemStyleGeometries(style);
+  var g = new THREE.Group();
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    var mesh = new THREE.Mesh(
+      geometries[i],
+      getItemPartMaterial(type, part.shade),
+    );
+    mesh.position.set(part.x || 0, part.y || 0, part.z || 0);
+    if (part.rotX) mesh.rotation.x = part.rotX;
+    if (part.rotZ) mesh.rotation.z = part.rotZ;
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    g.add(mesh);
+  }
+  return g;
 }
 
 // Doors render darker when shut and lighter/ajar when open, so their state is
@@ -1131,14 +1302,16 @@ function rebuildItemMeshes() {
     for (var i = 0; i < arr.length; i++) {
       var item = arr[i];
       if (item.type === "old_oak") continue;
-      var isDoor = item.type === "door";
+      // The door is the one style whose look depends on item state (shut vs
+      // ajar) and on its tile, so it keeps its own slab geometry and wall
+      // placement; every other style comes from the shared recipes.
+      var isDoor = itemVisualStyle(item.type) === "door";
       var doorOpen = isDoor && !!(item.state && item.state.open === true);
-      var mesh = new THREE.Mesh(
-        isDoor ? doorGeo : itemGeo,
-        isDoor ? getDoorMaterial(doorOpen) : getItemMaterial(item.type),
-      );
-      // The item class's size scales the shared geometry (see classSizeScale
-      // in tiles-and-items.js); "medium" is 1, leaving the mesh as before.
+      var mesh = isDoor
+        ? new THREE.Mesh(doorGeo, getDoorMaterial(doorOpen))
+        : makeItemObject(item.type);
+      // The item class's size scales the recipe (see classSizeScale in
+      // tiles-and-items.js); "medium" is 1, leaving the mesh as before.
       var sizeScale = itemSizeScale(item.type);
       if (sizeScale !== 1) mesh.scale.setScalar(sizeScale);
       if (isDoor && placeDoorOnWall(mesh, row, col, doorOpen, sizeScale)) {
@@ -1149,11 +1322,10 @@ function rebuildItemMeshes() {
       }
       var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
       var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
-      // A scaled cube must rest on the ground, not sink into it: its half
-      // height is 0.17 * scale, so the medium case still lands on 0.2.
-      var oy = isDoor
-        ? 0.5 * sizeScale
-        : 0.03 + 0.17 * sizeScale + Math.floor(i / 9) * 0.16;
+      // Recipes stand on their own y=0, so an item only needs lifting clear
+      // of the ground plane; the centred door slab still needs half its
+      // height. Stacked tiles step up so a full tile stays readable.
+      var oy = isDoor ? 0.5 * sizeScale : 0.03 + Math.floor(i / 9) * 0.16;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
       // An open door not hung on a house wall swings ~70° ajar and shifts to
       // its hinge edge; a shut one sits flush across the tile.

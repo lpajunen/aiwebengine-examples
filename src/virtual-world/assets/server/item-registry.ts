@@ -24,6 +24,11 @@ import {
 } from "./action-class-storage.ts";
 import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
 import { ClassSize, normalizeClassSize } from "./class-size.ts";
+import {
+  DEFAULT_ITEM_VISUAL_STYLE,
+  ItemVisualStyle,
+  normalizeItemVisualStyle,
+} from "./class-visual.ts";
 
 type BootstrapItemChangeDeltaKind = "add" | "remove" | "snapshot";
 
@@ -42,6 +47,9 @@ export interface ItemDefinition {
     // How big the item's mesh renders; missing == "medium" (unchanged
     // appearance). Cosmetic only — see class-size.ts.
     size?: ClassSize;
+    // Which mesh recipe the client builds; missing == "block", the plain
+    // cube. Cosmetic only — see class-visual.ts.
+    style?: ItemVisualStyle;
   };
   actionIds: string[];
 }
@@ -56,6 +64,7 @@ export interface ItemClassRecord {
     labelKey: string;
     fallbackLabel: string;
     size: ClassSize;
+    style: ItemVisualStyle;
   };
   actionIds: string[];
   stateTemplate: Record<string, unknown>;
@@ -71,6 +80,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xbfc6d0,
       labelKey: "item.saw.name",
       fallbackLabel: "Woodsman's saw",
+      style: "blade",
     },
     actionIds: ["cut"],
   },
@@ -81,6 +91,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xd8dee8,
       labelKey: "item.knife.name",
       fallbackLabel: "Knife",
+      style: "blade",
     },
     actionIds: [],
   },
@@ -95,6 +106,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xbfc6d0,
       labelKey: "item.sword.name",
       fallbackLabel: "Sword",
+      style: "blade",
     },
     actionIds: [],
   },
@@ -105,6 +117,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xa9752f,
       labelKey: "item.shortbow.name",
       fallbackLabel: "Shortbow",
+      style: "bow",
     },
     actionIds: [],
   },
@@ -115,6 +128,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x7a5220,
       labelKey: "item.longbow.name",
       fallbackLabel: "Longbow",
+      style: "bow",
     },
     actionIds: [],
   },
@@ -125,6 +139,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xec6ea4,
       labelKey: "item.flower.name",
       fallbackLabel: "Forest flower",
+      style: "plant",
     },
     actionIds: [],
   },
@@ -135,6 +150,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x54d08a,
       labelKey: "item.tree_planter.name",
       fallbackLabel: "Pine sapling",
+      style: "plant",
     },
     actionIds: ["plant", "grow_pine_tree"],
   },
@@ -145,6 +161,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xff9f1c,
       labelKey: "item.portal_builder.name",
       fallbackLabel: "Rune gate charm",
+      style: "orb",
     },
     actionIds: ["build_portal", "remove_portal"],
   },
@@ -165,6 +182,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xc73a32,
       labelKey: "item.rowan_charm.name",
       fallbackLabel: "Rowan charm",
+      style: "orb",
     },
     actionIds: ["place_blessing"],
   },
@@ -175,6 +193,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x7b7f8a,
       labelKey: "item.rune_stone.name",
       fallbackLabel: "Rune stone",
+      style: "orb",
     },
     actionIds: [],
   },
@@ -185,6 +204,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x51764f,
       labelKey: "item.juniper_bundle.name",
       fallbackLabel: "Juniper bundle",
+      style: "plant",
     },
     actionIds: [],
   },
@@ -195,6 +215,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0xe4d2a0,
       labelKey: "item.birch_bark_letter.name",
       fallbackLabel: "Birch-bark letter",
+      style: "scroll",
     },
     actionIds: [],
   },
@@ -205,6 +226,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x8f7f6d,
       labelKey: "item.hammer.name",
       fallbackLabel: "Hammer",
+      style: "staff",
     },
     actionIds: ["build_house", "destroy_house", "build_door", "remove_door"],
   },
@@ -216,6 +238,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x9c6b3f,
       labelKey: "item.door.name",
       fallbackLabel: "Door",
+      style: "door",
     },
     actionIds: ["door_travel", "open_door", "close_door"],
   },
@@ -278,6 +301,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x9b5cff,
       labelKey: "item.creator_stone.name",
       fallbackLabel: "Creator's stone",
+      style: "orb",
     },
     actionIds: [],
   },
@@ -324,6 +348,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x8a5a2b,
       labelKey: "item.chest.name",
       fallbackLabel: "Wooden chest",
+      style: "chest",
     },
     actionIds: [],
   },
@@ -389,6 +414,7 @@ export function getBootstrapRegistry(): {
       labels: ClassLabels;
       color: number;
       size: ClassSize;
+      style: ItemVisualStyle;
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
@@ -424,6 +450,7 @@ export function getBootstrapRegistry(): {
       labels: ClassLabels;
       color: number;
       size: ClassSize;
+      style: ItemVisualStyle;
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
@@ -460,6 +487,7 @@ export function getBootstrapRegistry(): {
         labels: normalizeClassLabels(cls.labels),
         color: cls.visuals.color,
         size: normalizeClassSize(cls.visuals.size),
+        style: normalizeItemVisualStyle(cls.visuals.style),
         action_ids: cls.actionIds.slice(),
         kind: cls.kind,
         non_pickable: !!cls.nonPickable,
@@ -474,6 +502,7 @@ export function getBootstrapRegistry(): {
         labels: {},
         color: item.visuals.color,
         size: normalizeClassSize(item.visuals.size),
+        style: normalizeItemVisualStyle(item.visuals.style),
         action_ids: item.actionIds.slice(),
         kind: item.kind,
         non_pickable: !!item.nonPickable,
@@ -530,6 +559,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
       labelKey: def.visuals.labelKey,
       fallbackLabel: def.visuals.fallbackLabel,
       size: normalizeClassSize(def.visuals.size),
+      style: normalizeItemVisualStyle(def.visuals.style),
     },
     actionIds: def.actionIds.slice(),
     stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
@@ -560,6 +590,7 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
       labelKey: String(row.label_key || ""),
       fallbackLabel: String(row.fallback_label || ""),
       size: normalizeClassSize(row.size),
+      style: normalizeItemVisualStyle(row.style),
     },
     actionIds: (function () {
       try {
@@ -597,6 +628,7 @@ function itemClassToDbRow(
   non_pickable: number;
   color: number;
   size: string;
+  style: string;
   label_key: string;
   fallback_label: string;
   action_ids_json: string;
@@ -620,6 +652,7 @@ function itemClassToDbRow(
     non_pickable: record.nonPickable ? 1 : 0,
     color: record.visuals.color,
     size: normalizeClassSize(record.visuals.size),
+    style: normalizeItemVisualStyle(record.visuals.style),
     label_key: record.visuals.labelKey,
     fallback_label: record.visuals.fallbackLabel,
     action_ids_json: JSON.stringify(record.actionIds),
@@ -655,12 +688,30 @@ function backfillItemClassDefaults(
       inserted++;
       continue;
     }
+    let changed = false;
     const defActionIds = Array.isArray(def.actionIds) ? def.actionIds : [];
     const missingActionIds = defActionIds.filter(function (id) {
       return existing.actionIds.indexOf(id) === -1;
     });
     if (missingActionIds.length > 0) {
       existing.actionIds = existing.actionIds.concat(missingActionIds);
+      changed = true;
+    }
+    // Rows seeded before visual styles existed read back as "block" (the
+    // normalizer's default), so a built-in that declares a real style needs
+    // it written on once — without this the sword would still be a cube.
+    // Only fills the never-set case: a creator who picked "block" for a
+    // built-in keeps it, since that is also what the definition would give.
+    if (
+      def.visuals.style &&
+      normalizeItemVisualStyle(existing.visuals.style) ===
+        DEFAULT_ITEM_VISUAL_STYLE &&
+      def.visuals.style !== DEFAULT_ITEM_VISUAL_STYLE
+    ) {
+      existing.visuals.style = def.visuals.style;
+      changed = true;
+    }
+    if (changed) {
       upsertItemClassRow(itemClassToDbRow(existing, now));
       patched++;
     }

@@ -26,6 +26,7 @@ export function upsertItemClassRow(row: {
   non_pickable: number;
   color: number;
   size: string;
+  style: string;
   label_key: string;
   fallback_label: string;
   action_ids_json: string;

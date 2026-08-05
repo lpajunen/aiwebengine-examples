@@ -605,6 +605,18 @@ function itemSizeScale(type) {
 }
 
 /**
+ * Mesh recipe id for an item type, "block" (the plain cube) for types that
+ * leave it unset. See ITEM_VISUAL_STYLE_SPECS in client-world-render.js.
+ * @param {string} type
+ * @returns {string}
+ */
+function itemVisualStyle(type) {
+  var def = getRegistryItemDef(type);
+  var style = def && def.style ? String(def.style) : "";
+  return style || "block";
+}
+
+/**
  * Mesh scale for a living class id (player or NPC).
  * @param {string} classId
  * @returns {number}
@@ -648,7 +660,7 @@ function livingClassColor(classId) {
 
 /**
  * @param {string} type
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, size?: string, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, size?: string, style?: string, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}
  */
 function getRegistryItemDef(type) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.items) return null;

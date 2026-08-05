@@ -1037,6 +1037,7 @@ function runWorldDatabaseMigration(): void {
     ["addIntegerColumn", "non_pickable", false],
     ["addIntegerColumn", "color", false],
     ["addTextColumn", "size", true],
+    ["addTextColumn", "style", true],
     ["addTextColumn", "label_key", false],
     ["addTextColumn", "fallback_label", false],
     ["addTextColumn", "action_ids_json", false],

@@ -396,6 +396,22 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="huge" data-i18n-key="size.huge">Huge</option>
           </select>
         </label>
+        <label><span data-i18n-key="class_editor.visual_style_label">Visual style</span>
+          <select id="ic-style">
+            <option value="block" data-i18n-key="item_style.block">Block (cube)</option>
+            <option value="blade" data-i18n-key="item_style.blade">Blade (knife, sword)</option>
+            <option value="bow" data-i18n-key="item_style.bow">Bow</option>
+            <option value="chest" data-i18n-key="item_style.chest">Chest</option>
+            <option value="door" data-i18n-key="item_style.door">Door</option>
+            <option value="staff" data-i18n-key="item_style.staff">Staff (hammer, tool)</option>
+            <option value="orb" data-i18n-key="item_style.orb">Orb (charm, stone)</option>
+            <option value="plant" data-i18n-key="item_style.plant">Plant (flower, sapling)</option>
+            <option value="scroll" data-i18n-key="item_style.scroll">Scroll</option>
+          </select>
+        </label>
+        <label><span data-i18n-key="class_editor.color_label">Color (blank = automatic)</span>
+          <span class="class-form-color"><input id="ic-color" type="text" placeholder="#a0522d" autocomplete="off" oninput="syncClassColorPicker('ic')"><input id="ic-color-picker" type="color" value="#a0522d" data-i18n-title="class_editor.color_pick" title="Pick a color" oninput="syncClassColorFromPicker('ic')"><button type="button" onclick="clearClassColor('ic')" data-i18n-key="class_editor.color_auto">Auto</button></span>
+        </label>
         <label><input id="ic-non-droppable" type="checkbox"> <span data-i18n-key="class_editor.non_droppable">Non-droppable</span></label>
         <label><input id="ic-non-pickable" type="checkbox"> <span data-i18n-key="class_editor.non_pickable">Non-pickable</span></label>
         <label><span data-i18n-key="class_editor.action_ids_label">Action IDs (comma-sep)</span> <input id="ic-action-ids" type="text" placeholder="tune,play_tune" autocomplete="off"></label>
@@ -482,7 +498,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
           </select>
         </label>
         <label><span data-i18n-key="class_editor.color_label">Color (blank = automatic)</span>
-          <span class="class-form-color"><input id="lc-color" type="text" placeholder="#a0522d" autocomplete="off" oninput="syncLivingClassColorPicker()"><input id="lc-color-picker" type="color" value="#a0522d" data-i18n-title="class_editor.color_pick" title="Pick a color" oninput="syncLivingClassColorFromPicker()"><button type="button" onclick="clearLivingClassColor()" data-i18n-key="class_editor.color_auto">Auto</button></span>
+          <span class="class-form-color"><input id="lc-color" type="text" placeholder="#a0522d" autocomplete="off" oninput="syncClassColorPicker('lc')"><input id="lc-color-picker" type="color" value="#a0522d" data-i18n-title="class_editor.color_pick" title="Pick a color" oninput="syncClassColorFromPicker('lc')"><button type="button" onclick="clearClassColor('lc')" data-i18n-key="class_editor.color_auto">Auto</button></span>
         </label>
         <label><span data-i18n-key="class_editor.slot_definitions_label">Slot definitions (JSON)</span> <textarea id="lc-slot-definitions" rows="3" placeholder='[{"id":"left_hand","labelKey":"living.slot.left_hand","fallbackLabel":"Left hand","tags":["hand"]}]'></textarea></label>
         <label><span data-i18n-key="class_editor.value_template_label">Value template (JSON)</span> <textarea id="lc-value-template" rows="2" placeholder='{"fatigue": 0}'></textarea></label>

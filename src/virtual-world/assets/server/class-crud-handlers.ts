@@ -36,6 +36,8 @@ import { normalizeClassLabels } from "./class-labels.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
+  normalizeColorNumber,
+  normalizeItemVisualStyle,
   normalizeLivingVisualStyle,
 } from "./class-visual.ts";
 
@@ -89,12 +91,17 @@ export function createItemClassHandler(context: any) {
     nonDroppable: !!(body && body.nonDroppable),
     nonPickable: !!(body && body.nonPickable),
     visuals: {
-      color: Number((body && body.visuals && body.visuals.color) || 0),
+      // 0 is "automatic": the client then falls back to its own per-type
+      // default color rather than rendering the item black.
+      color: normalizeColorNumber(body && body.visuals && body.visuals.color),
       labelKey: String((body && body.visuals && body.visuals.labelKey) || ""),
       fallbackLabel: String(
         (body && body.visuals && body.visuals.fallbackLabel) || id,
       ),
       size: normalizeClassSize(body && body.visuals && body.visuals.size),
+      style: normalizeItemVisualStyle(
+        body && body.visuals && body.visuals.style,
+      ),
     },
     actionIds: Array.isArray(body && body.actionIds) ? body.actionIds : [],
     stateTemplate:
@@ -168,7 +175,7 @@ export function updateItemClassHandler(context: any) {
         ? !!body.nonPickable
         : existing.nonPickable,
     visuals: {
-      color: Number(
+      color: normalizeColorNumber(
         body && body.visuals && body.visuals.color !== undefined
           ? body.visuals.color
           : existing.visuals.color,
@@ -184,6 +191,10 @@ export function updateItemClassHandler(context: any) {
       size: normalizeClassSize(
         body && body.visuals && body.visuals.size,
         existing.visuals.size,
+      ),
+      style: normalizeItemVisualStyle(
+        body && body.visuals && body.visuals.style,
+        normalizeItemVisualStyle(existing.visuals.style),
       ),
     },
     actionIds: Array.isArray(body && body.actionIds)

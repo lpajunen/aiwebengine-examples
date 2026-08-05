@@ -154,7 +154,9 @@ On top of the world type, the creator defines content types:
   just a different style/size/color combination: the built-in donkey is
   the horse's equine recipe with a grey coat, and cost no new artwork.
 - **Item types** — kinds of items, with their properties and the actions
-  they enable.
+  they enable. They carry the same three appearance picks as livings: a
+  **visual style** (block, blade, bow, chest, door, staff, orb, plant,
+  scroll), a **size** and a **color**.
 - **Action types** — the data-driven logic described above.
 
 Finally the creator writes **spawn rules**: which NPC types and item types

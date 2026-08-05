@@ -94,7 +94,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // or index. The migration list is skipped entirely while the persisted marker
 // matches this number, so a forgotten bump means the new column is never
 // created on an already-migrated database.
-export const VWORLD_SCHEMA_VERSION = 1;
+// v2: living class visual_style/color + item class style columns.
+export const VWORLD_SCHEMA_VERSION = 2;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

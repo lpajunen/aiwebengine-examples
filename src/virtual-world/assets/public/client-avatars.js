@@ -430,10 +430,13 @@ var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
 
 // ── Equipped-slot visuals ───────────────────────────────────────────────
 // Slots are public and drive outside appearance: an item equipped in a slot
-// renders as a small box near that slot's approximate body position, using
-// the same per-type color as ground/inventory item meshes (getItemMaterial,
-// defined in client-world-render.js, loaded before this file).
-var equipItemGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+// renders near that slot's approximate body position, built from the same
+// visual-style recipe as the ground mesh (makeItemObject, defined in
+// client-world-render.js, loaded before this file) so a wielded sword reads
+// as a sword rather than a coloured cube.
+// Recipes are sized for lying on a tile, so a held one is scaled down and
+// hung from its middle instead of standing on the attach point.
+var EQUIPPED_ITEM_SCALE = 0.5;
 /** @type {Record<string, {x: number, y: number, z: number}>} */
 var SLOT_ATTACH_POINTS = {
   left_hand: { x: -0.32, y: 0.55, z: 0.15 },
@@ -471,12 +474,14 @@ function syncAvatarEquippedItems(entry, slots) {
     if (existing && existing.itemType === itemType) continue;
     if (existing) entry.group.remove(existing.mesh);
     var point = SLOT_ATTACH_POINTS[slotId] || DEFAULT_SLOT_ATTACH_POINT;
-    var mesh = new THREE.Mesh(equipItemGeo, getItemMaterial(itemType));
+    var mesh = makeItemObject(itemType);
     // The item's own class size; the wielder's size then scales this along
     // with the rest of the avatar group, so a giant's sword reads as giant.
-    var itemScale = itemSizeScale(itemType);
-    if (itemScale !== 1) mesh.scale.setScalar(itemScale);
-    mesh.position.set(point.x, point.y, point.z);
+    var itemScale = itemSizeScale(itemType) * EQUIPPED_ITEM_SCALE;
+    mesh.scale.setScalar(itemScale);
+    // Recipes stand on y=0; drop the mesh by half its (scaled) height so it
+    // hangs at the attach point rather than sprouting upward from it.
+    mesh.position.set(point.x, point.y - 0.18 * itemScale, point.z);
     entry.group.add(mesh);
     entry.equipMeshes[slotId] = { mesh: mesh, itemType: itemType };
   }

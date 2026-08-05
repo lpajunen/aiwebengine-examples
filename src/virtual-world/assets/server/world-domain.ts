@@ -99,6 +99,7 @@ import {
 } from "./item-registry.ts";
 import { CLASS_OWNED_LIVING_VALUE_KEYS } from "./runtime-config.ts";
 import { ClassSize } from "./class-size.ts";
+import { LivingVisualStyle } from "./class-visual.ts";
 
 export {
   getActionDefinition,
@@ -183,6 +184,15 @@ export interface LivingClassRecord {
   // double-scale version of the same avatar mesh. Optional; missing ==
   // "medium" (unchanged appearance). See class-size.ts.
   size?: ClassSize;
+  // Which avatar mesh recipe the client builds for this class, and the primary
+  // body/fur/feather color to paint it with. Together with size these are the
+  // three knobs that let a new class reuse an existing silhouette (a donkey is
+  // the horse recipe at another size and color) without any client work.
+  // Optional; missing == "humanoid" and "" (client picks a per-instance color
+  // from the style's own palette, as it did before colors were configurable).
+  // See class-visual.ts.
+  visualStyle?: LivingVisualStyle;
+  color?: string;
 }
 
 export interface LivingState {

@@ -615,6 +615,37 @@ function livingSizeScale(classId) {
   return classSizeScale(cls && cls.size);
 }
 
+// ── Living visual style + color ──────────────────────────────────────────
+// A living class picks one of the client's avatar mesh recipes by name (see
+// LIVING_VISUAL_STYLE_SPECS in client-avatars.js) and optionally a primary
+// color; together with size these let a new class reuse an existing
+// silhouette without any client work. See class-visual.ts server-side.
+
+/**
+ * Style id for a living class, "humanoid" for classes that leave it unset
+ * (which is every class that predates the field).
+ * @param {string} classId
+ * @returns {string}
+ */
+function livingVisualStyle(classId) {
+  var classes = getLivingRegistryClasses();
+  var cls = classes[String(classId || "")];
+  var style = cls && cls.visualStyle ? String(cls.visualStyle) : "";
+  return style || "humanoid";
+}
+
+/**
+ * The class's configured primary color as "#rrggbb", or "" when it leaves the
+ * color automatic (the style then picks a per-instance shade).
+ * @param {string} classId
+ * @returns {string}
+ */
+function livingClassColor(classId) {
+  var classes = getLivingRegistryClasses();
+  var cls = classes[String(classId || "")];
+  return cls && cls.color ? String(cls.color) : "";
+}
+
 /**
  * @param {string} type
  * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, color?: number, size?: string, action_ids?: string[], kind?: string, non_pickable?: boolean} | null}

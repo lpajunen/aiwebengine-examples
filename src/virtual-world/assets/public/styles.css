@@ -1108,6 +1108,35 @@ canvas {
   width: auto;
   margin-right: 4px;
 }
+/* Hex field + swatch picker + "Auto" reset, on one row (living class color). */
+.class-form-color {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.class-form-color input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+.class-form-color input[type="color"] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+.class-form-color button {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(70, 70, 80, 0.8);
+  color: #fff;
+  cursor: pointer;
+}
 .class-form-actions {
   margin-top: 10px;
   display: flex;

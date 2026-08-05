@@ -471,6 +471,19 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="huge" data-i18n-key="size.huge">Huge</option>
           </select>
         </label>
+        <label><span data-i18n-key="class_editor.visual_style_label">Visual style</span>
+          <select id="lc-visual-style">
+            <option value="humanoid" data-i18n-key="visual_style.humanoid">Humanoid (two legs)</option>
+            <option value="wolfish" data-i18n-key="visual_style.wolfish">Wolfish (lean four legs)</option>
+            <option value="bearish" data-i18n-key="visual_style.bearish">Bearish (bulky four legs)</option>
+            <option value="doggish" data-i18n-key="visual_style.doggish">Doggish (small four legs)</option>
+            <option value="birdlike" data-i18n-key="visual_style.birdlike">Birdlike (two-legged bird)</option>
+            <option value="equine" data-i18n-key="visual_style.equine">Equine (horse-like)</option>
+          </select>
+        </label>
+        <label><span data-i18n-key="class_editor.color_label">Color (blank = automatic)</span>
+          <span class="class-form-color"><input id="lc-color" type="text" placeholder="#a0522d" autocomplete="off" oninput="syncLivingClassColorPicker()"><input id="lc-color-picker" type="color" value="#a0522d" data-i18n-title="class_editor.color_pick" title="Pick a color" oninput="syncLivingClassColorFromPicker()"><button type="button" onclick="clearLivingClassColor()" data-i18n-key="class_editor.color_auto">Auto</button></span>
+        </label>
         <label><span data-i18n-key="class_editor.slot_definitions_label">Slot definitions (JSON)</span> <textarea id="lc-slot-definitions" rows="3" placeholder='[{"id":"left_hand","labelKey":"living.slot.left_hand","fallbackLabel":"Left hand","tags":["hand"]}]'></textarea></label>
         <label><span data-i18n-key="class_editor.value_template_label">Value template (JSON)</span> <textarea id="lc-value-template" rows="2" placeholder='{"fatigue": 0}'></textarea></label>
         <label><span data-i18n-key="class_editor.value_schema_label">Value schema (JSON)</span> <textarea id="lc-value-schema" rows="3" placeholder='{"fatigue":{"kind":"number","min":0,"max":100}}'></textarea></label>

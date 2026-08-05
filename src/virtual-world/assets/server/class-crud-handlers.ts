@@ -34,6 +34,10 @@ import {
 import { getAllLivingClasses } from "./living-registry.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
 import { normalizeClassSize } from "./class-size.ts";
+import {
+  normalizeClassColor,
+  normalizeLivingVisualStyle,
+} from "./class-visual.ts";
 
 const CLASS_OWNER_ERROR = { error: "error.not_class_owner" };
 
@@ -540,6 +544,8 @@ export function createLivingClassHandler(context: any) {
         : undefined,
     aggressive: !!(body && body.aggressive),
     size: normalizeClassSize(body && body.size),
+    visualStyle: normalizeLivingVisualStyle(body && body.visualStyle),
+    color: normalizeClassColor(body && body.color),
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : [],
@@ -628,6 +634,14 @@ export function updateLivingClassHandler(context: any) {
       body && body.size,
       normalizeClassSize(existing.size),
     ),
+    visualStyle: normalizeLivingVisualStyle(
+      body && body.visualStyle,
+      normalizeLivingVisualStyle(existing.visualStyle),
+    ),
+    color:
+      body && body.color !== undefined
+        ? normalizeClassColor(body.color)
+        : normalizeClassColor(existing.color),
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : existing.defaultItems,

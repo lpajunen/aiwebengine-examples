@@ -24,6 +24,8 @@ export function upsertLivingClassRow(row: {
   value_template_json: string;
   value_schema_json: string;
   size: string;
+  visual_style: string;
+  color: string;
   owner_ids_json: string;
   labels_json: string;
   created_at: number;

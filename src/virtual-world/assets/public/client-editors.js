@@ -759,6 +759,60 @@ function renderLivingClassList() {
     });
 }
 
+// ── Living class color field ─────────────────────────────────────────────
+// The class's primary body/fur/feather color, typed as hex or picked from the
+// swatch. Blank means "automatic": the visual style then shades each living
+// from its own palette (see makeLivingAvatarGroup in client-avatars.js).
+
+/**
+ * @param {string} raw
+ * @returns {string} "#rrggbb", or "" for blank/unparseable input
+ */
+function normalizeLivingClassColorInput(raw) {
+  var value = String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/.test(value)) {
+    return (
+      "#" + value[0] + value[0] + value[1] + value[1] + value[2] + value[2]
+    );
+  }
+  if (/^[0-9a-f]{6}$/.test(value)) return "#" + value;
+  return "";
+}
+
+/** @param {string} color "#rrggbb" or "" for automatic */
+function setLivingClassColorField(color) {
+  var normalized = normalizeLivingClassColorInput(color);
+  /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value =
+    normalized;
+  syncLivingClassColorPicker();
+}
+
+/** Keeps the swatch in step with a hex typed into the text field. */
+function syncLivingClassColorPicker() {
+  var normalized = normalizeLivingClassColorInput(
+    /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value,
+  );
+  /** @type {HTMLInputElement} */ (
+    requireElementById("lc-color-picker")
+  ).value = normalized || "#a0522d";
+}
+
+/** Writes the swatch's color into the text field (the saved value). */
+function syncLivingClassColorFromPicker() {
+  /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value =
+    /** @type {HTMLInputElement} */ (
+      requireElementById("lc-color-picker")
+    ).value;
+}
+
+/** Clears the color back to automatic. */
+function clearLivingClassColor() {
+  setLivingClassColorField("");
+}
+
 /** @param {string} id */
 function editLivingClass(id) {
   fetchWithAuth("/virtual-world/living-classes")
@@ -794,6 +848,10 @@ function editLivingClass(id) {
         String(lc.kind || "creature");
       /** @type {HTMLSelectElement} */ (requireElementById("lc-size")).value =
         String(lc.size || "medium");
+      /** @type {HTMLSelectElement} */ (
+        requireElementById("lc-visual-style")
+      ).value = String(lc.visualStyle || "humanoid");
+      setLivingClassColorField(String(lc.color || ""));
       /** @type {HTMLTextAreaElement} */ (
         requireElementById("lc-slot-definitions")
       ).value =
@@ -845,6 +903,10 @@ function cancelLivingClassEdit() {
     "creature";
   /** @type {HTMLSelectElement} */ (requireElementById("lc-size")).value =
     "medium";
+  /** @type {HTMLSelectElement} */ (
+    requireElementById("lc-visual-style")
+  ).value = "humanoid";
+  setLivingClassColorField("");
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
   ).value = "";
@@ -887,6 +949,12 @@ function submitLivingClassForm() {
     .value;
   var sizeVal = /** @type {HTMLSelectElement} */ (requireElementById("lc-size"))
     .value;
+  var visualStyleVal = /** @type {HTMLSelectElement} */ (
+    requireElementById("lc-visual-style")
+  ).value;
+  var colorVal = normalizeLivingClassColorInput(
+    /** @type {HTMLInputElement} */ (requireElementById("lc-color")).value,
+  );
   var slotDefinitionsRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("lc-slot-definitions")
   ).value.trim();
@@ -973,6 +1041,8 @@ function submitLivingClassForm() {
     valueSchema: valueSchema,
     aggressive: aggressiveVal,
     size: sizeVal,
+    visualStyle: visualStyleVal,
+    color: colorVal,
     defaultItems: defaultItems,
     labels: buildLabelsPayload(nameFiVal),
   };

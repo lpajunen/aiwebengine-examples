@@ -169,6 +169,15 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       large: "Large",
       huge: "Huge",
     },
+    // Living visual styles (avatar mesh recipes), see class-visual.ts.
+    visual_style: {
+      humanoid: "Humanoid (two legs)",
+      wolfish: "Wolfish (lean four legs)",
+      bearish: "Bearish (bulky four legs)",
+      doggish: "Doggish (small four legs)",
+      birdlike: "Birdlike (two-legged bird)",
+      equine: "Equine (horse-like)",
+    },
     living: {
       class: {
         player_human: "Human",
@@ -182,6 +191,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_wolf: "Wolf",
         npc_bear: "Bear",
         npc_dog: "Dog",
+        npc_horse: "Horse",
+        npc_donkey: "Donkey",
         npc_chicken: "Chicken",
       },
       slot: {
@@ -317,6 +328,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       name_fi_label: "Name (Finnish)",
       kind_label: "Kind",
       size_label: "Size",
+      visual_style_label: "Visual style",
+      color_label: "Color (blank = automatic)",
+      color_pick: "Pick a color",
+      color_auto: "Auto",
       target_kind_label: "Target kind",
       non_droppable: "Non-droppable",
       non_pickable: "Non-pickable",
@@ -665,6 +680,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       large: "Suuri",
       huge: "Valtava",
     },
+    visual_style: {
+      humanoid: "Ihmismäinen (kaksi jalkaa)",
+      wolfish: "Sutimainen (hoikka nelijalkainen)",
+      bearish: "Karhumainen (tanakka nelijalkainen)",
+      doggish: "Koiramainen (pieni nelijalkainen)",
+      birdlike: "Linnunkaltainen (kaksijalkainen lintu)",
+      equine: "Hevosmainen",
+    },
     living: {
       class: {
         player_human: "Ihminen",
@@ -678,6 +701,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_wolf: "Susi",
         npc_bear: "Karhu",
         npc_dog: "Koira",
+        npc_horse: "Hevonen",
+        npc_donkey: "Aasi",
         npc_chicken: "Kana",
       },
       slot: {
@@ -813,6 +838,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       name_fi_label: "Nimi (suomi)",
       kind_label: "Laji",
       size_label: "Koko",
+      visual_style_label: "Ulkoasu",
+      color_label: "Väri (tyhjä = automaattinen)",
+      color_pick: "Valitse väri",
+      color_auto: "Auto",
       target_kind_label: "Kohteen tyyppi",
       non_droppable: "Ei pudotettavissa",
       non_pickable: "Ei poimittavissa",

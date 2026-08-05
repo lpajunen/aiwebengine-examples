@@ -1,9 +1,7 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
 // Avatars: local player mesh, target indicator, remote players, NPCs.
 
-// ── Avatar ───────────────────────────────────────────────────────────────
-var avatar = new THREE.Group();
-
+// ── Avatar parts ─────────────────────────────────────────────────────────
 /**
  * @param {number} w
  * @param {number} h
@@ -29,17 +27,328 @@ function makePart(w, h, d, color, px, py, pz, isEye) {
   return mesh;
 }
 
-// Legs
-avatar.add(makePart(0.2, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
-avatar.add(makePart(0.2, 0.35, 0.22, 0x1a252f, 0.14, 0.175, 0));
-// Body
-avatar.add(makePart(0.55, 0.65, 0.4, 0x2980b9, 0, 0.525, 0));
-// Head
-avatar.add(makePart(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
-// Eyes (on +Z face of head)
-avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225, true));
-avatar.add(makePart(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225, true));
+// ── Visual styles ────────────────────────────────────────────────────────
+// Every living class names one of these mesh recipes (visualStyle) and may
+// pin its primary body/fur/feather color; see class-visual.ts server-side.
+// Drawing a new silhouette means adding a spec here, but a class that reuses
+// an existing one (a donkey on the horse recipe) needs no client change at
+// all — it just picks the style, a size and a color in the living type
+// editor. A class that leaves the color blank keeps the pre-color behaviour:
+// the style hashes the living's id into its own palette, so a pack of wolves
+// still comes out in slightly different greys.
 
+/**
+ * @param {string} seedId
+ * @returns {number}
+ */
+function avatarSeedHash(seedId) {
+  var h = 0;
+  var id = String(seedId || "");
+  for (var i = 0; i < id.length; i++) {
+    h = (Math.imul(31, h) + id.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * Same hue/saturation, lightness shifted by `delta` (in 0..1 units) — how the
+ * quadruped styles derive their darker leg color from the primary one.
+ * @param {any} color
+ * @param {number} delta
+ * @returns {any}
+ */
+function shadeColor(color, delta) {
+  var hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  return new THREE.Color().setHSL(
+    hsl.h,
+    hsl.s,
+    Math.max(0, Math.min(1, hsl.l + delta)),
+  );
+}
+
+/**
+ * Two-legged upright body: the player/NPC silhouette.
+ * @param {any} bodyColor
+ * @param {number | string | any} legColor
+ * @param {number | string | any} skinColor
+ * @returns {any}
+ */
+function makeHumanoidBody(bodyColor, legColor, skinColor) {
+  var g = new THREE.Group();
+  // Legs
+  g.add(makePart(0.2, 0.35, 0.22, legColor, -0.14, 0.175, 0));
+  g.add(makePart(0.2, 0.35, 0.22, legColor, 0.14, 0.175, 0));
+  // Body
+  g.add(makePart(0.55, 0.65, 0.4, bodyColor, 0, 0.525, 0));
+  // Head
+  g.add(makePart(0.45, 0.45, 0.45, skinColor, 0, 0.975, 0));
+  // Eyes (on +Z face of head)
+  g.add(makePart(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225, true));
+  g.add(makePart(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225, true));
+  return g;
+}
+
+/** @type {Record<string, any>} */
+var LIVING_VISUAL_STYLE_SPECS = {
+  humanoid: {
+    // Players and NPCs share the mesh but not the palette, so a stranger on
+    // the next tile still reads as a player at a glance.
+    /**
+     * @param {number} hash
+     * @param {boolean} [isPlayer]
+     * @returns {any}
+     */
+    autoColor: function (hash, isPlayer) {
+      if (!isPlayer) {
+        return new THREE.Color("hsl(" + (25 + (hash % 80)) + ",65%,52%)");
+      }
+      var hue = hash % 360;
+      // Shift away from ~200-240 (local avatar blue)
+      if (hue >= 200 && hue <= 240) hue = (hue + 80) % 360;
+      return new THREE.Color("hsl(" + hue + ",70%,55%)");
+    },
+    /**
+     * @param {any} primary
+     * @param {boolean} [isPlayer]
+     * @returns {any}
+     */
+    build: function (primary, isPlayer) {
+      return makeHumanoidBody(
+        primary,
+        isPlayer ? 0x1a252f : 0x5c4033,
+        isPlayer ? 0xf4c78c : 0xd9b38c,
+      );
+    },
+  },
+  wolfish: {
+    /**
+     * @param {number} hash
+     * @returns {any}
+     */
+    autoColor: function (hash) {
+      return new THREE.Color("hsl(210,10%," + (32 + (hash % 18)) + "%)");
+    },
+    /**
+     * @param {any} primary
+     * @returns {any}
+     */
+    build: function (primary) {
+      return makeQuadrupedBody({
+        furColor: primary,
+        legColor: shadeColor(primary, -0.08),
+        snoutColor: 0x1c1c1c,
+        bodyW: 0.4,
+        bodyH: 0.4,
+        bodyL: 0.75,
+        legW: 0.16,
+        legH: 0.4,
+        headSize: 0.32,
+        snoutLen: 0.22,
+        earSize: 0.13,
+        tailLen: 0.35,
+      });
+    },
+  },
+  bearish: {
+    /**
+     * @param {number} hash
+     * @returns {any}
+     */
+    autoColor: function (hash) {
+      return new THREE.Color("hsl(25,35%," + (20 + (hash % 12)) + "%)");
+    },
+    /**
+     * @param {any} primary
+     * @returns {any}
+     */
+    build: function (primary) {
+      return makeQuadrupedBody({
+        furColor: primary,
+        legColor: shadeColor(primary, -0.06),
+        snoutColor: 0x2b2018,
+        bodyW: 0.62,
+        bodyH: 0.55,
+        bodyL: 0.85,
+        legW: 0.24,
+        legH: 0.42,
+        headSize: 0.42,
+        snoutLen: 0.12,
+        earSize: 0.14,
+        tailLen: 0,
+      });
+    },
+  },
+  doggish: {
+    /**
+     * @param {number} hash
+     * @returns {any}
+     */
+    autoColor: function (hash) {
+      return new THREE.Color(
+        "hsl(" + (25 + (hash % 30)) + ",45%," + (42 + (hash % 14)) + "%)",
+      );
+    },
+    /**
+     * @param {any} primary
+     * @returns {any}
+     */
+    build: function (primary) {
+      return makeQuadrupedBody({
+        furColor: primary,
+        legColor: shadeColor(primary, -0.08),
+        snoutColor: 0x2b2018,
+        bodyW: 0.3,
+        bodyH: 0.3,
+        bodyL: 0.55,
+        legW: 0.11,
+        legH: 0.3,
+        headSize: 0.24,
+        snoutLen: 0.15,
+        earSize: 0.1,
+        tailLen: 0.22,
+      });
+    },
+  },
+  birdlike: {
+    /**
+     * @param {number} hash
+     * @returns {any}
+     */
+    autoColor: function (hash) {
+      return new THREE.Color("hsl(40,20%," + (82 + (hash % 12)) + "%)");
+    },
+    /**
+     * @param {any} primary
+     * @returns {any}
+     */
+    build: function (primary) {
+      return makeBirdBody(primary);
+    },
+  },
+  // Long legs, a raised neck and a dropped tail: the horse/donkey/mule
+  // silhouette. A class picks it and its own color; nothing here is
+  // species-specific.
+  equine: {
+    /**
+     * @param {number} hash
+     * @returns {any}
+     */
+    autoColor: function (hash) {
+      // Bay/chestnut browns, so an unconfigured herd still varies.
+      return new THREE.Color(
+        "hsl(" + (18 + (hash % 20)) + ",42%," + (26 + (hash % 16)) + "%)",
+      );
+    },
+    /**
+     * @param {any} primary
+     * @returns {any}
+     */
+    build: function (primary) {
+      return makeQuadrupedBody({
+        furColor: primary,
+        legColor: shadeColor(primary, -0.06),
+        snoutColor: shadeColor(primary, -0.09),
+        maneColor: shadeColor(primary, -0.15),
+        bodyW: 0.42,
+        bodyH: 0.48,
+        bodyL: 0.95,
+        legW: 0.13,
+        legH: 0.62,
+        headSize: 0.26,
+        snoutLen: 0.26,
+        earSize: 0.09,
+        neckLen: 0.42,
+        tailLen: 0.34,
+        tailTilt: 0.9,
+      });
+    },
+  },
+};
+
+/**
+ * @param {string} classId
+ * @returns {any}
+ */
+function livingVisualStyleSpec(classId) {
+  var spec = LIVING_VISUAL_STYLE_SPECS[livingVisualStyle(classId)];
+  return spec || LIVING_VISUAL_STYLE_SPECS.humanoid;
+}
+
+/**
+ * Builds the body meshes a living class calls for: its visual style picks the
+ * recipe, its color paints the primary surface. `fallbackColor` stands in for
+ * the style's hashed auto shade on the local player's own humanoid body,
+ * which stays a steady blue rather than varying per account.
+ * @param {string} classId
+ * @param {string} seedId living id (player or NPC) the auto shade hashes
+ * @param {boolean} isPlayer
+ * @param {number} [fallbackColor]
+ * @returns {any}
+ */
+function makeLivingAvatarGroup(classId, seedId, isPlayer, fallbackColor) {
+  var spec = livingVisualStyleSpec(classId);
+  var classColor = livingClassColor(classId);
+  var primary;
+  if (classColor) {
+    primary = new THREE.Color(classColor);
+  } else if (
+    fallbackColor !== undefined &&
+    fallbackColor !== null &&
+    livingVisualStyle(classId) === "humanoid"
+  ) {
+    primary = new THREE.Color(fallbackColor);
+  } else {
+    primary = spec.autoColor(avatarSeedHash(seedId), isPlayer);
+  }
+  return spec.build(primary, isPlayer);
+}
+
+/**
+ * Swaps an avatar's body meshes for the ones its (new) living class calls for,
+ * keeping the same THREE.Group — position, rotation and the movement lerp all
+ * live on that object, so a class change must not replace it. Equipped-item
+ * meshes are rebuilt from the entry's slots afterwards.
+ * @param {any} entry an object with `group`, `equipMeshes` and `slots`
+ * @param {string} classId
+ * @param {string} seedId
+ * @param {boolean} isPlayer
+ * @param {number} [fallbackColor]
+ */
+function rebuildAvatarBody(entry, classId, seedId, isPlayer, fallbackColor) {
+  if (!entry || !entry.group) return;
+  var group = entry.group;
+  while (group.children.length > 0) group.remove(group.children[0]);
+  entry.equipMeshes = {};
+  var built = makeLivingAvatarGroup(classId, seedId, isPlayer, fallbackColor);
+  while (built.children.length > 0) {
+    var part = built.children[0];
+    built.remove(part);
+    group.add(part);
+  }
+  syncAvatarEquippedItems(entry, entry.slots);
+  setAvatarSizeFromClass(group, classId);
+  setAvatarGhostly(group, classId === "player_ghost");
+}
+
+// ── Local avatar ─────────────────────────────────────────────────────────
+// The local player's own body keeps one steady color instead of a hashed one
+// — you always look like yourself — unless the class pins a color.
+var LOCAL_PLAYER_BODY_COLOR = 0x2980b9;
+
+/** @returns {string} */
+function localPlayerClassId() {
+  return playerInventory && playerInventory.class_id
+    ? String(playerInventory.class_id)
+    : "";
+}
+
+var avatar = makeLivingAvatarGroup(
+  localPlayerClassId(),
+  playerId,
+  true,
+  LOCAL_PLAYER_BODY_COLOR,
+);
 avatar.position.set(targetX, 0, targetZ);
 avatar.rotation.y = INIT_ROTATION;
 scene.add(avatar);
@@ -48,13 +357,37 @@ scene.add(avatar);
 // in sync with playerInventory.slots via syncLocalAvatarEquippedItems()
 // (called from updateStatsHud() in client-core.js whenever the inventory
 // changes) for visual parity with how remote/NPC avatars render slots.
-var localAvatarEquipEntry = { group: avatar, equipMeshes: {} };
+var localAvatarEquipEntry = { group: avatar, equipMeshes: {}, slots: {} };
+
+// The living class the current body meshes were built for, so a class change
+// (dying into player_ghost, a creator handing out a wolfish body) rebuilds
+// them and nothing else does.
+var localAvatarBodyClassId = localPlayerClassId();
+
+/**
+ * Rebuilds the local body when the player's living class changes — the class
+ * carries the visual style and color. Called from updateStatsHud() ahead of
+ * the other playerInventory-changed avatar hooks.
+ */
+function syncLocalAvatarBody() {
+  var classId = localPlayerClassId();
+  if (classId === localAvatarBodyClassId) return;
+  localAvatarBodyClassId = classId;
+  localAvatarEquipEntry.slots =
+    playerInventory && playerInventory.slots ? playerInventory.slots : {};
+  rebuildAvatarBody(
+    localAvatarEquipEntry,
+    classId,
+    playerId,
+    true,
+    LOCAL_PLAYER_BODY_COLOR,
+  );
+}
 
 function syncLocalAvatarEquippedItems() {
-  syncAvatarEquippedItems(
-    localAvatarEquipEntry,
-    playerInventory && playerInventory.slots,
-  );
+  localAvatarEquipEntry.slots =
+    playerInventory && playerInventory.slots ? playerInventory.slots : {};
+  syncAvatarEquippedItems(localAvatarEquipEntry, localAvatarEquipEntry.slots);
 }
 
 /**
@@ -65,10 +398,7 @@ function syncLocalAvatarEquippedItems() {
  * changed" hook.
  */
 function syncLocalAvatarGhostVisual() {
-  setAvatarGhostly(
-    avatar,
-    !!(playerInventory && playerInventory.class_id === "player_ghost"),
-  );
+  setAvatarGhostly(avatar, localPlayerClassId() === "player_ghost");
 }
 
 /**
@@ -77,12 +407,7 @@ function syncLocalAvatarGhostVisual() {
  * updateStatsHud() alongside the other playerInventory-changed avatar hooks.
  */
 function syncLocalAvatarSize() {
-  setAvatarSizeFromClass(
-    avatar,
-    playerInventory && playerInventory.class_id
-      ? String(playerInventory.class_id)
-      : "",
-  );
+  setAvatarSizeFromClass(avatar, localPlayerClassId());
 }
 
 // ── Target indicator (shows where tree actions will occur) ───────────────
@@ -218,54 +543,11 @@ function setAvatarGhostly(group, isGhost) {
 
 /**
  * @param {string} pid
+ * @param {string} [classId]
  * @returns {any}
  */
-function avatarBodyColor(pid) {
-  var h = 0;
-  for (var i = 0; i < pid.length; i++)
-    h = (Math.imul(31, h) + pid.charCodeAt(i)) | 0;
-  var hue = (h >>> 0) % 360;
-  // Shift away from ~200-240 (local avatar blue)
-  if (hue >= 200 && hue <= 240) hue = (hue + 80) % 360;
-  return new THREE.Color("hsl(" + hue + ",70%,55%)");
-}
-
-/**
- * @param {string} pid
- * @returns {any}
- */
-function makeRemoteAvatar(pid) {
-  var g = new THREE.Group();
-  /**
-   * @param {number} w
-   * @param {number} h
-   * @param {number} d
-   * @param {number | string | any} color
-   * @param {number} px
-   * @param {number} py
-   * @param {number} pz
-   * @param {boolean} [isEye] tags this mesh for setAvatarGhostly's eye-glow treatment
-   * @returns {any}
-   */
-  function rp(w, h, d, color, px, py, pz, isEye) {
-    var mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color }),
-    );
-    mesh.position.set(px, py, pz);
-    mesh.castShadow = true;
-    mesh.userData.baseColor = new THREE.Color(color);
-    mesh.userData.isEye = !!isEye;
-    return mesh;
-  }
-  var bc = avatarBodyColor(pid);
-  g.add(rp(0.2, 0.35, 0.22, 0x1a252f, -0.14, 0.175, 0));
-  g.add(rp(0.2, 0.35, 0.22, 0x1a252f, 0.14, 0.175, 0));
-  g.add(rp(0.55, 0.65, 0.4, bc, 0, 0.525, 0));
-  g.add(rp(0.45, 0.45, 0.45, 0xf4c78c, 0, 0.975, 0));
-  g.add(rp(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225, true));
-  g.add(rp(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225, true));
-  return g;
+function makeRemoteAvatar(pid, classId) {
+  return makeLivingAvatarGroup(String(classId || ""), pid, true);
 }
 
 /**
@@ -286,7 +568,11 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
   var incomingSeq = seq !== undefined && seq !== null ? Number(seq) : null;
   if (incomingSeq !== null && !isFinite(incomingSeq)) incomingSeq = null;
   if (!remoteAvatars[pid]) {
-    var g = makeRemoteAvatar(pid);
+    var initialPlayerClassId =
+      playerData && typeof playerData.class_id === "string"
+        ? playerData.class_id
+        : "";
+    var g = makeRemoteAvatar(pid, initialPlayerClassId);
     g.position.set(tx, 0, tz);
     g.rotation.y = hasIncomingRot ? incomingRot : 0;
     scene.add(g);
@@ -298,10 +584,7 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
       seq: incomingSeq !== null ? incomingSeq : 0,
       row: Number(row),
       col: Number(col),
-      class_id:
-        playerData && typeof playerData.class_id === "string"
-          ? playerData.class_id
-          : "",
+      class_id: initialPlayerClassId,
       slots:
         playerData && playerData.slots && typeof playerData.slots === "object"
           ? playerData.slots
@@ -385,11 +668,9 @@ function upsertRemoteAvatar(pid, row, col, seq, rotation, playerData, path) {
     ) {
       remoteAvatars[pid].class_id = playerData.class_id;
       appliedLivingData = true;
-      setAvatarGhostly(
-        remoteAvatars[pid].group,
-        playerData.class_id === "player_ghost",
-      );
-      setAvatarSizeFromClass(remoteAvatars[pid].group, playerData.class_id);
+      // The class carries the visual style and color, so its body has to be
+      // rebuilt — ghost look and size are reapplied as part of that.
+      rebuildAvatarBody(remoteAvatars[pid], playerData.class_id, pid, true);
     }
     if (seqAdvanced || appliedLivingData) refreshTileDetailIfOpen();
   }
@@ -408,57 +689,16 @@ function removeRemoteAvatar(pid) {
 }
 
 /**
- * @param {string} npcId
- * @returns {any}
- */
-function npcBodyColor(npcId) {
-  var h = 0;
-  for (var i = 0; i < npcId.length; i++) {
-    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
-  }
-  var hue = 25 + ((h >>> 0) % 80);
-  return new THREE.Color("hsl(" + hue + ",65%,52%)");
-}
-
-/**
- * @param {string} npcId
- * @returns {any}
- */
-function makeHumanoidNPCAvatar(npcId) {
-  var g = new THREE.Group();
-  /**
-   * @param {number} w
-   * @param {number} h
-   * @param {number} d
-   * @param {number | string | any} color
-   * @param {number} px
-   * @param {number} py
-   * @param {number} pz
-   * @returns {any}
-   */
-  function np(w, h, d, color, px, py, pz) {
-    var mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color }),
-    );
-    mesh.position.set(px, py, pz);
-    mesh.castShadow = true;
-    return mesh;
-  }
-  var bc = npcBodyColor(npcId);
-  g.add(np(0.2, 0.35, 0.22, 0x5c4033, -0.14, 0.175, 0));
-  g.add(np(0.2, 0.35, 0.22, 0x5c4033, 0.14, 0.175, 0));
-  g.add(np(0.55, 0.65, 0.4, bc, 0, 0.525, 0));
-  g.add(np(0.45, 0.45, 0.45, 0xd9b38c, 0, 0.975, 0));
-  g.add(np(0.09, 0.09, 0.06, 0x222222, -0.11, 0.995, 0.225));
-  g.add(np(0.09, 0.09, 0.06, 0x222222, 0.11, 0.995, 0.225));
-  return g;
-}
-
-/**
  * Builds a four-legged animal silhouette (body/head running along +Z,
  * legs at the same x/z offsets as SLOT_ATTACH_POINTS' front/back leg
- * slots) shared by quadruped NPC species like wolves and bears.
+ * slots) shared by the quadruped visual styles (wolfish, bearish, doggish,
+ * equine).
+ *
+ * The last three fields are what separate a horse from a wolf: with
+ * `neckLen` the head rides on a raised neck instead of sitting straight in
+ * front of the chest, `maneColor` runs a stripe down that neck, and
+ * `tailTilt` swings the tail down off the rump. All three default to
+ * off/zero, so the styles that predate them are unchanged.
  * @param {{
  *   furColor: number | string | any,
  *   legColor: number | string | any,
@@ -467,10 +707,13 @@ function makeHumanoidNPCAvatar(npcId) {
  *   legW: number, legH: number,
  *   headSize: number, snoutLen: number,
  *   earSize: number, tailLen: number,
+ *   neckLen?: number,
+ *   maneColor?: number | string | any,
+ *   tailTilt?: number,
  * }} spec
  * @returns {any}
  */
-function makeQuadrupedAvatar(spec) {
+function makeQuadrupedBody(spec) {
   var g = new THREE.Group();
   /**
    * @param {number} w
@@ -483,13 +726,7 @@ function makeQuadrupedAvatar(spec) {
    * @returns {any}
    */
   function np(w, h, d, color, px, py, pz) {
-    var mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: color }),
-    );
-    mesh.position.set(px, py, pz);
-    mesh.castShadow = true;
-    return mesh;
+    return makePart(w, h, d, color, px, py, pz);
   }
   var legY = spec.legH / 2;
   var bodyY = spec.legH + spec.bodyH / 2;
@@ -507,6 +744,45 @@ function makeQuadrupedAvatar(spec) {
   g.add(np(spec.bodyW, spec.bodyH, spec.bodyL, spec.furColor, 0, bodyY, 0));
   var headZ = spec.bodyL / 2 + spec.headSize / 2;
   var headY = bodyY + spec.bodyH * 0.15;
+  var neckLen = Number(spec.neckLen || 0);
+  if (neckLen > 0) {
+    // Leans forward over the chest: local +Y maps to (0, cos, sin) under a
+    // positive X rotation, so the same angle places the neck's center and
+    // carries the head to its far end.
+    var neckTilt = 0.34;
+    var neckW = spec.bodyW * 0.42;
+    var neckD = spec.bodyW * 0.5;
+    var neckBaseY = bodyY + spec.bodyH * 0.35;
+    var neckBaseZ = spec.bodyL / 2 - neckD * 0.3;
+    var neckRise = Math.cos(neckTilt) * neckLen;
+    var neckReach = Math.sin(neckTilt) * neckLen;
+    var neck = np(
+      neckW,
+      neckLen,
+      neckD,
+      spec.furColor,
+      0,
+      neckBaseY + neckRise / 2,
+      neckBaseZ + neckReach / 2,
+    );
+    neck.rotation.x = neckTilt;
+    g.add(neck);
+    if (spec.maneColor) {
+      var mane = np(
+        neckW * 0.4,
+        neckLen * 0.95,
+        neckD * 0.35,
+        spec.maneColor,
+        0,
+        neckBaseY + neckRise / 2 + neckW * 0.12,
+        neckBaseZ + neckReach / 2 - neckD * 0.4,
+      );
+      mane.rotation.x = neckTilt;
+      g.add(mane);
+    }
+    headY = neckBaseY + neckRise + spec.headSize * 0.25;
+    headZ = neckBaseZ + neckReach + spec.headSize * 0.25;
+  }
   g.add(
     np(
       spec.headSize,
@@ -555,118 +831,31 @@ function makeQuadrupedAvatar(spec) {
     ),
   );
   if (spec.tailLen > 0) {
-    g.add(
-      np(
-        spec.legW * 0.6,
-        spec.legW * 0.6,
-        spec.tailLen,
-        spec.furColor,
-        0,
-        bodyY + spec.bodyH * 0.2,
-        -spec.bodyL / 2 - spec.tailLen / 2,
-      ),
+    // Straight out behind by default; tailTilt swings it down off the rump
+    // (local +Z maps to (0, -sin, cos) under a positive X rotation).
+    var tailTilt = Number(spec.tailTilt || 0);
+    var tailColor = spec.maneColor || spec.furColor;
+    var tail = np(
+      spec.legW * 0.6,
+      spec.legW * 0.6,
+      spec.tailLen,
+      tailColor,
+      0,
+      bodyY + spec.bodyH * 0.2 - (Math.sin(tailTilt) * spec.tailLen) / 2,
+      -spec.bodyL / 2 - (Math.cos(tailTilt) * spec.tailLen) / 2,
     );
+    tail.rotation.x = tailTilt;
+    g.add(tail);
   }
   return g;
 }
 
 /**
- * @param {string} npcId
+ * Builds a small two-legged bird silhouette (the birdlike style).
+ * @param {number | string | any} featherColor
  * @returns {any}
  */
-function makeWolfAvatar(npcId) {
-  var h = 0;
-  for (var i = 0; i < npcId.length; i++) {
-    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
-  }
-  var lightness = 32 + ((h >>> 0) % 18);
-  return makeQuadrupedAvatar({
-    furColor: new THREE.Color("hsl(210,10%," + lightness + "%)"),
-    legColor: new THREE.Color(
-      "hsl(210,10%," + Math.max(lightness - 8, 15) + "%)",
-    ),
-    snoutColor: 0x1c1c1c,
-    bodyW: 0.4,
-    bodyH: 0.4,
-    bodyL: 0.75,
-    legW: 0.16,
-    legH: 0.4,
-    headSize: 0.32,
-    snoutLen: 0.22,
-    earSize: 0.13,
-    tailLen: 0.35,
-  });
-}
-
-/**
- * @param {string} npcId
- * @returns {any}
- */
-function makeBearAvatar(npcId) {
-  var h = 0;
-  for (var i = 0; i < npcId.length; i++) {
-    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
-  }
-  var lightness = 20 + ((h >>> 0) % 12);
-  return makeQuadrupedAvatar({
-    furColor: new THREE.Color("hsl(25,35%," + lightness + "%)"),
-    legColor: new THREE.Color(
-      "hsl(25,35%," + Math.max(lightness - 6, 10) + "%)",
-    ),
-    snoutColor: 0x2b2018,
-    bodyW: 0.62,
-    bodyH: 0.55,
-    bodyL: 0.85,
-    legW: 0.24,
-    legH: 0.42,
-    headSize: 0.42,
-    snoutLen: 0.12,
-    earSize: 0.14,
-    tailLen: 0,
-  });
-}
-
-/**
- * @param {string} npcId
- * @returns {any}
- */
-function makeDogAvatar(npcId) {
-  var h = 0;
-  for (var i = 0; i < npcId.length; i++) {
-    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
-  }
-  var hue = 25 + ((h >>> 0) % 30);
-  var lightness = 42 + ((h >>> 0) % 14);
-  return makeQuadrupedAvatar({
-    furColor: new THREE.Color("hsl(" + hue + ",45%," + lightness + "%)"),
-    legColor: new THREE.Color(
-      "hsl(" + hue + ",45%," + Math.max(lightness - 8, 15) + "%)",
-    ),
-    snoutColor: 0x2b2018,
-    bodyW: 0.3,
-    bodyH: 0.3,
-    bodyL: 0.55,
-    legW: 0.11,
-    legH: 0.3,
-    headSize: 0.24,
-    snoutLen: 0.15,
-    earSize: 0.1,
-    tailLen: 0.22,
-  });
-}
-
-/**
- * Builds a small two-legged bird silhouette used for chickens.
- * @param {string} npcId
- * @returns {any}
- */
-function makeChickenAvatar(npcId) {
-  var h = 0;
-  for (var i = 0; i < npcId.length; i++) {
-    h = (Math.imul(31, h) + npcId.charCodeAt(i)) | 0;
-  }
-  var featherLightness = 82 + ((h >>> 0) % 12);
-  var featherColor = new THREE.Color("hsl(40,20%," + featherLightness + "%)");
+function makeBirdBody(featherColor) {
   var g = new THREE.Group();
   /**
    * @param {number} w
@@ -679,13 +868,7 @@ function makeChickenAvatar(npcId) {
    * @returns {any}
    */
   function np(w, h2, d, color, px, py, pz) {
-    var mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h2, d),
-      new THREE.MeshLambertMaterial({ color: color }),
-    );
-    mesh.position.set(px, py, pz);
-    mesh.castShadow = true;
-    return mesh;
+    return makePart(w, h2, d, color, px, py, pz);
   }
   var legY = 0.11;
   g.add(np(0.05, 0.22, 0.05, 0xd98c3a, -0.07, legY, 0));
@@ -706,11 +889,7 @@ function makeChickenAvatar(npcId) {
  * @returns {any}
  */
 function makeNPCAvatar(npcId, classId) {
-  if (classId === "npc_wolf") return makeWolfAvatar(npcId);
-  if (classId === "npc_bear") return makeBearAvatar(npcId);
-  if (classId === "npc_dog") return makeDogAvatar(npcId);
-  if (classId === "npc_chicken") return makeChickenAvatar(npcId);
-  return makeHumanoidNPCAvatar(npcId);
+  return makeLivingAvatarGroup(String(classId || ""), npcId, false);
 }
 
 /**
@@ -792,19 +971,12 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
       typeof npcData.class_id === "string" &&
       npcData.class_id !== npcAvatars[npcId].meshClassId
     ) {
-      npcAvatars[npcId].class_id = npcData.class_id;
+      // The class carries the visual style, color and size, so its body has
+      // to be rebuilt — in place, since the group holds the movement lerp.
       var entry = npcAvatars[npcId];
-      var oldGroup = entry.group;
-      var newGroup = makeNPCAvatar(npcId, npcData.class_id);
-      newGroup.position.copy(oldGroup.position);
-      newGroup.rotation.y = oldGroup.rotation.y;
-      setAvatarSizeFromClass(newGroup, npcData.class_id);
-      scene.remove(oldGroup);
-      scene.add(newGroup);
-      entry.group = newGroup;
+      entry.class_id = npcData.class_id;
       entry.meshClassId = npcData.class_id;
-      entry.equipMeshes = {};
-      syncAvatarEquippedItems(entry, entry.slots);
+      rebuildAvatarBody(entry, npcData.class_id, npcId, false);
     } else if (npcData && npcData.slots && typeof npcData.slots === "object") {
       syncAvatarEquippedItems(npcAvatars[npcId], npcData.slots);
     }

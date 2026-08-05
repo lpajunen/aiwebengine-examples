@@ -1168,6 +1168,8 @@ function runWorldDatabaseMigration(): void {
     ["addTextColumn", "value_schema_json", false],
     ["addIntegerColumn", "aggressive", false],
     ["addTextColumn", "size", true],
+    ["addTextColumn", "visual_style", true],
+    ["addTextColumn", "color", true],
     ["addTextColumn", "default_items_json", true],
     ["addTextColumn", "owner_ids_json", true],
     ["addTextColumn", "labels_json", true],

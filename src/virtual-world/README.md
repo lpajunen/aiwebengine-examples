@@ -147,7 +147,12 @@ generation parameters. Worlds are then instances of that type.
 On top of the world type, the creator defines content types:
 
 - **Living types** — kinds of NPCs (and player appearance variants), with
-  their properties and behavior.
+  their properties and behavior. Appearance is three picks, not artwork:
+  a **visual style** (the avatar silhouette — humanoid, wolfish, bearish,
+  doggish, birdlike, equine), a **size** and a **color**. Drawing a new
+  silhouette is client work, but every later species that reuses one is
+  just a different style/size/color combination: the built-in donkey is
+  the horse's equine recipe with a grey coat, and cost no new artwork.
 - **Item types** — kinds of items, with their properties and the actions
   they enable.
 - **Action types** — the data-driven logic described above.

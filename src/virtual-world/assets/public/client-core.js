@@ -426,6 +426,9 @@ function updateStatsHud() {
     "fatigue",
   );
   updateUseButtonState();
+  // Body first: a class change rebuilds the meshes the other three hooks
+  // then decorate (equipped items, ghost look, size).
+  syncLocalAvatarBody();
   syncLocalAvatarEquippedItems();
   syncLocalAvatarGhostVisual();
   syncLocalAvatarSize();

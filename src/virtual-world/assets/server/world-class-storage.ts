@@ -8,6 +8,7 @@ import {
   OAK_WORLD_COLS,
   OAK_WORLD_ROWS,
   ROWS,
+  WORLD_TYPE_FOREST,
   WORLD_TYPE_VILLAGE,
   WORLD_TYPES,
 } from "./world-domain.ts";
@@ -73,6 +74,14 @@ function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
       // rare wilderness landmark rather than a fifth common species, so the
       // wild presets get a couple and villages none.
       worldType === WORLD_TYPE_VILLAGE ? [] : [{ id: "npc_giant", count: 2 }],
+    )
+    .concat(
+      // The equines: donkeys are village livestock, horses roam the forest.
+      // Both are peaceful, so neither changes how dangerous a world is.
+      worldType === WORLD_TYPE_VILLAGE ? [{ id: "npc_donkey", count: 3 }] : [],
+    )
+    .concat(
+      worldType === WORLD_TYPE_FOREST ? [{ id: "npc_horse", count: 3 }] : [],
     );
 }
 
@@ -359,6 +368,19 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       existing.itemSpawns = desired.itemSpawns;
       existing.npcSpawns = desired.npcSpawns;
       changed = true;
+    } else {
+      // Same append-only backfill the generation presets get above, so a
+      // species added to the shared defaults (e.g. village donkeys) also
+      // reaches the start village's own class.
+      desired.npcSpawns.forEach(function (entry) {
+        const present = existing.npcSpawns.some(function (e) {
+          return e.id === entry.id;
+        });
+        if (!present) {
+          existing.npcSpawns.push(entry);
+          changed = true;
+        }
+      });
     }
     if (desired.labels.fi && !(existing.labels && existing.labels.fi)) {
       existing.labels = Object.assign({}, existing.labels || {}, {

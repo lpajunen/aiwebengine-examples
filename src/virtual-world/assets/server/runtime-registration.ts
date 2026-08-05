@@ -501,6 +501,24 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Visual size of the living: tiny, small, medium (default), large or huge — each step doubles the rendered scale",
       },
+      visualStyle: {
+        type: "string",
+        enum: [
+          "humanoid",
+          "wolfish",
+          "bearish",
+          "doggish",
+          "birdlike",
+          "equine",
+        ],
+        description:
+          "Avatar mesh recipe the client renders for this class: humanoid (default, two legs), wolfish (lean quadruped), bearish (bulky quadruped), doggish (small quadruped), birdlike (two-legged bird) or equine (horse-like, raised neck and dropped tail)",
+      },
+      color: {
+        type: "string",
+        description:
+          "Primary body/fur/feather color as a #rrggbb hex string; empty (default) lets the client pick a per-instance shade from the style's own palette",
+      },
     },
   });
   safeRegisterTool(

@@ -12,6 +12,10 @@ import {
 } from "./living-class-storage.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
 import { normalizeClassSize } from "./class-size.ts";
+import {
+  normalizeClassColor,
+  normalizeLivingVisualStyle,
+} from "./class-visual.ts";
 
 function bipedSlotDefinitions(): LivingClassRecord["slotDefinitions"] {
   return [
@@ -245,6 +249,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
+    visualStyle: "wolfish",
   },
   npc_bear: {
     id: "npc_bear",
@@ -255,6 +260,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
+    visualStyle: "bearish",
   },
   npc_dog: {
     id: "npc_dog",
@@ -264,6 +270,32 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: quadrupedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "doggish",
+  },
+  // Horse and donkey are the same equine recipe: the donkey just pins a grey
+  // coat where the horse leaves the color automatic (bay/chestnut browns
+  // hashed per animal). No client work went into the second one — that is the
+  // point of visualStyle, see class-visual.ts.
+  npc_horse: {
+    id: "npc_horse",
+    kind: "npc",
+    labelKey: "living.class.npc_horse",
+    fallbackLabel: "Horse",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "equine",
+  },
+  npc_donkey: {
+    id: "npc_donkey",
+    kind: "npc",
+    labelKey: "living.class.npc_donkey",
+    fallbackLabel: "Donkey",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "equine",
+    color: "#8f867c",
   },
   npc_chicken: {
     id: "npc_chicken",
@@ -273,6 +305,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedLegsOnlySlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "birdlike",
   },
 };
 
@@ -388,6 +421,8 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     })(),
     labels: normalizeClassLabels(row.labels_json),
     size: normalizeClassSize(row.size),
+    visualStyle: normalizeLivingVisualStyle(row.visual_style),
+    color: normalizeClassColor(row.color),
   };
 }
 
@@ -407,6 +442,8 @@ function livingClassToDbRow(
   owner_ids_json: string;
   labels_json: string;
   size: string;
+  visual_style: string;
+  color: string;
   created_at: number;
   updated_at: number;
 } {
@@ -415,6 +452,8 @@ function livingClassToDbRow(
     class_id: record.id,
     kind: record.kind,
     size: normalizeClassSize(record.size),
+    visual_style: normalizeLivingVisualStyle(record.visualStyle),
+    color: normalizeClassColor(record.color),
     label_key: record.labelKey || "",
     fallback_label: record.fallbackLabel || "",
     slot_definitions_json: JSON.stringify(record.slotDefinitions || []),
@@ -454,6 +493,8 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
       : [],
     ownerIds: [],
     size: normalizeClassSize(cls.size),
+    visualStyle: normalizeLivingVisualStyle(cls.visualStyle),
+    color: normalizeClassColor(cls.color),
   };
 }
 

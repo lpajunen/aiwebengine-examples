@@ -39,6 +39,10 @@ import {
 import { movePlayerForUser } from "./move-player.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
 import { normalizeClassSize } from "./class-size.ts";
+import {
+  normalizeClassColor,
+  normalizeLivingVisualStyle,
+} from "./class-visual.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import {
@@ -520,6 +524,16 @@ export function virtualWorldManageLivingClassesToolHandler(
         args.size,
         existing ? normalizeClassSize(existing.size) : undefined,
       ),
+      visualStyle: normalizeLivingVisualStyle(
+        args.visualStyle,
+        existing ? normalizeLivingVisualStyle(existing.visualStyle) : undefined,
+      ),
+      color:
+        args.color !== undefined
+          ? normalizeClassColor(args.color)
+          : existing
+            ? normalizeClassColor(existing.color)
+            : "",
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

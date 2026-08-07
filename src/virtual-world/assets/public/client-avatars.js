@@ -434,9 +434,10 @@ var npcAvatars = {}; // { npcId: { group, targetX, targetZ, targetRot, seq } }
 // visual-style recipe as the ground mesh (makeItemObject, defined in
 // client-world-render.js, loaded before this file) so a wielded sword reads
 // as a sword rather than a coloured cube.
-// Recipes are sized for lying on a tile, so a held one is scaled down and
-// hung from its middle instead of standing on the attach point.
-var EQUIPPED_ITEM_SCALE = 0.5;
+// Recipes are authored small (see ITEM_WORLD_SCALE in client-world-render.js);
+// a held one is scaled against the wielder's body instead, and hung from its
+// middle rather than standing on the attach point.
+var EQUIPPED_ITEM_SCALE = 0.9;
 /** @type {Record<string, {x: number, y: number, z: number}>} */
 var SLOT_ATTACH_POINTS = {
   left_hand: { x: -0.32, y: 0.55, z: 0.15 },

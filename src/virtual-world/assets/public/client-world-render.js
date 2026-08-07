@@ -915,7 +915,9 @@ scene.add(itemMeshGroup);
 // opportunity is discoverable in the world without opening the tile panel.
 var highlightMeshGroup = new THREE.Group();
 scene.add(highlightMeshGroup);
-var highlightRingGeo = new THREE.RingGeometry(0.3, 0.44, 28);
+// Wide enough to ring a ground item at ITEM_WORLD_SCALE rather than sit
+// under its middle.
+var highlightRingGeo = new THREE.RingGeometry(0.42, 0.58, 28);
 var highlightRingMat = new THREE.MeshBasicMaterial({
   color: 0xffd54a,
   transparent: true,
@@ -1033,6 +1035,13 @@ function getItemMaterial(type) {
 // stepped down/up, and a numeric shade is a fixed color for something the
 // class color shouldn't drive (a leather grip, a bowstring). Every recipe
 // stands on y=0 so a ground item can simply be dropped at tile height.
+
+// Recipes are authored around a ~0.35-wide footprint (what the old shared
+// cube was); a ground item is then drawn at this scale, which is where the
+// silhouettes actually read from the game's camera on a 2-unit tile. Held
+// items use EQUIPPED_ITEM_SCALE in client-avatars.js instead, being sized
+// against the wielder rather than the tile.
+var ITEM_WORLD_SCALE = 1.6;
 
 /** @type {Record<string, any[]>} */
 var ITEM_VISUAL_STYLE_SPECS = {
@@ -1311,21 +1320,27 @@ function rebuildItemMeshes() {
         ? new THREE.Mesh(doorGeo, getDoorMaterial(doorOpen))
         : makeItemObject(item.type);
       // The item class's size scales the recipe (see classSizeScale in
-      // tiles-and-items.js); "medium" is 1, leaving the mesh as before.
+      // tiles-and-items.js); "medium" is 1. On top of that a ground item is
+      // drawn at ITEM_WORLD_SCALE, since the recipes' details only read from
+      // the game camera once an item is a decent fraction of a tile. The door
+      // is its own full-size slab and takes the class size alone.
       var sizeScale = itemSizeScale(item.type);
-      if (sizeScale !== 1) mesh.scale.setScalar(sizeScale);
+      var meshScale = isDoor ? sizeScale : sizeScale * ITEM_WORLD_SCALE;
+      if (meshScale !== 1) mesh.scale.setScalar(meshScale);
       if (isDoor && placeDoorOnWall(mesh, row, col, doorOpen, sizeScale)) {
         mesh.castShadow = true;
         mesh.receiveShadow = false;
         itemMeshGroup.add(mesh);
         continue;
       }
-      var ox = isDoor ? 0 : ((i % 3) - 1) * 0.2;
-      var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.2;
+      // Items on one tile sit on a 3x3 grid; the spread grew with
+      // ITEM_WORLD_SCALE so bigger meshes still read as separate items.
+      var ox = isDoor ? 0 : ((i % 3) - 1) * 0.42;
+      var oz = isDoor ? 0 : ((Math.floor(i / 3) % 3) - 1) * 0.42;
       // Recipes stand on their own y=0, so an item only needs lifting clear
       // of the ground plane; the centred door slab still needs half its
-      // height. Stacked tiles step up so a full tile stays readable.
-      var oy = isDoor ? 0.5 * sizeScale : 0.03 + Math.floor(i / 9) * 0.16;
+      // height. A tenth item stacks above the grid rather than inside it.
+      var oy = isDoor ? 0.5 * sizeScale : 0.03 + Math.floor(i / 9) * 0.3;
       mesh.position.set(tileX(col) + ox, oy, tileZ(row) + oz);
       // An open door not hung on a house wall swings ~70° ajar and shifts to
       // its hinge edge; a shut one sits flush across the tile.

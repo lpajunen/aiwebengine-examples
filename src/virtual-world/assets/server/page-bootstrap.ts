@@ -407,6 +407,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
             <option value="orb" data-i18n-key="item_style.orb">Orb (charm, stone)</option>
             <option value="plant" data-i18n-key="item_style.plant">Plant (flower, sapling)</option>
             <option value="scroll" data-i18n-key="item_style.scroll">Scroll</option>
+            <option value="book" data-i18n-key="item_style.book">Book</option>
           </select>
         </label>
         <label><span data-i18n-key="class_editor.color_label">Color (blank = automatic)</span>

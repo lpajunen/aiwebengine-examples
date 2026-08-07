@@ -34,6 +34,8 @@ export type WorldClassRecord = {
   labels: ClassLabels;
 };
 
+const DEFAULT_SPELLBOOK_SPAWN_COUNT = 3;
+
 // Default item spawn manifest shared by all four built-in world classes,
 // reproducing the old flat WORLD_ITEM_SPAWN_COUNT=30 behavior (10 item types
 // x 3 each) now that spawning is explicit per world class.
@@ -49,11 +51,21 @@ function defaultItemSpawns(): WorldClassSpawnEntry[] {
     "rune_stone",
     "juniper_bundle",
     "birch_bark_letter",
+    "spellbook",
   ]
     .map(function (id) {
       return { id: id, count: 3 };
     })
     .concat([{ id: "chest", count: 1 }]);
+}
+
+function ensureSpellbookSpawn(itemSpawns: WorldClassSpawnEntry[]): boolean {
+  const alreadyPresent = itemSpawns.some(function (entry) {
+    return entry.id === "spellbook";
+  });
+  if (alreadyPresent) return false;
+  itemSpawns.push({ id: "spellbook", count: DEFAULT_SPELLBOOK_SPAWN_COUNT });
+  return true;
 }
 
 // Default NPC spawn manifest for built-in world classes, reproducing the old
@@ -314,6 +326,9 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       existing.npcSpawns = defaults.npcSpawns;
       changed = true;
     } else {
+      if (ensureSpellbookSpawn(existing.itemSpawns)) {
+        changed = true;
+      }
       // Add any built-in default NPC species missing from an already-populated
       // manifest (e.g. npc_archer added to the wild preset after this world was
       // seeded) — appends only, so counts and creator-added species are kept.
@@ -369,6 +384,9 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       existing.npcSpawns = desired.npcSpawns;
       changed = true;
     } else {
+      if (ensureSpellbookSpawn(existing.itemSpawns)) {
+        changed = true;
+      }
       // Same append-only backfill the generation presets get above, so a
       // species added to the shared defaults (e.g. village donkeys) also
       // reaches the start village's own class.

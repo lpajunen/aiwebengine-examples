@@ -1106,6 +1106,14 @@ var ITEM_VISUAL_STYLE_SPECS = {
       shade: "dark",
     },
   ],
+  // A closed hardback: dark cover edges frame a warm page block, with a
+  // raised spine so it reads as a book from the game's angled camera.
+  book: [
+    { w: 0.36, h: 0.035, d: 0.25, y: 0.018, shade: "dark" },
+    { w: 0.31, h: 0.12, d: 0.2, y: 0.095, shade: 0xe7d3a3 },
+    { w: 0.36, h: 0.035, d: 0.25, y: 0.172 },
+    { w: 0.04, h: 0.19, d: 0.26, x: -0.18, y: 0.095, shade: "dark" },
+  ],
 };
 
 // Geometry is per style+part and never varies, so build each part's geometry

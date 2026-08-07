@@ -15,6 +15,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_builder: { name: "Rune gate charm" },
       portal: { name: "Rune gate" },
       door: { name: "Door" },
+      spellbook: { name: "Spellbook" },
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Rowan charm" },
@@ -189,6 +190,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       orb: "Orb (charm, stone)",
       plant: "Plant (flower, sapling)",
       scroll: "Scroll",
+      book: "Book",
     },
     living: {
       class: {
@@ -539,6 +541,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_builder: { name: "Riimuportin amuletti" },
       portal: { name: "Riimuportti" },
       door: { name: "Ovi" },
+      spellbook: { name: "Loitsukirja" },
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Pihlajakoriste" },
@@ -710,6 +713,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       orb: "Pallo (amuletti, kivi)",
       plant: "Kasvi (kukka, taimi)",
       scroll: "Kääry",
+      book: "Kirja",
     },
     living: {
       class: {
@@ -1295,6 +1299,7 @@ function itemTypeToLabelKey(type) {
   if (type === "blessing_marker") return "item.blessing_marker.name";
   if (type === "portal") return "item.portal.name";
   if (type === "door") return "item.door.name";
+  if (type === "spellbook") return "item.spellbook.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   if (type === "creator_stone") return "item.creator_stone.name";
   if (type === "old_oak") return "item.old_oak.name";

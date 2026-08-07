@@ -253,6 +253,17 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: ["portal_travel"],
   },
+  spellbook: {
+    id: "spellbook",
+    kind: "artifact",
+    visuals: {
+      color: 0x6b3e80,
+      labelKey: "item.spellbook.name",
+      fallbackLabel: "Spellbook",
+      style: "book",
+    },
+    actionIds: ["firebolt", "fireball"],
+  },
   starter_kit: {
     id: "starter_kit",
     kind: "artifact",
@@ -275,8 +286,6 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "cancel_approach",
       "fight",
       "stop_fight",
-      "firebolt",
-      "fireball",
       "summon_knife",
       "summon_weapons",
       "craft_kantele",
@@ -709,6 +718,17 @@ function backfillItemClassDefaults(
       def.visuals.style !== DEFAULT_ITEM_VISUAL_STYLE
     ) {
       existing.visuals.style = def.visuals.style;
+      changed = true;
+    }
+    // Spellbook initially used the scroll recipe. Upgrade that seeded legacy
+    // value to the dedicated book recipe without touching creator-selected
+    // styles for any other built-in item.
+    if (
+      defId === "spellbook" &&
+      def.visuals.style === "book" &&
+      normalizeItemVisualStyle(existing.visuals.style) === "scroll"
+    ) {
+      existing.visuals.style = "book";
       changed = true;
     }
     if (changed) {

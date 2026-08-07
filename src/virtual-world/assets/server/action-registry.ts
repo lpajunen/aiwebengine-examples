@@ -832,7 +832,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     labelKey: "tree_action.firebolt",
     fallbackLabel: "Firebolt",
     targetKind: "living_nearby",
-    sourceItemIds: ["starter_kit"],
+    sourceItemIds: ["spellbook"],
     experience: { amount: 20, onKill: true },
     targeting: {
       range: 8,
@@ -850,7 +850,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     labelKey: "tree_action.fireball",
     fallbackLabel: "Fireball",
     targetKind: "point",
-    sourceItemIds: ["starter_kit"],
+    sourceItemIds: ["spellbook"],
     experience: { amount: 20, onKill: true },
     targeting: {
       range: 8,

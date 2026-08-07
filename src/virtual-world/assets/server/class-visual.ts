@@ -51,7 +51,8 @@ export type ItemVisualStyle =
   | "staff"
   | "orb"
   | "plant"
-  | "scroll";
+  | "scroll"
+  | "book";
 
 export const ITEM_VISUAL_STYLES: ItemVisualStyle[] = [
   "block",
@@ -63,6 +64,7 @@ export const ITEM_VISUAL_STYLES: ItemVisualStyle[] = [
   "orb",
   "plant",
   "scroll",
+  "book",
 ];
 
 export const DEFAULT_ITEM_VISUAL_STYLE: ItemVisualStyle = "block";

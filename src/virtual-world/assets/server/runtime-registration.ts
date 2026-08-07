@@ -312,9 +312,10 @@ export function registerVirtualWorldRuntime(): void {
           "orb",
           "plant",
           "scroll",
+          "book",
         ],
         description:
-          "Mesh recipe the client renders for this item: block (default cube), blade (knife/sword), bow, chest, door, staff (hammer/tool), orb (charm/stone), plant (flower/sapling) or scroll",
+          "Mesh recipe the client renders for this item: block (default cube), blade (knife/sword), bow, chest, door, staff (hammer/tool), orb (charm/stone), plant (flower/sapling), scroll or book",
       },
       actionIds: {
         type: "array",

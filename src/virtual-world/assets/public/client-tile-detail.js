@@ -567,9 +567,6 @@ function renderTileDetailPanel() {
       var npcData = npcEntry.data || {};
       var npcSlots =
         npcData.slots && typeof npcData.slots === "object" ? npcData.slots : {};
-      // Bag contents are private and never sent to other clients; only the
-      // count is public (see buildWorldNPCSnapshot on the server).
-      var npcBagCount = Number(npcData.inventory_count) || 0;
       var npcValues =
         npcData.values && typeof npcData.values === "object"
           ? npcData.values
@@ -596,13 +593,6 @@ function renderTileDetailPanel() {
           escHtml(inventorySlotLabel(npcData, npcSlotId)) +
             ": " +
             escHtml(inventoryItemLabel(npcSlots[npcSlotId])),
-        );
-      }
-      if (npcBagCount > 0) {
-        npcEquippedParts.push(
-          escHtml(t("tile.bag_items", "Bag items:")) +
-            " " +
-            escHtml(String(npcBagCount)),
         );
       }
       html += tileCompactRow(npcEquippedParts);

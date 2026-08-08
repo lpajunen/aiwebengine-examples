@@ -1,5 +1,18 @@
 # Unified Public Living Contract
 
+## Status: core migration complete (2026-08-08)
+
+The public world contract now uses `PublicLivingSnapshot` for players and
+NPCs, `/virtual-world/livings`, unified bootstrap/resync payloads, and
+`living_moved`/`living_updated`/`living_removed` stream events. Equipped slots
+and schema-public values update live without exposing bag contents, raw item
+state, session metadata, or private progression values.
+
+`/virtual-world/players` and `/virtual-world/npcs`, plus actor-specific
+internal stream labels, remain compatibility adapters. The client deliberately
+keeps separate player/NPC avatar collections because their rendering and local
+owner behavior differ, while consuming the same public data shape.
+
 ## Goal
 
 Players and NPCs should be mechanically equivalent living entities. Their

@@ -659,7 +659,6 @@ export function registerVirtualWorldRuntime(): void {
   safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");
   safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
-  safeRegisterRoute("/virtual-world/players", "playersHandler", "GET");
   safeRegisterRoute("/virtual-world/livings", "livingsHandler", "GET");
   safeRegisterRoute("/virtual-world/resync", "resyncHandler", "GET");
   safeRegisterRoute(
@@ -668,7 +667,6 @@ export function registerVirtualWorldRuntime(): void {
     "GET",
   );
   safeRegisterRoute("/virtual-world/world-state", "worldStateHandler", "GET");
-  safeRegisterRoute("/virtual-world/npcs", "npcsHandler", "GET");
   safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
   safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
   safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");

@@ -7,9 +7,7 @@ import {
   leaveWorldForUser,
   listItemsForUser,
   listLivingsForUser,
-  listNPCsForUser,
   listOnlinePlayersForUser,
-  listPlayersForUser,
   postDirectMessageForUser,
   postWorldChatForUser,
   setNicknameForUser,
@@ -475,17 +473,6 @@ export function startWorldHandler(context: any) {
 /**
  * @param {*} context
  */
-export function playersHandler(context: any) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listPlayersForUser(userId));
-}
-
-/**
- * @param {*} context
- */
 export function livingsHandler(context: any) {
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
@@ -529,17 +516,6 @@ export function currentWorldHandler(context: any) {
       : 0,
   });
   return ResponseBuilder.json(snapshot);
-}
-
-/**
- * @param {*} context
- */
-export function npcsHandler(context: any) {
-  if (!context.request.auth || !context.request.auth.isAuthenticated) {
-    return ResponseBuilder.json({ error: "Authentication required" }, 401);
-  }
-  var userId = context.request.auth.userId;
-  return ResponseBuilder.json(listNPCsForUser(userId));
 }
 
 /**

@@ -139,9 +139,7 @@ import {
   leaveWorldForUser as leaveWorldForUserImpl,
   listItemsForUser as listItemsForUserImpl,
   listLivingsForUser as listLivingsForUserImpl,
-  listNPCsForUser as listNPCsForUserImpl,
   listOnlinePlayersForUser as listOnlinePlayersForUserImpl,
-  listPlayersForUser as listPlayersForUserImpl,
   postDirectMessageForUser as postDirectMessageForUserImpl,
   postWorldChatForUser as postWorldChatForUserImpl,
   setNicknameForUser as setNicknameForUserImpl,
@@ -309,11 +307,9 @@ import {
   heartbeatHandler as heartbeatHandlerImpl,
   newWorldHandler as newWorldHandlerImpl,
   startWorldHandler as startWorldHandlerImpl,
-  playersHandler as playersHandlerImpl,
   livingsHandler as livingsHandlerImpl,
   resyncHandler as resyncHandlerImpl,
   currentWorldHandler as currentWorldHandlerImpl,
-  npcsHandler as npcsHandlerImpl,
   treeActionHandler as treeActionHandlerImpl,
 } from "./server/route-handlers.ts";
 
@@ -509,10 +505,6 @@ function startWorldHandler(context) {
   return startWorldHandlerImpl(context);
 }
 /** @param {*} context */
-function playersHandler(context) {
-  return playersHandlerImpl(context);
-}
-/** @param {*} context */
 function livingsHandler(context) {
   return livingsHandlerImpl(context);
 }
@@ -523,10 +515,6 @@ function resyncHandler(context) {
 /** @param {*} context */
 function currentWorldHandler(context) {
   return currentWorldHandlerImpl(context);
-}
-/** @param {*} context */
-function npcsHandler(context) {
-  return npcsHandlerImpl(context);
 }
 /** @param {*} context */
 function treeActionHandler(context) {

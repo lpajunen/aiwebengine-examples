@@ -34,67 +34,46 @@ export type WorldClassRecord = {
   labels: ClassLabels;
 };
 
-const DEFAULT_SPELLBOOK_SPAWN_COUNT = 3;
+const BUILTIN_ITEM_SPAWNS: WorldClassSpawnEntry[] = [
+  { id: "saw", count: 3 },
+  { id: "knife", count: 3 },
+  { id: "flower", count: 3 },
+  { id: "tree_planter", count: 3 },
+  { id: "portal_builder", count: 3 },
+  { id: "kantele", count: 3 },
+  { id: "rowan_charm", count: 3 },
+  { id: "rune_stone", count: 3 },
+  { id: "juniper_bundle", count: 3 },
+  { id: "birch_bark_letter", count: 3 },
+  { id: "spellbook", count: 3 },
+  { id: "shaman_talisman", count: 3 },
+  { id: "chest", count: 1 },
+];
 
-// Default item spawn manifest shared by all four built-in world classes,
-// reproducing the old flat WORLD_ITEM_SPAWN_COUNT=30 behavior (10 item types
-// x 3 each) now that spawning is explicit per world class.
-function defaultItemSpawns(): WorldClassSpawnEntry[] {
-  return [
-    "saw",
-    "knife",
-    "flower",
-    "tree_planter",
-    "portal_builder",
-    "kantele",
-    "rowan_charm",
-    "rune_stone",
-    "juniper_bundle",
-    "birch_bark_letter",
-    "spellbook",
-  ]
-    .map(function (id) {
-      return { id: id, count: 3 };
-    })
-    .concat([{ id: "chest", count: 1 }]);
-}
+const BUILTIN_WILD_NPC_SPAWNS: WorldClassSpawnEntry[] = [
+  { id: "npc_human", count: 5 },
+  { id: "npc_wolf", count: 5 },
+  { id: "npc_bear", count: 5 },
+  { id: "npc_archer", count: 5 },
+  { id: "npc_giant", count: 2 },
+];
 
-function ensureSpellbookSpawn(itemSpawns: WorldClassSpawnEntry[]): boolean {
-  const alreadyPresent = itemSpawns.some(function (entry) {
-    return entry.id === "spellbook";
+const BUILTIN_VILLAGE_NPC_SPAWNS: WorldClassSpawnEntry[] = [
+  { id: "npc_human", count: 5 },
+  { id: "npc_dog", count: 5 },
+  { id: "npc_chicken", count: 5 },
+  { id: "npc_donkey", count: 3 },
+];
+
+const BUILTIN_FOREST_NPC_SPAWNS: WorldClassSpawnEntry[] =
+  BUILTIN_WILD_NPC_SPAWNS.concat([{ id: "npc_horse", count: 3 }]);
+
+function copySpawnEntries(
+  entries: WorldClassSpawnEntry[],
+): WorldClassSpawnEntry[] {
+  return entries.map(function (entry) {
+    return { id: entry.id, count: entry.count };
   });
-  if (alreadyPresent) return false;
-  itemSpawns.push({ id: "spellbook", count: DEFAULT_SPELLBOOK_SPAWN_COUNT });
-  return true;
-}
-
-// Default NPC spawn manifest for built-in world classes, reproducing the old
-// NPC_SPECIES_POOL of 3 species with a total NPC count at the midpoint of the
-// old NPC_MIN_COUNT..NPC_MAX_COUNT range (10..20). Village worlds get tame
-// dogs/chickens instead of the wolves/bears every other preset spawns.
-function defaultNPCSpawns(worldType: string): WorldClassSpawnEntry[] {
-  const speciesIds =
-    worldType === WORLD_TYPE_VILLAGE
-      ? ["npc_human", "npc_dog", "npc_chicken"]
-      : ["npc_human", "npc_wolf", "npc_bear", "npc_archer"];
-  return speciesIds
-    .map(function (id) {
-      return { id: id, count: 5 };
-    })
-    .concat(
-      // Giants (a "large"-size living class, see living-registry.ts) are a
-      // rare wilderness landmark rather than a fifth common species, so the
-      // wild presets get a couple and villages none.
-      worldType === WORLD_TYPE_VILLAGE ? [] : [{ id: "npc_giant", count: 2 }],
-    )
-    .concat(
-      // The equines: donkeys are village livestock, horses roam the forest.
-      // Both are peaceful, so neither changes how dangerous a world is.
-      worldType === WORLD_TYPE_VILLAGE ? [{ id: "npc_donkey", count: 3 }] : [],
-    )
-    .concat(
-      worldType === WORLD_TYPE_FOREST ? [{ id: "npc_horse", count: 3 }] : [],
-    );
 }
 
 // Finnish display names for the built-in world classes, mirroring the
@@ -144,6 +123,12 @@ export function isBuiltinWorldClassId(classId: string): boolean {
 }
 
 function builtinWorldClassRecord(worldType: string): WorldClassRecord {
+  const npcSpawns =
+    worldType === WORLD_TYPE_VILLAGE
+      ? BUILTIN_VILLAGE_NPC_SPAWNS
+      : worldType === WORLD_TYPE_FOREST
+        ? BUILTIN_FOREST_NPC_SPAWNS
+        : BUILTIN_WILD_NPC_SPAWNS;
   return {
     id: worldType,
     baseType: worldType,
@@ -151,8 +136,8 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     cols: COLS,
     labelKey: "world_class." + worldType + ".name",
     fallbackLabel: worldType.charAt(0).toUpperCase() + worldType.slice(1),
-    itemSpawns: defaultItemSpawns(),
-    npcSpawns: defaultNPCSpawns(worldType),
+    itemSpawns: copySpawnEntries(BUILTIN_ITEM_SPAWNS),
+    npcSpawns: copySpawnEntries(npcSpawns),
     ownerIds: [],
     labels: BUILTIN_WORLD_CLASS_LABELS_FI[worldType]
       ? { fi: BUILTIN_WORLD_CLASS_LABELS_FI[worldType] }
@@ -172,8 +157,8 @@ function birdhavenWorldClassRecord(): WorldClassRecord {
     cols: OAK_WORLD_COLS,
     labelKey: "world_class." + BIRDHAVEN_WORLD_CLASS_ID + ".name",
     fallbackLabel: "Birdhaven",
-    itemSpawns: defaultItemSpawns(),
-    npcSpawns: defaultNPCSpawns(WORLD_TYPE_VILLAGE),
+    itemSpawns: copySpawnEntries(BUILTIN_ITEM_SPAWNS),
+    npcSpawns: copySpawnEntries(BUILTIN_VILLAGE_NPC_SPAWNS),
     ownerIds: [],
     labels: { fi: "Lintukoto" },
   };
@@ -300,8 +285,9 @@ function rebuildWorldClassCache(logSeed: boolean): void {
     if (record.id) cache[record.id] = record;
   }
 
-  // Backfill missing built-ins without overwriting existing custom rows.
-  let patchedSpawns = 0;
+  // Seed missing built-ins. Existing rows, including their spawn manifests,
+  // remain authoritative and are changed only through the class APIs.
+  let patchedRecords = 0;
   for (let i = 0; i < WORLD_TYPES.length; i++) {
     const worldType = WORLD_TYPES[i];
     const existing = cache[worldType];
@@ -317,32 +303,6 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       continue;
     }
     let changed = false;
-    // Rows seeded before item/npc spawn manifests existed have empty arrays
-    // here (JSON.parse fallback) — backfill built-in defaults so previously
-    // seeded worlds keep spawning items/NPCs after this migration.
-    if (existing.itemSpawns.length === 0 && existing.npcSpawns.length === 0) {
-      const defaults = builtinWorldClassRecord(worldType);
-      existing.itemSpawns = defaults.itemSpawns;
-      existing.npcSpawns = defaults.npcSpawns;
-      changed = true;
-    } else {
-      if (ensureSpellbookSpawn(existing.itemSpawns)) {
-        changed = true;
-      }
-      // Add any built-in default NPC species missing from an already-populated
-      // manifest (e.g. npc_archer added to the wild preset after this world was
-      // seeded) — appends only, so counts and creator-added species are kept.
-      const defaultNpcs = builtinWorldClassRecord(worldType).npcSpawns;
-      defaultNpcs.forEach(function (entry) {
-        const present = existing.npcSpawns.some(function (e) {
-          return e.id === entry.id;
-        });
-        if (!present) {
-          existing.npcSpawns.push(entry);
-          changed = true;
-        }
-      });
-    }
     // Backfill the built-in Finnish name onto rows seeded before it existed,
     // without overwriting a non-empty value a creator may have set.
     const desiredLabelFi = BUILTIN_WORLD_CLASS_LABELS_FI[worldType];
@@ -358,7 +318,7 @@ function rebuildWorldClassCache(logSeed: boolean): void {
         ["class_id"],
         worldClassToDbRow(existing, now),
       );
-      patchedSpawns++;
+      patchedRecords++;
     }
   }
 
@@ -379,27 +339,6 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       continue;
     }
     let changed = false;
-    if (existing.itemSpawns.length === 0 && existing.npcSpawns.length === 0) {
-      existing.itemSpawns = desired.itemSpawns;
-      existing.npcSpawns = desired.npcSpawns;
-      changed = true;
-    } else {
-      if (ensureSpellbookSpawn(existing.itemSpawns)) {
-        changed = true;
-      }
-      // Same append-only backfill the generation presets get above, so a
-      // species added to the shared defaults (e.g. village donkeys) also
-      // reaches the start village's own class.
-      desired.npcSpawns.forEach(function (entry) {
-        const present = existing.npcSpawns.some(function (e) {
-          return e.id === entry.id;
-        });
-        if (!present) {
-          existing.npcSpawns.push(entry);
-          changed = true;
-        }
-      });
-    }
     if (desired.labels.fi && !(existing.labels && existing.labels.fi)) {
       existing.labels = Object.assign({}, existing.labels || {}, {
         fi: desired.labels.fi,
@@ -416,16 +355,16 @@ function rebuildWorldClassCache(logSeed: boolean): void {
         ["class_id"],
         worldClassToDbRow(existing, now),
       );
-      patchedSpawns++;
+      patchedRecords++;
     }
   }
 
   if (logSeed && dbRows.length === 0) {
     vwLog("world class repository seeded", { count: insertedDefaults });
-  } else if (insertedDefaults > 0 || patchedSpawns > 0) {
+  } else if (insertedDefaults > 0 || patchedRecords > 0) {
     vwLog("world class repository backfilled", {
       inserted_count: insertedDefaults,
-      patched_spawn_count: patchedSpawns,
+      patched_record_count: patchedRecords,
     });
   }
 

@@ -157,10 +157,11 @@ sequenced together. Numbering continues from the list above.
 The `chest` container item and `container_put`/`container_get` actions are in
 place. Remaining gap:
 
-- `defaultItemSpawns()` seeds one `chest` per world class, but
-  `ensureWorldItems` only seeds a world once (`meta.seeded`), so worlds
-  created before this change never retroactively get one — reachable today
-  only via the `cheat` grant-all nickname or the item class editor.
+- Built-in world-class database records seed one `chest` through their
+  `itemSpawns` manifests, but `ensureWorldItems` only seeds a world once
+  (`meta.seeded`), so worlds created before this change never retroactively
+  get one — reachable today only via the `cheat` grant-all nickname or the
+  item class editor.
 
 ### 12. Slot/bag visibility semantics
 

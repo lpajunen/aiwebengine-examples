@@ -12,6 +12,7 @@ import { getCurrentWorldStateForUser } from "./current-world-state.ts";
 import { vwLog } from "./diagnostics.ts";
 import { getCurrentEventSeq } from "./event-seq.ts";
 import { grantAllItemsForUser } from "./item-action-helpers.ts";
+import { getLivingClass } from "./living-registry.ts";
 import {
   ensureWorldItems,
   flattenWorldItems,
@@ -407,6 +408,7 @@ export function listPlayersForUser(userId: string): any[] {
         ? Number(player.rotation)
         : 0,
       living: living,
+      livingClass: getLivingClass(living.class_id),
     });
   });
 }

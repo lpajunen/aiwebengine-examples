@@ -6,14 +6,14 @@ import {
   VWORLD_NPC_TICK_TABLE,
 } from "./runtime-config.ts";
 import {
-  buildInventorySelectors,
   createEmptyLivingState,
   createLivingSlotsFromDefinitions,
   fromStoredWorldTimestamp,
-  getItemsInSlotsWithTag,
   isWorldTileWalkable,
   normalizeLivingState,
+  PublicLivingSnapshot,
   stripClassOwnedLivingState,
+  toPublicLivingSnapshot,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
@@ -263,60 +263,25 @@ export function buildWorldNPCSnapshot(
   worldId: string,
   npcs: Record<string, any>,
   getNPCDisplayName: NPCDisplayNameResolver,
-): Array<{
-  npc_id: string;
-  display_name: string;
-  row: number;
-  col: number;
-  seq: number;
-  rotation: number;
-  state: string;
-  class_id: string;
-  slots: Record<string, any>;
-  values: Record<string, unknown>;
-  left_hand: string;
-  right_hand: string;
-  inventory_count: number;
-  inventory_slot_ids: string[];
-  inventory_selectors: string[];
-}> {
+): PublicLivingSnapshot[] {
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
-    const slots = n && n.slots && typeof n.slots === "object" ? n.slots : {};
-    const bag = Array.isArray(n && n.bag) ? n.bag : [];
-    const values =
-      n && n.values && typeof n.values === "object" ? n.values : {};
     const classId =
       typeof n.class_id === "string" && n.class_id
         ? String(n.class_id)
         : getDefaultNPCLivingClassId();
     const livingClass = getLivingClass(classId);
-    const handItems = getItemsInSlotsWithTag({ slots }, livingClass, "hand");
-    const leftHandItem = handItems[0] || null;
-    const rightHandItem = handItems[1] || null;
-    const selectors = buildInventorySelectors({ slots, bag });
-    return {
-      npc_id: npcId,
-      display_name: getNPCDisplayName(worldId, npcId),
+    return toPublicLivingSnapshot({
+      id: npcId,
+      kind: "npc",
+      displayName: getNPCDisplayName(worldId, npcId),
       row: Number(n.row),
       col: Number(n.col),
       seq: Number(n.seq || 0),
       rotation: Number.isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
-      state: typeof n.state === "string" ? n.state : "idle",
-      class_id: classId,
-      // Slots are public (drive outside appearance); bag contents are
-      // private and intentionally omitted — NPCs have no owning client, so
-      // there is no "self" snapshot that legitimately needs bag data here.
-      slots: slots,
-      values: values,
-      left_hand:
-        leftHandItem && leftHandItem.type ? String(leftHandItem.type) : "",
-      right_hand:
-        rightHandItem && rightHandItem.type ? String(rightHandItem.type) : "",
-      inventory_count: bag.length,
-      inventory_slot_ids: selectors.inventory_slot_ids,
-      inventory_selectors: selectors.inventory_selectors,
-    };
+      living: n,
+      livingClass: livingClass,
+    });
   });
 }
 

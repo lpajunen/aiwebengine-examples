@@ -109,16 +109,19 @@ function defaultFatigueValueSchema(): LivingValueSchema {
       kind: "number",
       labelKey: "living.value.level",
       fallbackLabel: "Level",
+      visibility: "public",
     },
     experience: {
       kind: "number",
       labelKey: "living.value.experience",
       fallbackLabel: "Experience",
+      visibility: "owner",
     },
     totalExperience: {
       kind: "number",
       labelKey: "living.value.total_experience",
       fallbackLabel: "Total experience",
+      visibility: "owner",
     },
     fatigue: {
       kind: "number",
@@ -126,11 +129,13 @@ function defaultFatigueValueSchema(): LivingValueSchema {
       max: 100,
       labelKey: "living.value.fatigue",
       fallbackLabel: "Fatigue",
+      visibility: "public",
     },
     maxHitPoints: {
       kind: "number",
       labelKey: "living.value.max_hit_points",
       fallbackLabel: "Max hit points",
+      visibility: "public",
     },
     currentHitPoints: {
       kind: "number",
@@ -138,16 +143,19 @@ function defaultFatigueValueSchema(): LivingValueSchema {
       max: 10,
       labelKey: "living.value.current_hit_points",
       fallbackLabel: "Hit points",
+      visibility: "public",
     },
     armorClass: {
       kind: "number",
       labelKey: "living.value.armor_class",
       fallbackLabel: "Armor class",
+      visibility: "public",
     },
     weaponClass: {
       kind: "number",
       labelKey: "living.value.weapon_class",
       fallbackLabel: "Weapon class",
+      visibility: "public",
     },
   };
 }
@@ -378,6 +386,10 @@ function parseValueSchema(raw: string): LivingValueSchema {
         labelKey: typeof def.labelKey === "string" ? def.labelKey : undefined,
         fallbackLabel:
           typeof def.fallbackLabel === "string" ? def.fallbackLabel : undefined,
+        visibility:
+          def.visibility === "public" || def.visibility === "owner"
+            ? def.visibility
+            : undefined,
       };
     });
     return schema;

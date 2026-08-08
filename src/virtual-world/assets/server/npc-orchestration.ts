@@ -57,6 +57,7 @@ import {
 } from "./world-domain.ts";
 import { loadWorldTrees, saveWorldTrees } from "./world-mod-storage.ts";
 import { LivingState } from "./world-domain.ts";
+import { PublicLivingSnapshot } from "./world-domain.ts";
 
 const npcTickOwnerId =
   "npc-tick-" +
@@ -309,17 +310,7 @@ export function registerRecurringNPCTick(): void {
   }
 }
 
-export function getWorldNPCSnapshot(worldId: string): Array<{
-  npc_id: string;
-  row: number;
-  col: number;
-  seq: number;
-  rotation: number;
-  state: string;
-  left_hand: string;
-  right_hand: string;
-  inventory_count: number;
-}> {
+export function getWorldNPCSnapshot(worldId: string): PublicLivingSnapshot[] {
   markNPCWorldActive(worldId);
   maybeTickWorldNPCs(worldId);
   const npcs = ensureWorldNPCs(worldId);

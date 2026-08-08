@@ -445,13 +445,9 @@ function performResync() {
 /** @param {any[]} players */
 function applyPlayersSnapshot(players) {
   players.forEach(function (p) {
-    if (p.player_id === playerId) {
+    if (!p || p.kind !== "player" || typeof p.id !== "string") return;
+    if (p.id === playerId) {
       var snapSeq = Number(p.seq || 0);
-      var snapshotSessionId =
-        typeof p.session_id === "string" ? p.session_id : "";
-      if (snapshotSessionId && snapshotSessionId !== sessionId) {
-        return;
-      }
       // Snapshot healing for same-user tabs when SSE is delayed/flaky.
       // Only accept snapshot if we're idle AND it's not stale (older than our current state).
       if (!moveInFlight && pendingMoves.length === 0 && snapSeq >= moveSeq) {
@@ -467,7 +463,7 @@ function applyPlayersSnapshot(players) {
         requireElementById("pos-row").textContent = String(avatarRow);
       }
     } else {
-      upsertRemoteAvatar(p.player_id, p.row, p.col, p.seq, p.rotation, p);
+      upsertRemoteAvatar(p.id, p.row, p.col, p.seq, p.rotation, p);
     }
   });
 }

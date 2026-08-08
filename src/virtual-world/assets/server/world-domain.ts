@@ -152,6 +152,10 @@ export interface LivingValueSchemaEntry {
   max?: number;
   labelKey?: string;
   fallbackLabel?: string;
+  // Owner-only values are returned only to the owning player's private
+  // inventory. Missing visibility preserves legacy behavior: built-in
+  // world-observable values are public; unknown values remain private.
+  visibility?: "public" | "owner";
 }
 
 export type LivingValueSchema = Record<string, LivingValueSchemaEntry>;
@@ -201,6 +205,58 @@ export interface LivingState {
   bag: InventoryItem[];
   values: Record<string, unknown>;
 }
+
+// The public world-facing identity of a living. "creature" remains a
+// class-authoring kind, but runtime public entities are presently players or
+// NPCs.
+export type PublicLivingKind = "player" | "npc";
+
+// Equipped items are visible, but their state may contain private data such
+// as a container's contents. The public projection deliberately exposes only
+// stable identity and visual type until item-state visibility is modeled.
+export interface PublicEquippedItem {
+  id: string;
+  type: string;
+}
+
+export interface PublicLivingSnapshot {
+  id: string;
+  kind: PublicLivingKind;
+  display_name: string;
+  row: number;
+  col: number;
+  seq: number;
+  rotation: number;
+  class_id: string;
+  slots: Record<string, PublicEquippedItem | null>;
+  values: Record<string, unknown>;
+}
+
+export interface PublicLivingSnapshotInput {
+  id: string;
+  kind: PublicLivingKind;
+  displayName: string;
+  row: number;
+  col: number;
+  seq: number;
+  rotation: number;
+  living: unknown;
+  livingClass?: LivingClassRecord | null;
+}
+
+// These values affect a living's observable condition or combat capability.
+// Progression and unknown creator-defined values are private until their
+// schemas explicitly support public visibility.
+const DEFAULT_PUBLIC_LIVING_VALUE_KEYS = [
+  "armorClass",
+  "currentHitPoints",
+  "fatigue",
+  "level",
+  "maxHitPoints",
+  "weaponClass",
+];
+
+const OWNER_ONLY_LIVING_VALUE_KEYS = ["experience", "totalExperience"];
 
 export interface OakTile {
   row: number;
@@ -750,6 +806,70 @@ export function isValidItem(item: unknown): item is InventoryItem {
     typeof item.id === "string" &&
     typeof item.type === "string"
   );
+}
+
+export function toPublicEquippedItem(item: unknown): PublicEquippedItem | null {
+  if (!isValidItem(item)) return null;
+  return { id: item.id, type: item.type };
+}
+
+function toPublicLivingSlots(
+  living: unknown,
+): Record<string, PublicEquippedItem | null> {
+  if (!isRecordLike(living) || !isRecordLike(living.slots)) return {};
+  const slots = living.slots as Record<string, unknown>;
+  const out: Record<string, PublicEquippedItem | null> = {};
+  Object.keys(slots).forEach(function (slotId) {
+    out[slotId] = toPublicEquippedItem(slots[slotId]);
+  });
+  return out;
+}
+
+export function toPublicLivingValues(
+  living: unknown,
+  livingClass?: LivingClassRecord | null,
+): Record<string, unknown> {
+  if (!isRecordLike(living) || !isRecordLike(living.values)) return {};
+  const values = living.values as Record<string, unknown>;
+  const valueSchema =
+    livingClass && livingClass.valueSchema ? livingClass.valueSchema : {};
+  const out: Record<string, unknown> = {};
+  Object.keys(values).forEach(function (key) {
+    if (OWNER_ONLY_LIVING_VALUE_KEYS.indexOf(key) !== -1) return;
+    const visibility = valueSchema[key] && valueSchema[key].visibility;
+    if (
+      visibility === "public" ||
+      (visibility !== "owner" &&
+        DEFAULT_PUBLIC_LIVING_VALUE_KEYS.indexOf(key) !== -1)
+    ) {
+      out[key] = values[key];
+    }
+  });
+  return out;
+}
+
+export function toPublicLivingSnapshot(
+  input: PublicLivingSnapshotInput,
+): PublicLivingSnapshot {
+  const living = isRecordLike(input.living) ? input.living : {};
+  const classId =
+    typeof living.class_id === "string" && living.class_id
+      ? living.class_id
+      : input.livingClass && input.livingClass.id
+        ? input.livingClass.id
+        : "";
+  return {
+    id: String(input.id),
+    kind: input.kind,
+    display_name: String(input.displayName || ""),
+    row: Number(input.row),
+    col: Number(input.col),
+    seq: Number(input.seq),
+    rotation: Number(input.rotation),
+    class_id: classId,
+    slots: toPublicLivingSlots(living),
+    values: toPublicLivingValues(living, input.livingClass),
+  };
 }
 
 export function getEquippedItems(inv: unknown): InventoryItem[] {

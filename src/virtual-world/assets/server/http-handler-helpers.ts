@@ -51,6 +51,7 @@ import {
   buildInventorySelectors,
   createEmptyLivingState,
   LivingState,
+  toPublicLivingSnapshot,
 } from "./world-domain.ts";
 
 function sanitizeText(value: any, maxLength: number): string {
@@ -395,20 +396,18 @@ export function listPlayersForUser(userId: string): any[] {
   markNPCWorldActive(worldId);
   return buildActiveWorldPlayers(worldId).map(function (player) {
     const living = loadPlayerInventory(player.player_id);
-    return {
-      player_id: player.player_id,
+    return toPublicLivingSnapshot({
+      id: player.player_id,
+      kind: "player",
+      displayName: getEffectiveNick(player.player_id),
       row: player.row,
       col: player.col,
       seq: player.seq || 0,
       rotation: Number.isFinite(Number(player.rotation))
         ? Number(player.rotation)
         : 0,
-      session_id:
-        typeof player.session_id === "string" ? player.session_id : "",
-      class_id: living.class_id,
-      slots: living.slots,
-      values: living.values,
-    };
+      living: living,
+    });
   });
 }
 

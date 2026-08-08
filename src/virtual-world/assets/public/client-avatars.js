@@ -1005,17 +1005,9 @@ function syncNPCSnapshot(npcs) {
   var seen = /** @type {Record<string, boolean>} */ ({});
   for (var i = 0; i < npcs.length; i++) {
     var n = npcs[i];
-    if (!n || typeof n.npc_id !== "string") continue;
-    seen[n.npc_id] = true;
-    upsertNPCAvatar(
-      n.npc_id,
-      n.row,
-      n.col,
-      n.seq,
-      n.rotation,
-      n.display_name,
-      n,
-    );
+    if (!n || n.kind !== "npc" || typeof n.id !== "string") continue;
+    seen[n.id] = true;
+    upsertNPCAvatar(n.id, n.row, n.col, n.seq, n.rotation, n.display_name, n);
   }
   for (var npcId in npcAvatars) {
     if (!seen[npcId]) removeNPCAvatar(npcId);

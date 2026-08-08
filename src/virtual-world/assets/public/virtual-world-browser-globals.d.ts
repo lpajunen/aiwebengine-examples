@@ -7,7 +7,7 @@ declare var TREE_MODS: any;
 declare var HOUSE_MODS: any;
 declare var WORLD_ITEMS: any;
 declare var PLAYER_INV: any;
-declare var NPCS: any;
+declare var LIVINGS: any[];
 declare var worldId: string;
 declare var WORLD_CLASS_ID: string;
 declare var playerId: string;

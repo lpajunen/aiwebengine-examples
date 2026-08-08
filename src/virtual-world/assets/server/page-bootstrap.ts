@@ -36,6 +36,7 @@ import {
   getWorldFlavorTextIndex,
   OAK_CENTER_COL,
   OAK_CENTER_ROW,
+  toPublicLivingSnapshot,
 } from "./world-domain.ts";
 import {
   loadWorldHouses,
@@ -52,7 +53,7 @@ type PageState = {
   houseMods: any;
   worldItems: any;
   playerInventory: any;
-  npcs: any;
+  livings: any[];
   worldId: string;
   userId: string;
   playerNick: string;
@@ -170,7 +171,20 @@ export function buildVirtualWorldPageState(
     houseMods: houseMods,
     worldItems: worldItems,
     playerInventory: playerInventory,
-    npcs: npcs,
+    livings: [
+      toPublicLivingSnapshot({
+        id: userId,
+        kind: "player",
+        displayName: playerNick,
+        row: initialPos.row,
+        col: initialPos.col,
+        seq: initialPos.seq || 0,
+        rotation: Number.isFinite(Number(initialPos.rotation))
+          ? Number(initialPos.rotation)
+          : 0,
+        living: playerInventory,
+      }),
+    ].concat(npcs),
     worldId: worldId,
     userId: userId,
     playerNick: playerNick,
@@ -562,7 +576,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var HOUSE_MODS = ${JSON.stringify(state.houseMods)};
     var WORLD_ITEMS = ${JSON.stringify(state.worldItems)};
     var PLAYER_INV = ${JSON.stringify(state.playerInventory)};
-    var NPCS = ${JSON.stringify(state.npcs)};
+    var LIVINGS = ${JSON.stringify(state.livings)};
     var worldId  = ${JSON.stringify(state.worldId)};
     var WORLD_CLASS_ID = ${JSON.stringify(state.worldClassId)};
     var playerId = ${JSON.stringify(state.userId)};

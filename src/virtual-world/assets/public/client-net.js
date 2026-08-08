@@ -529,11 +529,10 @@ function swapToWorld(state) {
   appliedItemSnapshotSeq = itemSnapshotRequestSeq;
 
   // 4. Rebuild the scene: drop every remote avatar from the old world, rebuild
-  //    all world meshes for the new MAP, then reconcile NPCs (syncNPCSnapshot
-  //    removes any NPC not present in the new snapshot).
+  //    all world meshes for the new MAP, then reconcile public livings.
   for (var pid in remoteAvatars) removeRemoteAvatar(pid);
   buildStaticWorldMeshes();
-  syncNPCSnapshot(Array.isArray(state.npcs) ? state.npcs : []);
+  applyLivingsSnapshot(Array.isArray(state.livings) ? state.livings : []);
 
   // 5. Per-world UI + chat (DMs untouched — they're user-scoped).
   worldChatMessages = Array.isArray(state.initialChat) ? state.initialChat : [];
@@ -602,7 +601,7 @@ function initMultiplayer() {
   renderInventoryPanel();
   updateEditingRightsUI();
   initLogoutTrigger();
-  syncNPCSnapshot(NPCS);
+  applyLivingsSnapshot(LIVINGS);
   // Active player positions are not part of the bootstrapped page state;
   // an initial resync populates remote avatars and establishes the
   // per-scope event seq baselines for gap detection.

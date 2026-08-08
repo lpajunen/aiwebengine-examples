@@ -16,7 +16,10 @@ import {
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
-import { broadcastItemChange } from "./stream-broadcast.ts";
+import {
+  broadcastItemChange,
+  broadcastPlayerLivingUpdated,
+} from "./stream-broadcast.ts";
 import { getAllKnownItemTypes } from "./world-domain.ts";
 import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
@@ -272,6 +275,9 @@ export function handleItemActionForUser(
 
     savePlayerInventory(userId, inv);
     upsertWorldItem(worldId, canonical.row, canonical.col, dropItem);
+    if (!isBagSelector(from)) {
+      broadcastPlayerLivingUpdated(worldId, userId, inv);
+    }
     broadcastItemChange(
       worldId,
       "player",
@@ -328,6 +334,9 @@ export function handleItemActionForUser(
     }
 
     savePlayerInventory(userId, inv);
+    if (!isBagSelector(fromSlot) || !isBagSelector(toSlot)) {
+      broadcastPlayerLivingUpdated(worldId, userId, inv);
+    }
     return {
       status: 200,
       payload: {
@@ -406,6 +415,9 @@ export function handleItemActionForUser(
     containerItem.state.contents.push(movingItem);
 
     savePlayerInventory(userId, inv);
+    if (!isBagSelector(from)) {
+      broadcastPlayerLivingUpdated(worldId, userId, inv);
+    }
     if (located.locationKind === "tile") {
       upsertWorldItem(worldId, canonical.row, canonical.col, containerItem);
       broadcastItemChange(
@@ -488,6 +500,9 @@ export function handleItemActionForUser(
     contents.splice(contentIndex, 1);
 
     savePlayerInventory(userId, inv);
+    if (!isBagSelector(to)) {
+      broadcastPlayerLivingUpdated(worldId, userId, inv);
+    }
     if (located.locationKind === "tile") {
       upsertWorldItem(worldId, canonical.row, canonical.col, containerItem);
       broadcastItemChange(

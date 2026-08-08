@@ -813,7 +813,7 @@ export function toPublicEquippedItem(item: unknown): PublicEquippedItem | null {
   return { id: item.id, type: item.type };
 }
 
-function toPublicLivingSlots(
+export function toPublicLivingSlots(
   living: unknown,
 ): Record<string, PublicEquippedItem | null> {
   if (!isRecordLike(living) || !isRecordLike(living.slots)) return {};

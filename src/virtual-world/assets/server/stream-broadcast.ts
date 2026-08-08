@@ -5,7 +5,14 @@ import {
   worldEventScope,
 } from "./event-seq.ts";
 import { VIRTUAL_WORLD_EVENTS_STREAM_PATH } from "./runtime-config.ts";
-import { toPublicLivingValues } from "./world-domain.ts";
+import { getLivingClass } from "./living-registry.ts";
+import { loadPlayerInventory } from "./item-storage.ts";
+import { loadWorldNPCs } from "./npc-storage.ts";
+import {
+  LivingState,
+  toPublicLivingSlots,
+  toPublicLivingValues,
+} from "./world-domain.ts";
 
 export function sendVirtualWorldStreamEvent(
   type: string,
@@ -96,6 +103,18 @@ function isRecordLike(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function getLivingClassForPublicEvent(
+  worldId: string,
+  kind: "player" | "npc",
+  livingId: string,
+): ReturnType<typeof getLivingClass> {
+  if (kind === "player") {
+    return getLivingClass(loadPlayerInventory(livingId).class_id);
+  }
+  const npc = loadWorldNPCs(worldId)[livingId];
+  return getLivingClass(npc && npc.class_id ? String(npc.class_id) : "");
+}
+
 // Existing gameplay modules still emit actor-specific movement/value events.
 // Normalize them at the stream boundary so every client receives one public
 // living contract without duplicating controller-specific event construction.
@@ -140,7 +159,10 @@ export function sendWorldScopedStreamEvent(
     });
   }
 
-  const values = toPublicLivingValues({ values: payload.values });
+  const values = toPublicLivingValues(
+    { values: payload.values },
+    getLivingClassForPublicEvent(worldId, kind, rawId),
+  );
   if (typeof payload.class_id === "string" || Object.keys(values).length > 0) {
     sendWorldScopedEvent(worldId, "living_updated", {
       id: rawId,
@@ -150,6 +172,21 @@ export function sendWorldScopedStreamEvent(
       values: values,
     });
   }
+}
+
+export function broadcastPlayerLivingUpdated(
+  worldId: string,
+  userId: string,
+  living: LivingState,
+): void {
+  const livingClass = getLivingClass(living.class_id);
+  sendWorldScopedEvent(worldId, "living_updated", {
+    id: String(userId),
+    kind: "player",
+    class_id: living.class_id,
+    slots: toPublicLivingSlots(living),
+    values: toPublicLivingValues(living, livingClass),
+  });
 }
 
 export function broadcastPlayerValuesChanged(

@@ -780,11 +780,14 @@ function initMultiplayer() {
       payload.values && typeof payload.values === "object"
         ? payload.values
         : {};
+    var slots =
+      payload.slots && typeof payload.slots === "object" ? payload.slots : null;
     if (payload.kind === "player") {
       if (payload.id === playerId) {
         if (typeof payload.class_id === "string") {
           playerInventory.class_id = payload.class_id;
         }
+        if (slots) playerInventory.slots = slots;
         Object.assign(playerInventory.values, values);
         updateStatsHud();
         return;
@@ -797,7 +800,7 @@ function initMultiplayer() {
         remote.col,
         remote.seq,
         undefined,
-        { class_id: payload.class_id, values: values },
+        { class_id: payload.class_id, slots: slots, values: values },
       );
     } else if (payload.kind === "npc") {
       var npc = npcAvatars[payload.id];
@@ -809,6 +812,10 @@ function initMultiplayer() {
         npc.class_id = payload.class_id;
         npc.meshClassId = payload.class_id;
         rebuildAvatarBody(npc, payload.class_id, payload.id, false);
+      }
+      if (slots) {
+        npc.slots = slots;
+        syncAvatarEquippedItems(npc, slots);
       }
       Object.assign(npc.values, values);
       refreshTileDetailIfOpen();

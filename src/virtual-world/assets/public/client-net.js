@@ -429,8 +429,7 @@ function performResync() {
             typeof known === "number" ? Math.max(known, serverSeq) : serverSeq;
         }
       }
-      if (Array.isArray(payload.players)) applyPlayersSnapshot(payload.players);
-      if (Array.isArray(payload.npcs)) syncNPCSnapshot(payload.npcs);
+      if (Array.isArray(payload.livings)) applyLivingsSnapshot(payload.livings);
       applyWorldStatePayload(payload.world, requestSeq);
       if (Array.isArray(payload.active_actions)) {
         applyActiveActionsSnapshot(payload.active_actions);
@@ -442,9 +441,14 @@ function performResync() {
     });
 }
 
-/** @param {any[]} players */
-function applyPlayersSnapshot(players) {
-  players.forEach(function (p) {
+/** @param {any[]} livings */
+function applyLivingsSnapshot(livings) {
+  var npcs = /** @type {any[]} */ ([]);
+  livings.forEach(function (p) {
+    if (p && p.kind === "npc") {
+      npcs.push(p);
+      return;
+    }
     if (!p || p.kind !== "player" || typeof p.id !== "string") return;
     if (p.id === playerId) {
       var snapSeq = Number(p.seq || 0);
@@ -466,6 +470,7 @@ function applyPlayersSnapshot(players) {
       upsertRemoteAvatar(p.id, p.row, p.col, p.seq, p.rotation, p);
     }
   });
+  syncNPCSnapshot(npcs);
 }
 
 /**
@@ -746,6 +751,85 @@ function initMultiplayer() {
     }
   }
 
+  /** @param {any} payload */
+  function handleLivingMovedEvent(payload) {
+    if (!payload || typeof payload.id !== "string") return;
+    if (payload.kind === "player") {
+      handlePlayerMovedEvent({
+        player_id: payload.id,
+        row: payload.row,
+        col: payload.col,
+        seq: payload.seq,
+        rotation: payload.rotation,
+        path: payload.path,
+      });
+    } else if (payload.kind === "npc") {
+      handleNpcMovedEvent({
+        npc_id: payload.id,
+        row: payload.row,
+        col: payload.col,
+        seq: payload.seq,
+        rotation: payload.rotation,
+      });
+    }
+  }
+
+  /** @param {any} payload */
+  function handleLivingUpdatedEvent(payload) {
+    if (!payload || typeof payload.id !== "string") return;
+    var values =
+      payload.values && typeof payload.values === "object"
+        ? payload.values
+        : {};
+    if (payload.kind === "player") {
+      if (payload.id === playerId) {
+        if (typeof payload.class_id === "string") {
+          playerInventory.class_id = payload.class_id;
+        }
+        Object.assign(playerInventory.values, values);
+        updateStatsHud();
+        return;
+      }
+      var remote = remoteAvatars[payload.id];
+      if (!remote) return;
+      upsertRemoteAvatar(
+        payload.id,
+        remote.row,
+        remote.col,
+        remote.seq,
+        undefined,
+        { class_id: payload.class_id, values: values },
+      );
+    } else if (payload.kind === "npc") {
+      var npc = npcAvatars[payload.id];
+      if (!npc) return;
+      if (
+        typeof payload.class_id === "string" &&
+        payload.class_id !== npc.class_id
+      ) {
+        npc.class_id = payload.class_id;
+        npc.meshClassId = payload.class_id;
+        rebuildAvatarBody(npc, payload.class_id, payload.id, false);
+      }
+      Object.assign(npc.values, values);
+      refreshTileDetailIfOpen();
+    }
+  }
+
+  /** @param {any} payload */
+  function handleLivingRemovedEvent(payload) {
+    if (!payload || typeof payload.id !== "string") return;
+    if (payload.kind === "player") {
+      if (payload.id === playerId && payload.switched_world) {
+        enterWorldSwitch();
+        return;
+      }
+      removeRemoteAvatar(payload.id);
+    } else if (payload.kind === "npc") {
+      removeNPCAvatar(payload.id);
+    }
+  }
+
   /** @param {any} msg */
   function handleChatMessageEvent(msg) {
     if (!msg || !msg.id) return;
@@ -990,11 +1074,8 @@ function initMultiplayer() {
     }
     if (!trackEventSeq(message.scope, message.seq)) return;
     switch (message.type) {
-      case "player_moved":
-        handlePlayerMovedEvent(payload);
-        return;
-      case "player_values_changed":
-        handlePlayerValuesChangedEvent(payload);
+      case "living_moved":
+        handleLivingMovedEvent(payload);
         return;
       case "tree_changed":
         handleTreeChangedEvent(payload);
@@ -1002,11 +1083,11 @@ function initMultiplayer() {
       case "house_changed":
         handleHouseChangedEvent(payload);
         return;
-      case "npc_moved":
-        handleNpcMovedEvent(payload);
+      case "living_updated":
+        handleLivingUpdatedEvent(payload);
         return;
-      case "npc_values_changed":
-        handleNpcValuesChangedEvent(payload);
+      case "living_removed":
+        handleLivingRemovedEvent(payload);
         return;
       case "item_changed":
         applyItemDeltaFromEvent(payload);

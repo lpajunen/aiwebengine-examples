@@ -660,6 +660,7 @@ export function registerVirtualWorldRuntime(): void {
   safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
   safeRegisterRoute("/virtual-world/players", "playersHandler", "GET");
+  safeRegisterRoute("/virtual-world/livings", "livingsHandler", "GET");
   safeRegisterRoute("/virtual-world/resync", "resyncHandler", "GET");
   safeRegisterRoute(
     "/virtual-world/current-world",

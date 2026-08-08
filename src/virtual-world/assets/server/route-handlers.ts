@@ -6,6 +6,7 @@ import {
   heartbeatForUser,
   leaveWorldForUser,
   listItemsForUser,
+  listLivingsForUser,
   listNPCsForUser,
   listOnlinePlayersForUser,
   listPlayersForUser,
@@ -480,6 +481,17 @@ export function playersHandler(context: any) {
   }
   var userId = context.request.auth.userId;
   return ResponseBuilder.json(listPlayersForUser(userId));
+}
+
+/**
+ * @param {*} context
+ */
+export function livingsHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  return ResponseBuilder.json({ livings: listLivingsForUser(userId) });
 }
 
 /**

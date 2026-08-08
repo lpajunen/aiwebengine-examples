@@ -411,12 +411,15 @@ export function listPlayersForUser(userId: string): any[] {
   });
 }
 
+export function listLivingsForUser(userId: string): any[] {
+  return listPlayersForUser(userId).concat(listNPCsForUser(userId));
+}
+
 /**
- * One-shot resync payload: current event-scope seqs plus full snapshots of
- * players, NPCs, and world state. Scope seqs are read BEFORE the snapshots
- * are built so an event emitted concurrently is re-delivered to the client
- * on top of the snapshot (all deltas are idempotent by id/seq) instead of
- * being silently skipped.
+ * One-shot resync payload: current event-scope seqs plus a unified living
+ * snapshot and world state. Scope seqs are read BEFORE the snapshot is built
+ * so an event emitted concurrently is re-delivered to the client on top of
+ * it (all deltas are idempotent by id/seq) instead of being silently skipped.
  */
 export function buildResyncForUser(userId: string): {
   status: number;
@@ -439,8 +442,7 @@ export function buildResyncForUser(userId: string): {
     payload: {
       world_id: String(worldId),
       scope_seqs: scopeSeqs,
-      players: listPlayersForUser(userId),
-      npcs: listNPCsForUser(userId),
+      livings: listLivingsForUser(userId),
       world: getCurrentWorldStateForUser(userId),
       active_actions: getActiveActionsForUser(userId),
     },

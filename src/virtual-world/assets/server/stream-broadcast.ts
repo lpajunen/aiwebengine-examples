@@ -5,6 +5,7 @@ import {
   worldEventScope,
 } from "./event-seq.ts";
 import { VIRTUAL_WORLD_EVENTS_STREAM_PATH } from "./runtime-config.ts";
+import { toPublicLivingValues } from "./world-domain.ts";
 
 export function sendVirtualWorldStreamEvent(
   type: string,
@@ -73,7 +74,7 @@ export function sendRecipientScopedStreamEvent(
   );
 }
 
-export function sendWorldScopedStreamEvent(
+function sendWorldScopedEvent(
   worldId: string,
   type: string,
   payload: unknown,
@@ -89,6 +90,66 @@ export function sendWorldScopedStreamEvent(
     scope,
     allocateEventSeq(scope),
   );
+}
+
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+// Existing gameplay modules still emit actor-specific movement/value events.
+// Normalize them at the stream boundary so every client receives one public
+// living contract without duplicating controller-specific event construction.
+export function sendWorldScopedStreamEvent(
+  worldId: string,
+  type: string,
+  payload: unknown,
+): void {
+  const isPlayer = type === "player_moved" || type === "player_values_changed";
+  const isNPC = type === "npc_moved" || type === "npc_values_changed";
+  if (!isPlayer && !isNPC) {
+    sendWorldScopedEvent(worldId, type, payload);
+    return;
+  }
+  if (!isRecordLike(payload)) return;
+
+  const kind = isPlayer ? "player" : "npc";
+  const rawId = isPlayer ? payload.player_id : payload.npc_id;
+  if (typeof rawId !== "string" || !rawId) return;
+
+  if (
+    (isPlayer && payload.leaving === true) ||
+    (isNPC && payload.despawn === true)
+  ) {
+    sendWorldScopedEvent(worldId, "living_removed", {
+      id: rawId,
+      kind: kind,
+      switched_world: isPlayer && payload.switched_world === true,
+    });
+    return;
+  }
+
+  if (type === "player_moved" || type === "npc_moved") {
+    sendWorldScopedEvent(worldId, "living_moved", {
+      id: rawId,
+      kind: kind,
+      row: payload.row,
+      col: payload.col,
+      seq: payload.seq,
+      rotation: payload.rotation,
+      path: Array.isArray(payload.path) ? payload.path : undefined,
+    });
+  }
+
+  const values = toPublicLivingValues({ values: payload.values });
+  if (typeof payload.class_id === "string" || Object.keys(values).length > 0) {
+    sendWorldScopedEvent(worldId, "living_updated", {
+      id: rawId,
+      kind: kind,
+      class_id:
+        typeof payload.class_id === "string" ? payload.class_id : undefined,
+      values: values,
+    });
+  }
 }
 
 export function broadcastPlayerValuesChanged(

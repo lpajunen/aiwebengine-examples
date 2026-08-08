@@ -138,6 +138,7 @@ import {
   heartbeatForUser as heartbeatForUserImpl,
   leaveWorldForUser as leaveWorldForUserImpl,
   listItemsForUser as listItemsForUserImpl,
+  listLivingsForUser as listLivingsForUserImpl,
   listNPCsForUser as listNPCsForUserImpl,
   listOnlinePlayersForUser as listOnlinePlayersForUserImpl,
   listPlayersForUser as listPlayersForUserImpl,
@@ -309,6 +310,7 @@ import {
   newWorldHandler as newWorldHandlerImpl,
   startWorldHandler as startWorldHandlerImpl,
   playersHandler as playersHandlerImpl,
+  livingsHandler as livingsHandlerImpl,
   resyncHandler as resyncHandlerImpl,
   currentWorldHandler as currentWorldHandlerImpl,
   npcsHandler as npcsHandlerImpl,
@@ -509,6 +511,10 @@ function startWorldHandler(context) {
 /** @param {*} context */
 function playersHandler(context) {
   return playersHandlerImpl(context);
+}
+/** @param {*} context */
+function livingsHandler(context) {
+  return livingsHandlerImpl(context);
 }
 /** @param {*} context */
 function resyncHandler(context) {

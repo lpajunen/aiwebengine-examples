@@ -859,6 +859,30 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       approach: "none",
     },
   },
+  heal: {
+    id: "heal",
+    labelKey: "tree_action.heal",
+    fallbackLabel: "Heal",
+    targetKind: "living_nearby",
+    sourceItemIds: ["shaman_talisman"],
+    targeting: {
+      range: 8,
+      rangeShape: "line",
+      approach: "none",
+    },
+  },
+  harm: {
+    id: "harm",
+    labelKey: "tree_action.harm",
+    fallbackLabel: "Harm",
+    targetKind: "living_nearby",
+    sourceItemIds: ["shaman_talisman"],
+    targeting: {
+      range: 8,
+      rangeShape: "line",
+      approach: "none",
+    },
+  },
   summon_knife: {
     id: "summon_knife",
     labelKey: "tree_action.summon_knife",

@@ -399,6 +399,38 @@ export function applyRangedHitToLiving(
   };
 }
 
+// Applies a spell effect with no attack roll or weapon scaling. This keeps
+// fixed-damage spells independent of the wielder's combat stats.
+export function applyFixedDamageToNPC(
+  worldId: string,
+  targetId: string,
+  damage: number,
+): { result: "hit" | "kill"; damage: number; target_label: string } | null {
+  const npcs = loadWorldNPCs(worldId);
+  const targetNpc = npcs[targetId];
+  if (!targetNpc) return null;
+
+  const actualDamage = Math.max(1, Math.floor(damage));
+  const targetValues = targetNpc.values || {};
+  const nextHitPoints = Math.max(
+    0,
+    (Number(targetValues.currentHitPoints) || 0) - actualDamage,
+  );
+  const targetLabel = getNPCDisplayName(worldId, targetId);
+
+  if (nextHitPoints > 0) {
+    targetNpc.values = Object.assign({}, targetValues, {
+      currentHitPoints: nextHitPoints,
+    });
+    saveWorldNPCs(worldId, { [targetId]: targetNpc });
+    broadcastNPCValuesChanged(worldId, targetId, targetNpc.values);
+    return { result: "hit", damage: actualDamage, target_label: targetLabel };
+  }
+
+  resolveNPCDeath(worldId, targetId, targetNpc);
+  return { result: "kill", damage: actualDamage, target_label: targetLabel };
+}
+
 function resolveCombatHit(
   worldId: string,
   fight: FightStateRow,

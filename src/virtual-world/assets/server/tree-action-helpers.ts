@@ -20,7 +20,11 @@ import {
 import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import { deleteFightState, saveFightState } from "./fight-storage.ts";
-import { applyRangedHitToLiving, wieldedWeapon } from "./fight-helpers.ts";
+import {
+  applyFixedDamageToNPC,
+  applyRangedHitToLiving,
+  wieldedWeapon,
+} from "./fight-helpers.ts";
 import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
 import {
   addPendingAction,
@@ -1967,6 +1971,127 @@ export function performTreeActionForUser(
         ...(hit.experience_gained
           ? { experience_gained: hit.experience_gained, values: hit.values }
           : {}),
+      }),
+    };
+  }
+
+  if (action === "heal") {
+    const targetPlayerId = String((body && body.target_living_id) || "");
+    const reach = actionDefinition
+      ? resolveEffectiveActionRange(
+          resolveActionTargeting(actionDefinition),
+          null,
+        )
+      : NEARBY_TARGET_TILE_DISTANCE;
+    const targetPlayer = loadWorldPlayers(worldId)[targetPlayerId];
+    if (
+      !targetPlayerId ||
+      !targetPlayer ||
+      !isWithinTileDistance(
+        targetPlayer.row,
+        targetPlayer.col,
+        canonical.row,
+        canonical.col,
+        reach,
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    const targetInv = loadPlayerInventory(targetPlayerId);
+    if (targetInv.class_id === "player_ghost") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_is_ghost" },
+      };
+    }
+    const targetValues = targetInv.values || {};
+    const maxHitPoints = Number(targetValues.maxHitPoints) || 0;
+    const currentHitPoints = Number(targetValues.currentHitPoints) || 0;
+    if (currentHitPoints >= maxHitPoints) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_at_full_health" },
+      };
+    }
+    targetInv.values = Object.assign({}, targetValues, {
+      currentHitPoints: currentHitPoints + 1,
+    });
+    savePlayerInventory(targetPlayerId, targetInv);
+    broadcastPlayerValuesChanged(worldId, targetPlayerId, targetInv.values);
+    const targetLabel = getEffectiveNick(targetPlayerId);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.heal_toast",
+          "You heal " + targetLabel + ".",
+          {
+            target: targetLabel,
+          },
+        ),
+        target_living_id: targetPlayerId,
+        target_living_label: targetLabel,
+      }),
+    };
+  }
+
+  if (action === "harm") {
+    if (inv.class_id === "player_ghost") {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.ghost_cannot_fight" },
+      };
+    }
+    const targetNpcId = String((body && body.target_living_id) || "");
+    const reach = actionDefinition
+      ? resolveEffectiveActionRange(
+          resolveActionTargeting(actionDefinition),
+          null,
+        )
+      : NEARBY_TARGET_TILE_DISTANCE;
+    const targetNpc = loadWorldNPCs(worldId)[targetNpcId];
+    if (
+      !targetNpcId ||
+      !targetNpc ||
+      !isWithinTileDistance(
+        targetNpc.row,
+        targetNpc.col,
+        canonical.row,
+        canonical.col,
+        reach,
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    const hit = applyFixedDamageToNPC(worldId, targetNpcId, 1);
+    if (!hit) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    const toastKey =
+      hit.result === "kill"
+        ? "tree_action.harm_kill_toast"
+        : "tree_action.harm_toast";
+    const toastFallback =
+      hit.result === "kill"
+        ? "Your harm spell destroys " + hit.target_label + "."
+        : "Your harm spell wounds " + hit.target_label + ".";
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(toastKey, toastFallback, { target: hit.target_label }),
+        target_living_id: targetNpcId,
+        target_living_label: hit.target_label,
+        result: hit.result,
+        damage: hit.damage,
       }),
     };
   }

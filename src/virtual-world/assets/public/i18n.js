@@ -16,6 +16,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal: { name: "Rune gate" },
       door: { name: "Door" },
       spellbook: { name: "Spellbook" },
+      shaman_talisman: { name: "Shaman's talisman" },
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Rowan charm" },
@@ -101,6 +102,11 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       fireball: "Fireball",
       fireball_toast: "Your fireball erupts — {struck} struck, {kills} slain.",
       fireball_miss_toast: "Your fireball scorches empty ground.",
+      heal: "Heal",
+      heal_toast: "You heal {target}.",
+      harm: "Harm",
+      harm_toast: "Your harm spell wounds {target}.",
+      harm_kill_toast: "Your harm spell destroys {target}.",
       cancel_approach: "Stop moving",
       cancel_approach_toast: "You stop moving toward the target.",
       door_travel: "Enter door",
@@ -542,6 +548,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal: { name: "Riimuportti" },
       door: { name: "Ovi" },
       spellbook: { name: "Loitsukirja" },
+      shaman_talisman: { name: "Shamaanin talismaani" },
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
       rowan_charm: { name: "Pihlajakoriste" },
@@ -629,6 +636,11 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       fireball: "Tulipallo",
       fireball_toast: "Tulipallosi räjähtää — {struck} osumaa, {kills} kaatui.",
       fireball_miss_toast: "Tulipallosi kärventää tyhjää maata.",
+      heal: "Paranna",
+      heal_toast: "Parannat kohdetta {target}.",
+      harm: "Vahingoita",
+      harm_toast: "Vahingoitusloitsusi haavoittaa kohdetta {target}.",
+      harm_kill_toast: "Vahingoitusloitsusi tuhoaa kohteen {target}.",
       door_travel: "Astu ovesta",
       build_portal: "Nosta riimuportti",
       remove_portal: "Sulje riimuportti",
@@ -1300,6 +1312,7 @@ function itemTypeToLabelKey(type) {
   if (type === "portal") return "item.portal.name";
   if (type === "door") return "item.door.name";
   if (type === "spellbook") return "item.spellbook.name";
+  if (type === "shaman_talisman") return "item.shaman_talisman.name";
   if (type === "starter_kit") return "item.starter_kit.name";
   if (type === "creator_stone") return "item.creator_stone.name";
   if (type === "old_oak") return "item.old_oak.name";

@@ -264,6 +264,17 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: ["firebolt", "fireball"],
   },
+  shaman_talisman: {
+    id: "shaman_talisman",
+    kind: "artifact",
+    visuals: {
+      color: 0x3c9b63,
+      labelKey: "item.shaman_talisman.name",
+      fallbackLabel: "Shaman's talisman",
+      style: "orb",
+    },
+    actionIds: ["heal", "harm"],
+  },
   starter_kit: {
     id: "starter_kit",
     kind: "artifact",

@@ -81,9 +81,27 @@ type PlacementReservation = {
   radius?: number;
   rows?: number;
   cols?: number;
-  rules: Array<"block_random_spawn" | "block_plant" | "block_build">;
+  rules: PlacementReservationRule[];
 };
+
+// Deliberately an open string set validated against a server-side registry
+// rather than a closed union. The oak clearing alone already carries six
+// distinct rules today, and adding a seventh must not require a column
+// migration. Unknown rules are rejected at save time, not at read time.
+type PlacementReservationRule = string;
 ```
+
+Rules that must exist in the initial registry, because the oak clearing
+already implements every one of them as a hard-coded check:
+
+| Rule                    | Replaces                                                 |
+| ----------------------- | -------------------------------------------------------- |
+| `block_random_spawn`    | clearing check in random item/NPC population             |
+| `block_plant`           | `isOakClearingTile` in `tree-action-helpers.ts:569`      |
+| `block_build`           | house-build rejection inside the clearing                |
+| `block_npc_wander`      | injected predicate in `npc-tick-helpers.ts:286,360`      |
+| `block_terrain_feature` | `avoidOakClearing` river shift in `world-map.ts:182-200` |
+| `spawn_area`            | `getOakClearingTiles` in `player-snapshots.ts:192-239`   |
 
 ### Why these fields
 
@@ -160,18 +178,59 @@ The first implementation may limit structures to one tile. Add a `footprint`
 field when multi-tile houses or walls are actually needed; do not encode a
 multi-tile building as unrelated individual placements.
 
+### Spawn positions
+
+Default spawn resolution is oak-special-cased today:
+`player-snapshots.ts:192-239` derives the spawn tile from
+`getOakClearingTiles` and falls back to `OAK_CENTER_ROW + 1`. The guild's
+`entryPlacementId` is not enough on its own — the _generic_ spawn resolver
+must become placement-driven for every world:
+
+1. if the world declares `spawn_area` reservations, pick a free tile inside
+   one;
+2. otherwise fall back to the existing random-walkable-tile search.
+
+### Client rendering of authored landmarks
+
+The old oak's mesh is selected by coordinate, not by class. `OAK_CENTER_ROW` /
+`OAK_CENTER_COL` are injected into browser globals in
+`page-bootstrap.ts:207-208,595-596`, declared in
+`virtual-world-browser-globals.d.ts:22-23`, and consumed by
+`client-world-render.js:124,188` (which draws the giant oak) and
+`client-tile-detail.js:345`.
+
+A placement-driven oak therefore requires the renderer to key its built-in
+oak recipe off the item class/type carried in the tile payload instead of off
+a pair of injected coordinates. This is _not_ covered by the
+"no creator-authored mesh recipes" non-goal: the recipe stays built in, only
+its selection changes. Once that lands, the two coordinate globals can be
+removed from the page state entirely.
+
 ### Reservations
 
 Reservations are evaluated as part of the effective world rules:
 
 - random item/NPC spawning excludes `block_random_spawn` tiles;
 - plant and build actions reject tiles marked `block_plant` and `block_build`;
-- map generation/rendering remains independent unless a placement also writes
-  terrain/object mods.
+- NPC wander target selection excludes `block_npc_wander` tiles;
+- terrain generation routes linear features around `block_terrain_feature`
+  tiles;
+- default spawn resolution prefers `spawn_area` tiles when a world declares
+  them.
 
 This is the replacement for world-ID checks and the `oak_clearing` /
 `oak_center` validation enum. The old oak itself can be protected through its
 own reservation rather than through a globally recognized oak-world rule.
+
+Terrain generation is explicitly **not** independent of reservations. The
+river generator in `world-map.ts:182-200` currently shifts its column away
+from the oak clearing under `avoidOakClearing = isOakWorld(worldId)`. Deleting
+that world-ID check without a `block_terrain_feature` rule puts a river
+through Birdhaven's clearing. Reservations must therefore be resolvable before
+map generation runs, not only after.
+
+Rendering does remain independent: reservations have no client-visible
+geometry of their own.
 
 ## Linked Worlds
 
@@ -200,6 +259,29 @@ traveller appears in the destination world.
 This makes a Birdhaven-like exterior and its guild interior a reusable
 configuration pattern, rather than a pair of system IDs.
 
+### Reuse the existing portal path
+
+Most of this already exists and must not be reimplemented in parallel.
+`tree-action-helpers.ts:2340-2460` (the `portal_builder` item) already:
+
+- accepts a `destination_world_class_id`;
+- creates the destination world from that class;
+- writes `destination_world_id` / `destination_world_type` /
+  `destination_world_rows` / `destination_world_cols` and
+  `destination_row` / `destination_col` onto the portal item;
+- creates the matching return portal in the new world.
+
+A portal placement must materialize through that same code path. Two things
+are genuinely new:
+
+1. **Idempotence.** The player-facing builder creates a fresh world on every
+   use. `ensure_world_class` must resolve one stable destination instance per
+   `(world_id, placement_id)` and reuse it.
+2. **Entry resolution.** The existing convention hard-codes an entry of
+   `(1, 1)`. `entryPlacementId` needs a resolution step from placement id to
+   coordinates in the destination world, evaluated at travel time so that
+   moving the entry placement moves where travellers arrive.
+
 ## Birdhaven as Data
 
 After this work, the `birdhaven` world class should be ordinary editor data:
@@ -216,6 +298,10 @@ After this work, the `birdhaven` world class should be ordinary editor data:
 The old oak should have an item/fixture or structure class that describes its
 appearance and supported actions. It must not be represented as a normal pine
 tree, because it has a stable identity and a different lifecycle.
+
+This is closer to done than it reads: `old_oak` already exists as an item type
+(`item-registry.ts:328`). The work is promoting it to a fixture-kind class
+whose class id drives rendering, not creating it from nothing.
 
 ## Adventurers' Guild as Data
 
@@ -254,9 +340,25 @@ The editor needs to support:
   missing class IDs, incompatible kinds, and invalid linked destinations.
 
 The current raw JSON inputs for random item and NPC spawn manifests may remain
-initially. Placements should not be introduced as a third opaque JSON textarea
-if a small list editor is feasible. Coordinate mistakes are too easy and too
-costly in authored landmarks.
+initially. Placements should not _ship_ as a third opaque JSON textarea if a
+small list editor is feasible. Coordinate mistakes are too easy and too costly
+in authored landmarks.
+
+### Authoring must exist from Phase 1
+
+The list editor is Phase 5 work, but Phases 1-4 need some way to author and
+inspect placements or they cannot be tested at all. Ship a validated JSON
+textarea in Phase 1 — matching how `itemSpawns`/`npcSpawns` are edited today
+(`client-editors.js:1300-1310,1375-1410`) — and treat the structured editor as
+the replacement for it, not as the first authoring surface.
+
+### MCP parity comes for free
+
+`virtualWorldManageWorldClasses` already exists as a registered MCP tool. Once
+`placements` is a normalized field on `WorldClassRecord`, an MCP client can
+create and manipulate worlds through it with no additional tool work. This is
+half of the stated goal and it is satisfied by Phase 1 alone — so it should be
+verified as a Phase 1 exit criterion rather than deferred to the editor phase.
 
 ### Preview and safety
 
@@ -297,7 +399,37 @@ For the migration, explicitly reconcile the existing Birdhaven and guild
 instances after the records are seeded. Do not rely on a hidden self-healing
 branch once the new system exists.
 
+### Conflicts with the existing reseed path
+
+Placement instance rows will be silently invalidated by machinery that
+already exists, unless materialization is made aware of it:
+
+- `item-storage.ts:447-470` scans for _all_ `old_oak` items and deletes every
+  one except the centre tile. A placement-owned oak must either be exempt from
+  that dedupe or become its replacement.
+- `world-bootstrap.ts:74-85` deletes every world item and item-meta row when a
+  world's stored shape changes, so the world reseeds from scratch. Placement
+  instances pointing at those items become orphans. Materialization must run
+  after that reseed, or the reseed must clear placement instances too.
+- `item-storage.ts:576` caches guild world configuration in a process-level
+  `guildWorldConfigEnsured` flag. That flag has to go with the special case,
+  not survive it.
+
+### Seeding placements onto already-seeded class rows
+
+The system-class backfill in `world-class-storage.ts:326-350` only patches
+labels and `fallbackLabel` on a row that already exists. Adding `placements`
+to `birdhavenWorldClassRecord()` will therefore **not** reach the deployed
+Birdhaven record. Class updates are full-replace rather than merge, so the
+backfill needs an explicit revision/version marker on the record and a
+"desired revision is newer than stored revision" branch that rewrites it.
+
 ## Implementation Plan
+
+Sizing note: roughly 98 references to the oak/guild constants exist across 17
+files, 41 of them in `world-domain.ts` alone. The riskiest part of this work
+is not the new storage — it is migrating that many consumers. Phase 2 exists
+to separate those two risks so neither has to be debugged through the other.
 
 ### Phase 1: Persist the schema
 
@@ -306,36 +438,77 @@ branch once the new system exists.
 3. Extend database serialization, cache refresh, CRUD handlers, and public
    API responses.
 4. Add strict server validation for placement IDs, kinds, coordinates, class
-   references, state ownership, reservation shapes, and destinations.
-5. Seed Birdhaven and Adventurers' Guild class records with placement data.
+   references, state ownership, reservation shapes, reservation rule names,
+   and destinations.
+5. Add the reservation rule registry that validation checks against.
+6. Add a revision marker to system class records and a revision-aware branch
+   to the system-class backfill, so seeded placements actually reach the
+   deployed Birdhaven/guild rows.
+7. Seed Birdhaven and Adventurers' Guild class records with placement data.
+8. Expose placements through a validated JSON control in the editor —
+   see "Authoring must exist from Phase 1" below.
 
-### Phase 2: Materialize placements
+At the end of this phase, placements round-trip through both the HTTP CRUD
+routes and the `virtualWorldManageWorldClasses` MCP tool, even though nothing
+reads them yet.
+
+### Phase 2: Reservation façade over the existing constants
+
+No behavior change, no new storage. Introduce `isReservedTile()` /
+`getReservedTiles()` backed by the _current_ oak constants, and migrate every
+consumer to call it:
+
+1. `tree-action-helpers.ts:569` (plant/build validation).
+2. `npc-orchestration.ts:188` and `npc-tick-helpers.ts:286,360` (the already
+   injected wander predicate).
+3. `world-map.ts:182-200` (river routing).
+4. `player-snapshots.ts:192-239` (spawn resolution).
+5. Random item/NPC population in `item-storage.ts`.
+
+Deploy this on its own. It is the largest diff in the project and it should be
+verifiable purely as "nothing changed".
+
+### Phase 3: Materialize placements
 
 1. Add world-placement instance storage with a unique `(world_id, placement_id)`
    constraint.
 2. Implement idempotent placement materialization in world bootstrap.
 3. Materialize fixture/item, NPC, terrain, and one-tile structure placements.
-4. Apply reservation rules to random spawning and action validation.
-5. Replace hard-coded Birdhaven/guild fixture seeding with materialization.
+4. Materialize portal placements through the existing `portal_builder`
+   destination path, adding stable per-placement destination resolution and
+   `entryPlacementId` lookup.
+5. Repoint the Phase 2 façade from the oak constants to placement data.
+6. Reconcile materialization with the existing reseed/dedupe paths described
+   above.
+7. Replace hard-coded Birdhaven/guild fixture seeding with materialization.
 
-### Phase 3: Remove special cases
+### Phase 4: Remove special cases
 
 1. Remove forced Birdhaven dimensions/class assignment from the normal world
    bootstrap path.
 2. Remove old-oak coordinates, clearing radius, and `oak_clearing`/
    `oak_center` checks from the generic world domain/action logic.
 3. Remove fixed guild world ID, fixed door coordinates, and hard-coded spawn
-   location branches.
-4. Make the default starting world configurable as runtime deployment
+   location branches. `getDefaultWorldTypeForWorldId` (`world-domain.ts:402`)
+   returns `building` for the guild by world ID, so the guild world instance
+   must carry its type in its stored row first — this is a data migration, not
+   only a code deletion.
+4. Select the built-in oak mesh by item class in `client-world-render.js`, then
+   drop `OAK_CENTER_ROW` / `OAK_CENTER_COL` from page state, browser globals,
+   and `client-tile-detail.js`.
+5. Make the default starting world configurable as runtime deployment
    configuration or a small admin-selected world instance, separate from world
-   class content.
+   class content. Three call sites: `route-handlers.ts:469`,
+   `tree-action-helpers.ts:1095`, and `world-switch.ts:94` (which also pins
+   `OAK_WORLD_ROWS`/`OAK_WORLD_COLS`).
 
 The start-world selector is deliberately outside `WorldClassRecord`: a class
 is reusable, while the deployment needs one concrete initial world instance.
 
-### Phase 4: Editor and reconciliation
+### Phase 5: Editor and reconciliation
 
-1. Add the placement list/editor to the World Types panel.
+1. Replace the Phase 1 JSON control with a placement list/editor in the World
+   Types panel.
 2. Add a visual preview and structured destination editor.
 3. Add controlled reconciliation for existing worlds, beginning with
    Birdhaven and Adventurers' Guild.
@@ -348,6 +521,8 @@ The work is complete when all of the following are true:
 
 - A creator can create a new world class in the editor with exact fixtures,
   structures, reservations, and an editor-selected linked interior.
+- An MCP client can do all of the same through
+  `virtualWorldManageWorldClasses`, without an editor session.
 - A creator can configure an old-oak-style landmark and protected clearing
   without adding a world-ID conditional to code.
 - A creator can configure a house and door to a linked world without adding a
@@ -358,6 +533,12 @@ The work is complete when all of the following are true:
 - Reconciliation never removes player-created content or arbitrary objects that
   merely share a class ID with a placement.
 - Random item/NPC population respects collision and reservation rules.
+- Terrain generation routes around reserved tiles, so Birdhaven's river still
+  misses the clearing with no world-ID check anywhere in `world-map.ts`.
+- The old oak renders from its class, and no coordinate constant for it reaches
+  the browser.
+- Loading Birdhaven does not resurrect a second oak through the world-item
+  reseed or dedupe paths.
 - Existing item, action, NPC, world-mod, and rendering ownership checks remain
   authoritative; placements compose those systems rather than bypass them.
 

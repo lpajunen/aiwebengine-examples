@@ -4,6 +4,8 @@ import {
   loadWorldPlacementInstances,
   saveWorldPlacementInstance,
 } from "./world-placement-instances.ts";
+import { isReservedTile } from "./world-reservations.ts";
+import { RESERVATION_BLOCK_RANDOM_SPAWN } from "./runtime-config.ts";
 import {
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
@@ -520,6 +522,11 @@ function placeNPCAtRandomTile(
     // full its spawn manifest was. Matches the walkability rule NPC movement
     // and world-item spawning already use.
     if (!isWorldTileWalkable(map[row][col]) || occupied[tileKey]) continue;
+    // Same rule the random item scatter honours: an authored area can refuse
+    // ambient population without refusing fixed NPC placements.
+    if (isReservedTile(worldId, row, col, RESERVATION_BLOCK_RANDOM_SPAWN)) {
+      continue;
+    }
     occupied[tileKey] = true;
     const npcId =
       "npc_" + worldId + "_" + index + "_" + Date.now().toString(36);

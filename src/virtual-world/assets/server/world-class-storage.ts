@@ -29,6 +29,7 @@ import {
 import {
   RESERVATION_BLOCK_BUILD,
   RESERVATION_BLOCK_PLANT,
+  RESERVATION_BLOCK_RANDOM_SPAWN,
   RESERVATION_BLOCK_TERRAIN_FEATURE,
   RESERVATION_CLEAR_TERRAIN,
   RESERVATION_SPAWN_AREA,
@@ -211,7 +212,7 @@ const GUILD_ENTRY_COL = 1;
 
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
-const SYSTEM_PLACEMENT_REVISION = 2;
+const SYSTEM_PLACEMENT_REVISION = 3;
 
 // Birdhaven's authored contents, as data rather than the world-ID branches in
 // item-storage.ts. Phase 1 only persists these; phase 3 materializes them and
@@ -234,6 +235,7 @@ function birdhavenPlacements(): WorldClassPlacement[] {
             RESERVATION_BLOCK_PLANT,
             RESERVATION_BLOCK_BUILD,
             RESERVATION_BLOCK_TERRAIN_FEATURE,
+            RESERVATION_BLOCK_RANDOM_SPAWN,
             RESERVATION_CLEAR_TERRAIN,
             RESERVATION_SPAWN_AREA,
           ],

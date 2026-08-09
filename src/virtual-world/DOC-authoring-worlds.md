@@ -138,3 +138,25 @@ Placements compose existing engine capabilities; they do not add new ones. A
 new terrain generator, a new interaction primitive, a new mesh recipe or a new
 combat rule is still a code change. What no longer is: where things are, what
 they are, what they protect, and where they lead.
+
+## Deliberately not built yet
+
+Kept small on purpose — each of these is easy to add when something concrete
+needs it, and speculative to add before then.
+
+- **`near_placement` and `random` position strategies.** Only `exact` is
+  supported; validation rejects the others by name. Random population is what
+  `itemSpawns`/`npcSpawns` are for, and relative positioning needs a real
+  editor workflow before it earns a schema.
+- **Multi-tile structures.** A `structure` covers one tile. A `footprint` field
+  belongs here when multi-tile buildings are actually wanted — a multi-tile
+  building must not be encoded as unrelated single placements.
+- **Structures other than `house`.** The object layer has one mod kind today. A
+  structure naming another tile records its instance and paints nothing.
+- **More than one reservation per placement in the editor.** The stored schema
+  allows several and the server honours all of them; the panel edits the first
+  and preserves the rest untouched, so extras stay MCP-editable.
+- **Legacy blocked-zone aliases.** `oak_clearing`/`oak_center` still resolve in
+  `world-reservations.ts`. No seeded row uses them any more (the seeder rewrites
+  them from the definition), so they can go once you are confident nothing
+  copied one before that migration ran.

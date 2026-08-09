@@ -13,6 +13,8 @@ import {
 } from "./world-bootstrap.ts";
 import { loadWorldHouses, saveWorldHouses } from "./world-mod-storage.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
+import { isReservedTile } from "./world-reservations.ts";
+import { RESERVATION_BLOCK_RANDOM_SPAWN } from "./runtime-config.ts";
 import {
   deleteWorldPlacementInstances,
   loadWorldPlacementInstances,
@@ -751,6 +753,11 @@ function placeItemAtRandomTile(
     // floor is sand/cave_floor/wood_floor/bridge seed items too, instead of
     // spinning all 1000 attempts and placing nothing.
     if (!isWorldTileWalkable(map[row][col])) continue;
+    // A world's authored areas can refuse ambient population — a protected
+    // clearing stays clear of scattered loot, not just of construction.
+    if (isReservedTile(worldId, row, col, RESERVATION_BLOCK_RANDOM_SPAWN)) {
+      continue;
+    }
     const tileKey = row + "_" + col;
     if (!items[tileKey]) items[tileKey] = [];
     const newItem = {

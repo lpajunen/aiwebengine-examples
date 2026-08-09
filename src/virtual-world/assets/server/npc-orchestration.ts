@@ -49,12 +49,7 @@ import {
   parseWorldDbResult,
   runInWorldTransaction,
 } from "./world-db.ts";
-import {
-  getInventoryTreeActions,
-  getNPCDisplayName,
-  isOakCenterTile,
-  isOakClearingTile,
-} from "./world-domain.ts";
+import { getInventoryTreeActions, getNPCDisplayName } from "./world-domain.ts";
 import { loadWorldTrees, saveWorldTrees } from "./world-mod-storage.ts";
 import { LivingState } from "./world-domain.ts";
 import { PublicLivingSnapshot } from "./world-domain.ts";
@@ -184,8 +179,6 @@ export function tickWorldNPCs(
       cols: mapCols,
       shuffleDirections: shuffleDirections,
       getInventoryTreeActions: getInventoryTreeActions,
-      isOakCenterTile: isOakCenterTile,
-      isOakClearingTile: isOakClearingTile,
       directionToRotation: directionToRotation,
       sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     });

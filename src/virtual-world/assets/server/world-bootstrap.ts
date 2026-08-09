@@ -7,7 +7,6 @@ import { generateWorldMap, applyWorldModsToMap } from "./world-map.ts";
 import { loadWorldMods } from "./world-mod-storage.ts";
 import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
 import {
-  applyOakReservation,
   BIRDHAVEN_WORLD_CLASS_ID,
   createWorldId,
   COLS,
@@ -24,6 +23,7 @@ import {
   getWorldClassWithRefresh,
   WorldClassRecord,
 } from "./world-class-storage.ts";
+import { applyWorldReservationsToMap } from "./world-reservations.ts";
 import {
   deleteWorldRowsWhere,
   querySingleWorldRow,
@@ -215,6 +215,6 @@ export function generateMap(worldId: string | number): number[][] {
 export function getEffectiveMap(worldId: string): number[][] {
   const map = generateMap(worldId);
   applyWorldModsToMap(map, loadWorldMods(worldId));
-  applyOakReservation(map, worldId);
+  applyWorldReservationsToMap(map, worldId);
   return map;
 }

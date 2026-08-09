@@ -2,7 +2,12 @@ import {
   ActionCondition,
   ActionLogicSpec,
 } from "./action-logic-interpreter.ts";
-import { NEARBY_TARGET_TILE_DISTANCE } from "./runtime-config.ts";
+import {
+  NEARBY_TARGET_TILE_DISTANCE,
+  RESERVATION_BLOCK_BUILD,
+  RESERVATION_BLOCK_PLANT,
+  RESERVATION_PROTECT_LANDMARK,
+} from "./runtime-config.ts";
 
 // Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
 // aimed and how far it reaches, independent of the existing `targetKind` (which
@@ -154,8 +159,12 @@ export interface ActionDefinition {
       kind: "present" | "absent";
       errorMessage: string;
     };
+    // `kind` is a tile-reservation rule name (see world-reservations.ts): the
+    // action is rejected on any tile carrying that rule. The legacy
+    // `oak_clearing`/`oak_center` kinds still resolve, for action-class rows
+    // seeded before reservations existed.
     blockedZones?: Array<{
-      kind: "oak_clearing" | "oak_center";
+      kind: string;
       errorMessage: string;
     }>;
   };
@@ -223,7 +232,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
       blockedZones: [
         {
-          kind: "oak_clearing",
+          kind: RESERVATION_BLOCK_PLANT,
           errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],
@@ -256,7 +265,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
       blockedZones: [
         {
-          kind: "oak_center",
+          kind: RESERVATION_PROTECT_LANDMARK,
           errorMessage: "error.old_oak_stands_firm",
         },
       ],
@@ -295,7 +304,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
       blockedZones: [
         {
-          kind: "oak_clearing",
+          kind: RESERVATION_BLOCK_PLANT,
           errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],
@@ -330,7 +339,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
       blockedZones: [
         {
-          kind: "oak_clearing",
+          kind: RESERVATION_BLOCK_BUILD,
           errorMessage: "error.oak_clearing_must_stay_open",
         },
       ],

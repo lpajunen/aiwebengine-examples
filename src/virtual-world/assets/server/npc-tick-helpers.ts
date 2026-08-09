@@ -4,6 +4,11 @@ import {
   LivingState,
   normalizeLivingState,
 } from "./world-domain.ts";
+import {
+  isReservedTile,
+  RESERVATION_BLOCK_PLANT,
+  RESERVATION_PROTECT_LANDMARK,
+} from "./world-reservations.ts";
 
 function ensureNPCSlotsAndBag(npc: any): {
   slots: Record<string, any>;
@@ -282,8 +287,6 @@ export function tickNPCTreeActions(params: {
   cols: number;
   shuffleDirections: (dirs: Array<{ dr: number; dc: number }>) => void;
   getInventoryTreeActions: (inventory: LivingState) => string[];
-  isOakCenterTile: (worldId: string, row: number, col: number) => boolean;
-  isOakClearingTile: (worldId: string, row: number, col: number) => boolean;
   directionToRotation: (dr: number, dc: number) => number;
   sendWorldScopedStreamEvent: (
     worldId: string,
@@ -313,7 +316,9 @@ export function tickNPCTreeActions(params: {
     const treeKey = tr + "_" + tc;
 
     if (npcTreeActions.indexOf("cut") !== -1) {
-      if (params.isOakCenterTile(params.worldId, tr, tc)) {
+      if (
+        isReservedTile(params.worldId, tr, tc, RESERVATION_PROTECT_LANDMARK)
+      ) {
         continue;
       }
       const hasPlantedTree =
@@ -357,7 +362,7 @@ export function tickNPCTreeActions(params: {
       if (
         groundWalkable &&
         !hasExistingTree &&
-        !params.isOakClearingTile(params.worldId, tr, tc)
+        !isReservedTile(params.worldId, tr, tc, RESERVATION_BLOCK_PLANT)
       ) {
         params.trees[treeKey] = {
           action: "plant",

@@ -1,14 +1,10 @@
 import {
-  applyOakReservation,
   COLS,
   getWorldBoundaryTileName,
   getWorldFloorTileName,
   getWorldWallTileName,
-  isOakWorld,
   isWorldTileWalkable,
   mulberry32,
-  OAK_CENTER_COL,
-  OAK_CLEAR_RADIUS,
   ROWS,
   WORLD_TILE_BRIDGE,
   WORLD_TILE_GROUND,
@@ -26,6 +22,11 @@ import {
   WORLD_MOD_LAYER_TERRAIN,
   WORLD_MOD_LAYER_OBJECT,
 } from "./world-domain.ts";
+import {
+  applyWorldReservationsToMap,
+  getReservationBounds,
+  RESERVATION_BLOCK_TERRAIN_FEATURE,
+} from "./world-reservations.ts";
 
 function paintWorldBorder(map: number[][], tileName: string): void {
   const tileValue = worldTileValueForName(tileName);
@@ -175,29 +176,27 @@ export function generateWorldMap(
     // can be painted exactly over the river instead of guessing its path.
     const riverColsByRow: Record<number, number[]> = {};
 
-    // The oak world's river must run the full height of the map uninterrupted
-    // (the clearing reservation below would otherwise cut a walkable gap
-    // through it), so confine its wander to a band on one side of the oak
-    // clearing instead of letting it drift across the whole map width.
-    const avoidOakClearing = isOakWorld(worldId);
+    // A river must run the full height of the map uninterrupted (a reservation
+    // painted afterwards would otherwise cut a walkable gap through it), so
+    // where the world reserves tiles against terrain features, confine the
+    // river's wander to a band on one side of that area instead of letting it
+    // drift across the whole map width.
+    const featureBounds = getReservationBounds(
+      worldId,
+      RESERVATION_BLOCK_TERRAIN_FEATURE,
+    );
     let riverBandMin = 8;
     let riverBandMax = cols - 9;
-    if (avoidOakClearing) {
+    if (featureBounds) {
       if (rand() < 0.5) {
         riverBandMin = 3;
-        riverBandMax = Math.max(
-          riverBandMin,
-          OAK_CENTER_COL - OAK_CLEAR_RADIUS - 2,
-        );
+        riverBandMax = Math.max(riverBandMin, featureBounds.minCol - 2);
       } else {
         riverBandMax = cols - 4;
-        riverBandMin = Math.min(
-          riverBandMax,
-          OAK_CENTER_COL + OAK_CLEAR_RADIUS + 2,
-        );
+        riverBandMin = Math.min(riverBandMax, featureBounds.maxCol + 2);
       }
     }
-    let riverCol = avoidOakClearing
+    let riverCol = featureBounds
       ? Math.floor((riverBandMin + riverBandMax) / 2)
       : Math.floor(cols * (0.35 + rand() * 0.3));
     for (let riverRow = 1; riverRow < rows - 1; riverRow++) {
@@ -287,7 +286,7 @@ export function generateWorldMap(
   }
 
   if (String(worldId) === "10000") {
-    return applyOakReservation(map, worldId);
+    return applyWorldReservationsToMap(map, worldId);
   }
 
   map[1][1] = worldTileValueForName(floorTileName);

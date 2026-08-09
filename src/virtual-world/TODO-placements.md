@@ -91,17 +91,32 @@ type PlacementReservation = {
 type PlacementReservationRule = string;
 ```
 
-Rules that must exist in the initial registry, because the oak clearing
-already implements every one of them as a hard-coded check:
+Rules in the initial registry. Every one but the last replaces a hard-coded
+check that already exists:
 
-| Rule                    | Replaces                                                 |
-| ----------------------- | -------------------------------------------------------- |
-| `block_random_spawn`    | clearing check in random item/NPC population             |
-| `block_plant`           | `isOakClearingTile` in `tree-action-helpers.ts:569`      |
-| `block_build`           | house-build rejection inside the clearing                |
-| `block_npc_wander`      | injected predicate in `npc-tick-helpers.ts:286,360`      |
-| `block_terrain_feature` | `avoidOakClearing` river shift in `world-map.ts:182-200` |
-| `spawn_area`            | `getOakClearingTiles` in `player-snapshots.ts:192-239`   |
+| Rule                    | Replaces                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `block_plant`           | `oak_clearing` blocked zone on `plant`/`grow_pine_tree`, and the NPC plant check |
+| `block_build`           | `oak_clearing` blocked zone on `build_house`                                     |
+| `protect_landmark`      | `oak_center` blocked zone on `cut`, and the NPC cut check                        |
+| `block_terrain_feature` | `avoidOakClearing` river shift in `world-map.ts`                                 |
+| `spawn_area`            | `getOakClearingTiles` in `player-snapshots.ts`                                   |
+| `block_random_spawn`    | nothing — see below                                                              |
+
+Two rules from the first draft of this plan did not survive contact with the
+code:
+
+- **`block_random_spawn` has no existing implementation.** Random item and NPC
+  population does not avoid the oak clearing today; nothing checks it. Making
+  population respect reservations is a genuine behavior change, so the rule is
+  declared but inert until phase 3.
+- **`block_npc_wander` does not exist and was a misreading.** The clearing
+  check in `npc-tick-helpers.ts` guards NPC _tree planting_, not NPC movement;
+  NPCs walk through the clearing freely. It is `block_plant` applied to an NPC
+  actor, not a separate rule.
+
+`protect_landmark` covers the landmark's own tile — distinct from the
+reservation area around it, which excludes that tile.
 
 ### Why these fields
 
@@ -210,13 +225,15 @@ removed from the page state entirely.
 
 Reservations are evaluated as part of the effective world rules:
 
-- random item/NPC spawning excludes `block_random_spawn` tiles;
-- plant and build actions reject tiles marked `block_plant` and `block_build`;
-- NPC wander target selection excludes `block_npc_wander` tiles;
+- plant and build actions reject tiles marked `block_plant` and `block_build`,
+  whether the actor is a player or an NPC;
+- actions that would destroy a landmark reject its `protect_landmark` tile;
 - terrain generation routes linear features around `block_terrain_feature`
   tiles;
 - default spawn resolution prefers `spawn_area` tiles when a world declares
-  them.
+  them;
+- random item/NPC spawning excludes `block_random_spawn` tiles (phase 3 —
+  no such exclusion exists today).
 
 This is the replacement for world-ID checks and the `oak_clearing` /
 `oak_center` validation enum. The old oak itself can be protected through its
@@ -415,6 +432,18 @@ already exists, unless materialization is made aware of it:
   `guildWorldConfigEnsured` flag. That flag has to go with the special case,
   not survive it.
 
+### Seeded action classes keep the legacy zone kinds
+
+`seedActionClassDefaults` in `item-registry.ts:1290-1321` shallow-merges only
+validation keys a stored row is _missing_. Deployed action-class rows already
+have a `blockedZones` key, so renaming the zone kinds in `ACTION_DEFINITIONS`
+never reaches them — they keep `oak_clearing` / `oak_center` forever.
+
+Phase 2 handles this with permanent aliases in `world-reservations.ts`. Those
+aliases stop being sufficient the moment a creator can give `block_plant` and
+`block_build` different areas, because `oak_clearing` cannot distinguish them.
+Phase 3 must therefore rewrite the seeded rows explicitly.
+
 ### Seeding placements onto already-seeded class rows
 
 The system-class backfill in `world-class-storage.ts:326-350` only patches
@@ -454,19 +483,35 @@ reads them yet.
 
 ### Phase 2: Reservation façade over the existing constants
 
-No behavior change, no new storage. Introduce `isReservedTile()` /
-`getReservedTiles()` backed by the _current_ oak constants, and migrate every
-consumer to call it:
+Status: **done**.
 
-1. `tree-action-helpers.ts:569` (plant/build validation).
-2. `npc-orchestration.ts:188` and `npc-tick-helpers.ts:286,360` (the already
-   injected wander predicate).
-3. `world-map.ts:182-200` (river routing).
-4. `player-snapshots.ts:192-239` (spawn resolution).
-5. Random item/NPC population in `item-storage.ts`.
+No behavior change, no new storage. `assets/server/world-reservations.ts`
+exposes `isReservedTile`, `getReservedTiles`, `getReservationBounds`,
+`getSpawnFallbackTile` and `applyWorldReservationsToMap`, all still answered by
+the oak constants in `world-domain.ts`. Migrated consumers:
 
-Deploy this on its own. It is the largest diff in the project and it should be
-verifiable purely as "nothing changed".
+1. `tree-action-helpers.ts` — `getBlockedZoneError` resolves any zone kind
+   through `isReservedTile` instead of branching on two hard-coded kinds.
+2. `action-registry.ts` — built-in blocked zones name rules (`block_plant`,
+   `block_build`, `protect_landmark`); `kind` is typed as a rule name rather
+   than a two-value union.
+3. `npc-tick-helpers.ts` / `npc-orchestration.ts` — the two injected oak
+   predicates are gone, replaced by a direct `isReservedTile` import per the
+   repo's no-dependency-injection convention.
+4. `world-map.ts` — the river band derives from
+   `getReservationBounds(..., block_terrain_feature)`; `rand()` call order is
+   preserved so seeded maps still generate identically.
+5. `player-snapshots.ts` — spawn tiles come from
+   `getReservedTiles(..., spawn_area)`, with `getSpawnFallbackTile` as the
+   anchor.
+6. `world-bootstrap.ts` / `world-map.ts` — `applyOakReservation` is reached
+   through `applyWorldReservationsToMap`.
+
+Random item/NPC population was _not_ migrated: it never consulted the clearing,
+so there was nothing to route through the façade.
+
+`world-domain.ts` keeps its oak exports as the façade's private backing. Phase 3
+removes them; nothing outside `world-reservations.ts` reads them now.
 
 ### Phase 3: Materialize placements
 

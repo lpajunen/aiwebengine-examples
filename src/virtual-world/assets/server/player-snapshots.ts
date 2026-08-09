@@ -1,12 +1,10 @@
 import { getEffectiveMap, getWorldDimensions } from "./world-bootstrap.ts";
+import { hashString, isWorldTileWalkable } from "./world-domain.ts";
 import {
-  getOakClearingTiles,
-  hashString,
-  isOakWorld,
-  isWorldTileWalkable,
-  OAK_CENTER_COL,
-  OAK_CENTER_ROW,
-} from "./world-domain.ts";
+  getReservedTiles,
+  getSpawnFallbackTile,
+  RESERVATION_SPAWN_AREA,
+} from "./world-reservations.ts";
 import {
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
@@ -185,15 +183,15 @@ export function getDefaultSpawnPosition(
   worldId: string | number,
   userId: string,
 ): { row: number; col: number; seq: number; rotation: number } {
-  if (!isOakWorld(worldId)) {
+  const tiles = getReservedTiles(worldId, RESERVATION_SPAWN_AREA);
+  const fallbackAnchor = getSpawnFallbackTile(worldId);
+  if (!fallbackAnchor) {
     return { row: 1, col: 1, seq: 0, rotation: 0 };
   }
-
-  const tiles = getOakClearingTiles(worldId);
   if (tiles.length === 0) {
     return {
-      row: OAK_CENTER_ROW + 1,
-      col: OAK_CENTER_COL,
+      row: fallbackAnchor.row,
+      col: fallbackAnchor.col,
       seq: 0,
       rotation: 0,
     };
@@ -235,8 +233,8 @@ export function getDefaultSpawnPosition(
   }
 
   return {
-    row: OAK_CENTER_ROW + 1,
-    col: OAK_CENTER_COL,
+    row: fallbackAnchor.row,
+    col: fallbackAnchor.col,
     seq: 0,
     rotation: 0,
   };

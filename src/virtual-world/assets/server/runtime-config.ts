@@ -117,3 +117,22 @@ export const APPROACH_ACTION_MAX_MS = 15000;
 // this is also the effective bound on total items reachable through one
 // container.
 export const MAX_CONTAINER_ITEMS = 20;
+
+// Tile-reservation rule names — see world-reservations.ts, which resolves
+// which tiles carry which rule. The names live here, in the dependency-free
+// shared-constants module, rather than beside that logic: action-registry.ts
+// needs them for its blocked-zone declarations, and importing
+// world-reservations.ts there would close a cycle
+// (world-domain -> item-registry -> action-registry -> world-reservations ->
+// world-domain) that the aiwebengine module loader rejects at transpile time,
+// even though TypeScript accepts it.
+export const RESERVATION_BLOCK_PLANT = "block_plant";
+export const RESERVATION_BLOCK_BUILD = "block_build";
+export const RESERVATION_BLOCK_TERRAIN_FEATURE = "block_terrain_feature";
+export const RESERVATION_SPAWN_AREA = "spawn_area";
+export const RESERVATION_PROTECT_LANDMARK = "protect_landmark";
+// Declared so placements can already be authored against it, but nothing
+// consumes it yet: random item/NPC population does not currently avoid any
+// reserved area, and making it do so is a behavior change that belongs to
+// phase 3 of TODO-placements.md.
+export const RESERVATION_BLOCK_RANDOM_SPAWN = "block_random_spawn";

@@ -80,13 +80,12 @@ import {
   canTileItemsUseTreeAction,
   getNearbyTileItems,
   getNearbyTileKeys,
-  isOakCenterTile,
-  isOakClearingTile,
   isWithinTileDistance,
   isWorldTileWalkable,
   normalizeWorldType,
   WORLD_TYPE_BUILDING,
 } from "./world-domain.ts";
+import { isReservedTile } from "./world-reservations.ts";
 import {
   applyHouseAction,
   applyTreeAction,
@@ -564,17 +563,7 @@ export function performTreeActionForUser(
       const blockedZone = blockedZones[i];
       if (!blockedZone || typeof blockedZone.kind !== "string") continue;
 
-      if (
-        blockedZone.kind === "oak_clearing" &&
-        isOakClearingTile(worldId, row, col)
-      ) {
-        return blockedZone.errorMessage || "error.action_not_allowed_here";
-      }
-
-      if (
-        blockedZone.kind === "oak_center" &&
-        isOakCenterTile(worldId, row, col)
-      ) {
+      if (isReservedTile(worldId, row, col, blockedZone.kind)) {
         return blockedZone.errorMessage || "error.action_not_allowed_here";
       }
     }

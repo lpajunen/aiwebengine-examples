@@ -709,9 +709,13 @@ export function getWorldClassForWorldId(
   if (!row) return null;
   const classId = String(row.world_class_id || "");
   const worldType = String(row.world_type || "");
+  // Refresh-tolerant, like getWorldClassForWorld: a class created through the
+  // editor (or on another instance) after this instance built its cache would
+  // otherwise resolve to null, and the world would silently lose its
+  // placements — its reservations, cleared terrain and landmark footprint.
   return (
-    (classId ? getWorldClass(classId) : null) ||
-    (worldType ? getWorldClass(worldType) : null)
+    (classId ? getWorldClassWithRefresh(classId) : null) ||
+    (worldType ? getWorldClassWithRefresh(worldType) : null)
   );
 }
 

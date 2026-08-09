@@ -537,46 +537,47 @@ removes them; nothing outside `world-reservations.ts` reads them now.
 
 ### Phase 3: Materialize placements
 
-Status: **step 5 done**, the rest outstanding.
+Status: **done**.
 
-1. Add world-placement instance storage with a unique `(world_id, placement_id)`
-   constraint.
-2. Implement idempotent placement materialization in world bootstrap.
-3. Materialize fixture/item, NPC, terrain, and one-tile structure placements.
-4. Materialize portal placements through the existing `portal_builder`
-   destination path, adding stable per-placement destination resolution and
-   `entryPlacementId` lookup.
-5. ~~Repoint the Phase 2 façade from the oak constants to placement data.~~
-   **Done.** `world-reservations.ts` resolves reservations from the world
-   class's placements, memoized per world and keyed on a world-class cache
-   generation counter (`isReservedTile` runs per candidate tile inside the NPC
-   tick, so a DB read per call was not viable). The oak helpers in
-   `world-domain.ts` are now referenced only from inside that file.
-6. Reconcile materialization with the existing reseed/dedupe paths described
-   above.
-7. Replace hard-coded Birdhaven/guild fixture seeding with materialization.
+1. `world-placement-instances.ts` + a `vworld_world_placements` table keyed
+   `(world_id, placement_id)`.
+2. `materializeWorldPlacements` in `item-storage.ts`, called from
+   `ensureWorldItems` — replacing the three world-ID-gated seeders.
+3. item/fixture/portal and one-tile structure materialize there; `npc`
+   materializes in `npc-storage.ts` (it owns NPC rows, and importing it from
+   item-storage would close a cycle); `terrain` needs no instance, since
+   `world-reservations.ts` paints it onto the map.
+4. Portal placements resolve `ensure_world_class` to one stable destination
+   world per (source world, placement), recorded on the instance, and
+   `entryPlacementId` to a tile in the destination class.
+5. Façade repointed at placement data.
+6. The reseed drops placement instances before re-materializing, so the
+   landmarks the wipe removed come back.
+7. `ensureOldOakItem`, `ensureGuildRoomItems`, `ensureVillageGuildEntrance`
+   deleted. `item-storage.ts` no longer imports a single oak or guild constant.
 
-Two modelling decisions fell out of step 5:
+Notes worth carrying:
 
-- **`clear_terrain` is a new rule** (registry now 7 names). The old
-  `applyOakReservation` painted the clearing to walkable ground; that is a
-  reservation effect, not a side effect of blocking construction, so it needed
-  its own rule rather than being implied by `block_plant`.
-- **A landmark's map footprint is a separate `terrain` placement.** Birdhaven
-  gained `old-oak-trunk` (terrain, `pine_tree`, same tile as the `old-oak`
-  fixture): the fixture is the interactable item, the terrain placement is what
-  makes the tile unwalkable and tree-shaped. Painting a tile because an _item_
-  happens to sit there would have been oak-specific special-casing wearing a
-  data costume.
-
-`protect_landmark` now covers every placement's own tile rather than only the
-oak's. Blocking `cut` on the guild house and door tiles is harmless and
-arguably correct.
-
-System classes are owner-scoped and Birdhaven has no owners, so editing its
-placements through the API returns `error.not_class_owner` for a non-admin
-creator. Reconciliation tooling in phase 5 needs an admin path or an explicit
-system-class escape hatch.
+- **Adoption, not recreation.** Before an instance row exists, a placement
+  matches an existing object by class id plus fixture tag. That is what let the
+  live start world migrate without growing a second oak: the deployed oak and
+  guild door kept their original item ids and destinations. Player-built
+  objects of the same class are untouched, because authored ones carry the tag.
+- **`generateWorldMap` was gating the reservation paint on `worldId === "10000"`.**
+  The page state's `map` is the _raw generated_ map (the client applies world
+  mods itself), so authored terrain has to be painted during generation to be
+  visible at all — which meant only Birdhaven ever got any. Now applied to
+  every world; a class with no placements resolves to nothing.
+- **`source_world` needs a recorded back-link.** A class cannot name its own
+  callers, so the exterior writes a `__source_world__` instance row into the
+  interior when it creates it. That row survives the reseed wipe, since nothing
+  else in the world knows the relationship existed. Return doors resolve the
+  world but deliberately not a tile: the exterior's portal tile is usually a
+  wall, so the traveller lands on that world's default spawn.
+- **Seeded action rows still carry oak-specific text.** Blocking a build inside
+  a creator's own clearing reports `error.oak_clearing_must_stay_open`. The
+  geometry is fully data-driven; only the message name is legacy. Rewriting
+  those seeded rows belongs to phase 4.
 
 ### Phase 4: Remove special cases
 

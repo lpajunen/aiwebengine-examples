@@ -360,6 +360,18 @@ export function getSpawnFallbackTile(
   return null;
 }
 
+// Whether a terrain placement claims this tile, so generation-time fixups
+// (the walkable spawn corner) can yield to authored terrain instead of
+// punching a hole through it.
+export function isTerrainPlacementTile(
+  worldId: string | number,
+  row: number,
+  col: number,
+): boolean {
+  const resolved = resolveWorldReservations(worldId);
+  return resolved.terrainTiles[row + "_" + col] !== undefined;
+}
+
 // Paints placement-owned terrain over a generated map: first the clear_terrain
 // reservations (so a clearing is actually clear of generated trees/rocks),
 // then terrain placements (so a landmark's own footprint survives its own

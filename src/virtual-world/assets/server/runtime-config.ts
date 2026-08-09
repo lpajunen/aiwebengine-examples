@@ -80,6 +80,9 @@ export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
+// One row per authored placement per world — what a world class's placements
+// actually created in a given world. See world-placement-instances.ts.
+export const VWORLD_WORLD_PLACEMENT_TABLE = "vworld_world_placements";
 // No CRUD route or MCP tool ever writes to this table — rows are added by an
 // operator directly via the DB, deliberately kept out of the creator_stone
 // item-economy trust boundary. See canManageClass() in http-handler-helpers.ts.
@@ -95,7 +98,7 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // matches this number, so a forgotten bump means the new column is never
 // created on an already-migrated database.
 // v2: living class visual_style/color + item class style columns.
-export const VWORLD_SCHEMA_VERSION = 2;
+export const VWORLD_SCHEMA_VERSION = 3;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

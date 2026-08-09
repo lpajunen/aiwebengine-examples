@@ -31,6 +31,7 @@ import {
   VWORLD_PLAYER_WORLD_TABLE,
   VWORLD_SPAWN_TIMER_TABLE,
   VWORLD_WORLD_CLASS_TABLE,
+  VWORLD_WORLD_PLACEMENT_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
   VWORLD_WORLD_ITEM_TABLE,
   VWORLD_WORLD_MOD_TABLE,
@@ -1247,6 +1248,46 @@ function runWorldDatabaseMigration(): void {
     return database.addUniqueIndex(
       VWORLD_WORLD_CLASS_TABLE,
       JSON.stringify(["class_id"]),
+    );
+  });
+
+  // What a world class's placements actually created in one world. Identity is
+  // (world_id, placement_id), which is what keeps materialization idempotent.
+  step("createTable", VWORLD_WORLD_PLACEMENT_TABLE, function () {
+    return database.createTable(VWORLD_WORLD_PLACEMENT_TABLE);
+  });
+  [
+    ["addTextColumn", "world_id", false],
+    ["addTextColumn", "placement_id", false],
+    ["addTextColumn", "placement_kind", true],
+    ["addTextColumn", "class_id", true],
+    ["addIntegerColumn", "revision", true],
+    ["addTextColumn", "data_json", true],
+    ["addIntegerColumn", "updated_at", true],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_WORLD_PLACEMENT_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_WORLD_PLACEMENT_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_WORLD_PLACEMENT_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_WORLD_PLACEMENT_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_WORLD_PLACEMENT_TABLE,
+      JSON.stringify(["world_id", "placement_id"]),
     );
   });
 

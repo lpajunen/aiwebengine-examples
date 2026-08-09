@@ -5,18 +5,21 @@ import {
   stripClassOwnedItemState,
 } from "./item-registry.ts";
 import {
+  createWorldOfType,
   getEffectiveMap,
   getWorldClassForWorld,
   getWorldInfo,
   resolvePortalDestinationWorldType,
-  saveWorldType,
 } from "./world-bootstrap.ts";
 import { loadWorldHouses, saveWorldHouses } from "./world-mod-storage.ts";
+import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
-  adventurersGuildWorldClassRecord,
-  getWorldClassWithRefresh,
-  upsertWorldClass,
-} from "./world-class-storage.ts";
+  deleteWorldPlacementInstances,
+  loadWorldPlacementInstances,
+  saveWorldPlacementInstance,
+  SOURCE_WORLD_LINK_ID,
+} from "./world-placement-instances.ts";
+import { WorldClassPlacement } from "./world-placements.ts";
 import {
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_WORLD_ITEM_META_TABLE,
@@ -24,32 +27,14 @@ import {
 } from "./runtime-config.ts";
 import {
   createEmptyLivingState,
-  GUILD_CENTER_COL,
-  GUILD_CENTER_ROW,
-  GUILD_SPAWN_COL,
-  GUILD_SPAWN_ROW,
-  GUILD_WORLD_CLASS_ID,
-  GUILD_WORLD_COLS,
-  GUILD_WORLD_ID,
-  GUILD_WORLD_ROWS,
-  isGuildWorld,
-  isOakWorld,
   isValidItem,
   isWorldTileWalkable,
-  OAK_CENTER_COL,
-  OAK_CENTER_ROW,
-  OAK_WORLD_ID,
   LivingState,
   normalizeLivingState,
   normalizeWorldType,
   stripClassOwnedLivingState,
   toStoredWorldTimestamp,
   fromStoredWorldTimestamp,
-  VILLAGE_GUILD_APPROACH_COL,
-  VILLAGE_GUILD_APPROACH_ROW,
-  VILLAGE_GUILD_DOOR_COL,
-  VILLAGE_GUILD_DOOR_ROW,
-  WORLD_TYPE_BUILDING,
 } from "./world-domain.ts";
 import {
   getDefaultPlayerLivingClassId,
@@ -439,43 +424,9 @@ export function spawnItemsOnTile(
   return createdItems;
 }
 
-export function ensureOldOakItem(worldId: string): void {
-  if (!isOakWorld(worldId)) return;
-  const items = loadWorldItems(worldId);
-  const found: Array<{ item: any; tileKey: string }> = [];
-  for (const tileKey of Object.keys(items)) {
-    for (const item of items[tileKey]) {
-      if (item && item.type === "old_oak") found.push({ item, tileKey });
-    }
-  }
-
-  // Self-heal: concurrent requests racing to seed the singleton oak on a
-  // fresh world can each insert their own copy; keep the lowest id (oldest)
-  // and delete any others so exactly one old_oak item ever survives.
-  found.sort(function (a, b) {
-    return String(a.item.id).localeCompare(String(b.item.id));
-  });
-  const canonical = found.length > 0 ? found[0] : null;
-  for (let i = 1; i < found.length; i++) {
-    deleteWorldItemById(String(found[i].item.id));
-  }
-
-  const centerTileKey = OAK_CENTER_ROW + "_" + OAK_CENTER_COL;
-  if (canonical && canonical.tileKey === centerTileKey) return;
-
-  upsertWorldItem(worldId, OAK_CENTER_ROW, OAK_CENTER_COL, {
-    id: canonical
-      ? canonical.item.id
-      : "w" + worldId + "_i" + nextWorldItemId(worldId),
-    type: "old_oak",
-    created_at: Date.now(),
-    non_droppable: true,
-  });
-}
-
 // Ensures exactly one world item matching `matchFn` exists in `worldId`, sitting
 // at (row,col). Self-heals duplicates (keeps the lowest/oldest id, deletes the
-// rest) the same way ensureOldOakItem does for the oak singleton, but matches on
+// rest) the way the old hard-coded oak seeding did, but matches on
 // a predicate rather than a bare type so a fixture (e.g. a tagged guild door)
 // can coexist with player-built items of the same type without clobbering them.
 // A matching item already on the target tile is left untouched, preserving any
@@ -486,7 +437,7 @@ function ensureSingletonWorldItem(
   col: number,
   matchFn: (item: any) => boolean,
   buildItem: () => Record<string, unknown>,
-): void {
+): string {
   const items = loadWorldItems(worldId);
   const found: Array<{ item: any; tileKey: string }> = [];
   for (const tileKey of Object.keys(items)) {
@@ -503,153 +454,280 @@ function ensureSingletonWorldItem(
   }
 
   const targetTileKey = row + "_" + col;
-  if (canonical && canonical.tileKey === targetTileKey) return;
+  if (canonical && canonical.tileKey === targetTileKey) {
+    return String(canonical.item.id);
+  }
 
   const base = buildItem();
+  const itemId = canonical
+    ? String(canonical.item.id)
+    : "w" + worldId + "_i" + nextWorldItemId(worldId);
   upsertWorldItem(
     worldId,
     row,
     col,
-    Object.assign(
-      {
-        id: canonical
-          ? canonical.item.id
-          : "w" + worldId + "_i" + nextWorldItemId(worldId),
-        created_at: Date.now(),
+    Object.assign({ id: itemId, created_at: Date.now() }, base),
+  );
+  return itemId;
+}
+
+// Materializes a world class's authored placements into one world — the
+// data-driven replacement for the old ensureOldOakItem / ensureGuildRoomItems /
+// ensureVillageGuildEntrance trio, which hard-coded Birdhaven's and the guild's
+// contents behind world-ID checks.
+//
+// Idempotent by (world_id, placement_id): the instance row records which item
+// or tile a placement created, so re-running adopts that object instead of
+// creating a second one. NPC placements are materialized in npc-storage.ts (it
+// owns NPC rows, and importing it here would close a cycle); terrain
+// placements need no instance, since world-reservations.ts paints them onto
+// the effective map.
+export function materializeWorldPlacements(worldId: string): void {
+  const worldClass = getWorldClassForWorld(worldId);
+  const placements =
+    worldClass && Array.isArray(worldClass.placements)
+      ? worldClass.placements
+      : [];
+  if (placements.length === 0) return;
+  const revision = worldClass ? Number(worldClass.placementRevision || 0) : 0;
+  const instances = loadWorldPlacementInstances(worldId);
+
+  for (let i = 0; i < placements.length; i++) {
+    const placement = placements[i];
+    if (!placement || !placement.position) continue;
+    const row = Number(placement.position.row);
+    const col = Number(placement.position.col);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+    const existing = instances[placement.id];
+
+    if (placement.kind === "structure") {
+      materializeStructurePlacement(worldId, placement, row, col, revision);
+      continue;
+    }
+    if (
+      placement.kind !== "item" &&
+      placement.kind !== "fixture" &&
+      placement.kind !== "portal"
+    ) {
+      continue;
+    }
+
+    const recordedItemId =
+      existing && existing.data ? String(existing.data.itemId || "") : "";
+    // The fixture tag distinguishes an authored door from a player-built one
+    // of the same class, so adoption cannot swallow player property.
+    const fixtureTag =
+      placement.state && typeof placement.state.fixture === "string"
+        ? String(placement.state.fixture)
+        : "";
+    const itemId = ensureSingletonWorldItem(
+      worldId,
+      row,
+      col,
+      function (item) {
+        if (!item) return false;
+        // Once an instance exists the match is exact; before that (a world
+        // seeded by the old hard-coded path, or a fresh reseed) fall back to
+        // class + fixture tag so the existing object is adopted rather than
+        // duplicated.
+        if (recordedItemId) return String(item.id) === recordedItemId;
+        if (String(item.type || "") !== String(placement.classId)) return false;
+        if (!fixtureTag) return true;
+        return !!item.state && item.state.fixture === fixtureTag;
       },
-      base,
-    ),
-  );
-}
-
-function isGuildDoorFixture(item: any, fixture: string): boolean {
-  return (
-    !!item &&
-    item.type === "door" &&
-    !!item.state &&
-    item.state.fixture === fixture
-  );
-}
-
-// Seeds the Adventurer's guild room's fixtures: a training post at the centre
-// (its advance_level action lets a player spend experience to level up) and a
-// return door at the spawn tile leading back to the village clearing. Called
-// from ensureWorldItems, so both survive the guild world's periodic reseed.
-export function ensureGuildRoomItems(worldId: string): void {
-  if (!isGuildWorld(worldId)) return;
-  // Guarantee the type/dimension row exists even if the guild is somehow loaded
-  // before the village writes it (self-corrects the map on the next load).
-  ensureAdventurersGuildWorld();
-  ensureSingletonWorldItem(
-    worldId,
-    GUILD_CENTER_ROW,
-    GUILD_CENTER_COL,
-    function (item) {
-      return item.type === "training_dummy";
-    },
-    function () {
-      return { type: "training_dummy", non_droppable: true };
-    },
-  );
-  ensureSingletonWorldItem(
-    worldId,
-    GUILD_SPAWN_ROW,
-    GUILD_SPAWN_COL,
-    function (item) {
-      return isGuildDoorFixture(item, "guild_return");
-    },
-    function () {
-      return {
-        type: "door",
-        state: { open: true, fixture: "guild_return" },
-        destination_world_id: OAK_WORLD_ID,
-        destination_row: VILLAGE_GUILD_APPROACH_ROW,
-        destination_col: VILLAGE_GUILD_APPROACH_COL,
-      };
-    },
-  );
-}
-
-// Writes the guild world's class + type/dimensions rows once per process so the
-// village door below points at a real building world with empty spawn manifests
-// (its room fixtures seed lazily on first entry, via ensureGuildRoomItems inside
-// ensureWorldItems).
-let guildWorldConfigEnsured = false;
-function ensureAdventurersGuildWorld(): void {
-  if (guildWorldConfigEnsured) return;
-  // A dedicated world class with empty item/NPC spawns keeps the room clean
-  // rather than inheriting the busy default building preset. The English name is
-  // in fallbackLabel and the Finnish name in the labels map (so the world-type
-  // editor's "Name (Finnish)" field shows/round-trips it — that field reads
-  // only labels.fi, not the i18n bundle). Re-upsert when either drifts so an
-  // already-seeded row self-heals.
-  // Same factory the class repository seeds from, so this legacy path and the
-  // system-class backfill can never write conflicting records — in particular
-  // this one must not drop the guild's placements on the floor.
-  const desiredGuildClass = adventurersGuildWorldClassRecord();
-  const existingGuildClass = getWorldClassWithRefresh(GUILD_WORLD_CLASS_ID);
-  if (
-    !existingGuildClass ||
-    existingGuildClass.fallbackLabel !== desiredGuildClass.fallbackLabel ||
-    !existingGuildClass.labels ||
-    existingGuildClass.labels.fi !== desiredGuildClass.labels.fi
-  ) {
-    upsertWorldClass(desiredGuildClass);
-  }
-  const info = getWorldInfo(GUILD_WORLD_ID);
-  if (
-    info.world_type !== WORLD_TYPE_BUILDING ||
-    info.rows !== GUILD_WORLD_ROWS ||
-    info.cols !== GUILD_WORLD_COLS ||
-    info.world_class_id !== GUILD_WORLD_CLASS_ID
-  ) {
-    saveWorldType(
-      GUILD_WORLD_ID,
-      WORLD_TYPE_BUILDING,
-      { rows: GUILD_WORLD_ROWS, cols: GUILD_WORLD_COLS },
-      GUILD_WORLD_CLASS_ID,
+      function () {
+        return buildPlacementItem(worldId, placement);
+      },
     );
+
+    saveWorldPlacementInstance({
+      worldId: String(worldId),
+      placementId: String(placement.id),
+      placementKind: String(placement.kind),
+      classId: String(placement.classId),
+      revision: revision,
+      data: { itemId: itemId },
+    });
   }
-  guildWorldConfigEnsured = true;
 }
 
-// Seeds the village-side guild entrance: a house wall just south of the oak
-// clearing with a door hung on it that leads into the Adventurer's guild.
-// Called from ensureWorldItems for the oak world so it self-heals like the oak.
-export function ensureVillageGuildEntrance(worldId: string): void {
-  if (!isOakWorld(worldId)) return;
-  ensureAdventurersGuildWorld();
+// Resolves a portal placement's linked destination to a concrete world and
+// entry tile. Reuses the same world-from-class creation the player-facing
+// portal_builder performs (see tree-action-helpers.ts); the difference is that
+// this must be stable — one destination world per (source world, placement),
+// recorded on the instance, rather than a fresh world per use.
+function resolvePlacementDestination(
+  worldId: string,
+  placement: WorldClassPlacement,
+): { worldId: string; row?: number; col?: number } | null {
+  const raw = placement.state && placement.state.destination;
+  if (!raw || typeof raw !== "object") return null;
+  const destination = raw as Record<string, unknown>;
+  const mode = String(destination.mode || "");
 
-  // Merge the entrance house into the existing house mods rather than replacing
-  // them, so player-built village houses are preserved.
-  const doorTileKey = VILLAGE_GUILD_DOOR_ROW + "_" + VILLAGE_GUILD_DOOR_COL;
-  const houses = loadWorldHouses(worldId);
-  if (!houses[doorTileKey]) {
-    houses[doorTileKey] = {
-      built_by: undefined,
-      actor_type: undefined,
-      timestamp: Date.now(),
-    };
-    saveWorldHouses(worldId, houses);
+  // A return door leads back to whichever world linked here, recorded by that
+  // world when it created this one. Deliberately no row/col: the exterior's
+  // portal tile is usually a wall the traveller cannot stand on, so the
+  // traveller lands on the source world's default spawn instead of risking a
+  // blocked tile. Without a recorded link there is nothing to resolve, and
+  // door_travel's own fallback applies.
+  if (mode === "source_world") {
+    const link = loadWorldPlacementInstances(worldId)[SOURCE_WORLD_LINK_ID];
+    const sourceWorldId =
+      link && link.data ? String(link.data.sourceWorldId || "") : "";
+    return sourceWorldId ? { worldId: sourceWorldId } : null;
   }
 
-  ensureSingletonWorldItem(
-    worldId,
-    VILLAGE_GUILD_DOOR_ROW,
-    VILLAGE_GUILD_DOOR_COL,
-    function (item) {
-      return isGuildDoorFixture(item, "guild_entrance");
-    },
-    function () {
-      return {
-        type: "door",
-        state: { open: true, fixture: "guild_entrance" },
-        destination_world_id: GUILD_WORLD_ID,
-        destination_row: GUILD_SPAWN_ROW,
-        destination_col: GUILD_SPAWN_COL,
-      };
-    },
+  const entryPlacementId = String(destination.entryPlacementId || "");
+
+  if (mode === "existing_world") {
+    const targetWorldId = String(destination.worldId || "");
+    if (!targetWorldId) return null;
+    const entry = resolveEntryTile(targetWorldId, entryPlacementId);
+    return { worldId: targetWorldId, row: entry.row, col: entry.col };
+  }
+
+  if (mode !== "ensure_world_class") return null;
+  const destinationClassId = String(destination.worldClassId || "");
+  if (!destinationClassId) return null;
+
+  // Stable per (source world, placement): reuse the world recorded on this
+  // placement's instance, and only create one the first time.
+  const instances = loadWorldPlacementInstances(worldId);
+  const existing = instances[String(placement.id)];
+  let targetWorldId =
+    existing && existing.data
+      ? String(existing.data.destinationWorldId || "")
+      : "";
+  if (!targetWorldId) {
+    const destinationClass = getWorldClassWithRefresh(destinationClassId);
+    if (!destinationClass) return null;
+    const created = createWorldOfType(
+      destinationClass.baseType,
+      { rows: destinationClass.rows, cols: destinationClass.cols },
+      destinationClassId,
+    );
+    targetWorldId = created.world_id;
+    // Back-link, so the new world's return doors know where they lead.
+    saveWorldPlacementInstance({
+      worldId: targetWorldId,
+      placementId: SOURCE_WORLD_LINK_ID,
+      placementKind: "link",
+      classId: "",
+      revision: 0,
+      data: { sourceWorldId: String(worldId) },
+    });
+    saveWorldPlacementInstance({
+      worldId: String(worldId),
+      placementId: String(placement.id),
+      placementKind: String(placement.kind),
+      classId: String(placement.classId),
+      revision: 0,
+      data: Object.assign({}, existing ? existing.data : {}, {
+        destinationWorldId: targetWorldId,
+      }),
+    });
+  }
+  const entry = resolveEntryTile(targetWorldId, entryPlacementId);
+  return { worldId: targetWorldId, row: entry.row, col: entry.col };
+}
+
+// Where a traveller lands in the destination world: the tile of the named
+// entry placement in that world's class, or (1,1) — the convention the
+// player-facing portal builder already uses — when none is named.
+function resolveEntryTile(
+  destinationWorldId: string,
+  entryPlacementId: string,
+): { row: number; col: number } {
+  if (entryPlacementId) {
+    const destinationClass = getWorldClassForWorld(destinationWorldId);
+    const placements =
+      destinationClass && Array.isArray(destinationClass.placements)
+        ? destinationClass.placements
+        : [];
+    for (let i = 0; i < placements.length; i++) {
+      const candidate = placements[i];
+      if (candidate && String(candidate.id) === entryPlacementId) {
+        return {
+          row: Number(candidate.position.row),
+          col: Number(candidate.position.col),
+        };
+      }
+    }
+  }
+  return { row: 1, col: 1 };
+}
+
+// Builds the world item an item/fixture/portal placement stands for. State
+// goes through the item class's owned-state rules, so a placement cannot smuggle
+// in keys the class does not own.
+function buildPlacementItem(
+  worldId: string,
+  placement: WorldClassPlacement,
+): Record<string, unknown> {
+  const itemClass = getItemClass(String(placement.classId));
+  const state = Object.assign(
+    {},
+    getItemStateTemplate(String(placement.classId)),
   );
+  const rawState = placement.state || {};
+  for (const key of Object.keys(rawState)) {
+    // `destination` is placement wiring, not item state — resolved below.
+    if (key === "destination") continue;
+    state[key] = rawState[key] as any;
+  }
+
+  const item: Record<string, unknown> = {
+    type: String(placement.classId),
+    state: normalizeItemState(String(placement.classId), state),
+  };
+  // Authored fixtures are part of the world, not loot: without this a player
+  // could pick the old oak up and walk off with it.
+  if (!itemClass || itemClass.nonDroppable !== false) {
+    item.non_droppable = true;
+  }
+
+  const destination = resolvePlacementDestination(worldId, placement);
+  if (destination) {
+    item.destination_world_id = destination.worldId;
+    if (destination.row !== undefined && destination.col !== undefined) {
+      item.destination_row = destination.row;
+      item.destination_col = destination.col;
+    }
+  }
+  return item;
+}
+
+// Writes the object-layer world mod a structure placement stands for. Only the
+// house layer exists today, so a structure naming any other tile records its
+// instance without a mod rather than failing the whole materialization.
+function materializeStructurePlacement(
+  worldId: string,
+  placement: WorldClassPlacement,
+  row: number,
+  col: number,
+  revision: number,
+): void {
+  const tileKey = row + "_" + col;
+  if (String(placement.classId) === "house") {
+    const houses = loadWorldHouses(worldId);
+    if (!houses[tileKey]) {
+      houses[tileKey] = {
+        built_by: undefined,
+        actor_type: undefined,
+        timestamp: Date.now(),
+      };
+      saveWorldHouses(worldId, houses);
+    }
+  }
+  saveWorldPlacementInstance({
+    worldId: String(worldId),
+    placementId: String(placement.id),
+    placementKind: String(placement.kind),
+    classId: String(placement.classId),
+    revision: revision,
+    data: { tileKey: tileKey },
+  });
 }
 
 // Finds a random walkable+empty tile and places one instance of itemType
@@ -695,13 +773,10 @@ function placeItemAtRandomTile(
 export const WORLD_ITEM_SEED_VERSION = 4;
 
 export function ensureWorldItems(worldId: string): void {
-  ensureOldOakItem(worldId);
-  // Self-heal the reserved-world fixtures every call (each no-ops unless it's
-  // the world it belongs to), so the guild room and village entrance appear on
-  // already-seeded worlds without needing a seed-version bump — same rationale
-  // as the unconditional ensureOldOakItem above.
-  ensureGuildRoomItems(worldId);
-  ensureVillageGuildEntrance(worldId);
+  // Self-heal authored placements on every call (a no-op for a world whose
+  // class declares none), so landmarks appear on already-seeded worlds without
+  // needing a seed-version bump.
+  materializeWorldPlacements(worldId);
 
   const meta = loadWorldItemMeta(worldId);
   if (meta.seeded === WORLD_ITEM_SEED_VERSION) return;
@@ -720,9 +795,11 @@ export function ensureWorldItems(worldId: string): void {
       VWORLD_WORLD_ITEM_TABLE,
       JSON.stringify({ world_id: String(worldId) }),
     );
-    ensureOldOakItem(worldId);
-    ensureGuildRoomItems(worldId);
-    ensureVillageGuildEntrance(worldId);
+    // The wipe above deleted the items the placement instances point at, so
+    // those rows are dangling: drop them or materialization would consider its
+    // work done and skip re-creating the landmarks that just vanished.
+    deleteWorldPlacementInstances(worldId);
+    materializeWorldPlacements(worldId);
 
     const worldClass = getWorldClassForWorld(worldId);
     const itemSpawns = worldClass ? worldClass.itemSpawns : [];

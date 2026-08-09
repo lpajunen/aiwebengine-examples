@@ -1,6 +1,10 @@
 import { getEffectiveMap, getWorldClassForWorld } from "./world-bootstrap.ts";
 import { loadWorldPlayers } from "./player-snapshots.ts";
 import {
+  loadWorldPlacementInstances,
+  saveWorldPlacementInstance,
+} from "./world-placement-instances.ts";
+import {
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
   VWORLD_NPC_TICK_TABLE,
@@ -333,6 +337,7 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
     if (hasNormalizationChanges) {
       saveWorldNPCs(worldId, existing);
     }
+    materializeWorldNPCPlacements(worldId, existing);
     return existing;
   }
 
@@ -377,7 +382,64 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
   });
 
   saveWorldNPCs(worldId, npcs);
+  materializeWorldNPCPlacements(worldId, npcs);
   return npcs;
+}
+
+// Materializes the world class's `npc` placements — named guards, quest NPCs,
+// scenery animals — as opposed to the random npcSpawns population above.
+// Lives here rather than beside the item/structure materialization in
+// item-storage.ts because NPC rows belong to this module, and importing it
+// there would close a cycle (npc-storage already imports item-storage).
+//
+// Idempotent by (world_id, placement_id): the instance row holds the NPC id,
+// so a fixed NPC is re-adopted rather than duplicated. A fixed NPC that was
+// killed and swept from the world does come back on the next load, which is
+// the point — an authored guard is part of the world, not ambient population.
+export function materializeWorldNPCPlacements(
+  worldId: string,
+  npcs: Record<string, any>,
+): void {
+  const worldClass = getWorldClassForWorld(worldId);
+  const placements =
+    worldClass && Array.isArray(worldClass.placements)
+      ? worldClass.placements
+      : [];
+  if (placements.length === 0) return;
+  const revision = worldClass ? Number(worldClass.placementRevision || 0) : 0;
+  const instances = loadWorldPlacementInstances(worldId);
+  let changed = false;
+
+  for (let i = 0; i < placements.length; i++) {
+    const placement = placements[i];
+    if (!placement || placement.kind !== "npc" || !placement.position) continue;
+    const classId = String(placement.classId || "");
+    if (!getLivingClass(classId)) continue;
+    const row = Number(placement.position.row);
+    const col = Number(placement.position.col);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+    const existing = instances[placement.id];
+    const recordedNpcId =
+      existing && existing.data ? String(existing.data.npcId || "") : "";
+    if (recordedNpcId && npcs[recordedNpcId]) continue;
+
+    const npcId = recordedNpcId || "placement_" + String(placement.id);
+    const built = buildNPCAtTile(worldId, row, col, classId);
+    if (!built) continue;
+    npcs[npcId] = built;
+    changed = true;
+    saveWorldPlacementInstance({
+      worldId: String(worldId),
+      placementId: String(placement.id),
+      placementKind: "npc",
+      classId: classId,
+      revision: revision,
+      data: { npcId: npcId },
+    });
+  }
+
+  if (changed) saveWorldNPCs(worldId, npcs);
 }
 
 // Finds a random walkable+unoccupied tile and builds a fresh NPC of classId
@@ -487,6 +549,32 @@ function placeNPCAtRandomTile(
     };
   }
   return null;
+}
+
+// Builds an NPC of classId standing on an exact tile — the placement
+// counterpart to placeNPCAtRandomTile, sharing its class loadout handling.
+function buildNPCAtTile(
+  worldId: string,
+  row: number,
+  col: number,
+  classId: string,
+): any | null {
+  const livingClass = getLivingClass(classId);
+  if (!livingClass) return null;
+  const slots = createLivingSlotsFromDefinitions(livingClass.slotDefinitions);
+  const bag = applyNPCDefaultItems(worldId, livingClass, slots);
+  return {
+    row: row,
+    col: col,
+    seq: 0,
+    rotation: 0,
+    state: "idle",
+    ts: Date.now(),
+    class_id: classId,
+    slots: slots,
+    bag: bag,
+    values: Object.assign({}, livingClass.valueTemplate || {}),
+  };
 }
 
 // Spawns a single replacement NPC of classId into worldId at a random

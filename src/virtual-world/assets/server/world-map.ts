@@ -25,6 +25,7 @@ import {
 import {
   applyWorldReservationsToMap,
   getReservationBounds,
+  isTerrainPlacementTile,
   RESERVATION_BLOCK_TERRAIN_FEATURE,
 } from "./world-reservations.ts";
 
@@ -285,13 +286,28 @@ export function generateWorldMap(
     }
   }
 
-  if (String(worldId) === "10000") {
-    return applyWorldReservationsToMap(map, worldId);
-  }
+  // Authored terrain is part of generation, not a post-step: the page state's
+  // `map` is this raw generated map (the client applies world mods itself), so
+  // a landmark's footprint and its cleared area have to be painted here to be
+  // visible at all. Previously gated on the start world's id, which is exactly
+  // why only Birdhaven ever got one. A world whose class declares no
+  // placements resolves to nothing and this returns the map untouched.
+  applyWorldReservationsToMap(map, worldId);
 
-  map[1][1] = worldTileValueForName(floorTileName);
-  map[1][2] = worldTileValueForName(floorTileName);
-  map[2][1] = worldTileValueForName(floorTileName);
+  // Keep the default spawn corner walkable — but not at the cost of carving a
+  // hole through authored terrain, so this yields to a terrain placement that
+  // claimed those tiles.
+  const corners = [
+    [1, 1],
+    [1, 2],
+    [2, 1],
+  ];
+  for (let i = 0; i < corners.length; i++) {
+    const row = corners[i][0];
+    const col = corners[i][1];
+    if (isTerrainPlacementTile(worldId, row, col)) continue;
+    map[row][col] = worldTileValueForName(floorTileName);
+  }
   return map;
 }
 

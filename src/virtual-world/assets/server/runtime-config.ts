@@ -136,3 +136,24 @@ export const RESERVATION_PROTECT_LANDMARK = "protect_landmark";
 // reserved area, and making it do so is a behavior change that belongs to
 // phase 3 of TODO-placements.md.
 export const RESERVATION_BLOCK_RANDOM_SPAWN = "block_random_spawn";
+// Paints the reserved tiles back to walkable floor after map generation, so a
+// clearing is actually clear of the trees/rocks the generator scattered.
+export const RESERVATION_CLEAR_TERRAIN = "clear_terrain";
+
+// The registry strict placement validation checks names against. Lives here
+// rather than in world-reservations.ts so world-placements.ts can validate
+// without importing the lookup module, which resolves placements and would
+// close a cycle back through world-class-storage.
+export const RESERVATION_RULES = [
+  RESERVATION_BLOCK_PLANT,
+  RESERVATION_BLOCK_BUILD,
+  RESERVATION_BLOCK_TERRAIN_FEATURE,
+  RESERVATION_SPAWN_AREA,
+  RESERVATION_PROTECT_LANDMARK,
+  RESERVATION_BLOCK_RANDOM_SPAWN,
+  RESERVATION_CLEAR_TERRAIN,
+];
+
+export function isReservationRule(rule: string): boolean {
+  return RESERVATION_RULES.indexOf(String(rule)) !== -1;
+}

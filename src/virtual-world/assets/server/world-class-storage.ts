@@ -1,4 +1,7 @@
-import { VWORLD_WORLD_CLASS_TABLE } from "./runtime-config.ts";
+import {
+  VWORLD_WORLD_CLASS_TABLE,
+  VWORLD_WORLD_TYPE_TABLE,
+} from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import {
   BIRDHAVEN_WORLD_CLASS_ID,
@@ -20,6 +23,7 @@ import {
   ROWS,
   VILLAGE_GUILD_DOOR_COL,
   VILLAGE_GUILD_DOOR_ROW,
+  WORLD_TILE_PINE_TREE,
   WORLD_TYPE_BUILDING,
   WORLD_TYPE_FOREST,
   WORLD_TYPE_VILLAGE,
@@ -40,6 +44,7 @@ import {
   RESERVATION_BLOCK_BUILD,
   RESERVATION_BLOCK_PLANT,
   RESERVATION_BLOCK_TERRAIN_FEATURE,
+  RESERVATION_CLEAR_TERRAIN,
   RESERVATION_SPAWN_AREA,
 } from "./runtime-config.ts";
 
@@ -153,6 +158,17 @@ function normalizeSpawnEntries(raw: unknown): WorldClassSpawnEntry[] {
 
 let _worldClassCache: Record<string, WorldClassRecord> | null = null;
 
+// Bumped on every cache rebuild and every single-class write. Consumers that
+// derive their own per-world data from class records (world-reservations.ts
+// memoizes resolved reservations, which are read per tile in the NPC tick)
+// key their memo on this so a class edit invalidates it immediately, without
+// this module needing to import — and thus depend on — those consumers.
+let _worldClassCacheGeneration = 0;
+
+export function getWorldClassCacheGeneration(): number {
+  return _worldClassCacheGeneration;
+}
+
 // The generation presets in WORLD_TYPES double as built-in world classes;
 // custom classes reference one of them as baseType and override the
 // dimensions.
@@ -187,7 +203,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
 
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
-const SYSTEM_PLACEMENT_REVISION = 1;
+const SYSTEM_PLACEMENT_REVISION = 2;
 
 // Birdhaven's authored contents, as data rather than the world-ID branches in
 // item-storage.ts. Phase 1 only persists these; phase 3 materializes them and
@@ -210,10 +226,23 @@ function birdhavenPlacements(): WorldClassPlacement[] {
             RESERVATION_BLOCK_PLANT,
             RESERVATION_BLOCK_BUILD,
             RESERVATION_BLOCK_TERRAIN_FEATURE,
+            RESERVATION_CLEAR_TERRAIN,
             RESERVATION_SPAWN_AREA,
           ],
         },
       ],
+    },
+    {
+      // The oak's tile on the map. Separate from the `old-oak` fixture above:
+      // that one is the interactable item, this is the terrain footprint that
+      // makes the tile unwalkable and renders as a tree. Painted after the
+      // clearing reservation clears the ring around it.
+      id: "old-oak-trunk",
+      kind: "terrain",
+      classId: WORLD_TILE_PINE_TREE,
+      position: { strategy: "exact", row: OAK_CENTER_ROW, col: OAK_CENTER_COL },
+      state: {},
+      reservations: [],
     },
     {
       id: "guild-house",
@@ -561,6 +590,7 @@ function rebuildWorldClassCache(logSeed: boolean): void {
   }
 
   _worldClassCache = cache;
+  _worldClassCacheGeneration++;
 }
 
 export function bootstrapWorldClasses(): void {
@@ -639,6 +669,7 @@ export function upsertWorldClass(record: WorldClassRecord): {
   if (ok && _worldClassCache) {
     _worldClassCache[record.id] = record;
   }
+  if (ok) _worldClassCacheGeneration++;
   return ok
     ? { ok: true }
     : {
@@ -657,6 +688,31 @@ export function deleteWorldClass(classId: string): void {
   if (_worldClassCache) {
     delete _worldClassCache[classId];
   }
+  _worldClassCacheGeneration++;
+}
+
+// The class a given *world instance* is built from. world-bootstrap.ts has
+// getWorldClassForWorld() with the same meaning, but it cannot be used from
+// world-reservations.ts: world-bootstrap imports that module, so calling back
+// into it would close a cycle the engine rejects. This reads the world row
+// directly instead, which needs nothing beyond world-db.
+export function getWorldClassForWorldId(
+  worldId: string | number,
+): WorldClassRecord | null {
+  const row = queryWorldRows(
+    VWORLD_WORLD_TYPE_TABLE,
+    JSON.stringify({ world_id: String(worldId || "") }),
+    1,
+    "world_id",
+    "asc",
+  )[0];
+  if (!row) return null;
+  const classId = String(row.world_class_id || "");
+  const worldType = String(row.world_type || "");
+  return (
+    (classId ? getWorldClass(classId) : null) ||
+    (worldType ? getWorldClass(worldType) : null)
+  );
 }
 
 // Cache-miss-tolerant world class lookup: another instance (or the editor on

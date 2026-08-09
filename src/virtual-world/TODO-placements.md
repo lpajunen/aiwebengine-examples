@@ -537,6 +537,8 @@ removes them; nothing outside `world-reservations.ts` reads them now.
 
 ### Phase 3: Materialize placements
 
+Status: **step 5 done**, the rest outstanding.
+
 1. Add world-placement instance storage with a unique `(world_id, placement_id)`
    constraint.
 2. Implement idempotent placement materialization in world bootstrap.
@@ -544,10 +546,37 @@ removes them; nothing outside `world-reservations.ts` reads them now.
 4. Materialize portal placements through the existing `portal_builder`
    destination path, adding stable per-placement destination resolution and
    `entryPlacementId` lookup.
-5. Repoint the Phase 2 façade from the oak constants to placement data.
+5. ~~Repoint the Phase 2 façade from the oak constants to placement data.~~
+   **Done.** `world-reservations.ts` resolves reservations from the world
+   class's placements, memoized per world and keyed on a world-class cache
+   generation counter (`isReservedTile` runs per candidate tile inside the NPC
+   tick, so a DB read per call was not viable). The oak helpers in
+   `world-domain.ts` are now referenced only from inside that file.
 6. Reconcile materialization with the existing reseed/dedupe paths described
    above.
 7. Replace hard-coded Birdhaven/guild fixture seeding with materialization.
+
+Two modelling decisions fell out of step 5:
+
+- **`clear_terrain` is a new rule** (registry now 7 names). The old
+  `applyOakReservation` painted the clearing to walkable ground; that is a
+  reservation effect, not a side effect of blocking construction, so it needed
+  its own rule rather than being implied by `block_plant`.
+- **A landmark's map footprint is a separate `terrain` placement.** Birdhaven
+  gained `old-oak-trunk` (terrain, `pine_tree`, same tile as the `old-oak`
+  fixture): the fixture is the interactable item, the terrain placement is what
+  makes the tile unwalkable and tree-shaped. Painting a tile because an _item_
+  happens to sit there would have been oak-specific special-casing wearing a
+  data costume.
+
+`protect_landmark` now covers every placement's own tile rather than only the
+oak's. Blocking `cut` on the guild house and door tiles is harmless and
+arguably correct.
+
+System classes are owner-scoped and Birdhaven has no owners, so editing its
+placements through the API returns `error.not_class_owner` for a non-admin
+creator. Reconciliation tooling in phase 5 needs an admin path or an explicit
+system-class escape hatch.
 
 ### Phase 4: Remove special cases
 

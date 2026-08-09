@@ -20,7 +20,7 @@
 import { getItemClass } from "./item-registry.ts";
 import { getLivingClass } from "./living-registry.ts";
 import { WORLD_TILE_DEFS } from "./world-domain.ts";
-import { isReservationRule } from "./world-reservations.ts";
+import { isReservationRule } from "./runtime-config.ts";
 
 // Closed set until a new engine primitive exists to back a new member.
 export const PLACEMENT_KINDS = [

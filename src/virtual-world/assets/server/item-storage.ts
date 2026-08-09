@@ -13,6 +13,7 @@ import {
 } from "./world-bootstrap.ts";
 import { loadWorldHouses, saveWorldHouses } from "./world-mod-storage.ts";
 import {
+  adventurersGuildWorldClassRecord,
   getWorldClassWithRefresh,
   upsertWorldClass,
 } from "./world-class-storage.ts";
@@ -582,27 +583,18 @@ function ensureAdventurersGuildWorld(): void {
   // editor's "Name (Finnish)" field shows/round-trips it — that field reads
   // only labels.fi, not the i18n bundle). Re-upsert when either drifts so an
   // already-seeded row self-heals.
-  const guildFallbackLabel = "Adventurers' guild";
-  const guildLabelFi = "Seikkailijoiden kilta";
+  // Same factory the class repository seeds from, so this legacy path and the
+  // system-class backfill can never write conflicting records — in particular
+  // this one must not drop the guild's placements on the floor.
+  const desiredGuildClass = adventurersGuildWorldClassRecord();
   const existingGuildClass = getWorldClassWithRefresh(GUILD_WORLD_CLASS_ID);
   if (
     !existingGuildClass ||
-    existingGuildClass.fallbackLabel !== guildFallbackLabel ||
+    existingGuildClass.fallbackLabel !== desiredGuildClass.fallbackLabel ||
     !existingGuildClass.labels ||
-    existingGuildClass.labels.fi !== guildLabelFi
+    existingGuildClass.labels.fi !== desiredGuildClass.labels.fi
   ) {
-    upsertWorldClass({
-      id: GUILD_WORLD_CLASS_ID,
-      baseType: WORLD_TYPE_BUILDING,
-      rows: GUILD_WORLD_ROWS,
-      cols: GUILD_WORLD_COLS,
-      labelKey: "world_class." + GUILD_WORLD_CLASS_ID + ".name",
-      fallbackLabel: guildFallbackLabel,
-      itemSpawns: [],
-      npcSpawns: [],
-      ownerIds: [],
-      labels: { fi: guildLabelFi },
-    });
+    upsertWorldClass(desiredGuildClass);
   }
   const info = getWorldInfo(GUILD_WORLD_ID);
   if (

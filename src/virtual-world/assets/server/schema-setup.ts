@@ -1215,6 +1215,10 @@ function runWorldDatabaseMigration(): void {
     ["addTextColumn", "fallback_label", false],
     ["addTextColumn", "item_spawns_json", true],
     ["addTextColumn", "npc_spawns_json", true],
+    ["addTextColumn", "placements_json", true],
+    // Nullable so the column can be added to already-populated tables; writes
+    // always supply a number, since the engine's DB rejects a null INTEGER.
+    ["addIntegerColumn", "placement_revision", true],
     ["addTextColumn", "owner_ids_json", true],
     ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],

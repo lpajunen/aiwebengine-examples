@@ -462,24 +462,46 @@ to separate those two risks so neither has to be debugged through the other.
 
 ### Phase 1: Persist the schema
 
-1. Add `placements` to `WorldClassRecord` and normalization.
-2. Add a `placements_json` column to the world-class table setup/migration.
-3. Extend database serialization, cache refresh, CRUD handlers, and public
-   API responses.
-4. Add strict server validation for placement IDs, kinds, coordinates, class
-   references, state ownership, reservation shapes, reservation rule names,
-   and destinations.
-5. Add the reservation rule registry that validation checks against.
-6. Add a revision marker to system class records and a revision-aware branch
-   to the system-class backfill, so seeded placements actually reach the
-   deployed Birdhaven/guild rows.
-7. Seed Birdhaven and Adventurers' Guild class records with placement data.
-8. Expose placements through a validated JSON control in the editor —
-   see "Authoring must exist from Phase 1" below.
+Status: **done**.
 
-At the end of this phase, placements round-trip through both the HTTP CRUD
-routes and the `virtualWorldManageWorldClasses` MCP tool, even though nothing
-reads them yet.
+`assets/server/world-placements.ts` holds the schema, with two entry points at
+deliberately different strictness: `normalizeWorldClassPlacements` is lenient
+and runs on the DB read path (a malformed stored row must still yield a
+loadable class), `validateWorldClassPlacements` is strict and runs on the write
+path, reporting every problem with its array index rather than silently
+dropping placements.
+
+1. `placements` and `placementRevision` on `WorldClassRecord`, with
+   normalization.
+2. `placements_json` + `placement_revision` columns (the integer one nullable,
+   so it can be added to a populated table; writes always supply a number).
+3. Serialization, cache refresh, HTTP CRUD, MCP tool, and public API responses.
+4. Validation of ids, kinds, coordinates, position strategy, class/tile
+   references, reservation shapes, reservation rule names, and destinations.
+   `validateWorldClassPlacementsForWrite` in `world-class-storage.ts` adds the
+   one check `world-placements.ts` cannot make without a cycle: that an
+   `ensure_world_class` destination names an existing class.
+5. Rule registry reused from `world-reservations.ts` (phase 2).
+6. `SYSTEM_PLACEMENT_REVISION` plus a revision-aware branch in the
+   system-class backfill, so seeded placements reach already-deployed rows.
+   Creator edits preserve the stored revision, so only a code-side bump
+   reclaims a row.
+7. Birdhaven (`old-oak` + clearing reservation, `guild-house`, `guild-door`)
+   and Adventurers' Guild (`guild-training-post`, `guild-return-door`) seeded.
+   `ensureAdventurersGuildWorld` in `item-storage.ts` now writes through the
+   same factory, so the legacy path can no longer wipe the guild's placements.
+8. Validated JSON textarea in the World Types editor; per-placement server
+   errors are surfaced to the creator instead of a generic save failure.
+
+Two things worth carrying forward:
+
+- A third destination mode, `source_world`, was unavoidable. A return door
+  leads back to whichever world the traveller came from, and a class template
+  cannot name its own callers — the guild's exit is inexpressible with
+  `ensure_world_class` or `existing_world` alone.
+- Placements are validated against the record's _new_ dimensions, so shrinking
+  a class below an existing placement's coordinate is rejected rather than
+  silently orphaning a landmark off the map.
 
 ### Phase 2: Reservation façade over the existing constants
 

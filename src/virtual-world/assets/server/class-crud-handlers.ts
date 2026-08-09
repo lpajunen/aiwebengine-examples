@@ -25,6 +25,7 @@ import {
   normalizeWorldClassRecord,
   refreshWorldClassCache,
   upsertWorldClass,
+  validateWorldClassPlacementsForWrite,
 } from "./world-class-storage.ts";
 import {
   canManageClass,
@@ -758,9 +759,26 @@ export function createWorldClassHandler(context: any) {
     fallbackLabel: body && body.fallbackLabel,
     itemSpawns: body && body.itemSpawns,
     npcSpawns: body && body.npcSpawns,
+    placements: body && body.placements,
     ownerIds: [context.request.auth.userId],
     labels: body && body.labels,
   });
+  // Validated against the *normalized* dimensions, so an out-of-bounds
+  // coordinate is reported against the size the class will actually have.
+  var createPlacementErrors = validateWorldClassPlacementsForWrite(
+    body && body.placements,
+    { rows: record.rows, cols: record.cols },
+  );
+  if (createPlacementErrors.length > 0) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error: "error.invalid_placements",
+        placement_errors: createPlacementErrors,
+      },
+      400,
+    );
+  }
   var worldCreateWrite = upsertWorldClass(record);
   if (!worldCreateWrite || !worldCreateWrite.ok) {
     return ResponseBuilder.json(
@@ -833,10 +851,33 @@ export function updateWorldClassHandler(context: any) {
       body && body.npcSpawns !== undefined
         ? body.npcSpawns
         : existing.npcSpawns,
+    placements:
+      body && body.placements !== undefined
+        ? body.placements
+        : existing.placements,
+    // Preserved across creator edits: only a code-side bump reclaims a system
+    // class's placements, and an editor round-trip must not look like one.
+    placementRevision: existing.placementRevision,
     ownerIds:
       body && body.ownerIds !== undefined ? body.ownerIds : existing.ownerIds,
     labels: body && body.labels !== undefined ? body.labels : existing.labels,
   });
+  var updatePlacementErrors = validateWorldClassPlacementsForWrite(
+    body && body.placements !== undefined
+      ? body.placements
+      : existing.placements,
+    { rows: record.rows, cols: record.cols },
+  );
+  if (updatePlacementErrors.length > 0) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error: "error.invalid_placements",
+        placement_errors: updatePlacementErrors,
+      },
+      400,
+    );
+  }
   var worldUpdateWrite = upsertWorldClass(record);
   if (!worldUpdateWrite || !worldUpdateWrite.ok) {
     return ResponseBuilder.json(

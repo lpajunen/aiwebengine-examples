@@ -1308,6 +1308,12 @@ function editWorldClass(id) {
         Array.isArray(wc.npcSpawns) && wc.npcSpawns.length
           ? JSON.stringify(wc.npcSpawns, null, 2)
           : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("wc-placements")
+      ).value =
+        Array.isArray(wc.placements) && wc.placements.length
+          ? JSON.stringify(wc.placements, null, 2)
+          : "";
       requireElementById("world-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -1338,6 +1344,9 @@ function cancelWorldClassEdit() {
   ).value = "";
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("wc-npc-spawns")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-placements")
   ).value = "";
   requireElementById("world-class-form-title").textContent = t(
     "class_editor.new_world_type",
@@ -1377,6 +1386,9 @@ function submitWorldClassForm() {
   var npcSpawnsRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("wc-npc-spawns")
   ).value.trim();
+  var placementsRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-placements")
+  ).value.trim();
   var itemSpawns = [];
   if (itemSpawnsRaw) {
     try {
@@ -1415,6 +1427,25 @@ function submitWorldClassForm() {
       return;
     }
   }
+  var placements = [];
+  if (placementsRaw) {
+    try {
+      placements = JSON.parse(placementsRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_placements_json", "Invalid placements JSON"),
+        true,
+      );
+      return;
+    }
+    if (!Array.isArray(placements)) {
+      showHudToast(
+        t("class_editor.invalid_placements_json", "Invalid placements JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     baseType: baseTypeVal,
@@ -1423,6 +1454,7 @@ function submitWorldClassForm() {
     fallbackLabel: labelVal || idVal,
     itemSpawns: itemSpawns,
     npcSpawns: npcSpawns,
+    placements: placements,
     labels: buildLabelsPayload(nameFiVal),
   };
   var url = worldClassEditId
@@ -1439,6 +1471,25 @@ function submitWorldClassForm() {
     })
     .then(function (data) {
       if (!data.ok) {
+        // Placement problems come back as a list of specific messages
+        // (bad coordinate, unknown class, duplicate id). Show the first one
+        // instead of the generic "invalid placements" — a coordinate mistake
+        // is only fixable if the creator is told which placement it is in.
+        var placementErrors = Array.isArray(data.placement_errors)
+          ? data.placement_errors
+          : [];
+        if (placementErrors.length > 0) {
+          showHudToast(
+            placementErrors.length > 1
+              ? String(placementErrors[0]) +
+                  " (+" +
+                  String(placementErrors.length - 1) +
+                  ")"
+              : String(placementErrors[0]),
+            true,
+          );
+          return;
+        }
         showHudToast(
           data.error
             ? translateServerMessage(String(data.error))

@@ -62,6 +62,7 @@ import {
   isBuiltinWorldClassId,
   normalizeWorldClassRecord,
   upsertWorldClass,
+  validateWorldClassPlacementsForWrite,
 } from "./world-class-storage.ts";
 import { buildInventorySelectors } from "./world-domain.ts";
 
@@ -656,6 +657,13 @@ export function virtualWorldManageWorldClassesToolHandler(
         args.npcSpawns !== undefined
           ? args.npcSpawns
           : existing && existing.npcSpawns,
+      placements:
+        args.placements !== undefined
+          ? args.placements
+          : existing && existing.placements,
+      // Only a code-side revision bump reclaims a system class's placements;
+      // an MCP round-trip must not look like one.
+      placementRevision: existing && existing.placementRevision,
       ownerIds:
         action === "update"
           ? normalizeOwnerIdsInput(args.ownerIds) ||
@@ -664,6 +672,19 @@ export function virtualWorldManageWorldClassesToolHandler(
       labels:
         args.labels !== undefined ? args.labels : existing && existing.labels,
     });
+    const placementErrors = validateWorldClassPlacementsForWrite(
+      args.placements !== undefined
+        ? args.placements
+        : existing && existing.placements,
+      { rows: record.rows, cols: record.cols },
+    );
+    if (placementErrors.length > 0) {
+      return JSON.stringify({
+        ok: false,
+        error: "Invalid placements",
+        placement_errors: placementErrors,
+      });
+    }
     const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {
       return JSON.stringify({

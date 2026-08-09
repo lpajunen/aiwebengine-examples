@@ -605,6 +605,67 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "NPC living class IDs and counts to populate worlds of this class with",
       },
+      placements: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description:
+                "Stable placement id, lowercase with - or _ separators",
+            },
+            kind: {
+              type: "string",
+              enum: [
+                "item",
+                "fixture",
+                "npc",
+                "terrain",
+                "structure",
+                "portal",
+              ],
+            },
+            classId: {
+              type: "string",
+              description:
+                "Item class id for item/fixture/portal, living class id for npc, world tile name for terrain/structure",
+            },
+            position: {
+              type: "object",
+              properties: {
+                strategy: { type: "string", enum: ["exact"] },
+                row: { type: "number" },
+                col: { type: "number" },
+              },
+            },
+            state: {
+              type: "object",
+              description:
+                "Class-owned initial state. For portals, state.destination selects the linked world: {mode: ensure_world_class|existing_world|source_world, worldClassId?, worldId?, entryPlacementId?}",
+            },
+            reservations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  kind: { type: "string", enum: ["circle", "rectangle"] },
+                  row: { type: "number" },
+                  col: { type: "number" },
+                  radius: { type: "number" },
+                  rows: { type: "number" },
+                  cols: { type: "number" },
+                  rules: { type: "array", items: { type: "string" } },
+                },
+              },
+              description:
+                "Tile rules this placement imposes: block_plant, block_build, block_terrain_feature, spawn_area, protect_landmark, block_random_spawn. Omitting row/col centres the reservation on the placement.",
+            },
+          },
+        },
+        description:
+          "Deterministic authored contents (landmarks, structures, fixed NPCs, portals) — distinct from the random itemSpawns/npcSpawns manifests",
+      },
     },
   });
   safeRegisterTool(

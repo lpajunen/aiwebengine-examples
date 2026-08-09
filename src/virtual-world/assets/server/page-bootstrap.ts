@@ -553,6 +553,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.cols_label">Cols (8-200)</span> <input id="wc-cols" type="number" min="8" max="200" value="100"></label>
         <label><span data-i18n-key="class_editor.item_spawns_label">Item spawns (JSON)</span> <textarea id="wc-item-spawns" rows="3" placeholder='[{"id":"flower","count":3}]'></textarea></label>
         <label><span data-i18n-key="class_editor.npc_spawns_label">NPC spawns (JSON)</span> <textarea id="wc-npc-spawns" rows="3" placeholder='[{"id":"npc_wolf","count":5}]'></textarea></label>
+        <label><span data-i18n-key="class_editor.placements_label">Placements (JSON)</span> <textarea id="wc-placements" rows="6" placeholder='[{"id":"old-oak","kind":"fixture","classId":"old_oak","position":{"strategy":"exact","row":15,"col":15}}]'></textarea></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitWorldClassForm()" data-i18n-key="class_editor.save">Save</button>

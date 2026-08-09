@@ -278,6 +278,7 @@ import {
   deleteLivingClassHandler as deleteLivingClassHandlerImpl,
   worldClassesHandler as worldClassesHandlerImpl,
   createWorldClassHandler as createWorldClassHandlerImpl,
+  reconcileWorldHandler as reconcileWorldHandlerImpl,
   updateWorldClassHandler as updateWorldClassHandlerImpl,
   deleteWorldClassHandler as deleteWorldClassHandlerImpl,
 } from "./server/class-crud-handlers.ts";
@@ -418,6 +419,11 @@ function worldClassesHandler(context) {
 /** @param {*} context */
 function createWorldClassHandler(context) {
   return createWorldClassHandlerImpl(context);
+}
+
+/** @param {*} context */
+function reconcileWorldHandler(context) {
+  return reconcileWorldHandlerImpl(context);
 }
 /** @param {*} context */
 function updateWorldClassHandler(context) {

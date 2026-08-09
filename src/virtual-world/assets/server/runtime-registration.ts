@@ -718,6 +718,11 @@ export function registerVirtualWorldRuntime(): void {
   });
   safeRegisterRoute("/virtual-world/move", "moveHandler", "POST");
   safeRegisterRoute("/virtual-world/leave", "leaveHandler", "POST");
+  safeRegisterRoute(
+    "/virtual-world/reconcile-world",
+    "reconcileWorldHandler",
+    "POST",
+  );
   safeRegisterRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   safeRegisterRoute("/virtual-world/start-world", "startWorldHandler", "POST");
   safeRegisterRoute("/virtual-world/livings", "livingsHandler", "GET");

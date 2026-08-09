@@ -1161,3 +1161,66 @@ canvas {
 .class-form-actions button:last-child:hover {
   background: rgba(95, 95, 110, 1);
 }
+
+/* World-class placement editor (see client-editors.js). Compact rows: a class
+   can carry a dozen placements and the panel shares the HUD's screen. */
+.wc-placements-block {
+  border-top: 1px solid #3a4a3a;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.wc-placements-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.wc-placement {
+  border: 1px solid #3a4a3a;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  padding: 4px;
+}
+.wc-placement-main,
+.wc-placement-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.wc-placement-sub {
+  margin-top: 4px;
+  font-size: 11px;
+}
+.wc-p-id {
+  width: 110px;
+}
+.wc-p-num {
+  width: 56px;
+}
+.wc-rule {
+  white-space: nowrap;
+}
+.wc-preview-wrap {
+  margin-top: 8px;
+}
+#wc-preview {
+  border: 1px solid #3a4a3a;
+  background: #101810;
+  image-rendering: pixelated;
+}
+.wc-preview-legend {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.wc-reconcile-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.wc-placement-errors {
+  color: #ff9a9a;
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin-top: 6px;
+}

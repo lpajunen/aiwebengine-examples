@@ -23,10 +23,12 @@ import {
   getWorldClassWithRefresh,
   isBuiltinWorldClassId,
   normalizeWorldClassRecord,
+  getWorldClassForWorldId,
   refreshWorldClassCache,
   upsertWorldClass,
   validateWorldClassPlacementsForWrite,
 } from "./world-class-storage.ts";
+import { reconcileWorldPlacements } from "./world-placement-reconcile.ts";
 import {
   canManageClass,
   normalizeOwnerIdsInput,
@@ -714,6 +716,51 @@ export function deleteLivingClassHandler(context: any) {
 /**
  * @param {*} context
  */
+// Reconciles one world instance against its class. Explicit and per-world by
+// design: saving a class edits a template, and rewriting live worlds is a
+// separate decision (see "Bootstrap and Reconciliation" in
+// TODO-placements.md). Gated on the same owner/admin check as editing the
+// class, since it applies that class's content.
+/**
+ * @param {*} context
+ */
+export function reconcileWorldHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  if (!userHasCreatorStone(userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
+  }
+  var targetWorldId = String((body && body.world_id) || "").trim();
+  if (!targetWorldId) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.missing_world_id" },
+      400,
+    );
+  }
+  var reconcileClass = getWorldClassForWorldId(targetWorldId);
+  if (!reconcileClass) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.world_class_not_found" },
+      404,
+    );
+  }
+  if (!canManageClass(userId, reconcileClass.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
+  }
+  return ResponseBuilder.json(reconcileWorldPlacements(targetWorldId));
+}
+
 export function worldClassesHandler(context: any) {
   // Listing is not stone-gated: any player building a portal needs the world
   // type list. Mutations below remain creator's-stone only.

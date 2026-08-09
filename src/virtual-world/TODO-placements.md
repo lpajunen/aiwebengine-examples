@@ -618,13 +618,37 @@ Worth carrying:
 
 ### Phase 5: Editor and reconciliation
 
-1. Replace the Phase 1 JSON control with a placement list/editor in the World
-   Types panel.
-2. Add a visual preview and structured destination editor.
-3. Add controlled reconciliation for existing worlds, beginning with
-   Birdhaven and Adventurers' Guild.
-4. Document creator workflow for creating an exterior, linked interior, and
-   return door entirely in the UI.
+Status: **done**, apart from a browser pass over the new panel.
+
+1. The JSON textarea is replaced by a placement list editor: per-placement id,
+   kind, class picker (fed from the registry the kind resolves against, so it
+   cannot offer something the save will reject), coordinates, duplicate and
+   delete. Held as state and re-rendered rather than parsed back out of the
+   DOM — a placement is a nested shape, and round-tripping that through form
+   fields per keystroke is where coordinate mistakes come from.
+2. A canvas preview draws placements and reserved areas to the configured
+   dimensions, and outlines the map when a placement falls outside it.
+   Structured destination editor for portals: mode, destination class or world
+   id, entry placement.
+3. `POST /virtual-world/reconcile-world` and an **Apply to world** control.
+   Explicit and per-world: saving a class edits a template, and rewriting live
+   worlds is a separate decision.
+4. `DOC-authoring-worlds.md` documents the exterior / linked interior / return
+   door pattern end to end.
+
+Reconciliation's removal half is what the instance rows were for. It deletes
+the object a removed placement created and nothing else — an object that merely
+shares a class id is somebody's property. A structure a player has since
+rebuilt is reported as a conflict rather than bulldozed.
+
+Verified live: adding a placement to Birdhaven and reconciling materialized it;
+removing it and reconciling deleted exactly that item, leaving the player-built
+door and both portals untouched.
+
+**Admin override confirmed working.** System classes have empty `ownerIds`, so
+`canManageClass` falls through to `isAdminUser`. With a row in `vworld_admins`,
+Birdhaven and the guild are editable through the same editor as any other class
+— which was the goal at the top of this document.
 
 ## Acceptance Criteria
 

@@ -36,7 +36,6 @@ import { sendRecipientScopedStreamEvent } from "./stream-broadcast.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./tree-action-helpers.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import {
-  OAK_WORLD_ID,
   WORLD_TYPE_FOREST,
   WORLD_TYPE_VILLAGE,
   buildInventorySelectors,
@@ -465,9 +464,7 @@ export function startWorldHandler(context: any) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
   var userId = context.request.auth.userId;
-  return ResponseBuilder.json(
-    switchUserToStartWorld(userId, OAK_WORLD_ID, WORLD_TYPE_VILLAGE),
-  );
+  return ResponseBuilder.json(switchUserToStartWorld(userId));
 }
 
 /**

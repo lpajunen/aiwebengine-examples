@@ -1,50 +1,8 @@
-// Default dimensions for worlds without stored rows/cols (all pre-existing
-// worlds except the oak home world, which is pinned to OAK_WORLD_ROWS/COLS
-// below regardless of what's stored).
+// Default dimensions for worlds with no stored rows/cols.
 export const ROWS = 100;
 export const COLS = 100;
 export const MIN_WORLD_DIM = 8;
 export const MAX_WORLD_DIM = 200;
-export const OAK_WORLD_ID = "10000";
-// The oak home/start world is a fixed-size village clearing, not a generic
-// generated world — its dimensions and clearing center are pinned here
-// rather than following the stored world row, same as OAK_WORLD_ID itself.
-export const OAK_WORLD_ROWS = 30;
-export const OAK_WORLD_COLS = 30;
-export const OAK_CENTER_ROW = Math.floor(OAK_WORLD_ROWS / 2);
-export const OAK_CENTER_COL = Math.floor(OAK_WORLD_COLS / 2);
-export const OAK_CLEAR_RADIUS = 5;
-// The start village (oak world) is classed as its own world class rather than
-// the bare "village" preset, so it shows in the world-type editor with a name
-// (English "Birdhaven" / Finnish "Lintukoto"). Same village terrain + spawns.
-export const BIRDHAVEN_WORLD_CLASS_ID = "birdhaven";
-
-// The Adventurer's guild is a fixed-id building world (a single small room),
-// reached through a door on a house just south of the oak clearing. Like the
-// oak/start world it uses a reserved id rather than a random one so the
-// village door can point at a stable destination and its room fixtures
-// (training post + return door) reseed to known tiles.
-export const GUILD_WORLD_ID = "10001";
-// Its own world class (empty item/NPC spawn manifests) so the room stays a
-// clean training hall instead of inheriting the busy default building preset.
-export const GUILD_WORLD_CLASS_ID = "adventurers_guild";
-export const GUILD_WORLD_ROWS = 10;
-export const GUILD_WORLD_COLS = 10;
-export const GUILD_CENTER_ROW = Math.floor(GUILD_WORLD_ROWS / 2);
-export const GUILD_CENTER_COL = Math.floor(GUILD_WORLD_COLS / 2);
-// Where a player lands when entering the guild (its default spawn, see
-// getDefaultSpawnPosition for non-oak worlds) — the return door sits here.
-export const GUILD_SPAWN_ROW = 1;
-export const GUILD_SPAWN_COL = 1;
-
-// The village-side guild entrance: a house wall tile one row south of the oak
-// clearing edge, with the door hung on it. The approach tile is the clearing
-// tile directly north of the door (guaranteed walkable by the oak
-// reservation), where the return door drops the player back off.
-export const VILLAGE_GUILD_DOOR_ROW = OAK_CENTER_ROW + OAK_CLEAR_RADIUS + 1;
-export const VILLAGE_GUILD_DOOR_COL = OAK_CENTER_COL;
-export const VILLAGE_GUILD_APPROACH_ROW = OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
-export const VILLAGE_GUILD_APPROACH_COL = OAK_CENTER_COL;
 
 export const WORLD_MOD_LAYER_TERRAIN = "terrain";
 export const WORLD_MOD_LAYER_OBJECT = "object";
@@ -258,11 +216,6 @@ const DEFAULT_PUBLIC_LIVING_VALUE_KEYS = [
 
 const OWNER_ONLY_LIVING_VALUE_KEYS = ["experience", "totalExperience"];
 
-export interface OakTile {
-  row: number;
-  col: number;
-}
-
 export const TREE_ACTION_BY_ITEM_TYPE: Record<string, string> =
   ALL_ITEM_TYPE_IDS.reduce(function (acc: Record<string, string>, itemId) {
     const actionId = getPrimaryActionForItemType(itemId);
@@ -395,11 +348,13 @@ export function normalizeWorldType(
     : WORLD_TYPE_FOREST;
 }
 
+// Fallback for a world with no stored row. Deliberately world-id agnostic: the
+// start world and the guild used to be special-cased here, but both have had a
+// stored type since long before placements, and hard-coding two ids meant no
+// other deployment could ever have a non-forest front door.
 export function getDefaultWorldTypeForWorldId(
-  worldId: string | number,
+  _worldId: string | number,
 ): WorldType {
-  if (isOakWorld(worldId)) return WORLD_TYPE_VILLAGE;
-  if (isGuildWorld(worldId)) return WORLD_TYPE_BUILDING;
   return WORLD_TYPE_FOREST;
 }
 
@@ -450,99 +405,6 @@ export function isWorldTileWalkable(tileValue: number): boolean {
 
 export function createWorldId(): string {
   return String(Math.floor(Math.random() * 999999) + 1);
-}
-
-export function isOakWorld(worldId: string | number): boolean {
-  return String(worldId) === OAK_WORLD_ID;
-}
-
-export function isGuildWorld(worldId: string | number): boolean {
-  return String(worldId) === GUILD_WORLD_ID;
-}
-
-export function oakDistanceSquared(row: number, col: number): number {
-  const dr = Number(row) - OAK_CENTER_ROW;
-  const dc = Number(col) - OAK_CENTER_COL;
-  return dr * dr + dc * dc;
-}
-
-export function isOakCenterTile(
-  worldId: string | number,
-  row: number,
-  col: number,
-): boolean {
-  return (
-    isOakWorld(worldId) &&
-    Number(row) === OAK_CENTER_ROW &&
-    Number(col) === OAK_CENTER_COL
-  );
-}
-
-export function isOakClearingTile(
-  worldId: string | number,
-  row: number,
-  col: number,
-): boolean {
-  if (!isOakWorld(worldId) || isOakCenterTile(worldId, row, col)) return false;
-  return oakDistanceSquared(row, col) <= OAK_CLEAR_RADIUS * OAK_CLEAR_RADIUS;
-}
-
-export function applyOakReservation(
-  map: number[][],
-  worldId: string | number,
-): number[][] {
-  if (!isOakWorld(worldId)) return map;
-  const mapRows = map.length;
-  for (
-    let row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
-    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
-    row++
-  ) {
-    if (row < 0 || row >= mapRows || !map[row]) continue;
-    const mapCols = map[row].length;
-    for (
-      let col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
-      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
-      col++
-    ) {
-      if (col < 0 || col >= mapCols) continue;
-      if (isOakCenterTile(worldId, row, col)) {
-        map[row][col] = worldTileValueForName(WORLD_TILE_PINE_TREE);
-      } else if (isOakClearingTile(worldId, row, col)) {
-        map[row][col] = worldTileValueForName(WORLD_TILE_GROUND);
-      }
-    }
-  }
-  return map;
-}
-
-export function getOakClearingTiles(worldId: string | number): OakTile[] {
-  if (!isOakWorld(worldId)) return [];
-  const tiles: Array<OakTile & { dist2: number }> = [];
-  for (
-    let row = OAK_CENTER_ROW - OAK_CLEAR_RADIUS;
-    row <= OAK_CENTER_ROW + OAK_CLEAR_RADIUS;
-    row++
-  ) {
-    if (row < 0 || row >= ROWS) continue;
-    for (
-      let col = OAK_CENTER_COL - OAK_CLEAR_RADIUS;
-      col <= OAK_CENTER_COL + OAK_CLEAR_RADIUS;
-      col++
-    ) {
-      if (col < 0 || col >= COLS) continue;
-      if (!isOakClearingTile(worldId, row, col)) continue;
-      tiles.push({ row: row, col: col, dist2: oakDistanceSquared(row, col) });
-    }
-  }
-  tiles.sort(function (a, b) {
-    if (a.dist2 !== b.dist2) return a.dist2 - b.dist2;
-    if (a.row !== b.row) return a.row - b.row;
-    return a.col - b.col;
-  });
-  return tiles.map(function (tile) {
-    return { row: tile.row, col: tile.col };
-  });
 }
 
 export function mulberry32(seed: number): () => number {

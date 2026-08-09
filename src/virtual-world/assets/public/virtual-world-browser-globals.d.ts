@@ -19,8 +19,6 @@ declare var INIT_ROW: number;
 declare var INIT_COL: number;
 declare var INIT_SEQ: number;
 declare var INIT_ROTATION: number;
-declare var OAK_CENTER_ROW: number;
-declare var OAK_CENTER_COL: number;
 declare var ITEM_REGISTRY: any;
 declare var LIVING_REGISTRY: any;
 declare var WORLD_CLASS_REGISTRY: Array<{

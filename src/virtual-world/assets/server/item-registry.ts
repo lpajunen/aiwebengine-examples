@@ -1226,6 +1226,45 @@ function targetingEquals(
   );
 }
 
+// Blocked zones name tile-reservation rules (see world-reservations.ts). Rows
+// seeded before reservations existed still say `oak_clearing`/`oak_center`,
+// and the backfill below only fills in validation keys a stored row is
+// *missing* — so those rows would keep the old names forever, and a creator's
+// own protected clearing would report "The oak clearing must remain open".
+//
+// The definition is authoritative here, unlike every other validation key:
+// blocked zones are not exposed by any editor, so there is no creator
+// customization to preserve, and a stale kind is actively wrong. `oak_clearing`
+// in particular cannot distinguish block_plant from block_build — mapping it
+// generically would leave build_house checking the planting rule.
+function syncBlockedZonesWithDefinition(
+  record: ActionClassRecord,
+  def: ActionDefinition,
+): boolean {
+  const defZones = def.validation && def.validation.blockedZones;
+  if (!Array.isArray(defZones)) return false;
+  const validation = (record.validation || {}) as Record<string, unknown>;
+  const storedZones = Array.isArray(validation.blockedZones)
+    ? (validation.blockedZones as Array<Record<string, unknown>>)
+    : [];
+  const matches =
+    storedZones.length === defZones.length &&
+    defZones.every(function (defZone, i) {
+      const stored = storedZones[i];
+      return (
+        !!stored &&
+        String(stored.kind || "") === defZone.kind &&
+        String(stored.errorMessage || "") === defZone.errorMessage
+      );
+    });
+  if (matches) return false;
+  validation.blockedZones = defZones.map(function (defZone) {
+    return { kind: defZone.kind, errorMessage: defZone.errorMessage };
+  });
+  record.validation = validation as ActionClassRecord["validation"];
+  return true;
+}
+
 // Seeds missing built-in action rows from ACTION_DEFINITIONS, and patches
 // rows that already exist but predate a field's DB column (e.g. rows seeded
 // before logic_spec_json existed never got a logicSpec) — without touching
@@ -1286,6 +1325,9 @@ function backfillActionClassDefaults(
           changed = true;
         }
       }
+    }
+    if (syncBlockedZonesWithDefinition(existing, def)) {
+      changed = true;
     }
     if (def.validation !== undefined) {
       if (existing.validation === undefined) {

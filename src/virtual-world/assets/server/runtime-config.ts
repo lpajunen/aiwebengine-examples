@@ -79,6 +79,12 @@ export const VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
+// Deployment configuration, deliberately not world-class content: a class is a
+// reusable template, while a deployment needs one concrete world instance to
+// drop new players into. Change these to move the game's front door.
+export const START_WORLD_ID = "10000";
+export const START_WORLD_CLASS_ID = "birdhaven";
+
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
 // actually created in a given world. See world-placement-instances.ts.

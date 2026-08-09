@@ -1,28 +1,14 @@
 import {
+  START_WORLD_CLASS_ID,
   VWORLD_WORLD_CLASS_TABLE,
   VWORLD_WORLD_TYPE_TABLE,
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import {
-  BIRDHAVEN_WORLD_CLASS_ID,
   COLS,
-  GUILD_CENTER_COL,
-  GUILD_CENTER_ROW,
-  GUILD_SPAWN_COL,
-  GUILD_SPAWN_ROW,
-  GUILD_WORLD_CLASS_ID,
-  GUILD_WORLD_COLS,
-  GUILD_WORLD_ROWS,
   normalizeWorldDimension,
   normalizeWorldType,
-  OAK_CENTER_COL,
-  OAK_CENTER_ROW,
-  OAK_CLEAR_RADIUS,
-  OAK_WORLD_COLS,
-  OAK_WORLD_ROWS,
   ROWS,
-  VILLAGE_GUILD_DOOR_COL,
-  VILLAGE_GUILD_DOOR_ROW,
   WORLD_TILE_PINE_TREE,
   WORLD_TYPE_BUILDING,
   WORLD_TYPE_FOREST,
@@ -201,6 +187,28 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
   };
 }
 
+// Geometry of the two shipped worlds. These are *seed data* — the coordinates
+// this deployment happens to have authored Birdhaven and its guild with — not
+// engine constants. They lived in world-domain.ts when the game branched on
+// them at runtime; nothing does any more, so they belong next to the records
+// they describe, where editing one is obviously just editing content.
+const BIRDHAVEN_ROWS = 30;
+const BIRDHAVEN_COLS = 30;
+const OAK_ROW = Math.floor(BIRDHAVEN_ROWS / 2);
+const OAK_COL = Math.floor(BIRDHAVEN_COLS / 2);
+const OAK_CLEARING_RADIUS = 5;
+// The guild entrance sits one tile beyond the clearing's southern edge.
+const GUILD_DOOR_ROW = OAK_ROW + OAK_CLEARING_RADIUS + 1;
+const GUILD_DOOR_COL = OAK_COL;
+
+const GUILD_CLASS_ID = "adventurers_guild";
+const GUILD_ROWS = 10;
+const GUILD_COLS = 10;
+const GUILD_TRAINING_ROW = Math.floor(GUILD_ROWS / 2);
+const GUILD_TRAINING_COL = Math.floor(GUILD_COLS / 2);
+const GUILD_ENTRY_ROW = 1;
+const GUILD_ENTRY_COL = 1;
+
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
 const SYSTEM_PLACEMENT_REVISION = 2;
@@ -214,14 +222,14 @@ function birdhavenPlacements(): WorldClassPlacement[] {
       id: "old-oak",
       kind: "fixture",
       classId: "old_oak",
-      position: { strategy: "exact", row: OAK_CENTER_ROW, col: OAK_CENTER_COL },
+      position: { strategy: "exact", row: OAK_ROW, col: OAK_COL },
       state: {},
       reservations: [
         {
           kind: "circle",
-          row: OAK_CENTER_ROW,
-          col: OAK_CENTER_COL,
-          radius: OAK_CLEAR_RADIUS,
+          row: OAK_ROW,
+          col: OAK_COL,
+          radius: OAK_CLEARING_RADIUS,
           rules: [
             RESERVATION_BLOCK_PLANT,
             RESERVATION_BLOCK_BUILD,
@@ -240,7 +248,7 @@ function birdhavenPlacements(): WorldClassPlacement[] {
       id: "old-oak-trunk",
       kind: "terrain",
       classId: WORLD_TILE_PINE_TREE,
-      position: { strategy: "exact", row: OAK_CENTER_ROW, col: OAK_CENTER_COL },
+      position: { strategy: "exact", row: OAK_ROW, col: OAK_COL },
       state: {},
       reservations: [],
     },
@@ -250,8 +258,8 @@ function birdhavenPlacements(): WorldClassPlacement[] {
       classId: "house",
       position: {
         strategy: "exact",
-        row: VILLAGE_GUILD_DOOR_ROW,
-        col: VILLAGE_GUILD_DOOR_COL,
+        row: GUILD_DOOR_ROW,
+        col: GUILD_DOOR_COL,
       },
       state: {},
       reservations: [],
@@ -262,15 +270,15 @@ function birdhavenPlacements(): WorldClassPlacement[] {
       classId: "door",
       position: {
         strategy: "exact",
-        row: VILLAGE_GUILD_DOOR_ROW,
-        col: VILLAGE_GUILD_DOOR_COL,
+        row: GUILD_DOOR_ROW,
+        col: GUILD_DOOR_COL,
       },
       state: {
         open: true,
         fixture: "guild_entrance",
         destination: {
           mode: "ensure_world_class",
-          worldClassId: GUILD_WORLD_CLASS_ID,
+          worldClassId: GUILD_CLASS_ID,
           entryPlacementId: "guild-return-door",
         },
       },
@@ -287,8 +295,8 @@ function adventurersGuildPlacements(): WorldClassPlacement[] {
       classId: "training_dummy",
       position: {
         strategy: "exact",
-        row: GUILD_CENTER_ROW,
-        col: GUILD_CENTER_COL,
+        row: GUILD_TRAINING_ROW,
+        col: GUILD_TRAINING_COL,
       },
       state: {},
       reservations: [],
@@ -302,8 +310,8 @@ function adventurersGuildPlacements(): WorldClassPlacement[] {
       classId: "door",
       position: {
         strategy: "exact",
-        row: GUILD_SPAWN_ROW,
-        col: GUILD_SPAWN_COL,
+        row: GUILD_ENTRY_ROW,
+        col: GUILD_ENTRY_COL,
       },
       state: {
         open: true,
@@ -317,11 +325,11 @@ function adventurersGuildPlacements(): WorldClassPlacement[] {
 
 function birdhavenWorldClassRecord(): WorldClassRecord {
   return {
-    id: BIRDHAVEN_WORLD_CLASS_ID,
+    id: START_WORLD_CLASS_ID,
     baseType: WORLD_TYPE_VILLAGE,
-    rows: OAK_WORLD_ROWS,
-    cols: OAK_WORLD_COLS,
-    labelKey: "world_class." + BIRDHAVEN_WORLD_CLASS_ID + ".name",
+    rows: BIRDHAVEN_ROWS,
+    cols: BIRDHAVEN_COLS,
+    labelKey: "world_class." + START_WORLD_CLASS_ID + ".name",
     fallbackLabel: "Birdhaven",
     itemSpawns: copySpawnEntries(BUILTIN_ITEM_SPAWNS),
     npcSpawns: copySpawnEntries(BUILTIN_VILLAGE_NPC_SPAWNS),
@@ -337,11 +345,11 @@ function birdhavenWorldClassRecord(): WorldClassRecord {
 // never disagree and wipe each other's placements.
 export function adventurersGuildWorldClassRecord(): WorldClassRecord {
   return {
-    id: GUILD_WORLD_CLASS_ID,
+    id: GUILD_CLASS_ID,
     baseType: WORLD_TYPE_BUILDING,
-    rows: GUILD_WORLD_ROWS,
-    cols: GUILD_WORLD_COLS,
-    labelKey: "world_class." + GUILD_WORLD_CLASS_ID + ".name",
+    rows: GUILD_ROWS,
+    cols: GUILD_COLS,
+    labelKey: "world_class." + GUILD_CLASS_ID + ".name",
     fallbackLabel: "Adventurers' guild",
     // Deliberately empty: the room's contents are authored placements, not
     // ambient population.

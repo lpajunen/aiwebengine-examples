@@ -43,6 +43,7 @@ import {
   ADVANCE_LEVEL_COST_PER_LEVEL,
   APPROACH_ACTION_MAX_MS,
   NEARBY_TARGET_TILE_DISTANCE,
+  START_WORLD_ID,
 } from "./runtime-config.ts";
 import {
   resolveActionTargeting,
@@ -75,7 +76,6 @@ import {
 } from "./world-bootstrap.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
-  OAK_WORLD_ID,
   canInventoryUseTreeAction,
   canTileItemsUseTreeAction,
   getNearbyTileItems,
@@ -1081,14 +1081,14 @@ export function performTreeActionForUser(
   if (action === "return_home") {
     switchUserWorld(
       userId,
-      OAK_WORLD_ID,
-      getDefaultSpawnPosition(OAK_WORLD_ID, userId),
+      START_WORLD_ID,
+      getDefaultSpawnPosition(START_WORLD_ID, userId),
     );
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
         action: "return_home",
-        world_id: OAK_WORLD_ID,
+        world_id: START_WORLD_ID,
       }),
     };
   }

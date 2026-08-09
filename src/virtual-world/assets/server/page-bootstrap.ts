@@ -34,8 +34,6 @@ import { getAllWorldClasses } from "./world-class-storage.ts";
 import {
   getWorldFlavorTextByIndex,
   getWorldFlavorTextIndex,
-  OAK_CENTER_COL,
-  OAK_CENTER_ROW,
   toPublicLivingSnapshot,
 } from "./world-domain.ts";
 import {
@@ -76,8 +74,6 @@ type PageState = {
   livingRegistry?: any;
   worldClassRegistry?: any[];
   activeActions: ActiveActionEntry[];
-  oakCenterRow: number;
-  oakCenterCol: number;
 };
 
 export function ensureStarterKit(userId: string): void {
@@ -204,8 +200,6 @@ export function buildVirtualWorldPageState(
     worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
     worldClassId: getWorldInfo(worldId).world_class_id,
     activeActions: activeActions,
-    oakCenterRow: OAK_CENTER_ROW,
-    oakCenterCol: OAK_CENTER_COL,
   };
 
   // The item/living/world-class registries and tile defs are world-independent
@@ -593,8 +587,6 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
     var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
     var INITIAL_ACTIVE_ACTIONS = ${JSON.stringify(state.activeActions)};
-    var OAK_CENTER_ROW = ${JSON.stringify(state.oakCenterRow)};
-    var OAK_CENTER_COL = ${JSON.stringify(state.oakCenterCol)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>

@@ -14,8 +14,8 @@ import {
   sendGlobalPresenceEvent,
 } from "./social-state.ts";
 import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
-import { createWorldOfType, saveWorldType } from "./world-bootstrap.ts";
-import { OAK_WORLD_COLS, OAK_WORLD_ROWS } from "./world-domain.ts";
+import { createWorldOfType } from "./world-bootstrap.ts";
+import { START_WORLD_ID } from "./runtime-config.ts";
 type SpawnPosition = {
   row: number;
   col: number;
@@ -83,21 +83,17 @@ export function switchUserToNewWorld(
   return { ok: true };
 }
 
-export function switchUserToStartWorld(
-  userId: string,
-  oakWorldId: string,
-  oakWorldType: string,
-): { ok: boolean } {
-  saveWorldType(
-    oakWorldId,
-    oakWorldType,
-    { rows: OAK_WORLD_ROWS, cols: OAK_WORLD_COLS },
-    oakWorldType,
-  );
+// Sends a player to the deployment's configured start world. Deliberately does
+// not write the world's type/dimensions/class: it used to rewrite them from the
+// caller's arguments on every use, which reset the start world's class to the
+// bare preset and dropped its placements — leaving a separate self-heal to put
+// them back on the next load. Switching a player is not a reason to reconfigure
+// a world.
+export function switchUserToStartWorld(userId: string): { ok: boolean } {
   switchUserWorld(
     userId,
-    oakWorldId,
-    getDefaultSpawnPosition(oakWorldId, userId),
+    START_WORLD_ID,
+    getDefaultSpawnPosition(START_WORLD_ID, userId),
   );
   return { ok: true };
 }

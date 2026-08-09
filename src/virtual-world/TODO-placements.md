@@ -581,26 +581,40 @@ Notes worth carrying:
 
 ### Phase 4: Remove special cases
 
-1. Remove forced Birdhaven dimensions/class assignment from the normal world
-   bootstrap path.
-2. Remove old-oak coordinates, clearing radius, and `oak_clearing`/
-   `oak_center` checks from the generic world domain/action logic.
-3. Remove fixed guild world ID, fixed door coordinates, and hard-coded spawn
-   location branches. `getDefaultWorldTypeForWorldId` (`world-domain.ts:402`)
-   returns `building` for the guild by world ID, so the guild world instance
-   must carry its type in its stored row first — this is a data migration, not
-   only a code deletion.
-4. Select the built-in oak mesh by item class in `client-world-render.js`, then
-   drop `OAK_CENTER_ROW` / `OAK_CENTER_COL` from page state, browser globals,
-   and `client-tile-detail.js`.
-5. Make the default starting world configurable as runtime deployment
-   configuration or a small admin-selected world instance, separate from world
-   class content. Three call sites: `route-handlers.ts:469`,
-   `tree-action-helpers.ts:1095`, and `world-switch.ts:94` (which also pins
-   `OAK_WORLD_ROWS`/`OAK_WORLD_COLS`).
+Status: **done**.
 
-The start-world selector is deliberately outside `WorldClassRecord`: a class
-is reusable, while the deployment needs one concrete initial world instance.
+1. The start world's forced config is gone. `ensureOakWorldConfig` rewrote
+   type, dimensions and class on _every_ load, which meant the start world
+   could not be reconfigured at all — the next page load undid it. Replaced by
+   `ensureStartWorldRow`, which creates the row from the configured class only
+   when none exists.
+2. `world-domain.ts` has no oak or guild knowledge left: coordinates, clearing
+   radius, `isOakWorld`/`isGuildWorld`, `OakTile` and the world-id branches in
+   `getDefaultWorldTypeForWorldId` are all gone. The geometry now lives in
+   `world-class-storage.ts` as what it always was — seed data for two
+   authored worlds.
+3. Seeded action rows migrated off `oak_clearing`/`oak_center` to rule names,
+   with generic messages (`error.area_is_protected`,
+   `error.landmark_stands_firm`).
+4. The old oak renders from the tile its `old_oak` item occupies, found in the
+   world's items. `OAK_CENTER_ROW`/`COL` are gone from page state, browser
+   globals, `client-world-render.js` and `client-tile-detail.js`.
+5. `START_WORLD_ID` / `START_WORLD_CLASS_ID` in `runtime-config.ts` — one
+   place to move the deployment's front door. `switchUserToStartWorld` takes
+   only a user id and no longer rewrites the world it sends them to.
+
+Worth carrying:
+
+- **The definition is authoritative for blocked zones**, unlike every other
+  validation key. They are not exposed by any editor, so there is no creator
+  customization to preserve, and a stale kind is actively wrong. A generic
+  legacy mapping was not enough: `oak_clearing` cannot distinguish
+  `block_plant` from `block_build`, so migrating it by alias left `build_house`
+  checking the planting rule. `syncBlockedZonesWithDefinition` replaces them
+  from `ACTION_DEFINITIONS` whenever they differ.
+- The legacy aliases in `world-reservations.ts` are now unused by any seeded
+  row, but stay as a safety net for rows copied from a built-in before the
+  migration ran.
 
 ### Phase 5: Editor and reconciliation
 

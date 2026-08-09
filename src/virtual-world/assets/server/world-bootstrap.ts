@@ -1,4 +1,6 @@
 import {
+  START_WORLD_CLASS_ID,
+  START_WORLD_ID,
   VWORLD_WORLD_ITEM_META_TABLE,
   VWORLD_WORLD_ITEM_TABLE,
   VWORLD_WORLD_TYPE_TABLE,
@@ -7,15 +9,11 @@ import { generateWorldMap, applyWorldModsToMap } from "./world-map.ts";
 import { loadWorldMods } from "./world-mod-storage.ts";
 import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
 import {
-  BIRDHAVEN_WORLD_CLASS_ID,
   createWorldId,
   COLS,
   getDefaultWorldTypeForWorldId,
-  isOakWorld,
   normalizeWorldDimension,
   normalizeWorldType,
-  OAK_WORLD_COLS,
-  OAK_WORLD_ROWS,
   ROWS,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
@@ -33,53 +31,33 @@ import {
 export function getOrCreatePlayerWorld(userId: string): string {
   let worldId = getPlayerWorld(userId);
   if (!worldId) {
-    worldId = "10000";
+    worldId = START_WORLD_ID;
     savePlayerWorld(userId, worldId);
   }
-  ensureOakWorldConfig(worldId);
+  ensureStartWorldRow(worldId);
   return worldId;
 }
 
-// The oak/start world is a fixed-size village clearing, not a generic
-// generated world. Self-heals its stored type/dimensions on every load
-// (cheap no-op once migrated) so rows persisted before the village/30x30
-// switch upgrade the next time anyone loads into it, without needing a
-// one-off migration script.
-function ensureOakWorldConfig(worldId: string): void {
-  if (!isOakWorld(worldId)) return;
-  const defaultType = getDefaultWorldTypeForWorldId(worldId);
-  const info = getWorldInfo(worldId);
-  const shapeMatches =
-    info.world_type === defaultType &&
-    info.rows === OAK_WORLD_ROWS &&
-    info.cols === OAK_WORLD_COLS;
-  // The start world is classed as its own "birdhaven" world class (so it shows
-  // in the world-type editor with a name) rather than the bare "village" preset.
-  const classMatches = info.world_class_id === BIRDHAVEN_WORLD_CLASS_ID;
-  if (shapeMatches && classMatches) {
-    return;
-  }
+// Creates the start world's row the first time the deployment is used, from
+// its configured class. Only ever runs when no row exists: what replaced it —
+// a self-heal that rewrote type, dimensions and class on *every* load — meant
+// the start world could not be reconfigured at all, since the next page load
+// undid it.
+function ensureStartWorldRow(worldId: string): void {
+  if (String(worldId) !== START_WORLD_ID) return;
+  const existing = querySingleWorldRow(
+    VWORLD_WORLD_TYPE_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+  );
+  if (existing) return;
+  const startClass = getWorldClassWithRefresh(START_WORLD_CLASS_ID);
   saveWorldType(
     worldId,
-    defaultType,
-    { rows: OAK_WORLD_ROWS, cols: OAK_WORLD_COLS },
-    BIRDHAVEN_WORLD_CLASS_ID,
-  );
-  // Only the item map depends on the world's shape/type. If just the world
-  // class id changed (migrating an existing start world village -> birdhaven),
-  // leave the seeded items (oak, guild door, ...) in place — no reseed needed.
-  if (shapeMatches) return;
-  // The stored map just changed shape/type. Any items seeded against the old
-  // map are now at coordinates that may fall outside the new bounds, and the
-  // world's "seeded" marker would otherwise stop ensureWorldItems from ever
-  // re-placing them. Drop both so the world re-seeds items on the new map.
-  deleteWorldRowsWhere(
-    VWORLD_WORLD_ITEM_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
-  );
-  deleteWorldRowsWhere(
-    VWORLD_WORLD_ITEM_META_TABLE,
-    JSON.stringify({ world_id: String(worldId) }),
+    startClass ? startClass.baseType : normalizeWorldType(""),
+    startClass
+      ? { rows: startClass.rows, cols: startClass.cols }
+      : { rows: ROWS, cols: COLS },
+    START_WORLD_CLASS_ID,
   );
 }
 

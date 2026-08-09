@@ -160,9 +160,10 @@ export interface ActionDefinition {
       errorMessage: string;
     };
     // `kind` is a tile-reservation rule name (see world-reservations.ts): the
-    // action is rejected on any tile carrying that rule. The legacy
-    // `oak_clearing`/`oak_center` kinds still resolve, for action-class rows
-    // seeded before reservations existed.
+    // action is rejected on any tile carrying that rule. Legacy
+    // `oak_clearing`/`oak_center` kinds still resolve for rows seeded before
+    // reservations existed, but migrateLegacyBlockedZones in item-registry.ts
+    // rewrites those on seed.
     blockedZones?: Array<{
       kind: string;
       errorMessage: string;
@@ -233,7 +234,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_PLANT,
-          errorMessage: "error.oak_clearing_must_stay_open",
+          errorMessage: "error.area_is_protected",
         },
       ],
     },
@@ -266,7 +267,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       blockedZones: [
         {
           kind: RESERVATION_PROTECT_LANDMARK,
-          errorMessage: "error.old_oak_stands_firm",
+          errorMessage: "error.landmark_stands_firm",
         },
       ],
     },
@@ -305,7 +306,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_PLANT,
-          errorMessage: "error.oak_clearing_must_stay_open",
+          errorMessage: "error.area_is_protected",
         },
       ],
     },
@@ -340,7 +341,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_BUILD,
-          errorMessage: "error.oak_clearing_must_stay_open",
+          errorMessage: "error.area_is_protected",
         },
       ],
     },

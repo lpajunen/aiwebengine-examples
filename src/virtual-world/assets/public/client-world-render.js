@@ -113,17 +113,40 @@ var matHouseRoof = new THREE.MeshLambertMaterial({ color: 0x81503c });
 var matHouseDoor = new THREE.MeshLambertMaterial({ color: 0x4e311f });
 var matHouseChimney = new THREE.MeshLambertMaterial({ color: 0x6a6767 });
 
+// The old oak renders as its own hand-built mesh rather than a pine instance,
+// so the pine passes below have to skip its tile. Which tile that is comes from
+// the world's items — the oak is wherever its world class placed it — instead of
+// a coordinate the server used to inject for the one world that had one.
+/** @type {{row: number, col: number} | null} */
+var oldOakTile = null;
+
+/** @returns {{row: number, col: number} | null} */
+function findOldOakTile() {
+  for (var tileKey in worldItemsByTile) {
+    var tileItems = worldItemsByTile[tileKey];
+    if (!tileItems) continue;
+    for (var i = 0; i < tileItems.length; i++) {
+      if (tileItems[i] && tileItems[i].type === "old_oak") {
+        var parts = String(tileKey).split("_");
+        return { row: Number(parts[0]), col: Number(parts[1]) };
+      }
+    }
+  }
+  return null;
+}
+
+/** @returns {{row: number, col: number} | null} */
+function getOldOakTile() {
+  return oldOakTile;
+}
+
 /**
  * @param {number} row
  * @param {number} col
  * @returns {boolean}
  */
 function isOldOakTile(row, col) {
-  return (
-    String(worldId) === "10000" &&
-    row === OAK_CENTER_ROW &&
-    col === OAK_CENTER_COL
-  );
+  return !!oldOakTile && row === oldOakTile.row && col === oldOakTile.col;
 }
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
@@ -183,10 +206,13 @@ function setTreeMeshVisibility(visible) {
 }
 
 function buildOakGroup() {
-  if (String(worldId) !== "10000") return null;
+  // Recomputed here rather than cached across worlds: this runs on every world
+  // (re)build, before the pine passes that call isOldOakTile.
+  oldOakTile = findOldOakTile();
+  if (!oldOakTile) return null;
   var group = new THREE.Group();
-  var oakX = tileX(OAK_CENTER_COL);
-  var oakZ = tileZ(OAK_CENTER_ROW);
+  var oakX = tileX(oldOakTile.col);
+  var oakZ = tileZ(oldOakTile.row);
 
   var oakTrunk = new THREE.Mesh(geoOakTrunk, matOakTrunk);
   oakTrunk.position.set(oakX, 0.65, oakZ);

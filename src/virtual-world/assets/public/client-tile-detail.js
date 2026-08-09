@@ -340,10 +340,8 @@ function renderTileDetailPanel() {
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
   var key = row + "_" + col;
-  var isOakCenter =
-    String(worldId) === "10000" &&
-    row === OAK_CENTER_ROW &&
-    col === OAK_CENTER_COL;
+  var oakTile = getOldOakTile();
+  var isOakCenter = !!oakTile && row === oakTile.row && col === oakTile.col;
 
   requireElementById("tile-detail-title").textContent =
     t("tile.square", "Square") + " (" + col + ", " + row + ")";

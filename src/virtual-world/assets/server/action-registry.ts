@@ -124,8 +124,22 @@ export interface ActionDefinition {
     itemMutation?: {
       saveWorldItems?: boolean;
     };
+    // Writes a tile mod on the action's target square: the tile becomes
+    // `tileType`, tagged with `sourceKind` so the per-kind views (planted
+    // trees, built houses, a creator's own paved paths) can be told apart.
+    // Omitting tileType clears the mod instead, restoring the generated
+    // terrain — that is what destroying a house does.
+    //
+    // This was a closed `storage: "trees" | "houses"` enum with a per-kind
+    // sub-action, which meant the only two things any action could ever change
+    // about a world were trees and houses. Any of the world tile types
+    // (world-domain.ts) is now reachable: dig a lake, pave a floor, raise a
+    // fence. The legacy fields are still read for rows written before
+    // sourceKind existed — see resolveWorldMutation in tree-action-helpers.ts.
     worldMutation?: {
-      storage: "trees" | "houses";
+      sourceKind?: string;
+      tileType?: string;
+      storage?: "trees" | "houses";
       treeAction?: "plant" | "cut";
       houseAction?: "build_house" | "destroy_house";
     };
@@ -316,10 +330,11 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       worldMutation: {
-        storage: "trees",
+        sourceKind: "tree",
+        tileType: "pine_tree",
       },
       worldEvent: {
-        eventId: "tree_changed",
+        eventId: "world_mod_changed",
       },
     },
     validation: {
@@ -349,10 +364,11 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       worldMutation: {
-        storage: "trees",
+        sourceKind: "tree",
+        tileType: "ground",
       },
       worldEvent: {
-        eventId: "tree_changed",
+        eventId: "world_mod_changed",
       },
     },
     validation: {
@@ -387,11 +403,11 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       worldMutation: {
-        storage: "trees",
-        treeAction: "plant",
+        sourceKind: "tree",
+        tileType: "pine_tree",
       },
       worldEvent: {
-        eventId: "tree_changed",
+        eventId: "world_mod_changed",
       },
     },
     validation: {
@@ -421,10 +437,11 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       worldMutation: {
-        storage: "houses",
+        sourceKind: "house",
+        tileType: "house",
       },
       worldEvent: {
-        eventId: "house_changed",
+        eventId: "world_mod_changed",
       },
     },
     validation: {
@@ -455,10 +472,10 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         includeWorldId: true,
       },
       worldMutation: {
-        storage: "houses",
+        sourceKind: "house",
       },
       worldEvent: {
-        eventId: "house_changed",
+        eventId: "world_mod_changed",
       },
     },
     validation: {

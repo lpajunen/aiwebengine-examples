@@ -26,7 +26,10 @@ import {
   summarizeItems,
   vwDiag,
 } from "./diagnostics.ts";
-import { handleItemActionForUser as handleItemActionForUserImpl } from "./item-action-helpers.ts";
+import {
+  grantAllItemsForUser as grantAllItemsForUserImpl,
+  handleItemActionForUser as handleItemActionForUserImpl,
+} from "./item-action-helpers.ts";
 import { loadPlayerInventory, loadWorldItems } from "./item-storage.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
@@ -232,8 +235,12 @@ export function craftHandler(context: any) {
  * @returns {{ok: boolean, action: string, granted_count: number, inventory: {class_id: string, slots: Record<string, any>, bag: any[], values: Record<string, any>}, items: Array<{id: string, type: string, row: number, col: number}>}}
  */
 export function grantAllItemsForUser(userId: any): any {
+  // The imported helper under an alias: this wrapper shares its name, so
+  // calling it unqualified recursed until the stack blew and the cheat route
+  // returned SCRIPT_EXECUTION_FAILED — the same aliasing every other
+  // transaction wrapper in this file already uses.
   return runInWorldTransaction("cheat_grant_all", function () {
-    return grantAllItemsForUser(userId);
+    return grantAllItemsForUserImpl(userId);
   });
 }
 

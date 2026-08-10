@@ -1,5 +1,7 @@
 import { getLivingClass } from "./living-registry.ts";
 import {
+  WORLD_TILE_GROUND,
+  WORLD_TILE_PINE_TREE,
   createLivingSlotsFromDefinitions,
   LivingState,
   normalizeLivingState,
@@ -340,13 +342,15 @@ export function tickNPCTreeActions(params: {
         didTreeAction = true;
         params.sendWorldScopedStreamEvent(
           String(params.worldId),
-          "tree_changed",
+          "world_mod_changed",
           {
             action: "cut",
             row: tr,
             col: tc,
             actor_type: "npc",
             actor_id: params.npcId,
+            source_kind: "tree",
+            tile_type: WORLD_TILE_GROUND,
           },
         );
         return { hasChanges: true, treeChanges: true };
@@ -377,13 +381,15 @@ export function tickNPCTreeActions(params: {
         didTreeAction = true;
         params.sendWorldScopedStreamEvent(
           String(params.worldId),
-          "tree_changed",
+          "world_mod_changed",
           {
             action: "plant",
             row: tr,
             col: tc,
             actor_type: "npc",
             actor_id: params.npcId,
+            source_kind: "tree",
+            tile_type: WORLD_TILE_PINE_TREE,
           },
         );
         return { hasChanges: true, treeChanges: true };

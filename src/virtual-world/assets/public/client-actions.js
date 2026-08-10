@@ -171,37 +171,22 @@ function postTreeAction(action, extras) {
       }
       applyItemStateFromResult(result);
       requestHeartbeatSoon();
-      var resolvedTreeAction = resolveTreeActionKind(result.action);
+      // Optimistic local repaint for any action that writes a tile mod — one
+      // path for trees, houses and whatever else a creator paints with.
+      var resultTileMod = resolveActionTileMod(result.action);
       if (
-        resolvedTreeAction &&
+        resultTileMod &&
         typeof result.row === "number" &&
         typeof result.col === "number"
       ) {
-        applyTreeAction(
-          resolvedTreeAction,
+        applyTileModLocally(
+          resultTileMod.sourceKind,
+          resultTileMod.tileType,
           result.row,
           result.col,
           "player",
           playerId,
         );
-        updateTreeInstances();
-        refreshTileDetailIfOpen();
-      }
-      var resolvedHouseAction = resolveHouseActionKind(result.action);
-      if (
-        resolvedHouseAction &&
-        typeof result.row === "number" &&
-        typeof result.col === "number"
-      ) {
-        applyHouseAction(
-          resolvedHouseAction,
-          result.row,
-          result.col,
-          "player",
-          playerId,
-        );
-        updateHouseMeshes();
-        refreshTileDetailIfOpen();
       }
       // Side effects for the follow/fight active-action panel; the toast for
       // every action (including these) is shown once, localized, below.

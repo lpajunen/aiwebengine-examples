@@ -455,8 +455,10 @@ export function getBootstrapRegistry(): {
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
       category?: string;
-      tree_action?: "plant" | "cut";
-      house_action?: "build_house" | "destroy_house";
+      // The tile mod this action writes, so the client can repaint the square
+      // itself; replaced the tree_action/house_action pair.
+      source_kind?: string;
+      tile_type?: string;
     }
   >;
   item_events: Record<
@@ -491,8 +493,10 @@ export function getBootstrapRegistry(): {
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
       category?: string;
-      tree_action?: "plant" | "cut";
-      house_action?: "build_house" | "destroy_house";
+      // The tile mod this action writes, so the client can repaint the square
+      // itself; replaced the tree_action/house_action pair.
+      source_kind?: string;
+      tile_type?: string;
     }
   > = {};
   const itemEvents: Record<
@@ -549,8 +553,8 @@ export function getBootstrapRegistry(): {
       targeting: action.targeting,
       valid_when: action.validWhen,
       category: actionCategory(actionId),
-      tree_action: worldMutation ? worldMutation.treeAction : undefined,
-      house_action: worldMutation ? worldMutation.houseAction : undefined,
+      source_kind: worldMutation ? worldMutation.sourceKind : undefined,
+      tile_type: worldMutation ? worldMutation.tileType : undefined,
     };
   });
 
@@ -1344,6 +1348,26 @@ function backfillActionClassDefaults(
     }
     if (syncBlockedZonesWithDefinition(existing, def)) {
       changed = true;
+    }
+    // worldMutation grew a sourceKind/tileType pair in place of the closed
+    // storage enum. execution is shallow-merged above, so an already-seeded
+    // row keeps its whole old worldMutation object and would never see the new
+    // keys — rewrite that one key when it still has the old shape. This is a
+    // format migration, not an override: the replacement says exactly what the
+    // stored value said.
+    if (def.execution && def.execution.worldMutation) {
+      const storedMutation =
+        existing.execution && existing.execution.worldMutation;
+      if (
+        storedMutation &&
+        !storedMutation.sourceKind &&
+        storedMutation.storage
+      ) {
+        existing.execution = Object.assign({}, existing.execution, {
+          worldMutation: def.execution.worldMutation,
+        });
+        changed = true;
+      }
     }
     if (def.validation !== undefined) {
       if (existing.validation === undefined) {

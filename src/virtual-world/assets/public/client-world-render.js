@@ -974,6 +974,26 @@ function buildStaticWorldMeshes() {
 }
 
 // ── Function to rebuild tree instances after tree modifications ───────────
+/**
+ * Rebuilds whichever passes a tile-type change affects. Pines and houses have
+ * their own instanced passes and are cheap to redo; every other tile type is
+ * drawn by the terrain-feature and floor-overlay passes, which only run when a
+ * mod actually paints one of those (a creator paving a path, digging a pool).
+ * @param {string} previousTileType
+ * @param {string} nextTileType
+ */
+function refreshMeshesForTileChange(previousTileType, nextTileType) {
+  updateTreeInstances();
+  updateHouseMeshes();
+  var touchesOther = [previousTileType, nextTileType].some(function (type) {
+    return type && type !== "pine_tree" && type !== "house";
+  });
+  if (touchesOther) {
+    rebuildTerrainFeatureMeshes();
+    rebuildFloorOverlayMeshes();
+  }
+}
+
 function updateTreeInstances() {
   rebuildPineInstances();
 }

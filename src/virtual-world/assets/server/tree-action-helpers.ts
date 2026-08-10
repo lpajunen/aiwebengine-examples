@@ -60,6 +60,7 @@ import {
   getItemDefinition,
   isPickableWorldItem,
 } from "./item-registry.ts";
+import { ActionDefinition } from "./action-registry.ts";
 import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
 import {
   broadcastItemChange,
@@ -84,14 +85,12 @@ import {
 } from "./world-domain.ts";
 import { isReservedTile } from "./world-reservations.ts";
 import {
-  applyHouseAction,
-  applyTreeAction,
+  applyTileMod,
   checkHouseBuildable,
   checkTreePlantable,
+  loadTileModsOfKind,
   loadWorldHouses,
   loadWorldTrees,
-  saveWorldHouses,
-  saveWorldTrees,
 } from "./world-mod-storage.ts";
 import { switchUserWorld } from "./world-switch.ts";
 import { runInWorldTransaction } from "./world-db.ts";
@@ -103,6 +102,9 @@ import {
   applyEffects,
 } from "./action-logic-interpreter.ts";
 import {
+  WORLD_TILE_GROUND,
+  WORLD_TILE_HOUSE,
+  WORLD_TILE_PINE_TREE,
   consumeLivingItemsByType,
   countItemsByType,
   countLivingItemsByType,
@@ -335,36 +337,10 @@ export function performTreeActionForUser(
     return null;
   }
 
-  function getActionExecutionConfig(): {
-    startToastMessage?: string;
-    startToastMessageKey?: string;
-    toastMessage?: string;
-    toastMessageKey?: string;
-    worldChatText?: string;
-    successPayload?: {
-      includeTargetPosition?: boolean;
-      includeWorldId?: boolean;
-      includeInventory?: boolean;
-      includeTileItems?: boolean;
-      includeRemovedCount?: boolean;
-      includeSwitchedWorld?: boolean;
-    };
-    itemMutation?: {
-      saveWorldItems?: boolean;
-    };
-    worldMutation?: {
-      storage: "trees" | "houses";
-      treeAction?: "plant" | "cut";
-      houseAction?: "build_house" | "destroy_house";
-    };
-    worldEvent?: {
-      eventId: string;
-      actionId?: string;
-    };
-    itemChange?: {
-      eventId: string;
-    };
-  } | null {
+  // The action's execution config, straight from the class row. Typed off
+  // ActionDefinition rather than restating its shape here — this used to be a
+  // second copy of that type, which is how worldMutation could drift.
+  function getActionExecutionConfig(): ActionDefinition["execution"] | null {
     return actionDefinition && actionDefinition.execution
       ? actionDefinition.execution
       : null;
@@ -455,7 +431,11 @@ export function performTreeActionForUser(
     return withConfiguredToastMessage(payload);
   }
 
-  function maybeSendConfiguredWorldEvent(row: number, col: number): void {
+  function maybeSendConfiguredWorldEvent(
+    row: number,
+    col: number,
+    mutation?: { sourceKind: string; tileType: string },
+  ): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.worldEvent) return;
     const worldEvent = getWorldEventDefinition(execution.worldEvent.eventId);
@@ -468,6 +448,11 @@ export function performTreeActionForUser(
       actor_type: "player",
       actor_id: userId,
       player_id: userId,
+      // The mod itself, so a client repaints the square from the event without
+      // having to know which action produced it.
+      ...(mutation
+        ? { source_kind: mutation.sourceKind, tile_type: mutation.tileType }
+        : {}),
     });
   }
 
@@ -492,52 +477,60 @@ export function performTreeActionForUser(
     );
   }
 
-  function maybePersistConfiguredWorldMutation(
-    row: number,
-    col: number,
-    state: {
-      trees: Record<string, any>;
-      houses: Record<string, any>;
-    },
-  ): boolean {
+  // Resolves the action's worldMutation to the tile mod it writes. Rows seeded
+  // before sourceKind existed carry the old closed enum instead — those four
+  // built-in ids are named here, in the one place that has to understand the
+  // old shape, rather than back in the handlers they came from. The bootstrap
+  // migration in item-registry.ts rewrites them, so this is a safety net for
+  // any row it does not reach (a creator-owned one).
+  function resolveWorldMutation(
+    cfg: NonNullable<ActionDefinition["execution"]>["worldMutation"],
+  ): { sourceKind: string; tileType: string } | null {
+    if (!cfg) return null;
+    if (cfg.sourceKind) {
+      return {
+        sourceKind: String(cfg.sourceKind),
+        tileType: String(cfg.tileType || ""),
+      };
+    }
+    if (cfg.storage === "trees") {
+      const treeAction = cfg.treeAction || (action === "cut" ? "cut" : "plant");
+      return {
+        sourceKind: "tree",
+        tileType:
+          treeAction === "cut" ? WORLD_TILE_GROUND : WORLD_TILE_PINE_TREE,
+      };
+    }
+    if (cfg.storage === "houses") {
+      const houseAction =
+        cfg.houseAction ||
+        (action === "destroy_house" ? "destroy_house" : "build_house");
+      return {
+        sourceKind: "house",
+        tileType: houseAction === "destroy_house" ? "" : WORLD_TILE_HOUSE,
+      };
+    }
+    return null;
+  }
+
+  function maybePersistConfiguredWorldMutation(row: number, col: number): void {
     const execution = getActionExecutionConfig();
-    if (!execution || !execution.worldMutation) return false;
-
-    if (execution.worldMutation.storage === "trees") {
-      if (execution.worldMutation.treeAction) {
-        applyTreeAction(
-          worldId,
-          userId,
-          row,
-          col,
-          execution.worldMutation.treeAction,
-          state.trees,
-        );
-      } else {
-        saveWorldTrees(worldId, state.trees);
-      }
-      maybeSendConfiguredWorldEvent(row, col);
-      return true;
-    }
-
-    if (execution.worldMutation.storage === "houses") {
-      if (execution.worldMutation.houseAction) {
-        applyHouseAction(
-          worldId,
-          userId,
-          row,
-          col,
-          execution.worldMutation.houseAction,
-          state.houses,
-        );
-      } else {
-        saveWorldHouses(worldId, state.houses);
-      }
-      maybeSendConfiguredWorldEvent(row, col);
-      return true;
-    }
-
-    return false;
+    const mutation = resolveWorldMutation(
+      execution ? execution.worldMutation : undefined,
+    );
+    if (!mutation) return;
+    const mods = loadTileModsOfKind(worldId, mutation.sourceKind);
+    applyTileMod(
+      worldId,
+      userId,
+      "player",
+      row,
+      col,
+      mutation.sourceKind,
+      mutation.tileType,
+      mods,
+    );
+    maybeSendConfiguredWorldEvent(row, col, mutation);
   }
 
   function maybePersistConfiguredItemMutation(
@@ -2175,38 +2168,6 @@ export function performTreeActionForUser(
   const actionStartCostError = applyActionStartCostsOrDefer();
   if (actionStartCostError) return actionStartCostError;
 
-  if (action === "build_house") {
-    applyHouseAction(
-      worldId,
-      userId,
-      targetRow,
-      targetCol,
-      "build_house",
-      houses,
-    );
-    maybeSendConfiguredWorldEvent(targetRow, targetCol);
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
-  if (action === "destroy_house") {
-    applyHouseAction(
-      worldId,
-      userId,
-      targetRow,
-      targetCol,
-      "destroy_house",
-      houses,
-    );
-    maybeSendConfiguredWorldEvent(targetRow, targetCol);
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
   if (action === "open_door" || action === "close_door") {
     // Toggle the faced door's open state and persist it on the world item.
     // requireItemState (door present) already ran in validation above, so a
@@ -2366,15 +2327,7 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "plant" || action === "cut") {
-    applyTreeAction(worldId, userId, targetRow, targetCol, action, trees);
-    maybeSendConfiguredWorldEvent(targetRow, targetCol);
-  } else {
-    maybePersistConfiguredWorldMutation(targetRow, targetCol, {
-      trees: trees,
-      houses: houses,
-    });
-  }
+  maybePersistConfiguredWorldMutation(targetRow, targetCol);
 
   let removedCount: number | undefined;
 

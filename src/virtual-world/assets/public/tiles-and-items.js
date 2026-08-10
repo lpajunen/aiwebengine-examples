@@ -173,8 +173,17 @@ function rebuildLegacyDynamicViews() {
     var payload =
       mod && mod.payload && typeof mod.payload === "object" ? mod.payload : {};
     if (payload.source_kind === "tree") {
+      // The mod's tile_type is the state, mirroring loadWorldTrees on the
+      // server: a pine standing, or the ground a cut one left. payload.action
+      // is only still read for mods built from the legacy bootstrap globals.
+      var treeTileType = String(mod.tile_type || payload.tile_type || "");
       dynamicTrees[tileKey] = {
-        action: String(payload.action || "plant"),
+        action:
+          treeTileType === "pine_tree"
+            ? "plant"
+            : treeTileType
+              ? "cut"
+              : String(payload.action || "plant"),
         actor_type: mod.actor_type || "player",
         actor_id: mod.actor_id || "",
       };
@@ -212,90 +221,62 @@ function resetWorldModsFromGlobals() {
 resetWorldModsFromGlobals();
 
 /**
- * Resolves a (possibly custom, config-driven) action id to the underlying
- * tree mutation it performs, so the client can render it the same way as
- * the built-in "plant"/"cut" actions.
+ * The tile mod an action writes, from its class row: which kind of thing it
+ * marks the square with and what the square becomes. An empty tile_type means
+ * the action clears the mod (destroying a house restores the ground under it).
+ * Replaced a pair of resolvers that could only name a tree or a house.
  * @param {string} action
- * @returns {"plant"|"cut"|null}
+ * @returns {{sourceKind: string, tileType: string} | null}
  */
-function resolveTreeActionKind(action) {
-  if (action === "plant" || action === "cut") return action;
+function resolveActionTileMod(action) {
   var actionDef =
     ITEM_REGISTRY && ITEM_REGISTRY.actions && ITEM_REGISTRY.actions[action];
-  return (actionDef && actionDef.tree_action) || null;
+  if (!actionDef || !actionDef.source_kind) return null;
+  return {
+    sourceKind: String(actionDef.source_kind),
+    tileType: String(actionDef.tile_type || ""),
+  };
 }
 
 /**
- * Resolves a (possibly custom, config-driven) action id to the underlying
- * house mutation it performs, so the client can render it the same way as
- * the built-in "build_house"/"destroy_house" actions.
- * @param {string} action
- * @returns {"build_house"|"destroy_house"|null}
- */
-function resolveHouseActionKind(action) {
-  if (action === "build_house" || action === "destroy_house") return action;
-  var actionDef =
-    ITEM_REGISTRY && ITEM_REGISTRY.actions && ITEM_REGISTRY.actions[action];
-  return (actionDef && actionDef.house_action) || null;
-}
-
-/**
- * @param {string} action
+ * Paints one tile mod into the client's world: the overlay entry, and the map
+ * square it shows as. Mirrors applyTileMod in world-mod-storage.ts, so the
+ * optimistic local update and the server's stored state agree.
+ * @param {string} sourceKind
+ * @param {string} tileType empty clears the mod
  * @param {number} row
  * @param {number} col
  * @param {string} actorType
  * @param {string} actorId
  */
-function applyHouseAction(action, row, col, actorType, actorId) {
+function applyTileModLocally(
+  sourceKind,
+  tileType,
+  row,
+  col,
+  actorType,
+  actorId,
+) {
   var tileKey = row + "_" + col;
-  if (action === "build_house") {
-    worldMods.object[tileKey] = {
-      row: row,
-      col: col,
-      tile_type: "house",
-      actor_id: actorId || "",
-      actor_type: actorType || "player",
-      payload: { source_kind: "house" },
-    };
-    MAP[row][col] = clientTileValueForName("house");
-  } else if (action === "destroy_house") {
+  var previous = worldMods.object[tileKey];
+  var previousTileType = previous ? String(previous.tile_type || "") : "";
+  if (!tileType) {
     delete worldMods.object[tileKey];
     MAP[row][col] = clientTileValueForName("ground");
-  }
-  rebuildLegacyDynamicViews();
-}
-
-/**
- * @param {string} action
- * @param {number} row
- * @param {number} col
- * @param {string} actorType
- * @param {string} actorId
- */
-function applyTreeAction(action, row, col, actorType, actorId) {
-  var tileKey = row + "_" + col;
-  if (action === "plant") {
+  } else {
     worldMods.object[tileKey] = {
       row: row,
       col: col,
-      tile_type: "pine_tree",
+      tile_type: tileType,
       actor_id: actorId || "",
       actor_type: actorType || "player",
-      payload: { source_kind: "tree", action: "plant" },
+      payload: { source_kind: sourceKind, tile_type: tileType },
     };
-    MAP[row][col] = clientTileValueForName("pine_tree");
-  } else if (action === "cut") {
-    worldMods.object[tileKey] = {
-      row: row,
-      col: col,
-      tile_type: "ground",
-      actor_id: actorId || "",
-      actor_type: actorType || "player",
-      payload: { source_kind: "tree", action: "cut" },
-    };
-    MAP[row][col] = clientTileValueForName("ground");
+    MAP[row][col] = clientTileValueForName(tileType);
   }
   rebuildLegacyDynamicViews();
+  refreshMeshesForTileChange(previousTileType, tileType);
+  refreshTileDetailIfOpen();
 }
 
 /**

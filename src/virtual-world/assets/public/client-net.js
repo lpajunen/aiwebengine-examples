@@ -685,36 +685,32 @@ function initMultiplayer() {
   }
 
   /** @param {any} payload */
-  function handleTreeChangedEvent(payload) {
-    if (!payload) return;
-    var resolvedTreeAction = resolveTreeActionKind(payload.action);
-    if (!resolvedTreeAction) return;
-    applyTreeAction(
-      resolvedTreeAction,
-      payload.row,
-      payload.col,
-      payload.actor_type || "player",
-      payload.actor_id || payload.player_id || "",
-    );
-
-    updateTreeInstances();
-    refreshTileDetailIfOpen();
-  }
-
+  // One handler for every tile mod, whatever wrote it. The event carries the
+  // mod (source_kind / tile_type); an event from an older server that only
+  // named the action still resolves through the action's class row.
   /** @param {any} payload */
-  function handleHouseChangedEvent(payload) {
+  function handleWorldModChangedEvent(payload) {
     if (!payload) return;
-    var resolvedHouseAction = resolveHouseActionKind(payload.action);
-    if (!resolvedHouseAction) return;
-    applyHouseAction(
-      resolvedHouseAction,
+    if (typeof payload.row !== "number" || typeof payload.col !== "number") {
+      return;
+    }
+    var sourceKind = payload.source_kind ? String(payload.source_kind) : "";
+    var tileType =
+      payload.tile_type !== undefined ? String(payload.tile_type) : null;
+    if (!sourceKind || tileType === null) {
+      var fallback = resolveActionTileMod(payload.action);
+      if (!fallback) return;
+      sourceKind = fallback.sourceKind;
+      tileType = fallback.tileType;
+    }
+    applyTileModLocally(
+      sourceKind,
+      tileType,
       payload.row,
       payload.col,
       payload.actor_type || "player",
       payload.actor_id || payload.player_id || "",
     );
-    updateHouseMeshes();
-    refreshTileDetailIfOpen();
   }
 
   /** @param {any} payload */
@@ -1083,11 +1079,12 @@ function initMultiplayer() {
       case "living_moved":
         handleLivingMovedEvent(payload);
         return;
+      // tree_changed/house_changed are the names world_mod_changed replaced;
+      // they still arrive from a class row that names them.
+      case "world_mod_changed":
       case "tree_changed":
-        handleTreeChangedEvent(payload);
-        return;
       case "house_changed":
-        handleHouseChangedEvent(payload);
+        handleWorldModChangedEvent(payload);
         return;
       case "living_updated":
         handleLivingUpdatedEvent(payload);

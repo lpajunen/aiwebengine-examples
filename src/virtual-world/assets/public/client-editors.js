@@ -70,6 +70,7 @@ function retranslateUI() {
   if (actionClassPanelVisible) renderActionClassList();
   if (livingClassPanelVisible) renderLivingClassList();
   if (worldClassPanelVisible) renderWorldClassList();
+  if (tileClassPanelVisible) renderTileClassList();
   if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
 }
 
@@ -113,11 +114,15 @@ function updateEditingRightsUI() {
   requireElementById("btn-world-classes").style.display = hasRights
     ? ""
     : "none";
+  requireElementById("btn-tile-classes").style.display = hasRights
+    ? ""
+    : "none";
   if (!hasRights) {
     if (itemClassPanelVisible) closeItemClassPanel();
     if (actionClassPanelVisible) closeActionClassPanel();
     if (livingClassPanelVisible) closeLivingClassPanel();
     if (worldClassPanelVisible) closeWorldClassPanel();
+    if (tileClassPanelVisible) closeTileClassPanel();
   }
 }
 
@@ -422,6 +427,7 @@ function showItemClassPanel() {
   if (actionClassPanelVisible) closeActionClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
+  if (tileClassPanelVisible) closeTileClassPanel();
   itemClassPanelVisible = true;
   requireElementById("hud-item-class-panel").style.display = "block";
   renderItemClassList();
@@ -726,6 +732,7 @@ function showActionClassPanel() {
   if (itemClassPanelVisible) closeItemClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
+  if (tileClassPanelVisible) closeTileClassPanel();
   actionClassPanelVisible = true;
   requireElementById("hud-action-class-panel").style.display = "block";
   renderActionClassList();
@@ -1250,6 +1257,7 @@ function showLivingClassPanel() {
   if (itemClassPanelVisible) closeItemClassPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (worldClassPanelVisible) closeWorldClassPanel();
+  if (tileClassPanelVisible) closeTileClassPanel();
   livingClassPanelVisible = true;
   requireElementById("hud-living-class-panel").style.display = "block";
   renderLivingClassList();
@@ -2098,6 +2106,7 @@ function showWorldClassPanel() {
   if (itemClassPanelVisible) closeItemClassPanel();
   if (actionClassPanelVisible) closeActionClassPanel();
   if (livingClassPanelVisible) closeLivingClassPanel();
+  if (tileClassPanelVisible) closeTileClassPanel();
   worldClassPanelVisible = true;
   requireElementById("hud-world-class-panel").style.display = "block";
   renderWorldClassList();
@@ -2111,4 +2120,281 @@ function closeWorldClassPanel() {
 function toggleWorldClassPanel() {
   if (worldClassPanelVisible) closeWorldClassPanel();
   else showWorldClassPanel();
+}
+
+// ── Tile class panel ─────────────────────────────────────────────────────
+// The vocabulary worlds are made of. A tile's map value is a runtime encoding
+// (maps are regenerated from a seed and world mods store the tile id), so the
+// field is only here to be kept unique — leaving it blank takes the next free
+// one.
+
+/** @type {string | null} */
+var tileClassEditId = null;
+
+function renderTileClassList() {
+  var listDiv = requireElementById("tile-class-list");
+  fetchWithAuth("/virtual-world/tile-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.tile_classes) ? data.tile_classes : [];
+      classes = classes
+        .slice()
+        .sort(function (/** @type {any} */ a, /** @type {any} */ b) {
+          return Number(a.value) - Number(b.value);
+        });
+      if (!classes.length) {
+        listDiv.innerHTML =
+          '<div class="class-row"><em style="opacity:0.55">' +
+          escHtml(t("class_editor.no_tile_types", "No tile types yet.")) +
+          "</em></div>";
+        return;
+      }
+      var rows = "";
+      for (var i = 0; i < classes.length; i++) {
+        var tc = classes[i];
+        var id = escHtml(String(tc.id || ""));
+        // The value is what the map array holds, so showing it makes a clash
+        // obvious before the server rejects one.
+        var meta =
+          "#" +
+          escHtml(String(tc.value)) +
+          " · " +
+          escHtml(
+            tc.walkable
+              ? t("class_editor.tile_walkable_short", "walkable")
+              : t("class_editor.tile_blocking_short", "blocks"),
+          );
+        rows +=
+          '<div class="class-row">' +
+          '<span class="class-row-id">' +
+          id +
+          "</span> " +
+          '<span class="class-row-label">' +
+          meta +
+          "</span>" +
+          '<span class="class-row-btns">' +
+          '<button data-tile-class-id="' +
+          id +
+          '" onclick="editTileClass(this.dataset.tileClassId)">' +
+          escHtml(t("class_editor.edit_button", "Edit")) +
+          "</button>" +
+          '<button data-tile-class-id="' +
+          id +
+          '" onclick="deleteTileClassUI(this.dataset.tileClassId)">' +
+          escHtml(t("class_editor.del_button", "Del")) +
+          "</button>" +
+          "</span></div>";
+      }
+      listDiv.innerHTML = rows;
+    })
+    .catch(function () {
+      listDiv.innerHTML =
+        '<div class="class-row"><em style="opacity:0.55">' +
+        escHtml(t("class_editor.failed_to_load", "Failed to load")) +
+        "</em></div>";
+    });
+}
+
+/** @param {string} id */
+function editTileClass(id) {
+  fetchWithAuth("/virtual-world/tile-classes")
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var classes =
+        data && Array.isArray(data.tile_classes) ? data.tile_classes : [];
+      var tc = null;
+      for (var i = 0; i < classes.length; i++) {
+        if (String(classes[i].id) === String(id)) tc = classes[i];
+      }
+      if (!tc) {
+        showHudToast(
+          t("class_editor.tile_not_found", "Tile type not found"),
+          true,
+        );
+        return;
+      }
+      tileClassEditId = String(id);
+      var idEl = /** @type {HTMLInputElement} */ (requireElementById("tc-id"));
+      idEl.value = String(tc.id || "");
+      idEl.disabled = true;
+      /** @type {HTMLInputElement} */ (requireElementById("tc-name-fi")).value =
+        String((tc.labels && tc.labels.fi) || "");
+      /** @type {HTMLInputElement} */ (requireElementById("tc-value")).value =
+        String(tc.value);
+      /** @type {HTMLInputElement} */ (
+        requireElementById("tc-walkable")
+      ).checked = !!tc.walkable;
+      /** @type {HTMLSelectElement} */ (requireElementById("tc-layer")).value =
+        String(tc.layer || "terrain");
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("tc-visual")
+      ).value = tc.visual ? JSON.stringify(tc.visual) : "";
+      requireElementById("tile-class-form-title").textContent =
+        t("class_editor.edit_prefix", "Edit:") + " " + String(id);
+    })
+    .catch(function () {
+      showHudToast(
+        t("class_editor.failed_to_load_tile_type", "Failed to load tile type"),
+        true,
+      );
+    });
+}
+
+function cancelTileClassEdit() {
+  tileClassEditId = null;
+  var idEl = /** @type {HTMLInputElement} */ (requireElementById("tc-id"));
+  idEl.value = "";
+  idEl.disabled = false;
+  /** @type {HTMLInputElement} */ (requireElementById("tc-name-fi")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("tc-value")).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("tc-walkable")).checked =
+    false;
+  /** @type {HTMLSelectElement} */ (requireElementById("tc-layer")).value =
+    "terrain";
+  /** @type {HTMLTextAreaElement} */ (requireElementById("tc-visual")).value =
+    "";
+  requireElementById("tile-class-form-title").textContent = t(
+    "class_editor.new_tile_type",
+    "New tile type",
+  );
+}
+
+function submitTileClassForm() {
+  var idVal = /** @type {HTMLInputElement} */ (
+    requireElementById("tc-id")
+  ).value.trim();
+  if (!idVal) {
+    showHudToast(t("class_editor.id_required", "ID is required"), true);
+    return;
+  }
+  var nameFiVal = /** @type {HTMLInputElement} */ (
+    requireElementById("tc-name-fi")
+  ).value.trim();
+  var valueRaw = /** @type {HTMLInputElement} */ (
+    requireElementById("tc-value")
+  ).value.trim();
+  var walkableVal = /** @type {HTMLInputElement} */ (
+    requireElementById("tc-walkable")
+  ).checked;
+  var layerVal = /** @type {HTMLSelectElement} */ (
+    requireElementById("tc-layer")
+  ).value;
+  var visualRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("tc-visual")
+  ).value.trim();
+  // Null rather than undefined so clearing the box clears the stored visual:
+  // undefined would be dropped by JSON.stringify and the server would keep it.
+  var visual = null;
+  if (visualRaw) {
+    try {
+      visual = JSON.parse(visualRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_tile_visual_json", "Invalid visual JSON"),
+        true,
+      );
+      return;
+    }
+  }
+  /** @type {Record<string, *>} */
+  var record = {
+    id: idVal,
+    walkable: walkableVal,
+    layer: layerVal,
+    visual: visual,
+    labels: buildLabelsPayload(nameFiVal),
+  };
+  // Only send a value when one was typed; blank means "assign the next free".
+  if (valueRaw) record.value = Number(valueRaw);
+  var url = tileClassEditId
+    ? "/virtual-world/tile-classes/" + encodeURIComponent(tileClassEditId)
+    : "/virtual-world/tile-classes";
+  var method = tileClassEditId ? "PUT" : "POST";
+  fetchWithAuth(url, {
+    method: method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(record),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.save_failed", "Save failed"),
+          true,
+        );
+        return;
+      }
+      showHudToast(
+        t("class_editor.saved_prefix", "Saved") + " " + idVal,
+        false,
+      );
+      cancelTileClassEdit();
+      renderTileClassList();
+    })
+    .catch(function () {
+      showHudToast(t("class_editor.save_failed", "Save failed"), true);
+    });
+}
+
+/** @param {string} id */
+function deleteTileClassUI(id) {
+  fetchWithAuth(
+    "/virtual-world/tile-classes/" + encodeURIComponent(String(id)),
+    {
+      method: "DELETE",
+    },
+  )
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data.ok) {
+        showHudToast(
+          data.error
+            ? translateServerMessage(String(data.error))
+            : t("class_editor.delete_failed", "Delete failed"),
+          true,
+        );
+        return;
+      }
+      showHudToast(
+        t("class_editor.deleted_prefix", "Deleted") + " " + String(id),
+        false,
+      );
+      if (tileClassEditId === String(id)) cancelTileClassEdit();
+      renderTileClassList();
+    })
+    .catch(function () {
+      showHudToast(t("class_editor.delete_failed", "Delete failed"), true);
+    });
+}
+
+function showTileClassPanel() {
+  if (inventoryPanelVisible) closeInventoryPanel();
+  if (itemClassPanelVisible) closeItemClassPanel();
+  if (actionClassPanelVisible) closeActionClassPanel();
+  if (livingClassPanelVisible) closeLivingClassPanel();
+  if (worldClassPanelVisible) closeWorldClassPanel();
+  tileClassPanelVisible = true;
+  requireElementById("hud-tile-class-panel").style.display = "block";
+  renderTileClassList();
+}
+
+function closeTileClassPanel() {
+  tileClassPanelVisible = false;
+  requireElementById("hud-tile-class-panel").style.display = "none";
+}
+
+function toggleTileClassPanel() {
+  if (tileClassPanelVisible) closeTileClassPanel();
+  else showTileClassPanel();
 }

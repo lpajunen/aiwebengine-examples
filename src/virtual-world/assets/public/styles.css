@@ -1003,7 +1003,8 @@ canvas {
 #hud-item-class-panel,
 #hud-action-class-panel,
 #hud-living-class-panel,
-#hud-world-class-panel {
+#hud-world-class-panel,
+#hud-tile-class-panel {
   right: 14px;
   bottom: 90px;
   width: min(400px, calc(100vw - 28px));

@@ -237,7 +237,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 <body class="game">
   <div id="hud-left-col">
     <div class="hud" id="hud-pos">
-      <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><span id="hud-editor-buttons"><button id="btn-item-classes" onclick="toggleItemClassPanel()" data-i18n-title="hud.item_types" title="Item types">📦</button><button id="btn-action-classes" onclick="toggleActionClassPanel()" data-i18n-title="hud.action_types" title="Action types">⚡</button><button id="btn-living-classes" onclick="toggleLivingClassPanel()" data-i18n-title="hud.living_types" title="Living types">🧬</button><button id="btn-world-classes" onclick="toggleWorldClassPanel()" data-i18n-title="hud.world_types" title="World types">🌍</button></span><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
+      <span id="hud-title-row"><strong data-i18n-key="hud.title">Virtual World</strong><span id="hud-editor-buttons"><button id="btn-item-classes" onclick="toggleItemClassPanel()" data-i18n-title="hud.item_types" title="Item types">📦</button><button id="btn-action-classes" onclick="toggleActionClassPanel()" data-i18n-title="hud.action_types" title="Action types">⚡</button><button id="btn-living-classes" onclick="toggleLivingClassPanel()" data-i18n-title="hud.living_types" title="Living types">🧬</button><button id="btn-world-classes" onclick="toggleWorldClassPanel()" data-i18n-title="hud.world_types" title="World types">🌍</button><button id="btn-tile-classes" onclick="toggleTileClassPanel()" data-i18n-title="hud.tile_types" title="Tile types">🧱</button></span><button id="btn-world-info" onclick="toggleWorldInfoPanel()" data-i18n-title="hud.world_info" title="World info">ℹ️</button></span>
       <span id="hud-nick-row"><span id="nick-display">${escapeHtml(state.playerNick || state.authName)}</span><button id="nick-edit-btn" onclick="startNickEdit()" data-i18n-title="hud.rename" title="Rename">✏️</button><button id="btn-locale-toggle" onclick="toggleLocale()" data-i18n-title="hud.switch_language" title="Switch language">🌐</button><span id="nick-edit-row" style="display:none;"><input id="nick-input" type="text" maxlength="24"><button onclick="commitNickEdit()" data-i18n-title="hud.save" title="Save">✓</button><button onclick="cancelNickEdit()" data-i18n-title="hud.cancel" title="Cancel">✗</button></span></span><br>
       <span data-i18n-key="hud.world_label">World:</span> <span id="hud-world-id">${state.worldId}</span> (<span id="pos-col">${state.initCol}</span>, <span id="pos-row">${state.initRow}</span>)<br>
       <span data-i18n-key="hud.stats_label">Stats:</span>
@@ -524,6 +524,34 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <div class="class-form-actions">
         <button onclick="submitLivingClassForm()" data-i18n-key="class_editor.save">Save</button>
         <button onclick="cancelLivingClassEdit()" data-i18n-key="class_editor.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud" id="hud-tile-class-panel">
+    <div class="panel-header">
+      <span class="panel-title" data-i18n-key="panel.tile_types">Tile Types</span>
+      <button class="panel-close" onclick="closeTileClassPanel()" data-i18n-title="panel.close" title="Close">×</button>
+    </div>
+    <div id="tile-class-list" class="class-list"></div>
+    <div class="class-form">
+      <div class="class-form-title" id="tile-class-form-title" data-i18n-key="class_editor.new_tile_type">New tile type</div>
+      <div class="class-form-fields">
+        <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="tc-id" type="text" placeholder="moss" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="tc-name-fi" type="text" placeholder="Sammal" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.tile_value_label">Map value (blank = next free; must be unique)</span> <input id="tc-value" type="number" placeholder="" autocomplete="off"></label>
+        <label><input id="tc-walkable" type="checkbox"> <span data-i18n-key="class_editor.tile_walkable">Walkable (livings can stand on it)</span></label>
+        <label><span data-i18n-key="class_editor.tile_layer_label">World-mod layer</span>
+          <select id="tc-layer">
+            <option value="terrain">terrain</option>
+            <option value="object">object</option>
+          </select>
+        </label>
+        <label><span data-i18n-key="class_editor.tile_visual_label">Visual (JSON; blank = drawn by its own pass)</span> <textarea id="tc-visual" rows="2" placeholder='{"style":"floor","color":3821888,"colorAlt":3166258}'></textarea></label>
+      </div>
+      <div class="class-form-actions">
+        <button onclick="submitTileClassForm()" data-i18n-key="class_editor.save">Save</button>
+        <button onclick="cancelTileClassEdit()" data-i18n-key="class_editor.cancel">Cancel</button>
       </div>
     </div>
   </div>

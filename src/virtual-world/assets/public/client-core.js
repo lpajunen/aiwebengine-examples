@@ -49,6 +49,7 @@ var chatActiveTab = "world"; // 'world' | 'dm'
 var itemClassPanelVisible = false;
 var actionClassPanelVisible = false;
 var livingClassPanelVisible = false;
+var tileClassPanelVisible = false;
 var worldClassPanelVisible = false;
 /** @type {string | null} */
 var itemClassEditId = null;

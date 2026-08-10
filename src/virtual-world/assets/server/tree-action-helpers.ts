@@ -84,14 +84,7 @@ import {
   normalizeWorldType,
 } from "./world-domain.ts";
 import { isReservedTile } from "./world-reservations.ts";
-import {
-  applyTileMod,
-  checkHouseBuildable,
-  checkTreePlantable,
-  loadTileModsOfKind,
-  loadWorldHouses,
-  loadWorldTrees,
-} from "./world-mod-storage.ts";
+import { applyTileMod, loadTileModsOfKind } from "./world-mod-storage.ts";
 import { switchUserWorld } from "./world-switch.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import { getItemChangeDefinition } from "./item-events.ts";
@@ -575,42 +568,26 @@ export function performTreeActionForUser(
     row: number,
     col: number,
     map: number[][],
-    houses: Record<string, any>,
-    trees: Record<string, any>,
   ): string | null {
     const validation = actionDefinition && actionDefinition.validation;
     if (!validation) return null;
 
     if (
       validation.requireWalkableTile &&
-      validation.requireHouseState &&
-      validation.requireHouseState.kind === "absent"
+      map[row] &&
+      !isWorldTileWalkable(map[row][col])
     ) {
-      const buildable = checkHouseBuildable(row, col, map, houses);
-      if (!buildable.ok) {
-        return buildable.reason === "not_walkable"
-          ? validation.requireWalkableTile.errorMessage
-          : validation.requireHouseState.errorMessage;
-      }
-    } else {
-      if (
-        validation.requireWalkableTile &&
-        map[row] &&
-        !isWorldTileWalkable(map[row][col])
-      ) {
-        return validation.requireWalkableTile.errorMessage;
-      }
+      return validation.requireWalkableTile.errorMessage;
+    }
 
-      if (validation.requireHouseState) {
-        const tileKey = row + "_" + col;
-        const hasHouse = !!houses[tileKey];
-        if (validation.requireHouseState.kind === "present" && !hasHouse) {
-          return validation.requireHouseState.errorMessage;
-        }
-        if (validation.requireHouseState.kind === "absent" && hasHouse) {
-          return validation.requireHouseState.errorMessage;
-        }
-      }
+    // Tile-state rules, in the order the action lists them, so a specific
+    // rule claims its own message before a general one fires.
+    const tileRules = resolveTileStateRules(validation);
+    for (let i = 0; i < tileRules.length; i++) {
+      const rule = tileRules[i];
+      const matches = tileStateMatches(rule, row, col, map);
+      if (rule.kind === "present" && !matches) return rule.errorMessage;
+      if (rule.kind === "absent" && matches) return rule.errorMessage;
     }
 
     if (validation.requireItemState) {
@@ -627,42 +604,83 @@ export function performTreeActionForUser(
       }
     }
 
-    if (validation.requireTreeState) {
-      const treeKey = row + "_" + col;
-      const treeState = trees[treeKey];
-      const hasExistingTree = treeState && treeState.action === "plant";
-      const wasTreeCut = treeState && treeState.action === "cut";
-      const baseHasTree =
-        map[row] &&
-        map[row][col] === worldTileValueForName(WORLD_TILE_PINE_TREE);
-
-      if (validation.requireTreeState.kind === "plantable") {
-        const plantable = checkTreePlantable(row, col, map, trees);
-        if (!plantable.ok) {
-          return plantable.reason === "tile_occupied"
-            ? validation.requireTreeState.missingErrorMessage ||
-                "Cannot use here"
-            : validation.requireTreeState.conflictErrorMessage ||
-                "Already exists";
-        }
-      }
-
-      if (validation.requireTreeState.kind === "cuttable") {
-        if (!hasExistingTree && !baseHasTree) {
-          return (
-            validation.requireTreeState.missingErrorMessage || "Nothing to cut"
-          );
-        }
-        if (wasTreeCut) {
-          return (
-            validation.requireTreeState.conflictErrorMessage ||
-            "Already removed"
-          );
-        }
-      }
-    }
-
     return null;
+  }
+
+  type TileStateRule = {
+    tileType: string;
+    kind: "present" | "absent";
+    errorMessage: string;
+    sourceKind?: string;
+  };
+
+  // The action's tile-state rules, translating the legacy tree/house pair for
+  // rows written before requireTileState existed. Those two said exactly what
+  // the rules below say; keeping the translation here means the check itself
+  // never has to know what a tree or a house is.
+  function resolveTileStateRules(
+    validation: NonNullable<ActionDefinition["validation"]>,
+  ): TileStateRule[] {
+    if (Array.isArray(validation.requireTileState)) {
+      return validation.requireTileState as TileStateRule[];
+    }
+    const rules: TileStateRule[] = [];
+    const tree = validation.requireTreeState;
+    if (tree && tree.kind === "plantable") {
+      rules.push({
+        tileType: WORLD_TILE_PINE_TREE,
+        kind: "absent",
+        errorMessage: tree.conflictErrorMessage || "Already exists",
+      });
+      rules.push({
+        tileType: WORLD_TILE_GROUND,
+        kind: "present",
+        errorMessage: tree.missingErrorMessage || "Cannot use here",
+      });
+    }
+    if (tree && tree.kind === "cuttable") {
+      rules.push({
+        sourceKind: "tree",
+        tileType: WORLD_TILE_GROUND,
+        kind: "absent",
+        errorMessage: tree.conflictErrorMessage || "Already removed",
+      });
+      rules.push({
+        tileType: WORLD_TILE_PINE_TREE,
+        kind: "present",
+        errorMessage: tree.missingErrorMessage || "Nothing to cut",
+      });
+    }
+    if (validation.requireHouseState) {
+      rules.push({
+        tileType: WORLD_TILE_HOUSE,
+        kind: validation.requireHouseState.kind,
+        errorMessage: validation.requireHouseState.errorMessage,
+      });
+    }
+    return rules;
+  }
+
+  /**
+   * Whether the target tile currently looks like the rule's tileType. Without
+   * a sourceKind this reads the effective tile — generated terrain with world
+   * mods painted over it — so a planted pine and a generated one match alike
+   * and a cut one does not. With a sourceKind it asks specifically whether a
+   * mod of that kind is showing that tile type, which is what tells "already
+   * cut" apart from "there was never a tree here".
+   */
+  function tileStateMatches(
+    rule: TileStateRule,
+    row: number,
+    col: number,
+    map: number[][],
+  ): boolean {
+    if (rule.sourceKind) {
+      const mods = loadTileModsOfKind(worldId, rule.sourceKind);
+      const mod = mods[row + "_" + col];
+      return !!mod && String(mod.tile_type || "") === rule.tileType;
+    }
+    return !!map[row] && map[row][col] === worldTileValueForName(rule.tileType);
   }
 
   function resolveActionTarget(): {
@@ -2151,14 +2169,11 @@ export function performTreeActionForUser(
   }
 
   const map = getEffectiveMap(worldId);
-  const trees = loadWorldTrees(worldId);
-  const houses = loadWorldHouses(worldId);
+
   const actionValidationError = getActionValidationError(
     targetRow,
     targetCol,
     map,
-    houses,
-    trees,
   );
 
   if (actionValidationError) {

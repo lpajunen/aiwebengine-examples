@@ -155,6 +155,28 @@ export interface ActionDefinition {
     requireWalkableTile?: {
       errorMessage: string;
     };
+    // What the target tile must (or must not) look like. Checked in order, so
+    // a specific rule can claim its own message before a general one fires —
+    // planting reports "a tree is already here" before it reports "you cannot
+    // plant here".
+    //
+    // `tileType` is matched against the *effective* tile: the generated
+    // terrain with world mods painted over it, so a planted pine and one the
+    // generator placed read the same, and a cut one reads as ground. Naming a
+    // `sourceKind` narrows the rule to tiles carrying a mod of that kind,
+    // which is how "already cut" is told apart from "there was never a tree".
+    //
+    // This replaced requireTreeState/requireHouseState, a pair of rules that
+    // could only speak about trees and houses while worldMutation had already
+    // been opened up to paint any tile type. The legacy fields are still read
+    // for rows written before this existed — see the validation handling in
+    // tree-action-helpers.ts.
+    requireTileState?: Array<{
+      tileType: string;
+      kind: "present" | "absent";
+      errorMessage: string;
+      sourceKind?: string;
+    }>;
     requireTreeState?: {
       kind: "plantable" | "cuttable";
       missingErrorMessage?: string;
@@ -338,11 +360,18 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
     validation: {
-      requireTreeState: {
-        kind: "plantable",
-        missingErrorMessage: "error.cannot_plant_here",
-        conflictErrorMessage: "error.tree_already_exists",
-      },
+      requireTileState: [
+        {
+          tileType: "pine_tree",
+          kind: "absent",
+          errorMessage: "error.tree_already_exists",
+        },
+        {
+          tileType: "ground",
+          kind: "present",
+          errorMessage: "error.cannot_plant_here",
+        },
+      ],
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_PLANT,
@@ -372,11 +401,19 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
     validation: {
-      requireTreeState: {
-        kind: "cuttable",
-        missingErrorMessage: "error.no_tree_to_cut",
-        conflictErrorMessage: "error.tree_already_cut",
-      },
+      requireTileState: [
+        {
+          sourceKind: "tree",
+          tileType: "ground",
+          kind: "absent",
+          errorMessage: "error.tree_already_cut",
+        },
+        {
+          tileType: "pine_tree",
+          kind: "present",
+          errorMessage: "error.no_tree_to_cut",
+        },
+      ],
       blockedZones: [
         {
           kind: RESERVATION_PROTECT_LANDMARK,
@@ -411,11 +448,18 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
     validation: {
-      requireTreeState: {
-        kind: "plantable",
-        missingErrorMessage: "error.cannot_plant_here",
-        conflictErrorMessage: "error.tree_already_exists",
-      },
+      requireTileState: [
+        {
+          tileType: "pine_tree",
+          kind: "absent",
+          errorMessage: "error.tree_already_exists",
+        },
+        {
+          tileType: "ground",
+          kind: "present",
+          errorMessage: "error.cannot_plant_here",
+        },
+      ],
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_PLANT,
@@ -448,10 +492,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       requireWalkableTile: {
         errorMessage: "error.cannot_build_house_here",
       },
-      requireHouseState: {
-        kind: "absent",
-        errorMessage: "error.house_already_exists",
-      },
+      requireTileState: [
+        {
+          tileType: "house",
+          kind: "absent",
+          errorMessage: "error.house_already_exists",
+        },
+      ],
       blockedZones: [
         {
           kind: RESERVATION_BLOCK_BUILD,
@@ -479,10 +526,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
     validation: {
-      requireHouseState: {
-        kind: "present",
-        errorMessage: "error.no_house_to_destroy",
-      },
+      requireTileState: [
+        {
+          tileType: "house",
+          kind: "present",
+          errorMessage: "error.no_house_to_destroy",
+        },
+      ],
     },
   },
   build_door: {
@@ -509,10 +559,13 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validation: {
       // A door is an opening in a house wall — it must be hung on an existing
       // house tile, and only one door per tile.
-      requireHouseState: {
-        kind: "present",
-        errorMessage: "error.door_needs_wall",
-      },
+      requireTileState: [
+        {
+          tileType: "house",
+          kind: "present",
+          errorMessage: "error.door_needs_wall",
+        },
+      ],
       requireItemState: {
         itemId: "door",
         kind: "absent",

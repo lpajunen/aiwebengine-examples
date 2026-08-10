@@ -1349,6 +1349,23 @@ function backfillActionClassDefaults(
     if (syncBlockedZonesWithDefinition(existing, def)) {
       changed = true;
     }
+    // validation's tree/house rules became one ordered requireTileState list.
+    // Same shallow-merge problem as worldMutation below: a seeded row keeps
+    // its whole old validation object, so both the legacy rules and the new
+    // list would end up running. Rewrite validation wholesale when it still
+    // carries the old keys — the new list says exactly what they said.
+    if (def.validation && def.validation.requireTileState) {
+      const storedValidation = existing.validation;
+      if (
+        storedValidation &&
+        !storedValidation.requireTileState &&
+        (storedValidation.requireTreeState ||
+          storedValidation.requireHouseState)
+      ) {
+        existing.validation = def.validation;
+        changed = true;
+      }
+    }
     // worldMutation grew a sourceKind/tileType pair in place of the closed
     // storage enum. execution is shallow-merged above, so an already-seeded
     // row keeps its whole old worldMutation object and would never see the new

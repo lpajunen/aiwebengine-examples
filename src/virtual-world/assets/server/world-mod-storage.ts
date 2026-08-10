@@ -141,57 +141,6 @@ export function saveWorldModLayer(
   });
 }
 
-export type TreePlantBlockReason = "tile_occupied" | "tree_exists";
-
-// Shared by any action that plants a tree (e.g. "plant", "grow_pine_tree") —
-// checks whether a tile can receive a newly planted tree.
-export function checkTreePlantable(
-  row: number,
-  col: number,
-  map: number[][],
-  trees: Record<string, any>,
-): { ok: true } | { ok: false; reason: TreePlantBlockReason } {
-  const tileKey = row + "_" + col;
-  const treeState = trees[tileKey];
-  const hasExistingTree = treeState && treeState.action === "plant";
-  const wasTreeCut = treeState && treeState.action === "cut";
-  const groundValue = worldTileValueForName(WORLD_TILE_GROUND);
-  const baseHasTree =
-    map[row] && map[row][col] === worldTileValueForName(WORLD_TILE_PINE_TREE);
-
-  // Bare ground specifically, not merely a walkable square: a sapling does not
-  // go into a cave floor or a plank floor. Named rather than compared against
-  // the raw tile values 0 and 2, which is how the same check elsewhere came to
-  // mean "ground" by accident.
-  if (map[row] && map[row][col] !== groundValue && !wasTreeCut) {
-    return { ok: false, reason: "tile_occupied" };
-  }
-  if (hasExistingTree || (baseHasTree && !wasTreeCut)) {
-    return { ok: false, reason: "tree_exists" };
-  }
-  return { ok: true };
-}
-
-export type HouseBuildBlockReason = "not_walkable" | "house_exists";
-
-// Shared by any action that builds a house (e.g. "build_house") — checks
-// whether a tile can receive a new house.
-export function checkHouseBuildable(
-  row: number,
-  col: number,
-  map: number[][],
-  houses: Record<string, any>,
-): { ok: true } | { ok: false; reason: HouseBuildBlockReason } {
-  const tileKey = row + "_" + col;
-  if (map[row] && !isWorldTileWalkable(map[row][col])) {
-    return { ok: false, reason: "not_walkable" };
-  }
-  if (houses[tileKey]) {
-    return { ok: false, reason: "house_exists" };
-  }
-  return { ok: true };
-}
-
 // ── Generic tile mods ────────────────────────────────────────────────────
 // A tile mod is "this square was changed by something, and now looks like
 // `tile_type`". `source_kind` groups the mods so per-kind views can be told

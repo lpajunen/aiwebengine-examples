@@ -449,6 +449,9 @@ export function virtualWorldManageActionClassesToolHandler(
         args.linkedWorld ?? (existing ? existing.linkedWorld : undefined),
       itemEffect:
         args.itemEffect ?? (existing ? existing.itemEffect : undefined),
+      progression:
+        args.progression ?? (existing ? existing.progression : undefined),
+      messages: args.messages ?? (existing ? existing.messages : undefined),
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:
@@ -622,6 +625,12 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? existing.behavior
             : {},
+      isDefault:
+        args.isDefault !== undefined
+          ? !!args.isDefault
+          : existing
+            ? existing.isDefault
+            : false,
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

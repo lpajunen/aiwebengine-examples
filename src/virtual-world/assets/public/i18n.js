@@ -1197,7 +1197,31 @@ function getOtherLocale() {
  * @param {string} key
  * @returns {string | null}
  */
+// Per-locale text a creator authored on their action classes, shipped in the
+// item registry (see getBootstrapRegistry). Consulted before the built-in
+// bundle and keyed by the whole dotted key rather than walked as a tree, so a
+// creator can name a message anything without colliding with our namespaces.
+/**
+ * @param {string} locale
+ * @returns {Record<string, string> | null}
+ */
+function creatorMessagesForLocale(locale) {
+  if (typeof ITEM_REGISTRY === "undefined" || !ITEM_REGISTRY) return null;
+  var byLocale = ITEM_REGISTRY.messages;
+  if (!byLocale || typeof byLocale !== "object") return null;
+  return byLocale[locale] || null;
+}
+
+/**
+ * @param {string} locale
+ * @param {string} key
+ * @returns {string | null}
+ */
 function getMessageByKey(locale, key) {
+  var authored = creatorMessagesForLocale(locale);
+  if (authored && typeof authored[key] === "string" && authored[key]) {
+    return authored[key];
+  }
   var dict = I18N_MESSAGES[locale];
   if (!dict) return null;
   var parts = String(key || "").split(".");

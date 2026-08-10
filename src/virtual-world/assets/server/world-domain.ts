@@ -221,6 +221,12 @@ export interface LivingClassRecord {
     dropChance?: number;
     forageChance?: number;
   };
+  // Marks this class as the one a new living of its kind starts as: a fresh
+  // player's body, or an NPC seeded without a class of its own. Exactly one
+  // class per kind should carry it; the first match wins, and if none does the
+  // built-in human is used. This replaced two functions that returned the
+  // literals "player_human" and "npc_human".
+  isDefault?: boolean;
   // Whether this living may take part in combat at all — as attacker or as
   // target. False makes a class untouchable and harmless: the built-in
   // player_ghost sets it, which is what stops a dead player from fighting on,

@@ -170,6 +170,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     deathClassId: "player_ghost",
+    isDefault: true,
   },
   player_elf: {
     id: "player_elf",
@@ -225,6 +226,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     corpseItemId: "npc_corpse",
+    isDefault: true,
   },
   // A hostile biped that spawns wielding a shortbow (auto-equipped from
   // defaultItems) and opens fire on players within its bow range — the
@@ -466,6 +468,7 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     // Absent (a row seeded before this column existed) reads as a combatant,
     // matching the "missing == true" default on LivingClassRecord.
     combatant: row.combatant !== 0 && row.combatant !== false,
+    isDefault: row.is_default === 1 || row.is_default === true,
     behavior: (function () {
       try {
         const parsed = JSON.parse(row.behavior_json || "{}");
@@ -499,6 +502,7 @@ function livingClassToDbRow(
   corpse_item_id: string;
   revive_class_id: string;
   combatant: number;
+  is_default: number;
   behavior_json: string;
   created_at: number;
   updated_at: number;
@@ -520,6 +524,7 @@ function livingClassToDbRow(
     corpse_item_id: String(record.corpseItemId || ""),
     revive_class_id: String(record.reviveClassId || ""),
     combatant: record.combatant === false ? 0 : 1,
+    is_default: record.isDefault ? 1 : 0,
     behavior_json: JSON.stringify(record.behavior || {}),
     default_items_json: JSON.stringify(record.defaultItems || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
@@ -560,6 +565,7 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     corpseItemId: String(cls.corpseItemId || ""),
     reviveClassId: String(cls.reviveClassId || ""),
     combatant: cls.combatant !== false,
+    isDefault: !!cls.isDefault,
     behavior: Object.assign({}, cls.behavior || {}),
   };
 }
@@ -617,6 +623,7 @@ export function bootstrapLivingClasses(): void {
   }
 
   _livingClassCache = cache;
+  _defaultClassByKind = {};
 }
 
 export function refreshLivingClassCache(): void {
@@ -684,12 +691,33 @@ export function deleteLivingClass(classId: string): void {
   }
 }
 
+// Memoized per kind: these are asked on every inventory load and every NPC
+// seed, so they must not rescan the class table each time. Cleared with the
+// cache, which is what a class edit rebuilds.
+let _defaultClassByKind: Record<string, string> = {};
+
+function resolveDefaultLivingClassId(kind: string, fallback: string): string {
+  const cached = _defaultClassByKind[kind];
+  if (cached) return cached;
+  const classes = getAllLivingClasses();
+  for (let i = 0; i < classes.length; i++) {
+    if (classes[i].kind === kind && classes[i].isDefault) {
+      _defaultClassByKind[kind] = classes[i].id;
+      return classes[i].id;
+    }
+  }
+  // No class claims the kind — keep the built-in body rather than leaving a
+  // player or NPC with no class at all.
+  _defaultClassByKind[kind] = fallback;
+  return fallback;
+}
+
 export function getDefaultPlayerLivingClassId(): string {
-  return "player_human";
+  return resolveDefaultLivingClassId("player", "player_human");
 }
 
 export function getDefaultNPCLivingClassId(): string {
-  return "npc_human";
+  return resolveDefaultLivingClassId("npc", "npc_human");
 }
 
 // Whether a living of this class may fight or be fought. Unknown classes are

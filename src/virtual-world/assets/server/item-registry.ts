@@ -535,6 +535,11 @@ export function getBootstrapRegistry(): {
       delta_kind: BootstrapItemChangeDeltaKind;
     }
   >;
+  // locale -> message key -> text, gathered from every action class's
+  // `messages`. The client consults this before its own bundle, so a
+  // creator's own toast and error keys localize through the same path the
+  // built-in ones do.
+  messages: Record<string, Record<string, string>>;
 } {
   const items: Record<
     string,
@@ -628,6 +633,23 @@ export function getBootstrapRegistry(): {
     };
   });
 
+  // Gather every action's authored per-locale text into one flat table.
+  const messages: Record<string, Record<string, string>> = {};
+  Object.keys(actionSource).forEach(function (actionId) {
+    const authored = (actionSource[actionId] as ActionClassRecord).messages;
+    if (!authored || typeof authored !== "object") return;
+    Object.keys(authored).forEach(function (messageKey) {
+      const byLocale = authored[messageKey];
+      if (!byLocale || typeof byLocale !== "object") return;
+      Object.keys(byLocale).forEach(function (locale) {
+        const text = byLocale[locale];
+        if (typeof text !== "string" || !text) return;
+        if (!messages[locale]) messages[locale] = {};
+        messages[locale][messageKey] = text;
+      });
+    });
+  });
+
   Object.keys(ITEM_CHANGE_DEFINITIONS).forEach(function (itemChangeId) {
     const itemChange = ITEM_CHANGE_DEFINITIONS[itemChangeId];
     itemEvents[itemChangeId] = {
@@ -639,6 +661,7 @@ export function getBootstrapRegistry(): {
     items: items,
     actions: actions,
     item_events: itemEvents,
+    messages: messages,
   };
 }
 
@@ -1214,6 +1237,10 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["linkedWorld"] | undefined,
     itemEffect: parseJson(row.item_effect_json, undefined) as
       ActionDefinition["itemEffect"] | undefined,
+    progression: parseJson(row.progression_json, undefined) as
+      ActionDefinition["progression"] | undefined,
+    messages: parseJson(row.messages_json, undefined) as
+      ActionDefinition["messages"] | undefined,
     fatigueCost:
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
@@ -1252,6 +1279,8 @@ function actionClassToDbRow(
   living_effect_json: string;
   linked_world_json: string;
   item_effect_json: string;
+  progression_json: string;
+  messages_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
@@ -1285,6 +1314,10 @@ function actionClassToDbRow(
     item_effect_json: record.itemEffect
       ? JSON.stringify(record.itemEffect)
       : "",
+    progression_json: record.progression
+      ? JSON.stringify(record.progression)
+      : "",
+    messages_json: record.messages ? JSON.stringify(record.messages) : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
     // the integer column) — omit the key entirely instead of writing null
@@ -1576,6 +1609,14 @@ function backfillActionClassDefaults(
         existing.livingEffect = def.livingEffect;
         changed = true;
       }
+    }
+    if (def.progression !== undefined && existing.progression === undefined) {
+      existing.progression = def.progression;
+      changed = true;
+    }
+    if (def.messages !== undefined && existing.messages === undefined) {
+      existing.messages = def.messages;
+      changed = true;
     }
     // Same code-owned resync rule as livingEffect, for the same reason.
     if (def.itemEffect !== undefined) {

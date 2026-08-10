@@ -334,6 +334,8 @@ export function createActionClassHandler(context: any) {
     livingEffect: body && body.livingEffect ? body.livingEffect : undefined,
     linkedWorld: body && body.linkedWorld ? body.linkedWorld : undefined,
     itemEffect: body && body.itemEffect ? body.itemEffect : undefined,
+    progression: body && body.progression ? body.progression : undefined,
+    messages: body && body.messages ? body.messages : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
@@ -459,6 +461,12 @@ export function updateActionClassHandler(context: any) {
       body && body.itemEffect !== undefined
         ? body.itemEffect
         : existing.itemEffect,
+    progression:
+      body && body.progression !== undefined
+        ? body.progression
+        : existing.progression,
+    messages:
+      body && body.messages !== undefined ? body.messages : existing.messages,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
@@ -604,6 +612,7 @@ export function createLivingClassHandler(context: any) {
       body && body.behavior && typeof body.behavior === "object"
         ? body.behavior
         : {},
+    isDefault: !!(body && body.isDefault),
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
   };
@@ -720,6 +729,10 @@ export function updateLivingClassHandler(context: any) {
       body && body.behavior && typeof body.behavior === "object"
         ? body.behavior
         : existing.behavior,
+    isDefault:
+      body && body.isDefault !== undefined
+        ? !!body.isDefault
+        : existing.isDefault,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
     labels:

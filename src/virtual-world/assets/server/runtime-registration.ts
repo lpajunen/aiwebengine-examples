@@ -608,6 +608,25 @@ export function registerVirtualWorldRuntime(): void {
           },
         },
       },
+      progression: {
+        type: "object",
+        description:
+          "Spends one living value to raise another by one (the verb behind advance_level). Cost is costBase + currentValue * costPerStep.",
+        properties: {
+          field: { type: "string", description: "e.g. values.level" },
+          costField: { type: "string", description: "e.g. values.experience" },
+          costPerStep: { type: "number" },
+          costBase: { type: "number" },
+          maxValue: { type: "number" },
+          insufficientErrorMessage: { type: "string" },
+          toast: { type: "object" },
+        },
+      },
+      messages: {
+        type: "object",
+        description:
+          'Per-locale text for message keys this action authors: { "my.toast.key": { "en": "...", "fi": "..." } }. Merged into the client\'s message table, so a creator\'s own toast and error keys localize like the built-in ones.',
+      },
       fatigueCost: {
         type: "number",
         description:
@@ -744,6 +763,11 @@ export function registerVirtualWorldRuntime(): void {
               "Chance of using a carried tree tool nearby (default 0.08)",
           },
         },
+      },
+      isDefault: {
+        type: "boolean",
+        description:
+          "Marks this class as the one a new living of its kind starts as. One per kind; the built-in human is used if none claims it.",
       },
       combatant: {
         type: "boolean",

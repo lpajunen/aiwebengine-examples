@@ -111,7 +111,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // v6: living class behavior_json.
 // v7: vworld_tile_classes table.
 // v8: world class generation_json.
-export const VWORLD_SCHEMA_VERSION = 8;
+// v9: action class progression_json + messages_json; living class is_default.
+export const VWORLD_SCHEMA_VERSION = 9;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

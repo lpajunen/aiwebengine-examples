@@ -225,6 +225,15 @@ export interface ActionDefinition {
   // The same idea aimed at an item on the target tile rather than at a
   // living — see the itemEffect block in tree-action-helpers.ts.
   itemEffect?: ActionItemEffect;
+  // Spends one living value to raise another by one — the verb behind
+  // advance_level. See the progression block in tree-action-helpers.ts.
+  progression?: ActionProgression;
+  // Per-locale text for the message keys this action authors, merged into the
+  // client's message table at boot. A creator's own toast and error keys
+  // localize through exactly the path the built-in ones do; without this their
+  // authored English was all any player ever saw. Keyed message id -> locale
+  // -> text.
+  messages?: Record<string, Record<string, string>>;
   // Creates a brand-new world and a matched pair of items linking this tile to
   // it — the verb behind build_portal and build_door. See the linkedWorld
   // block in tree-action-helpers.ts.
@@ -275,6 +284,25 @@ export interface ActionItemEffect {
     // The mutation would have changed nothing.
     none?: ActionLivingEffectToast;
   };
+}
+
+// Trading one living value for a step up in another: spend experience to gain
+// a level. The cost is `costBase + currentValue * costPerStep`, which covers
+// the built-in curve (a level costs its own number times a unit) and a flat
+// price (costPerStep 0) without inventing a formula language.
+export interface ActionProgression {
+  // The value that goes up by one, as a field path within the living.
+  field: string;
+  // The value spent to do it.
+  costField: string;
+  costPerStep: number;
+  costBase?: number;
+  // Refuses past this, if set.
+  maxValue?: number;
+  // Reported when the actor cannot afford the step; the payload also carries
+  // required/current amounts either way.
+  insufficientErrorMessage?: string;
+  toast?: ActionLivingEffectToast;
 }
 
 // A "build a way into a new world" spec. The two built-in instances differ
@@ -845,16 +873,27 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     labelKey: "tree_action.advance_level",
     fallbackLabel: "Advance level",
     // Used while standing at the guild training post (source item is the
-    // non-pickable training_dummy on/next to the actor's tile). The escalating
-    // free-experience cost and level bump live in the advance_level branch of
-    // tree-action-helpers.ts (it mutates a player living value, which the
-    // item-state logicSpec can't express).
+    // non-pickable training_dummy on/next to the actor's tile). What it costs
+    // and what it raises are the `progression` block below.
     targetKind: "current_tile",
     sourceItemIds: ["training_dummy"],
     execution: {
       successPayload: {
         includeInventory: true,
         includeWorldId: true,
+      },
+    },
+    progression: {
+      field: "values.level",
+      costField: "values.experience",
+      // A level costs its own number times this: 1 -> 2 costs one unit,
+      // 2 -> 3 two, and so on. Only the spendable `experience` is drained;
+      // the lifetime `totalExperience` tally is left alone.
+      costPerStep: 1000,
+      insufficientErrorMessage: "error.not_enough_experience",
+      toast: {
+        message: "You advance to level {level}!",
+        messageKey: "tree_action.advance_level_toast",
       },
     },
   },

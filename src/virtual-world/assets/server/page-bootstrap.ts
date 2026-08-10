@@ -1,5 +1,5 @@
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
-import { getTileDefs } from "./tile-registry.ts";
+import { getTileDefs, refreshTileClassCache } from "./tile-registry.ts";
 import {
   ActiveActionEntry,
   getActiveActionsForUser,
@@ -11,7 +11,10 @@ import {
   loadWorldItems,
   savePlayerInventory,
 } from "./item-storage.ts";
-import { getAllLivingClasses } from "./living-registry.ts";
+import {
+  getAllLivingClasses,
+  refreshLivingClassCache,
+} from "./living-registry.ts";
 import { markNPCWorldActive } from "./npc-storage.ts";
 import {
   loadPlayerPosition,
@@ -41,7 +44,11 @@ import {
   loadWorldMods,
   loadWorldTrees,
 } from "./world-mod-storage.ts";
-import { getBootstrapRegistry } from "./item-registry.ts";
+import {
+  getBootstrapRegistry,
+  refreshActionClassCache,
+  refreshItemClassCache,
+} from "./item-registry.ts";
 import { getAllLivingItems, LivingState } from "./world-domain.ts";
 
 type PageState = {
@@ -207,6 +214,16 @@ export function buildVirtualWorldPageState(
   // endpoint omits them (see worldStateHandler) — this both shrinks the swap
   // payload and skips the avoidable server work of assembling them.
   if (includeRegistries) {
+    // Refresh the class caches before shipping them. This instance may have
+    // built its caches before a creator (or another instance) added a class,
+    // and the registries below are the client's whole picture of what exists —
+    // a newly authored item, action or tile that is missing here simply does
+    // not appear in the game until something else happens to refresh. Once per
+    // full page load, and the in-place world swap skips this block entirely.
+    refreshItemClassCache();
+    refreshActionClassCache();
+    refreshLivingClassCache();
+    refreshTileClassCache();
     const livingClasses = getAllLivingClasses();
     state.worldTileDefs = getTileDefs();
     state.itemRegistry = getBootstrapRegistry();

@@ -39,7 +39,6 @@ import {
 import { getEffectiveNick } from "./social-state.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
 import {
-  ADVANCE_LEVEL_COST_PER_LEVEL,
   APPROACH_ACTION_MAX_MS,
   NEARBY_TARGET_TILE_DISTANCE,
   START_WORLD_ID,
@@ -1223,40 +1222,67 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "advance_level") {
-    // Spend free experience to gain a level at the guild training post. The
-    // cost scales with the current level (level 1 -> 2 costs one unit, 2 -> 3
-    // two units, ...), draining only the spendable `experience` value while
-    // leaving the lifetime `totalExperience` tally untouched.
-    const currentLevel = Math.max(1, Math.floor(Number(inv.values.level || 1)));
-    const cost = currentLevel * ADVANCE_LEVEL_COST_PER_LEVEL;
-    const freeExperience = Math.floor(Number(inv.values.experience || 0));
-    if (freeExperience < cost) {
+  // Declarative progression (action-registry.ts `progression`): spend one
+  // living value to raise another by one. advance_level was the only instance
+  // and its escalating cost was a constant in runtime-config.ts, which meant
+  // the game had exactly one progression curve and no way to price a second.
+  const progression = actionDefinition ? actionDefinition.progression : null;
+  if (progression) {
+    const context: Record<string, unknown> = { values: inv.values };
+    const currentValue = Math.max(
+      1,
+      Math.floor(Number(getFieldValue(context, progression.field) || 1)),
+    );
+    if (
+      progression.maxValue !== undefined &&
+      currentValue >= Number(progression.maxValue)
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.progression_at_maximum" },
+      };
+    }
+    const cost =
+      Math.floor(Number(progression.costBase || 0)) +
+      currentValue * Math.floor(Number(progression.costPerStep || 0));
+    const available = Math.floor(
+      Number(getFieldValue(context, progression.costField) || 0),
+    );
+    if (available < cost) {
       return {
         status: 200,
         payload: {
           ok: false,
-          error: "error.not_enough_experience",
+          error:
+            progression.insufficientErrorMessage ||
+            "error.not_enough_experience",
           required_experience: cost,
-          current_experience: freeExperience,
+          current_experience: available,
         },
       };
     }
-    const nextLevel = currentLevel + 1;
-    inv.values.experience = freeExperience - cost;
-    inv.values.level = nextLevel;
+    const nextValue = currentValue + 1;
+    setFieldValue(context, progression.costField, available - cost);
+    setFieldValue(context, progression.field, nextValue);
+    inv.values = context.values as Record<string, unknown>;
     savePlayerInventory(userId, inv);
     broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    const toast = progression.toast;
+    let toastPayload: Record<string, unknown> = {};
+    if (toast) {
+      const english = String(toast.message || "")
+        .split("{level}")
+        .join(String(nextValue));
+      toastPayload = toastFields(String(toast.messageKey || ""), english, {
+        level: nextValue,
+      });
+    }
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        ...toastFields(
-          "tree_action.advance_level_toast",
-          "You advance to level " + nextLevel + "!",
-          { level: nextLevel },
-        ),
+        ...toastPayload,
         inventory: inv,
-        new_level: nextLevel,
+        new_level: nextValue,
         spent_experience: cost,
       }),
     };

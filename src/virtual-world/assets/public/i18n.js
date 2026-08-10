@@ -366,6 +366,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       aggressive: "Aggressive (NPC auto-attacks players on its tile)",
       default_items_label:
         "Default items (comma-separated types; weapons are auto-wielded)",
+      death_class_label:
+        "Death class (becomes this when killed; blank = despawn)",
+      corpse_item_label: "Corpse item (left on the death tile; blank = none)",
+      revive_class_label:
+        "Revive class (what praying restores; blank = cannot revive)",
+      combatant: "Combatant (may fight and be fought)",
       item_spawns_label: "Item spawns (JSON)",
       npc_spawns_label: "NPC spawns (JSON)",
       placements_label: "Placements",
@@ -909,6 +915,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       aggressive: "Aggressiivinen (NPC hyökkää pelaajien kimppuun ruudullaan)",
       default_items_label:
         "Oletusesineet (pilkuin erotellut tyypit; aseet otetaan käyttöön)",
+      death_class_label:
+        "Kuolemanluokka (muuttuu tähän kuollessa; tyhjä = katoaa)",
+      corpse_item_label: "Ruumisesine (jää kuolinruudulle; tyhjä = ei mitään)",
+      revive_class_label:
+        "Herätysluokka (mihin rukoilu palauttaa; tyhjä = ei herätettävissä)",
+      combatant: "Taistelija (voi taistella ja olla kohteena)",
       item_spawns_label: "Esineiden ilmestyminen (JSON)",
       npc_spawns_label: "NPC:iden ilmestyminen (JSON)",
       placements_label: "Sijoittelut",

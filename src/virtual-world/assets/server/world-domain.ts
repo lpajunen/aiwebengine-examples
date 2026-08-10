@@ -135,6 +135,34 @@ export interface LivingClassRecord {
   // any weapon with no free hand) goes to the bag. See applyNPCDefaultItems in
   // npc-storage.ts. Optional; missing == [].
   defaultItems?: string[];
+  // ── The death/revival cycle, as data ──────────────────────────────────
+  // What happens when a living of this class is killed, and how it comes
+  // back. Together these replace the hardcoded player_ghost/npc_corpse names
+  // that used to sit in fight-helpers.ts and the pray handler. See
+  // resolveNPCDeath/resolvePlayerDeath in fight-helpers.ts.
+  //
+  // The class this living *becomes* when killed, instead of being removed
+  // from the world — the built-in player classes name player_ghost, so a
+  // defeated player keeps their inventory and lingers as a ghost. Missing
+  // means "no transformation": an NPC despawns, and a player (who cannot be
+  // despawned) simply revives in place at full health.
+  deathClassId?: string;
+  // Item type left behind on the death tile. The built-in NPC classes name
+  // npc_corpse; players leave nothing. Missing == no corpse. Independent of
+  // deathClassId, so a class can both transform and drop something.
+  corpseItemId?: string;
+  // The class a living of this class returns to when revived — the inverse of
+  // deathClassId, and what makes the pray handler content-free: it revives
+  // whatever class declares a reviveClassId, rather than testing for a ghost
+  // by name. Missing == this class cannot be revived.
+  reviveClassId?: string;
+  // Whether this living may take part in combat at all — as attacker or as
+  // target. False makes a class untouchable and harmless: the built-in
+  // player_ghost sets it, which is what stops a dead player from fighting on,
+  // being attacked, or being aggro'd by a hostile NPC. Missing == true, so
+  // every ordinary class fights as before. A running fight whose either side
+  // stops being a combatant is ended by the tick (fight-helpers.ts).
+  combatant?: boolean;
   // Optional so the built-in DEFAULT_LIVING_CLASSES literals don't need to
   // declare it; treat missing the same as [] (admin-only, see canManageClass).
   ownerIds?: string[];

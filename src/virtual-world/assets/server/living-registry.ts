@@ -169,6 +169,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    deathClassId: "player_ghost",
   },
   player_elf: {
     id: "player_elf",
@@ -178,6 +179,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    deathClassId: "player_ghost",
   },
   player_hobbit: {
     id: "player_hobbit",
@@ -187,6 +189,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    deathClassId: "player_ghost",
   },
   // The player-side counterpart to npc_giant: an ordinary human avatar at
   // double scale. Nothing assigns it automatically (new players start as
@@ -200,6 +203,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     size: "large",
+    deathClassId: "player_ghost",
   },
   player_ghost: {
     id: "player_ghost",
@@ -209,6 +213,8 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    reviveClassId: "player_human",
+    combatant: false,
   },
   npc_human: {
     id: "npc_human",
@@ -218,6 +224,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
+    corpseItemId: "npc_corpse",
   },
   // A hostile biped that spawns wielding a shortbow (auto-equipped from
   // defaultItems) and opens fire on players within its bow range — the
@@ -232,6 +239,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
     defaultItems: ["shortbow"],
+    corpseItemId: "npc_corpse",
   },
   // Same humanoid mesh as npc_human, rendered at double scale by its "large"
   // size — the built-in demonstration that size is a class-level visual knob
@@ -247,6 +255,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     size: "large",
+    corpseItemId: "npc_corpse",
   },
   npc_wolf: {
     id: "npc_wolf",
@@ -258,6 +267,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
     visualStyle: "wolfish",
+    corpseItemId: "npc_corpse",
   },
   npc_bear: {
     id: "npc_bear",
@@ -269,6 +279,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     aggressive: true,
     visualStyle: "bearish",
+    corpseItemId: "npc_corpse",
   },
   npc_dog: {
     id: "npc_dog",
@@ -279,6 +290,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "doggish",
+    corpseItemId: "npc_corpse",
   },
   // Horse and donkey are the same equine recipe: the donkey just pins a grey
   // coat where the horse leaves the color automatic (bay/chestnut browns
@@ -293,6 +305,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "equine",
+    corpseItemId: "npc_corpse",
   },
   npc_donkey: {
     id: "npc_donkey",
@@ -304,6 +317,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "equine",
     color: "#8f867c",
+    corpseItemId: "npc_corpse",
   },
   npc_chicken: {
     id: "npc_chicken",
@@ -314,6 +328,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "birdlike",
+    corpseItemId: "npc_corpse",
   },
 };
 
@@ -435,6 +450,15 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     size: normalizeClassSize(row.size),
     visualStyle: normalizeLivingVisualStyle(row.visual_style),
     color: normalizeClassColor(row.color),
+    deathClassId:
+      typeof row.death_class_id === "string" ? row.death_class_id : "",
+    corpseItemId:
+      typeof row.corpse_item_id === "string" ? row.corpse_item_id : "",
+    reviveClassId:
+      typeof row.revive_class_id === "string" ? row.revive_class_id : "",
+    // Absent (a row seeded before this column existed) reads as a combatant,
+    // matching the "missing == true" default on LivingClassRecord.
+    combatant: row.combatant !== 0 && row.combatant !== false,
   };
 }
 
@@ -456,6 +480,10 @@ function livingClassToDbRow(
   size: string;
   visual_style: string;
   color: string;
+  death_class_id: string;
+  corpse_item_id: string;
+  revive_class_id: string;
+  combatant: number;
   created_at: number;
   updated_at: number;
 } {
@@ -472,6 +500,10 @@ function livingClassToDbRow(
     value_template_json: JSON.stringify(record.valueTemplate || {}),
     value_schema_json: JSON.stringify(record.valueSchema || {}),
     aggressive: record.aggressive ? 1 : 0,
+    death_class_id: String(record.deathClassId || ""),
+    corpse_item_id: String(record.corpseItemId || ""),
+    revive_class_id: String(record.reviveClassId || ""),
+    combatant: record.combatant === false ? 0 : 1,
     default_items_json: JSON.stringify(record.defaultItems || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
@@ -507,6 +539,10 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     size: normalizeClassSize(cls.size),
     visualStyle: normalizeLivingVisualStyle(cls.visualStyle),
     color: normalizeClassColor(cls.color),
+    deathClassId: String(cls.deathClassId || ""),
+    corpseItemId: String(cls.corpseItemId || ""),
+    reviveClassId: String(cls.reviveClassId || ""),
+    combatant: cls.combatant !== false,
   };
 }
 
@@ -624,4 +660,12 @@ export function getDefaultPlayerLivingClassId(): string {
 
 export function getDefaultNPCLivingClassId(): string {
   return "npc_human";
+}
+
+// Whether a living of this class may fight or be fought. Unknown classes are
+// treated as combatants so a missing/legacy class never makes a living
+// silently invulnerable. See LivingClassRecord.combatant.
+export function isCombatantClass(classId: unknown): boolean {
+  const cls = getLivingClass(String(classId || ""));
+  return !cls || cls.combatant !== false;
 }

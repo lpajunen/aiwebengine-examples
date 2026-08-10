@@ -1094,6 +1094,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Summon knife",
     targetKind: "inventory",
     sourceItemIds: ["starter_kit"],
+    produces: [{ itemId: "knife", count: 1 }],
     execution: {
       successPayload: {
         includeInventory: true,

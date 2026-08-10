@@ -18,7 +18,10 @@ import {
   setFieldValue,
 } from "./action-logic-interpreter.ts";
 import { getActionDefinition, getItemStateTemplate } from "./item-registry.ts";
-import { getLivingClassWithRefresh } from "./living-registry.ts";
+import {
+  getLivingClassWithRefresh,
+  isCombatantClass,
+} from "./living-registry.ts";
 import { deleteNPCById, loadWorldNPCs, saveWorldNPCs } from "./npc-storage.ts";
 import {
   buildOccupiedNPCMap,
@@ -130,8 +133,9 @@ function maybeStartNPCAggression(
       return p && chebyshev(p.row, p.col, npc.row, npc.col) <= reach;
     });
     if (!targetPlayerId) return;
-    // Ghosts cannot be fought — including being aggro'd by a hostile NPC.
-    if (loadPlayerInventory(targetPlayerId).class_id === "player_ghost") {
+    // A non-combatant class cannot be fought — including being aggro'd by a
+    // hostile NPC. That is what keeps a dead player (a ghost) out of combat.
+    if (!isCombatantClass(loadPlayerInventory(targetPlayerId).class_id)) {
       return;
     }
     if (Math.random() >= NPC_AGGRO_CHANCE) return;
@@ -245,6 +249,24 @@ function stepNPCTowardTarget(
 // Deletes the NPC row, drops an npc_corpse item at its last position, and
 // broadcasts both so connected clients despawn the NPC and see the corpse
 // appear without waiting for the next /npcs poll.
+// Builds the corpse a dying living leaves behind, or null when its class
+// names no corpseItemId — the item type is class data, so a wolf can rot into
+// a pelt and a construct into scrap without touching this function.
+function buildCorpseItem(
+  worldId: string,
+  classId: unknown,
+): { id: string; type: string; created_at: number; state: any } | null {
+  const cls = getLivingClassWithRefresh(String(classId || ""));
+  const corpseItemId = cls ? String(cls.corpseItemId || "") : "";
+  if (!corpseItemId) return null;
+  return {
+    id: "w" + worldId + "_i" + nextWorldItemId(worldId),
+    type: corpseItemId,
+    created_at: Date.now(),
+    state: getItemStateTemplate(corpseItemId),
+  };
+}
+
 function resolveNPCDeath(
   worldId: string,
   npcId: string,
@@ -255,35 +277,51 @@ function resolveNPCDeath(
     npc_id: npcId,
     despawn: true,
   });
-  const corpseItem = {
-    id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-    type: "npc_corpse",
-    created_at: Date.now(),
-    state: getItemStateTemplate("npc_corpse"),
-  };
-  upsertWorldItem(worldId, npc.row, npc.col, corpseItem);
-  broadcastItemChange(worldId, "npc", npcId, "npc_died", npc.row, npc.col, [
-    corpseItem,
-  ]);
+  const corpseItem = buildCorpseItem(worldId, npc.class_id);
+  if (corpseItem) {
+    upsertWorldItem(worldId, npc.row, npc.col, corpseItem);
+    broadcastItemChange(worldId, "npc", npcId, "npc_died", npc.row, npc.col, [
+      corpseItem,
+    ]);
+  }
   if (typeof npc.class_id === "string" && npc.class_id) {
     scheduleRespawnIfManifestTracked(worldId, "npc", npc.class_id);
   }
 }
 
-// Flips the defeated player's living class to player_ghost and heals them
-// to full ghost HP (per design: keep inventory, respawn in place as a
-// ghost) rather than removing them from the world.
+// Resolves a defeated player through their class's `deathClassId` — the
+// built-in player classes name player_ghost, so the player keeps their
+// inventory and lingers as a ghost rather than being removed from the world.
+// A class that names no deathClassId simply revives in place at full health:
+// a player cannot be despawned the way an NPC can, so there is nothing else
+// for "no transformation" to mean. A corpseItemId, if the class carries one,
+// is dropped either way.
 function resolvePlayerDeath(
   worldId: string,
   playerId: string,
   playerPos: { row: number; col: number; seq: number; rotation: number },
   inv: any,
 ): void {
-  inv.class_id = "player_ghost";
+  const corpseItem = buildCorpseItem(worldId, inv.class_id);
+  const deathClass = getLivingClassWithRefresh(String(inv.class_id || ""));
+  const deathClassId = deathClass ? String(deathClass.deathClassId || "") : "";
+  if (deathClassId) inv.class_id = deathClassId;
   inv.values = Object.assign({}, inv.values, {
     currentHitPoints: inv.values.maxHitPoints,
   });
   savePlayerInventory(playerId, inv);
+  if (corpseItem) {
+    upsertWorldItem(worldId, playerPos.row, playerPos.col, corpseItem);
+    broadcastItemChange(
+      worldId,
+      "player",
+      playerId,
+      "npc_died",
+      playerPos.row,
+      playerPos.col,
+      [corpseItem],
+    );
+  }
   sendWorldScopedStreamEvent(String(worldId), "player_moved", {
     player_id: playerId,
     row: playerPos.row,
@@ -642,14 +680,15 @@ function processFight(
     return;
   }
 
-  // Ghosts cannot fight — neither as attacker nor as opponent. This can
-  // only be reached if a living became a ghost after the fight started
-  // (starting a new fight against/as a ghost is already rejected up front
-  // in tree-action-helpers.ts and maybeStartNPCAggression above), so treat
-  // it the same as the target/attacker having left the world.
+  // A non-combatant cannot fight — neither as attacker nor as opponent. This
+  // can only be reached if a living changed into one after the fight started
+  // (starting a new fight against/as a non-combatant is already rejected up
+  // front in tree-action-helpers.ts and maybeStartNPCAggression above), which
+  // in practice means dying into a ghost, so treat it the same as the
+  // target/attacker having left the world.
   if (
     fight.attacker_type === "player" &&
-    loadPlayerInventory(fight.attacker_id).class_id === "player_ghost"
+    !isCombatantClass(loadPlayerInventory(fight.attacker_id).class_id)
   ) {
     deleteFightState(fight.attacker_id);
     deleteFollowState(fight.attacker_id);
@@ -660,7 +699,7 @@ function processFight(
   }
   if (
     fight.target_type === "player" &&
-    loadPlayerInventory(fight.target_id).class_id === "player_ghost"
+    !isCombatantClass(loadPlayerInventory(fight.target_id).class_id)
   ) {
     deleteFightState(fight.attacker_id);
     if (fight.attacker_type === "player") {

@@ -962,6 +962,18 @@ function editLivingClass(id) {
       ).value = Array.isArray(lc.defaultItems)
         ? lc.defaultItems.join(", ")
         : "";
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-death-class")
+      ).value = String(lc.deathClassId || "");
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-corpse-item")
+      ).value = String(lc.corpseItemId || "");
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-revive-class")
+      ).value = String(lc.reviveClassId || "");
+      /** @type {HTMLInputElement} */ (
+        requireElementById("lc-combatant")
+      ).checked = lc.combatant !== false;
       requireElementById("living-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -1006,6 +1018,15 @@ function cancelLivingClassEdit() {
   /** @type {HTMLInputElement} */ (
     requireElementById("lc-default-items")
   ).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("lc-death-class")).value =
+    "";
+  /** @type {HTMLInputElement} */ (requireElementById("lc-corpse-item")).value =
+    "";
+  /** @type {HTMLInputElement} */ (
+    requireElementById("lc-revive-class")
+  ).value = "";
+  /** @type {HTMLInputElement} */ (requireElementById("lc-combatant")).checked =
+    true;
   requireElementById("living-class-form-title").textContent = t(
     "class_editor.new_living_type",
     "New living type",
@@ -1114,10 +1135,26 @@ function submitLivingClassForm() {
     .filter(function (s) {
       return s.length > 0;
     });
+  var deathClassId = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-death-class")
+  ).value.trim();
+  var corpseItemId = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-corpse-item")
+  ).value.trim();
+  var reviveClassId = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-revive-class")
+  ).value.trim();
+  var combatantVal = /** @type {HTMLInputElement} */ (
+    requireElementById("lc-combatant")
+  ).checked;
   var record = {
     id: idVal,
     kind: kindVal,
     fallbackLabel: labelVal || idVal,
+    deathClassId: deathClassId,
+    corpseItemId: corpseItemId,
+    reviveClassId: reviveClassId,
+    combatant: combatantVal,
     slotDefinitions: slotDefinitions,
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,

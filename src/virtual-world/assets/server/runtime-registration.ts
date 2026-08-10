@@ -610,6 +610,32 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Primary body/fur/feather color as a #rrggbb hex string; empty (default) lets the client pick a per-instance shade from the style's own palette",
       },
+      defaultItems: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Item types a fresh NPC of this class spawns with; weapons are auto-wielded into a free hand slot",
+      },
+      deathClassId: {
+        type: "string",
+        description:
+          "Living class this class becomes when killed instead of being removed (the built-in player classes name player_ghost). Empty means no transformation: an NPC despawns, a player revives in place at full health.",
+      },
+      corpseItemId: {
+        type: "string",
+        description:
+          "Item type left on the death tile (the built-in NPC classes name npc_corpse). Empty means no corpse. Independent of deathClassId.",
+      },
+      reviveClassId: {
+        type: "string",
+        description:
+          "Living class this class returns to when revived — the inverse of deathClassId, and what the pray action reads. Empty means this class cannot be revived.",
+      },
+      combatant: {
+        type: "boolean",
+        description:
+          "Whether this living may fight or be fought at all; false makes it untouchable and harmless (the built-in player_ghost). Defaults to true.",
+      },
     },
   });
   safeRegisterTool(

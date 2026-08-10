@@ -558,6 +558,50 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? normalizeClassColor(existing.color)
             : "",
+      // Fall back to the stored row on update — upsert is a full replace, so
+      // a caller that sends only the field it wants to change must not lose
+      // the rest (an NPC's defaultItems are its weapons).
+      labelKey:
+        args.labelKey !== undefined
+          ? String(args.labelKey || "")
+          : existing
+            ? existing.labelKey
+            : "",
+      fallbackLabel:
+        args.fallbackLabel !== undefined
+          ? String(args.fallbackLabel)
+          : existing
+            ? existing.fallbackLabel
+            : id,
+      defaultItems: Array.isArray(args.defaultItems)
+        ? args.defaultItems.map(String)
+        : existing
+          ? existing.defaultItems
+          : [],
+      deathClassId:
+        args.deathClassId !== undefined
+          ? String(args.deathClassId || "")
+          : existing
+            ? existing.deathClassId
+            : "",
+      corpseItemId:
+        args.corpseItemId !== undefined
+          ? String(args.corpseItemId || "")
+          : existing
+            ? existing.corpseItemId
+            : "",
+      reviveClassId:
+        args.reviveClassId !== undefined
+          ? String(args.reviveClassId || "")
+          : existing
+            ? existing.reviveClassId
+            : "",
+      combatant:
+        args.combatant !== undefined
+          ? !!args.combatant
+          : existing
+            ? existing.combatant !== false
+            : true,
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

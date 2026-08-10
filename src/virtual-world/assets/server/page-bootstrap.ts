@@ -515,6 +515,10 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.value_schema_label">Value schema (JSON)</span> <textarea id="lc-value-schema" rows="3" placeholder='{"fatigue":{"kind":"number","min":0,"max":100}}'></textarea></label>
         <label><input id="lc-aggressive" type="checkbox"> <span data-i18n-key="class_editor.aggressive">Aggressive (NPC auto-attacks players on its tile)</span></label>
         <label><span data-i18n-key="class_editor.default_items_label">Default items (comma-separated types; weapons are auto-wielded)</span> <input id="lc-default-items" type="text" placeholder="shortbow"></label>
+        <label><span data-i18n-key="class_editor.death_class_label">Death class (becomes this when killed; blank = despawn)</span> <input id="lc-death-class" type="text" placeholder="player_ghost" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.corpse_item_label">Corpse item (left on the death tile; blank = none)</span> <input id="lc-corpse-item" type="text" placeholder="npc_corpse" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.revive_class_label">Revive class (what praying restores; blank = cannot revive)</span> <input id="lc-revive-class" type="text" placeholder="player_human" autocomplete="off"></label>
+        <label><input id="lc-combatant" type="checkbox" checked> <span data-i18n-key="class_editor.combatant">Combatant (may fight and be fought)</span></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitLivingClassForm()" data-i18n-key="class_editor.save">Save</button>

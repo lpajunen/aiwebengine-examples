@@ -21,7 +21,10 @@ import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import { deleteFightState, saveFightState } from "./fight-storage.ts";
 import { applyLivingEffect, wieldedWeapon } from "./fight-helpers.ts";
-import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
+import {
+  getLivingClassWithRefresh,
+  isCombatantClass,
+} from "./living-registry.ts";
 import {
   addPendingAction,
   deletePendingAction,
@@ -55,7 +58,6 @@ import {
   buildItemInspection,
   getActionDefinition,
   getItemDefinition,
-  getItemStateTemplate,
   isPickableWorldItem,
 } from "./item-registry.ts";
 import { scheduleRespawnIfManifestTracked } from "./spawn-timers.ts";
@@ -1142,8 +1144,15 @@ export function performTreeActionForUser(
   }
 
   if (action === "pray") {
-    if (inv.class_id === "player_ghost") {
-      inv.class_id = getDefaultPlayerLivingClassId();
+    // Praying revives whatever class declares a reviveClassId — the inverse
+    // of the deathClassId that put the player in it. No class is named here,
+    // so a creator's own death form is revived by the same handler.
+    const prayClass = getLivingClassWithRefresh(String(inv.class_id || ""));
+    const reviveClassId = prayClass
+      ? String(prayClass.reviveClassId || "")
+      : "";
+    if (reviveClassId) {
+      inv.class_id = reviveClassId;
       inv.values = Object.assign({}, inv.values, {
         currentHitPoints: inv.values.maxHitPoints,
       });
@@ -1481,7 +1490,16 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_item_not_found" },
       };
     }
-    if (String(targetItem.type || "") !== "npc_corpse") {
+    // What is buriable is the action's own validWhen precondition — the same
+    // data the client uses to decide whether to offer the button — rather
+    // than a second copy of "npc_corpse" here. Retarget bury at gravestones
+    // by editing the action row; this handler stays a generic "destroy the
+    // targeted world item".
+    const buryGate = evaluateEntityConditions(
+      actionDefinition ? actionDefinition.validWhen : undefined,
+      targetItem,
+    );
+    if (!buryGate.ok) {
       return {
         status: 200,
         payload: { ok: false, error: "error.target_item_not_buriable" },
@@ -1754,7 +1772,7 @@ export function performTreeActionForUser(
   }
 
   if (action === "fight") {
-    if (inv.class_id === "player_ghost") {
+    if (!isCombatantClass(inv.class_id)) {
       return {
         status: 200,
         payload: { ok: false, error: "error.ghost_cannot_fight" },
@@ -1816,7 +1834,7 @@ export function performTreeActionForUser(
     }
     if (
       targetKind === "player" &&
-      loadPlayerInventory(targetLivingId).class_id === "player_ghost"
+      !isCombatantClass(loadPlayerInventory(targetLivingId).class_id)
     ) {
       return {
         status: 200,
@@ -2107,24 +2125,6 @@ export function performTreeActionForUser(
               values: outcome.values,
             }
           : {}),
-      }),
-    };
-  }
-
-  if (action === "summon_knife") {
-    const summonedItem = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "knife",
-      created_at: Date.now(),
-      summoned_by: userId,
-      state: getItemStateTemplate("knife"),
-    };
-    inv.bag.push(summonedItem);
-    savePlayerInventory(userId, inv);
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        summoned_item: summonedItem,
       }),
     };
   }

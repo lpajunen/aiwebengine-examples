@@ -576,6 +576,10 @@ export function createLivingClassHandler(context: any) {
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : [],
+    deathClassId: String((body && body.deathClassId) || ""),
+    corpseItemId: String((body && body.corpseItemId) || ""),
+    reviveClassId: String((body && body.reviveClassId) || ""),
+    combatant: !(body && body.combatant === false),
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
   };
@@ -672,6 +676,22 @@ export function updateLivingClassHandler(context: any) {
     defaultItems: Array.isArray(body && body.defaultItems)
       ? body.defaultItems.map(String)
       : existing.defaultItems,
+    deathClassId:
+      body && body.deathClassId !== undefined
+        ? String(body.deathClassId || "")
+        : existing.deathClassId,
+    corpseItemId:
+      body && body.corpseItemId !== undefined
+        ? String(body.corpseItemId || "")
+        : existing.corpseItemId,
+    reviveClassId:
+      body && body.reviveClassId !== undefined
+        ? String(body.reviveClassId || "")
+        : existing.reviveClassId,
+    combatant:
+      body && body.combatant !== undefined
+        ? !!body.combatant
+        : existing.combatant !== false,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
     labels:

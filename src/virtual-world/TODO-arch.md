@@ -1,12 +1,12 @@
 # Architectural TODO — from example to a real world platform
 
 Status of this document: remaining work from an architecture review (July
-2026). The module-level design (dependency-injected server modules,
-lease-based multi-instance coordination, data-driven content classes) is
-sound and survives all of the changes below. What does **not** carry to
-platform scale is the interaction model: per-step HTTP requests, full-state
-DB round trips per request, regenerate-the-map-per-call, and
-broadcast-everything events.
+2026), re-checked against the code in August 2026. The module-level design
+(small server modules importing their siblings directly, lease-based
+multi-instance coordination, data-driven content classes) is sound and
+survives all of the changes below. What does **not** carry to platform scale
+is the interaction model: per-step HTTP requests, full-state DB round trips
+per request, regenerate-the-map-per-call, and broadcast-everything events.
 
 Items that have since been implemented are trimmed to their remaining gaps;
 item numbers are preserved so cross-references stay stable. Several changes
@@ -35,9 +35,12 @@ place. Remaining gaps:
 
 **Today:** every request re-derives world state from the DB:
 
-- `getEffectiveMap` regenerates the 100×100 map from the seed **and**
-  re-loads world mods from the DB on every call — and it is called on every
-  move, every NPC tick, every world-state fetch (9 call sites).
+- `getEffectiveMap` regenerates the whole map (up to 200×200) from the
+  world class's generation spec and the seed **and** re-loads world mods
+  from the DB on every call — and it is called on every move, every NPC
+  tick, every world-state fetch (23 call sites, up from 9 as more
+  systems — placements, reservations, pursuit — started asking the map
+  questions).
 - Every move runs `loadWorldPlayers`, a query of up to 1000 rows.
 - The NPC tick reloads NPCs, items, trees, and players per world every 500 ms.
 
@@ -80,7 +83,9 @@ path) is in place. Remaining work:
 
 **Today:** every world event is delivered to every client in the world (SSE
 filtered by `world_id` only), and the client holds and renders the full
-100×100 world. Cost grows O(players × events) per world.
+world map. Cost grows O(players × events) per world, and O(tiles) per
+client — a 200×200 world is four times the render load of the 100×100
+default.
 
 **Needed:** spatial interest areas — clients subscribe to a region around
 their avatar; events outside it are not delivered; crossing region
@@ -90,33 +95,39 @@ and unload map regions.
 
 ### 6. Shared typed protocol module (client/server drift)
 
-**Today:** constants (`ROWS`, `COLS`, tile values) and event payload shapes
-are duplicated between server modules and the browser client (`client-*.js`),
-kept in sync by convention (`clientTileValueForName`, the browser globals
-`.d.ts`).
+Tile values are no longer duplicated: tiles became a class repository, so
+the page ships the tile registry as `WORLD_TILE_DEFS` and the client reads
+values from it (`clientTileValueForName`) rather than from a hand-written
+copy. `ROWS`/`COLS` likewise derive from the map the client is handed.
+Remaining gap:
 
-**Needed:** one shared module defining tile values, event types, payload
-schemas, and API request/response shapes, imported by both sides (client
-side via bundling, see item 8).
+- **Event payload shapes** are still duplicated by convention between
+  emitting server modules and consuming `client-*.js` files, with only the
+  browser globals `.d.ts` to keep them honest. One shared module defining
+  event types, payload schemas, and API request/response shapes, imported
+  by both sides (client side via bundling, see item 8), is still wanted.
 
 ### 7. Composition-root cleanup of `virtual-world.js`
 
-**Today:** the 3.6k-line entrypoint hand-wires dependencies into every
-module, re-declaring the same dep lists in five-plus separate literal
-objects (e.g. `NPC_TICK_LEASE_MS` is wired into six). Adding a module means
-editing several giant wiring blocks.
+Done, though not the way this item proposed. Rather than building a runtime
+context object, dependency injection was removed outright: server modules
+import their siblings directly, shared constants live in `runtime-config.ts`,
+and the entrypoint shrank from 3.6k lines to ~650 — imports, `init()`, and
+one-line named delegates that exist only because the runtime resolves
+handlers by name in the entrypoint's scope. Adding a module no longer means
+editing wiring blocks.
 
-**Needed:** build one runtime context object (storage, events, config,
-constants) once and pass it through; modules can `Pick<>` what they need, as
-they already do. Pure refactor, no behavior change — but it is the tax paid
-on every new module until done.
+One constraint this bought, worth knowing before restructuring imports: the
+engine FATALs on circular imports between asset-backed modules even where
+`tsc` accepts them, which takes down every route. Shared constants go in
+`runtime-config.ts` instead of being imported back across a cycle.
 
 ### 8. Client modularization and asset pipeline
 
-**Today:** the client is split into twelve plain-JS `client-*.js` feature
-files (global scope, load order defined in `page-bootstrap.ts`) with
-hardcoded geometry, uploaded as static assets. No bundler, no shared modules
-with the server, no code splitting.
+**Today:** the client is split into fourteen plain-JS `client-*.js` feature
+files plus five shared foundation files (global scope, load order defined in
+`page-bootstrap.ts`) with hardcoded geometry, uploaded as static assets. No
+bundler, no shared modules with the server, no code splitting.
 
 **Needed:** a build step (bundler) producing the deployed client from
 modular sources, enabling the shared protocol module (item 6), region-based
@@ -137,13 +148,16 @@ mutation. Still missing:
 ### 10. Tests and observability
 
 **Today:** no test suite exists, and observability is `vwLog` lines only.
-The DI design makes unit tests nearly free.
+Since item 7 removed dependency injection, a unit test now has to stand in
+for a module's imports rather than be handed fakes — which argues for
+testing the pure pieces first, where there is nothing to stand in for.
 
-**Needed:** unit tests first for the code that silently regresses — move
-seq/lease logic, crafting, and especially the action-logic interpreter
-(which executes user-authored programs). Operationally: metrics (request
-rates, tick durations, DB error rates) and some tracing story from the
-runtime.
+**Needed:** unit tests first for the code that silently regresses and is
+already pure — the action-logic interpreter (which executes user-authored
+programs), placement normalization/validation, the generation spec's passes,
+and targeting resolution. Then the stateful paths: move seq/lease logic and
+action costs/produces. Operationally: metrics (request rates, tick
+durations, DB error rates) and some tracing story from the runtime.
 
 ## Domain-model goals
 
@@ -177,10 +191,14 @@ avatars. Remaining gap:
 
 ### 13. Persistence tiers and the 30-minute world reset
 
-**Today:** everything persists forever. Player inventory is already
-per-user durable (correct, keep), but world items, NPCs, and world mods
-also accumulate indefinitely — nothing expires, so worlds silt up with
-litter and depleted state.
+**Today:** the depletion half of this is solved, the accumulation half is
+not. Consuming or killing something that came from a spawn manifest writes a
+respawn timer (`spawn-timers.ts`, `RESPAWN_DELAY_MS` = 30 minutes), and the
+world tick spawns it again when the timer is due — so a stripped forest
+regrows without a reset. What still has no expiry is everything players
+_add_: dropped litter, built houses, planted trees, world mods generally, and
+NPC/item rows outside any manifest. Player inventory is per-user durable
+(correct, keep).
 
 **Needed:** three explicit tiers:
 
@@ -200,32 +218,58 @@ cleanly (rides on the item 1 resync path). A DB TTL/expiry primitive would
 help (add to runtime capability 9's DB asks) but a lease-guarded sweep can
 do it in game code.
 
+Note the interaction with placements: authored placements are part of the
+world definition, like spawn rules, and a reset must re-materialize them
+rather than treat their objects as ephemeral litter. The per-world placement
+instance records already distinguish the two, so a reset should reuse the
+reconciliation path (`world-placement-reconcile.ts`) rather than invent a
+second notion of "baseline".
+
 ### 14. Timed actions (durations and started-action state)
 
-**Today:** all actions resolve instantly inside one request; action classes
-(`action-class-storage.ts`, `action-logic-interpreter.ts`) have no duration
-or cooldown fields and no in-flight state.
+Durations are in place. An action class carries `durationMs` (editable
+through the class CRUD path, so a creator can set one); starting such an
+action charges its costs and fatigue immediately, enqueues a pending action
+with a `ready_at`, and returns `started: true` plus a start toast instead of
+applying effects. A leased per-world sweep replays the action when due,
+through the same code path instant actions take. `craft_kantele` is the
+built-in example at 5 s.
 
-**Needed:** an action type can declare a duration (chop a tree: one
-minute); performing one creates a **started action** — a live record whose
-values track remaining time — with effects applied on completion, progress
-observable by nearby clients, and interruption rules (mover cancels,
-target vanished, actor left). Needs a persisted started-actions store
-driven by the scheduler tick (same lease pattern as the NPC tick),
-start/progress/complete/cancel events on the versioned protocol (item 1),
-and completion effects wrapped in the item 3 transactions. Interpreter
-validation limits from item 9 apply to duration values too.
+What is missing is everything that makes a started action a _thing in the
+world_ rather than a private timer:
+
+- **No live record.** The pending row carries a ready-at timestamp, not
+  values tracking remaining time, so nothing can read progress.
+- **Not observable.** Only the actor learns an action started; nearby
+  clients see nothing until the effect lands. Needs
+  start/progress/complete/cancel events on the versioned protocol (item 1).
+- **No interruption rules.** Moving away, the target vanishing, or the actor
+  dying mid-craft does not cancel it — the action still resolves when due,
+  and costs are already spent either way. (`cancel_approach` cancels a
+  walk-then-act approach, which is a different queue entry.)
+- **No cooldowns.**
+- Completion effects are not wrapped in the item 3 transactions, and
+  interpreter validation limits from item 9 should apply to duration values.
 
 ### 15. Per-world size and creator-defined world types
 
-Per-world `rows`/`cols` and world classes (the fourth content class, with a
-creator's-stone-gated World Types panel, CRUD route, and MCP tool) are in
-place. Remaining gaps:
+Per-world `rows`/`cols` and world classes are in place, and the idea went
+further than this item asked: tiles became a fifth class repository
+(`tile-registry.ts`, with its own editor panel), terrain generation became a
+data spec on the world class rather than a preset pick
+(`world-generation.ts`), and authored placements with reservations landed on
+top (`world-placements.ts`, see [DOC-authoring-worlds.md](DOC-authoring-worlds.md)).
+Remaining gaps:
 
 - The world-class cache refreshes per-instance on CRUD/list calls only —
-  cross-instance staleness until item 2's world-state story lands.
+  cross-instance staleness until item 2's world-state story lands. The
+  reservation cache keys off the same generation counter and inherits the
+  problem.
 - The portal picker's registry snapshot refreshes on page load only.
 - World classes have no quotas (item 9).
+- Placement position strategies are `exact` only; `near_placement`/`random`
+  and multi-tile structure footprints are deliberately unbuilt (see the
+  authoring doc's closing section).
 
 ## Capabilities expected from the runtime
 
@@ -266,9 +310,10 @@ primitives. Roughly in order of leverage:
 
 ## What explicitly does _not_ need changing
 
-- The `assets/server/` module decomposition and dependency-injection style —
-  keep it; it is what makes the above changes incremental instead of a
-  rewrite.
+- The `assets/server/` module decomposition — one module per feature, each
+  importing its siblings directly. Keep it; it is what makes the above
+  changes incremental instead of a rewrite. (The dependency injection this
+  list originally endorsed is gone — see item 7.)
 - The lease-based multi-instance coordination (NPC tick lease, move lease) —
   it becomes less load-bearing once items 2–3 land, but the pattern is
   correct today.

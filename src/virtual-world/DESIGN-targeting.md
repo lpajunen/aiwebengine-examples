@@ -1,46 +1,52 @@
 # Design — a unified targeting / aiming system
 
-Status of this document: design proposal (August 2026). Not yet
-implemented. It replaces the current tile-exact selection model with a
-data-driven **targeting spec** per action, from which the client derives an
-**aiming mode**. The goal is one system that serves manipulation (poke,
-fix, pick), single-target ranged (bow, firebolt), and area attacks
-(fireball), while keeping the UI from exploding into an item × action grid.
+Status of this document: design from August 2026, **largely implemented**.
+It replaced the tile-exact selection model with a data-driven **targeting
+spec** per action, from which the client derives an **aiming mode**. The goal
+was one system serving manipulation (poke, fix, pick), single-target ranged
+(bow, firebolt), and area attacks (fireball), without the UI exploding into
+an item × action grid.
+
+Steps 1, 2, 3 and 5 of the landing order are done; step 4 is done for both
+`line` and `radius` attacks, with three gaps left (item-derived range,
+action-first aiming for `line`, PvP area effects). Per-step notes below say
+what landed and where it lives. The sections before the landing order are
+kept as the reasoning behind the design; where the implementation diverged
+from what they proposed, a note says so.
 
 ## Motivation
 
-**Today** selection is stricter than action:
+Selection used to be stricter than the action it fed:
 
-- A click raycasts the flat ground plane → `selectTile(row, col)`
-  (`assets/public/client-tile-detail.js`), and the detail panel lists only
-  entities whose `row/col` **exactly** match the selected tile
-  (`renderTileDetailPanel`, the `na.row === row && na.col === col` loops).
-- But `fight`/`follow` ("nearby" actions) already work anywhere within
-  `NEARBY_ACTION_TILE_DISTANCE = 5` tiles (`tiles-and-items.js`,
-  `isWithinTileDistance` in `assets/server/tree-action-helpers.ts`); only
-  plain actions like `poke` require the same tile.
+- A click raycast the flat ground plane → `selectTile(row, col)`
+  (`assets/public/client-tile-detail.js`), and the detail panel listed only
+  entities whose `row/col` **exactly** matched the selected tile.
+- But `fight`/`follow` ("nearby" actions) already worked anywhere within
+  `NEARBY_TARGET_TILE_DISTANCE = 5` tiles; only plain actions like `poke`
+  required the same tile.
 
-So selection is tile-exact while the action it feeds is not. When an NPC
-moves between the click and the action press, the panel goes stale/empty —
-the player has to click the square and then race the NPC to press Fight.
-That mismatch is the root problem this design removes.
+So selection was tile-exact while the action was not. When an NPC moved
+between the click and the action press, the panel went stale/empty — the
+player had to click the square and then race the NPC to press Fight. That
+mismatch was the root problem, and steps 1–2 removed it: the tile inspector
+now gates each button by that action's own `actionEffectiveRange`, and an
+out-of-range target for a `walk_adjacent` action makes the actor close the
+gap instead of refusing.
 
-There is also latent infrastructure this design leans on rather than
-inventing:
+The design leaned on infrastructure that already existed rather than
+inventing it — all four of these are now load-bearing:
 
-- The player already has a `rotation`; `getTargetTileFromRotation()` /
-  `facing_tile` in `assets/server/current-world-state.ts` already computes
-  "the tile I'm looking at" (nothing consumes it on the client yet).
-- Item-targeted actions already round-trip a specific id: the panel emits
-  `data-target-item-id` → `postItemTargetedAction`, and
-  `data-target-living-id` → `postLivingTargetedAction`. Per-entity
-  targeting is already half-wired.
-- `pending-action-storage.ts` is a generic delayed-action queue (used by
-  follow, tree-actions, NPC orchestration) — the natural home for
-  "walk into range, then act".
+- The player's `rotation` and `getTargetTileFromRotation()` / `facing_tile`
+  in `assets/server/current-world-state.ts` — "the tile I'm looking at".
+- Item-targeted actions round-tripping a specific id (`data-target-item-id`
+  → `postItemTargetedAction`, `data-target-living-id` →
+  `postLivingTargetedAction`); the MCP `virtualWorldAct` tool forwards both
+  too, so the tool path aims like the browser does.
+- `pending-action-storage.ts`, the generic delayed-action queue — now also
+  the home of "walk into range, then act".
 - `action-logic-interpreter.ts` (+ `action-registry`, `action-class-storage`)
-  already evaluates per-action condition/effect logic — the natural home
-  for "when is this action offered / effective".
+  for per-action condition/effect logic — now also "when is this action
+  offered" (`validWhen`).
 
 ## Core model: a `targeting` spec per action
 
@@ -58,6 +64,21 @@ keeping with the generalize-hardcoded-behavior initiative.
 | `rangeFrom`   | who supplies `range`                     | `action` · `item` (longbow overrides bow)              |
 | `targetScope` | where an item target may live            | `world` (default) · `inventory` · `any` (examine)      |
 | `validWhen`   | precondition for **offering** the action | item is damaged, target is a living, target below X HP |
+
+**As built**, the eight fields did not end up in one object. `ActionTargeting`
+(stored in `targeting_json`) holds the six middle rows — `range`,
+`rangeShape`, `approach`, `areaRadius`, `rangeFrom`, `targetScope`. The other
+two are siblings on `ActionDefinition`: `targetKind` predates this design and
+kept its own field, and `validWhen` got `valid_when_json` of its own because
+it is a condition list evaluated by the same machinery as `actorConditions` /
+`targetConditions`, not a reach parameter. The split is worth knowing when
+reading `resolveActionTargeting`, which resolves only the six.
+
+`targetKind`'s real vocabulary is also wider than the sketch above:
+`self`, `current_tile`, `facing_tile`, `facing_or_current_tile`, `item`,
+`living`, `item_nearby`, `living_nearby`, `point`, `inventory`. The
+`*_nearby` pair is what "aim at a thing up to 5 tiles away" desugars to, and
+`point` was added by step 4 for reticle-placed area attacks.
 
 Coverage:
 
@@ -102,11 +123,17 @@ never renders items × actions simultaneously.
 
 | case                        | spec                                     | notes                                                                                  |
 | --------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| poke / fix an item          | `item, range 1, adjacent, walk_adjacent` | out-of-range → enqueue _path-adjacent → execute_ via `pending-action-storage`          |
-| pick one item (vs pick all) | `item, range 1, walk_adjacent`           | per-item button already emits `data-target-item-id`; keep a bulk "pick all" separately |
+| poke / fix an item          | `item, range 5, adjacent, walk_adjacent` | out-of-range → enqueue _path-adjacent → execute_ via `pending-action-storage`          |
+| pick one item (vs pick all) | `item, range 5, walk_adjacent`           | per-item button already emits `data-target-item-id`; keep a bulk "pick all" separately |
 | firebolt / bow on an NPC    | `living, range from item, line, none`    | action-first aiming; in-range livings highlight                                        |
 | fireball on a location      | `point, radius, areaRadius N, none`      | reticle + ring preview; hits all livings in radius                                     |
 | longbow > shortbow          | same `attack`, `rangeFrom: "item"`       | range pulled off the weapon item class                                                 |
+
+The two `walk_adjacent` rows shipped at range 5, not the range 1 sketched
+here: the point of walking into range is that you may point at something
+far away, so the reach that matters is how far you may _choose_ from, and
+`adjacent` describes where the action resolves. Rows 3 and 5 remain
+partly unbuilt — see step 4's remaining list.
 
 ## Disambiguation is two different problems
 
@@ -123,6 +150,13 @@ These are routinely conflated; they need different UI:
 The system needs both: direction to reach the tile, a compact grouped list
 to pick within it.
 
+**Neither half is built.** Reach came from ranges and approaches instead, so
+the pressure that motivated a facing-sector view never arrived — nothing on
+the client consumes `facing_tile` to this day. Picking within a tile is a
+plain ungrouped list in the tile inspector; it stays usable only because no
+world yet piles enough identical entities on one square to need collapsing.
+Both remain the right answer if that changes.
+
 ## Keeping the UI from exploding
 
 Layered, each cutting the item × action cross-product:
@@ -130,11 +164,15 @@ Layered, each cutting the item × action cross-product:
 1. **`validWhen` gating** — offer only actions whose preconditions hold
    (evaluated by `action-logic-interpreter`). Most of the grid vanishes:
    `fix` appears only on a damaged item, `attack` only on a living in
-   range.
-2. **Commit-one-axis** — one list at a time (see the two flows).
-3. **Group & collapse** identical entities, expand on demand.
+   range. ✅ step 3.
+2. **Commit-one-axis** — one list at a time (see the two flows). ✅ the tile
+   inspector is target-first, the aim row action-first; neither renders the
+   other axis.
+3. **Group & collapse** identical entities, expand on demand. ❌ not built.
 4. **A small action hotbar** for the few armed/combat actions, so combat
-   never scans the detail panel.
+   never scans the detail panel. ✅ shipped as the armed-action aim row
+   (`aimActiveRowHtml` in `client-aiming.js`), which lists point-targeted
+   actions and grows a Bag button for inventory-scoped targets.
 
 ## Discoverability — surface affordances, don't list them
 
@@ -144,15 +182,26 @@ Layered, each cutting the item × action cross-product:
 
 - **Highlight valid targets** for the armed/held action — a damaged item
   pulses while the repair hammer is held; an in-range living outlines for
-  the bow; low-HP enemies glow for a finisher.
+  the bow; low-HP enemies glow for a finisher. ✅ two highlighters landed:
+  `updateItemHighlights` rings world items a satisfied-`validWhen` action
+  applies to, and `updateAimTargetHighlights` pulses every valid target
+  while an action is armed. Effectiveness-based highlighting (the finisher
+  glow) is not built — it needs a notion of effectiveness beyond
+  "applicable", which no action carries yet.
 - **Context-rank** the panel — float `fix` to the top when the item is
   damaged; mark `firebolt` "effective" when the target is weak to fire.
+  ⚠️ ranking landed as `rankActionsByContext`, then regressed: demoting the
+  tile dialog removed its only caller and the function was pruned with it.
+  The palette groups by category and ranks nothing. See TODO.md. The
+  "effective" marking has the same missing prerequisite as the finisher glow.
 - **Reveal-on-condition** — actions hidden until relevant double as both the
   discovery mechanism and the scalability mechanism: the list stays short
   because it shows only what currently applies, and new situations reveal
-  new verbs.
+  new verbs. ✅ this is what `validWhen` gating does in practice.
 - **Result hints via toasts** — the localized `toast_message_key` system can
   carry "super-effective"-style feedback, closing the learn-by-doing loop.
+  ✅ the mechanism is in place and used for hit/kill/miss variants
+  (`livingEffect.toasts`); nothing yet phrases a hint as guidance.
 
 ## Suggested landing order
 
@@ -195,7 +244,9 @@ class bootstrap, and evaluated client-side (`actionValidForTarget` mirrors the
 server's `evaluateTargetConditions`) to hide inapplicable buttons: Fix shows
 only on a damaged item, Bury only on a corpse. The action's own handler
 remains the server-side authority — validWhen is client gating, not
-enforcement. The **valid-target highlight** is a pulsing gold ring on the
+enforcement. (The context-ranking part of this step has since regressed —
+see the discoverability note above and TODO.md.) The **valid-target
+highlight** is a pulsing gold ring on the
 ground under any world item a satisfied-validWhen action currently applies to
 (damaged item → Fix, corpse → Bury; `itemHasContextualAction` +
 `updateItemHighlights` in client-world-render.js) so the opportunity is
@@ -273,7 +324,29 @@ row grows a **Bag** button that lists the carried candidates
 `virtualWorldAct` tool now also forwards `target_item_id`/`target_living_id`, so
 every entity-targeted action is drivable from the tool path.
 
-Steps 1–2 are the highest leverage: together they make the whole interaction
-"point at a place or thing; the game resolves reach and pathing", which is
-what the manipulation cases need and what eliminates the moving-target race,
-before any combat-aiming UI exists.
+Steps 1–2 were the highest leverage, and landing them first proved out: they
+made the whole interaction "point at a place or thing; the game resolves
+reach and pathing", which is what the manipulation cases needed and what
+eliminated the moving-target race — before any combat-aiming UI existed.
+
+## What is left
+
+Consolidated from the steps above, roughly in order of how much each is
+missed:
+
+- **Item-derived range** (`rangeFrom: "item"`). The server resolves it
+  (`resolveEffectiveActionRange`); the client's `actionEffectiveRange` still
+  reads the action's own range, and no item carries a range stat — so no
+  longbow-beats-shortbow yet. This is the one field of the core model that
+  is specified, half-wired, and unused.
+- **Action-first aiming for `line`.** Firebolt is target-first (click the
+  living, press the button). The highlight-and-tap/cycle mode described
+  under "Two aiming flows" exists only for `radius`.
+- **PvP and friendly fire.** Fireball hits NPCs only; area effects have no
+  story for players yet, and `livingEffect.targetKinds` / `allowSelf` are
+  the levers when they do.
+- **Grouping a crowded tile**, and the facing-sector disambiguation it pairs
+  with — both unbuilt, neither yet needed.
+- **Effectiveness**, as distinct from applicability: the finisher glow, the
+  "super-effective" mark, and guidance toasts all wait on actions carrying
+  some notion of how well they suit a target.

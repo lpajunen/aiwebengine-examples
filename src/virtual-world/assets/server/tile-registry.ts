@@ -135,6 +135,12 @@ let _tileClassCache: Record<string, TileClassRecord> | null = null;
 // value -> id, rebuilt with the cache: worldTileNameForValue runs per tile per
 // walkability check, which is per step and per NPC per tick.
 let _tileNameByValue: Record<number, string> = {};
+// Flat lookups for the two questions asked per tile per map generation and per
+// step of every move and NPC tick. A 100x100 world is 10k of each, so these
+// must not allocate: worldTileValueForName used to build a fresh def object
+// every call, which was enough to get an NPC tick interrupted mid-job.
+let _tileValueByName: Record<string, number> = {};
+let _tileWalkableByValue: Record<number, boolean> = {};
 // Values already looked up and not found. An instance that booted before a
 // class was created has a stale cache, so a miss refreshes once — but only
 // once per value, or a tile painted by a since-deleted class would hit the
@@ -234,8 +240,12 @@ export function bootstrapTileClasses(): void {
   }
   _tileClassCache = cache;
   _tileNameByValue = {};
+  _tileValueByName = {};
+  _tileWalkableByValue = {};
   Object.keys(cache).forEach(function (id) {
     _tileNameByValue[cache[id].value] = id;
+    _tileValueByName[id] = cache[id].value;
+    _tileWalkableByValue[cache[id].value] = cache[id].walkable;
   });
   _missedTileValues = {};
   _missedTileNames = {};
@@ -314,10 +324,20 @@ export function worldTileNameForValue(tileValue: number): string {
 }
 
 export function worldTileValueForName(tileName: string): number {
-  return getWorldTileDef(tileName).value;
+  if (!_tileClassCache) refreshTileClassCache();
+  const id = String(tileName || "");
+  const hit = _tileValueByName[id];
+  if (hit !== undefined) return hit;
+  // Unknown name: fall through to the miss-tolerant lookup, which refreshes
+  // once in case another instance created the class.
+  const cls = getTileClass(id);
+  return cls ? cls.value : FALLBACK_TILE.value;
 }
 
 export function isWorldTileWalkable(tileValue: number): boolean {
+  if (!_tileClassCache) refreshTileClassCache();
+  const hit = _tileWalkableByValue[Number(tileValue)];
+  if (hit !== undefined) return hit;
   return !!getWorldTileDef(worldTileNameForValue(tileValue)).walkable;
 }
 

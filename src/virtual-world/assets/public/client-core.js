@@ -2,7 +2,8 @@
 // Client core: shared typedefs, UI state, HUD pickers/toast, logout.
 
 /**
- * @typedef {{ value: number, walkable: boolean, layer: string }} ClientTileDef
+ * @typedef {{ style: string, color?: number, colorAlt?: number, y?: number }} ClientTileVisual
+ * @typedef {{ value: number, walkable: boolean, layer: string, visual?: ClientTileVisual }} ClientTileDef
  * @typedef {{ id: string, type: string, destination_world_id?: string | number, destination_world_type?: string, non_droppable?: boolean, state?: Record<string, unknown> }} ClientItem
  * @typedef {{ class_id: string, slots: Record<string, ClientItem | null>, bag: ClientItem[], values: Record<string, unknown>, left_hand: ClientItem | null, right_hand: ClientItem | null, inventory: ClientItem[] }} ClientInventory
  * @typedef {{ row: number, col: number, tile_type: string, actor_id: string, actor_type: string, payload: Record<string, any> }} ClientWorldMod

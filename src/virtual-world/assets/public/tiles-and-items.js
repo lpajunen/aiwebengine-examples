@@ -1,25 +1,13 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
 
 // ── Dynamic world-mod state (client-side) ─────────────────────────────────
+// The tile registry the page shipped (see buildVirtualWorldPageState). There
+// used to be a hand-written copy of the whole table here as a fallback for a
+// missing global — it had already drifted (no visuals, so nothing would have
+// rendered from it), and a stale silent copy is worse than the loud failure of
+// having none: the page always ships this.
 var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (
-  typeof WORLD_TILE_DEFS === "object" && WORLD_TILE_DEFS
-    ? WORLD_TILE_DEFS
-    : {
-        ground: { value: 0, walkable: true, layer: "terrain" },
-        spruce_thicket: { value: 1, walkable: false, layer: "terrain" },
-        pine_tree: { value: 2, walkable: false, layer: "object" },
-        house: { value: 3, walkable: false, layer: "object" },
-        ocean: { value: 4, walkable: false, layer: "terrain" },
-        lake: { value: 5, walkable: false, layer: "terrain" },
-        river: { value: 6, walkable: false, layer: "terrain" },
-        rock: { value: 7, walkable: false, layer: "terrain" },
-        mountain: { value: 8, walkable: false, layer: "terrain" },
-        sand: { value: 9, walkable: true, layer: "terrain" },
-        cave_floor: { value: 10, walkable: true, layer: "terrain" },
-        wood_floor: { value: 11, walkable: true, layer: "terrain" },
-        stick_fence: { value: 12, walkable: false, layer: "terrain" },
-        bridge: { value: 13, walkable: true, layer: "terrain" },
-      }
+  typeof WORLD_TILE_DEFS === "object" && WORLD_TILE_DEFS ? WORLD_TILE_DEFS : {}
 );
 /** @type {Record<number, string>} */
 var clientTileNamesByValue = {};

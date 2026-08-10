@@ -77,10 +77,45 @@ export type WorldType = (typeof WORLD_TYPES)[number];
 
 export const ALL_ITEM_TYPE_IDS = getAllItemTypeIds();
 
+// How the client draws a tile type. A fixed menu of mesh recipes the tile
+// picks from, exactly like an item class's visual style — see
+// TILE_VISUAL_STYLE_SPECS in client-world-render.js. This is what makes a new
+// tile type one entry in WORLD_TILE_DEFS instead of another hand-written pass
+// in the renderer: the two per-type passes it replaced named ten tile types
+// between them, in code, on top of naming them here.
+export type TileVisualStyle =
+  // A slab laid over the ground, alternating `color`/`colorAlt` by tile
+  // parity so a floor reads as boards or flagstones rather than one flat wash.
+  | "floor"
+  // A flat pane sunk slightly below ground level.
+  | "water"
+  // A single scattered boulder.
+  | "rock"
+  // A cone, tall enough to read as a peak from the game camera.
+  | "mountain"
+  // A post with two crossed rails: `color` paints the post, `colorAlt` the
+  // rails.
+  | "fence";
+
+export interface TileVisual {
+  style: TileVisualStyle;
+  color?: number;
+  // Second color: the other parity shade for "floor", the rails for "fence".
+  colorAlt?: number;
+  // Height the recipe sits at; each style has its own sensible default.
+  y?: number;
+}
+
 export interface WorldTileDef {
   value: number;
   walkable: boolean;
   layer: WorldModLayer;
+  // Missing means the tile is drawn by a pass of its own rather than by the
+  // generic dispatcher: plain `ground` is the base floor, and spruce_thicket,
+  // pine_tree and house each have their own instanced/mesh pass with
+  // behaviour the recipes cannot express (fixtures suppress pines, houses
+  // carry walls and roofs).
+  visual?: TileVisual;
 }
 
 export interface InventoryItem {
@@ -260,34 +295,80 @@ export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   },
   pine_tree: { value: 2, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
   house: { value: 3, walkable: false, layer: WORLD_MOD_LAYER_OBJECT },
-  ocean: { value: 4, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  lake: { value: 5, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  river: { value: 6, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  rock: { value: 7, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  mountain: { value: 8, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  sand: { value: 9, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  cave_floor: { value: 10, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  wood_floor: { value: 11, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
-  stick_fence: { value: 12, walkable: false, layer: WORLD_MOD_LAYER_TERRAIN },
-  bridge: { value: 13, walkable: true, layer: WORLD_MOD_LAYER_TERRAIN },
+  ocean: {
+    value: 4,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "water", color: 0x2f6fa3, y: -0.055 },
+  },
+  lake: {
+    value: 5,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "water", color: 0x4f91c9, y: -0.05 },
+  },
+  river: {
+    value: 6,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "water", color: 0x62b9d9, y: -0.045 },
+  },
+  rock: {
+    value: 7,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "rock", color: 0x7f8892 },
+  },
+  mountain: {
+    value: 8,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "mountain", color: 0x8a8178 },
+  },
+  sand: {
+    value: 9,
+    walkable: true,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "floor", color: 0xd7c182, colorAlt: 0xcbb170 },
+  },
+  cave_floor: {
+    value: 10,
+    walkable: true,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "floor", color: 0x6a6b72, colorAlt: 0x5a5c63 },
+  },
+  wood_floor: {
+    value: 11,
+    walkable: true,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "floor", color: 0x9b6c3f, colorAlt: 0x835730 },
+  },
+  stick_fence: {
+    value: 12,
+    walkable: false,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "fence", color: 0x8a6239, colorAlt: 0x9c7444 },
+  },
+  bridge: {
+    value: 13,
+    walkable: true,
+    layer: WORLD_MOD_LAYER_TERRAIN,
+    visual: { style: "floor", color: 0xb08a55, colorAlt: 0x9a7447, y: 0.03 },
+  },
 };
 
-export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> = {
-  0: WORLD_TILE_GROUND,
-  1: WORLD_TILE_SPRUCE_THICKET,
-  2: WORLD_TILE_PINE_TREE,
-  3: WORLD_TILE_HOUSE,
-  4: WORLD_TILE_OCEAN,
-  5: WORLD_TILE_LAKE,
-  6: WORLD_TILE_RIVER,
-  7: WORLD_TILE_ROCK,
-  8: WORLD_TILE_MOUNTAIN,
-  9: WORLD_TILE_SAND,
-  10: WORLD_TILE_CAVE_FLOOR,
-  11: WORLD_TILE_WOOD_FLOOR,
-  12: WORLD_TILE_STICK_FENCE,
-  13: WORLD_TILE_BRIDGE,
-};
+// Derived from the table above rather than hand-maintained beside it: the two
+// used to be edited in lockstep, which is one more place a new tile type had
+// to be remembered.
+export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> =
+  Object.keys(WORLD_TILE_DEFS).reduce(function (
+    acc: Record<number, WorldTileName>,
+    tileName,
+  ) {
+    const name = tileName as WorldTileName;
+    acc[WORLD_TILE_DEFS[name].value] = name;
+    return acc;
+  }, {});
 
 const WORLD_FLAVOR_TEXTS = [
   "A low rune-song lingers between the spruce boughs.",

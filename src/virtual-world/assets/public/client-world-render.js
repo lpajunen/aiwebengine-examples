@@ -51,14 +51,6 @@ var geoGround = new THREE.BoxGeometry(TILE, 0.25, TILE);
 var geoFloorOverlay = new THREE.BoxGeometry(TILE, 0.05, TILE);
 var matGroundA = new THREE.MeshLambertMaterial({ color: 0x7ab648 });
 var matGroundB = new THREE.MeshLambertMaterial({ color: 0x6da040 });
-var matSandA = new THREE.MeshLambertMaterial({ color: 0xd7c182 });
-var matSandB = new THREE.MeshLambertMaterial({ color: 0xcbb170 });
-var matCaveFloorA = new THREE.MeshLambertMaterial({ color: 0x6a6b72 });
-var matCaveFloorB = new THREE.MeshLambertMaterial({ color: 0x5a5c63 });
-var matWoodFloorA = new THREE.MeshLambertMaterial({ color: 0x9b6c3f });
-var matWoodFloorB = new THREE.MeshLambertMaterial({ color: 0x835730 });
-var matBridgeA = new THREE.MeshLambertMaterial({ color: 0xb08a55 });
-var matBridgeB = new THREE.MeshLambertMaterial({ color: 0x9a7447 });
 
 var geoSpruceTrunk = new THREE.CylinderGeometry(0.11, 0.16, 0.95, 6);
 var geoSpruceCanopyLow = new THREE.ConeGeometry(0.78, 1.5, 8);
@@ -87,16 +79,9 @@ var matOakSide = new THREE.MeshLambertMaterial({ color: 0x6aa651 });
 var geoWaterTile = new THREE.BoxGeometry(TILE, 0.12, TILE);
 var geoRock = new THREE.DodecahedronGeometry(0.42, 0);
 var geoMountain = new THREE.ConeGeometry(0.78, 1.9, 7);
-var matOcean = new THREE.MeshLambertMaterial({ color: 0x2f6fa3 });
-var matLake = new THREE.MeshLambertMaterial({ color: 0x4f91c9 });
-var matRiver = new THREE.MeshLambertMaterial({ color: 0x62b9d9 });
-var matRock = new THREE.MeshLambertMaterial({ color: 0x7f8892 });
-var matMountain = new THREE.MeshLambertMaterial({ color: 0x8a8178 });
 var geoFencePost = new THREE.CylinderGeometry(0.05, 0.07, 0.85, 6);
 var geoFenceRailX = new THREE.BoxGeometry(TILE * 0.85, 0.09, 0.09);
 var geoFenceRailZ = new THREE.BoxGeometry(0.09, 0.09, TILE * 0.85);
-var matFencePost = new THREE.MeshLambertMaterial({ color: 0x8a6239 });
-var matFenceRail = new THREE.MeshLambertMaterial({ color: 0x9c7444 });
 var geoHouseFloor = new THREE.BoxGeometry(1.82, 0.16, 1.82);
 var geoHouseBody = new THREE.BoxGeometry(1.56, 1.18, 1.56);
 var geoHouseWallNorthSouth = new THREE.BoxGeometry(1.62, 1.06, 0.12);
@@ -312,33 +297,6 @@ function buildFixtureGroup() {
   return group;
 }
 
-/** @param {number} tileValue */
-function countTilesByValue(tileValue) {
-  var count = 0;
-  for (var row = 0; row < ROWS; row++) {
-    for (var col = 0; col < COLS; col++) {
-      if (MAP[row][col] === tileValue) count++;
-    }
-  }
-  return count;
-}
-
-/** @type {any} */ var iOcean = null;
-/** @type {any} */ var iLake = null;
-/** @type {any} */ var iRiver = null;
-/** @type {any} */ var iRock = null;
-/** @type {any} */ var iMountain = null;
-/** @type {any} */ var iFencePost = null;
-/** @type {any} */ var iFenceRailX = null;
-/** @type {any} */ var iFenceRailZ = null;
-/** @type {any} */ var iSandA = null;
-/** @type {any} */ var iSandB = null;
-/** @type {any} */ var iCaveFloorA = null;
-/** @type {any} */ var iCaveFloorB = null;
-/** @type {any} */ var iWoodFloorA = null;
-/** @type {any} */ var iWoodFloorB = null;
-/** @type {any} */ var iBridgeA = null;
-/** @type {any} */ var iBridgeB = null;
 // Ground/spruce/oak meshes are rebuilt from scratch on each world load (boot
 // and in-place world swap) by buildStaticWorldMeshes(), so they are mutable
 // module holders rather than build-once locals.
@@ -354,140 +312,166 @@ function countTilesByValue(tileValue) {
 /** @type {any} */ var iPineCanopyTop = null;
 /** @type {any} */ var fixtureGroup = null;
 
+// ── Generic tile rendering ───────────────────────────────────────────────
+// A tile type names one of these recipes and its colors (see WORLD_TILE_DEFS
+// in world-domain.ts); this dispatcher draws every one of them. It replaced
+// two hand-written passes that between them named ten tile types in code, on
+// top of the tile table already naming them — so a new tile type is now an
+// entry in that table and nothing here.
+//
+// A recipe's `parts` are each instanced once per tile of the type. `shade`
+// picks which of the tile's two colors paints a part; a `parity` recipe uses
+// both instead, one per tile parity, so a floor reads as boards or flagstones
+// rather than one flat wash.
+/** @type {Record<string, {y: number, parity?: boolean, parts: Array<{geo: any, y?: number, shade?: string}>}>} */
+var TILE_VISUAL_STYLE_SPECS = {
+  floor: { y: 0.01, parity: true, parts: [{ geo: geoFloorOverlay }] },
+  water: { y: -0.05, parts: [{ geo: geoWaterTile }] },
+  rock: { y: 0.2, parts: [{ geo: geoRock }] },
+  mountain: { y: 0.92, parts: [{ geo: geoMountain }] },
+  fence: {
+    y: 0.42,
+    parts: [
+      { geo: geoFencePost },
+      { geo: geoFenceRailX, y: 0.5, shade: "alt" },
+      { geo: geoFenceRailZ, y: 0.5, shade: "alt" },
+    ],
+  },
+};
+
+// Materials keyed by color, so tile types sharing a shade share one material.
+/** @type {Record<string, any>} */
+var tileMatCache = {};
+
 /**
- * @param {string} tileName
- * @param {number} parity
+ * @param {number} color
+ * @returns {any}
+ */
+function getTileMaterial(color) {
+  var key = "#" + color;
+  if (!tileMatCache[key]) {
+    tileMatCache[key] = new THREE.MeshLambertMaterial({ color: color });
+  }
+  return tileMatCache[key];
+}
+
+/** Instanced meshes the dispatcher currently has in the scene. @type {any[]} */
+var tileVisualMeshes = [];
+
+/**
+ * Tile types that declare a visual the client can draw, paired with their
+ * recipe. Read fresh each rebuild, so a registry that changed between worlds
+ * is picked up.
+ * @returns {Array<{name: string, value: number, visual: any, spec: any}>}
+ */
+function getRenderableTileVisuals() {
+  /** @type {Array<{name: string, value: number, visual: any, spec: any}>} */
+  var out = [];
+  Object.keys(clientTileDefs).forEach(function (tileName) {
+    var def = clientTileDefs[tileName];
+    var visual = def && def.visual;
+    if (!visual || !visual.style) return;
+    var spec = TILE_VISUAL_STYLE_SPECS[String(visual.style)];
+    if (!spec) return;
+    out.push({
+      name: tileName,
+      value: Number(def.value),
+      visual: visual,
+      spec: spec,
+    });
+  });
+  return out;
+}
+
+/**
+ * @param {{visual: any}} entry
+ * @param {boolean} useAlt
  * @returns {number}
  */
-function countParityTiles(tileName, parity) {
-  var tileValue = clientTileValueForName(tileName);
-  var count = 0;
-  for (var row = 0; row < ROWS; row++) {
-    for (var col = 0; col < COLS; col++) {
-      if (((row + col) & 1) !== parity) continue;
-      if (MAP[row][col] === tileValue) count++;
-    }
-  }
-  return count;
+function tileEntryColor(entry, useAlt) {
+  var main = Number(entry.visual.color || 0xffffff);
+  if (!useAlt) return main;
+  return entry.visual.colorAlt !== undefined
+    ? Number(entry.visual.colorAlt)
+    : main;
 }
 
-function rebuildFloorOverlayMeshes() {
-  scene.remove(
-    iSandA,
-    iSandB,
-    iCaveFloorA,
-    iCaveFloorB,
-    iWoodFloorA,
-    iWoodFloorB,
-    iBridgeA,
-    iBridgeB,
-  );
-  disposeInstancedMeshes([
-    iSandA,
-    iSandB,
-    iCaveFloorA,
-    iCaveFloorB,
-    iWoodFloorA,
-    iWoodFloorB,
-    iBridgeA,
-    iBridgeB,
-  ]);
+function rebuildTileVisualMeshes() {
+  for (var m = 0; m < tileVisualMeshes.length; m++) {
+    scene.remove(tileVisualMeshes[m]);
+  }
+  disposeInstancedMeshes(tileVisualMeshes);
+  tileVisualMeshes = [];
 
-  iSandA = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matSandA,
-    countParityTiles("sand", 0),
-  );
-  iSandB = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matSandB,
-    countParityTiles("sand", 1),
-  );
-  iCaveFloorA = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matCaveFloorA,
-    countParityTiles("cave_floor", 0),
-  );
-  iCaveFloorB = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matCaveFloorB,
-    countParityTiles("cave_floor", 1),
-  );
-  iWoodFloorA = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matWoodFloorA,
-    countParityTiles("wood_floor", 0),
-  );
-  iWoodFloorB = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matWoodFloorB,
-    countParityTiles("wood_floor", 1),
-  );
-  iBridgeA = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matBridgeA,
-    countParityTiles("bridge", 0),
-  );
-  iBridgeB = new THREE.InstancedMesh(
-    geoFloorOverlay,
-    matBridgeB,
-    countParityTiles("bridge", 1),
-  );
+  var entries = getRenderableTileVisuals();
+  if (entries.length === 0) return;
 
-  var sandAIdx = 0;
-  var sandBIdx = 0;
-  var caveAIdx = 0;
-  var caveBIdx = 0;
-  var woodAIdx = 0;
-  var woodBIdx = 0;
-  var bridgeAIdx = 0;
-  var bridgeBIdx = 0;
-  for (var row = 0; row < ROWS; row++) {
-    for (var col = 0; col < COLS; col++) {
-      var tileValue = MAP[row][col];
-      var x = tileX(col);
-      var z = tileZ(row);
-      var parity = (row + col) & 1;
-      if (tileValue === clientTileValueForName("sand")) {
+  /** @type {Record<number, any>} */
+  var entryByValue = {};
+  /** @type {Record<string, number[]>} */
+  var counts = {};
+  entries.forEach(function (entry) {
+    entryByValue[entry.value] = entry;
+    counts[entry.name] = [0, 0];
+  });
+
+  // Count first: an InstancedMesh is allocated at a fixed size.
+  var row, col, entry, parity;
+  for (row = 0; row < ROWS; row++) {
+    for (col = 0; col < COLS; col++) {
+      entry = entryByValue[MAP[row][col]];
+      if (!entry) continue;
+      counts[entry.name][entry.spec.parity ? (row + col) & 1 : 0]++;
+    }
+  }
+
+  // One instanced mesh per (tile type, parity bucket, recipe part).
+  /** @type {Record<string, any[][]>} */
+  var meshes = {};
+  entries.forEach(function (e) {
+    var buckets = e.spec.parity ? 2 : 1;
+    var perParity = [];
+    for (var p = 0; p < buckets; p++) {
+      var bucketUsesAlt = e.spec.parity && p === 1;
+      perParity.push(
+        e.spec.parts.map(function (/** @type {any} */ part) {
+          return new THREE.InstancedMesh(
+            part.geo,
+            getTileMaterial(
+              tileEntryColor(e, bucketUsesAlt || part.shade === "alt"),
+            ),
+            counts[e.name][p],
+          );
+        }),
+      );
+    }
+    meshes[e.name] = perParity;
+  });
+
+  /** @type {Record<string, number[]>} */
+  var next = {};
+  entries.forEach(function (e) {
+    next[e.name] = [0, 0];
+  });
+  for (row = 0; row < ROWS; row++) {
+    for (col = 0; col < COLS; col++) {
+      entry = entryByValue[MAP[row][col]];
+      if (!entry) continue;
+      parity = entry.spec.parity ? (row + col) & 1 : 0;
+      var idx = next[entry.name][parity]++;
+      var baseY =
+        entry.visual.y !== undefined
+          ? Number(entry.visual.y)
+          : Number(entry.spec.y);
+      var partList = meshes[entry.name][parity];
+      for (var pi = 0; pi < partList.length; pi++) {
+        var partSpec = entry.spec.parts[pi];
         setInstanceTransform(
-          parity === 0 ? iSandA : iSandB,
-          parity === 0 ? sandAIdx++ : sandBIdx++,
-          x,
-          0.01,
-          z,
-          1,
-          1,
-          1,
-        );
-      } else if (tileValue === clientTileValueForName("cave_floor")) {
-        setInstanceTransform(
-          parity === 0 ? iCaveFloorA : iCaveFloorB,
-          parity === 0 ? caveAIdx++ : caveBIdx++,
-          x,
-          0.01,
-          z,
-          1,
-          1,
-          1,
-        );
-      } else if (tileValue === clientTileValueForName("wood_floor")) {
-        setInstanceTransform(
-          parity === 0 ? iWoodFloorA : iWoodFloorB,
-          parity === 0 ? woodAIdx++ : woodBIdx++,
-          x,
-          0.01,
-          z,
-          1,
-          1,
-          1,
-        );
-      } else if (tileValue === clientTileValueForName("bridge")) {
-        setInstanceTransform(
-          parity === 0 ? iBridgeA : iBridgeB,
-          parity === 0 ? bridgeAIdx++ : bridgeBIdx++,
-          x,
-          0.03,
-          z,
+          partList[pi],
+          idx,
+          tileX(col),
+          partSpec.y !== undefined ? Number(partSpec.y) : baseY,
+          tileZ(row),
           1,
           1,
           1,
@@ -496,134 +480,15 @@ function rebuildFloorOverlayMeshes() {
     }
   }
 
-  finalizeInstancedMesh(iSandA);
-  finalizeInstancedMesh(iSandB);
-  finalizeInstancedMesh(iCaveFloorA);
-  finalizeInstancedMesh(iCaveFloorB);
-  finalizeInstancedMesh(iWoodFloorA);
-  finalizeInstancedMesh(iWoodFloorB);
-  finalizeInstancedMesh(iBridgeA);
-  finalizeInstancedMesh(iBridgeB);
-  scene.add(
-    iSandA,
-    iSandB,
-    iCaveFloorA,
-    iCaveFloorB,
-    iWoodFloorA,
-    iWoodFloorB,
-    iBridgeA,
-    iBridgeB,
-  );
-}
-
-function rebuildTerrainFeatureMeshes() {
-  scene.remove(
-    iOcean,
-    iLake,
-    iRiver,
-    iRock,
-    iMountain,
-    iFencePost,
-    iFenceRailX,
-    iFenceRailZ,
-  );
-  disposeInstancedMeshes([
-    iOcean,
-    iLake,
-    iRiver,
-    iRock,
-    iMountain,
-    iFencePost,
-    iFenceRailX,
-    iFenceRailZ,
-  ]);
-
-  iOcean = new THREE.InstancedMesh(
-    geoWaterTile,
-    matOcean,
-    countTilesByValue(clientTileValueForName("ocean")),
-  );
-  iLake = new THREE.InstancedMesh(
-    geoWaterTile,
-    matLake,
-    countTilesByValue(clientTileValueForName("lake")),
-  );
-  iRiver = new THREE.InstancedMesh(
-    geoWaterTile,
-    matRiver,
-    countTilesByValue(clientTileValueForName("river")),
-  );
-  iRock = new THREE.InstancedMesh(
-    geoRock,
-    matRock,
-    countTilesByValue(clientTileValueForName("rock")),
-  );
-  iMountain = new THREE.InstancedMesh(
-    geoMountain,
-    matMountain,
-    countTilesByValue(clientTileValueForName("mountain")),
-  );
-  var fenceCount = countTilesByValue(clientTileValueForName("stick_fence"));
-  iFencePost = new THREE.InstancedMesh(geoFencePost, matFencePost, fenceCount);
-  iFenceRailX = new THREE.InstancedMesh(
-    geoFenceRailX,
-    matFenceRail,
-    fenceCount,
-  );
-  iFenceRailZ = new THREE.InstancedMesh(
-    geoFenceRailZ,
-    matFenceRail,
-    fenceCount,
-  );
-
-  var oceanIdx = 0;
-  var lakeIdx = 0;
-  var riverIdx = 0;
-  var rockIdx = 0;
-  var mountainIdx = 0;
-  var fenceIdx = 0;
-  for (var row = 0; row < ROWS; row++) {
-    for (var col = 0; col < COLS; col++) {
-      var tileValue = MAP[row][col];
-      var x = tileX(col);
-      var z = tileZ(row);
-      if (tileValue === clientTileValueForName("ocean")) {
-        setInstanceTransform(iOcean, oceanIdx++, x, -0.055, z, 1, 1, 1);
-      } else if (tileValue === clientTileValueForName("lake")) {
-        setInstanceTransform(iLake, lakeIdx++, x, -0.05, z, 1, 1, 1);
-      } else if (tileValue === clientTileValueForName("river")) {
-        setInstanceTransform(iRiver, riverIdx++, x, -0.045, z, 1, 1, 1);
-      } else if (tileValue === clientTileValueForName("rock")) {
-        setInstanceTransform(iRock, rockIdx++, x, 0.2, z, 1, 1, 1);
-      } else if (tileValue === clientTileValueForName("mountain")) {
-        setInstanceTransform(iMountain, mountainIdx++, x, 0.92, z, 1, 1, 1);
-      } else if (tileValue === clientTileValueForName("stick_fence")) {
-        setInstanceTransform(iFencePost, fenceIdx, x, 0.42, z, 1, 1, 1);
-        setInstanceTransform(iFenceRailX, fenceIdx, x, 0.5, z, 1, 1, 1);
-        setInstanceTransform(iFenceRailZ, fenceIdx, x, 0.5, z, 1, 1, 1);
-        fenceIdx++;
-      }
-    }
-  }
-
-  finalizeInstancedMesh(iOcean);
-  finalizeInstancedMesh(iLake);
-  finalizeInstancedMesh(iRiver);
-  finalizeInstancedMesh(iRock);
-  finalizeInstancedMesh(iMountain);
-  finalizeInstancedMesh(iFencePost);
-  finalizeInstancedMesh(iFenceRailX);
-  finalizeInstancedMesh(iFenceRailZ);
-  scene.add(
-    iOcean,
-    iLake,
-    iRiver,
-    iRock,
-    iMountain,
-    iFencePost,
-    iFenceRailX,
-    iFenceRailZ,
-  );
+  entries.forEach(function (e) {
+    meshes[e.name].forEach(function (partList) {
+      partList.forEach(function (mesh) {
+        finalizeInstancedMesh(mesh);
+        scene.add(mesh);
+        tileVisualMeshes.push(mesh);
+      });
+    });
+  });
 }
 
 function countRenderablePines() {
@@ -966,8 +831,7 @@ function buildStaticWorldMeshes() {
   );
   if (fixtureGroup) scene.add(fixtureGroup);
 
-  rebuildFloorOverlayMeshes();
-  rebuildTerrainFeatureMeshes();
+  rebuildTileVisualMeshes();
   rebuildPineInstances();
   rebuildHouseMeshes();
   rebuildItemMeshes();
@@ -977,8 +841,8 @@ function buildStaticWorldMeshes() {
 /**
  * Rebuilds whichever passes a tile-type change affects. Pines and houses have
  * their own instanced passes and are cheap to redo; every other tile type is
- * drawn by the terrain-feature and floor-overlay passes, which only run when a
- * mod actually paints one of those (a creator paving a path, digging a pool).
+ * drawn by the generic tile dispatcher, which only reruns when a mod actually
+ * paints one of those (a creator paving a path, digging a pool).
  * @param {string} previousTileType
  * @param {string} nextTileType
  */
@@ -988,10 +852,7 @@ function refreshMeshesForTileChange(previousTileType, nextTileType) {
   var touchesOther = [previousTileType, nextTileType].some(function (type) {
     return type && type !== "pine_tree" && type !== "house";
   });
-  if (touchesOther) {
-    rebuildTerrainFeatureMeshes();
-    rebuildFloorOverlayMeshes();
-  }
+  if (touchesOther) rebuildTileVisualMeshes();
 }
 
 function updateTreeInstances() {
@@ -1000,11 +861,6 @@ function updateTreeInstances() {
 
 function updateHouseMeshes() {
   rebuildHouseMeshes();
-}
-
-function updateTerrainFeatureMeshes() {
-  rebuildFloorOverlayMeshes();
-  rebuildTerrainFeatureMeshes();
 }
 
 // ── Ground items (MVP visuals) ─────────────────────────────────────────

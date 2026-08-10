@@ -543,6 +543,9 @@ function editActionClass(id) {
       /** @type {HTMLTextAreaElement} */ (
         requireElementById("ac-logic-spec")
       ).value = ac.logicSpec ? JSON.stringify(ac.logicSpec, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-living-effect")
+      ).value = ac.livingEffect ? JSON.stringify(ac.livingEffect, null, 2) : "";
       requireElementById("action-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -572,6 +575,9 @@ function cancelActionClassEdit() {
   ).value = "";
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("ac-logic-spec")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-living-effect")
   ).value = "";
   requireElementById("action-class-form-title").textContent = t(
     "class_editor.new_action_type",
@@ -605,6 +611,9 @@ function submitActionClassForm() {
   var logicSpecRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("ac-logic-spec")
   ).value.trim();
+  var livingEffectRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-living-effect")
+  ).value.trim();
   var sourceItemIds = sourceItemsRaw
     .split(",")
     .map(function (s) {
@@ -623,12 +632,31 @@ function submitActionClassForm() {
       return;
     }
   }
+  // Explicitly null rather than undefined when the box is empty: undefined
+  // would be dropped by JSON.stringify and the server would keep the stored
+  // effect, leaving a creator no way to take a spell's behavior back off.
+  var livingEffect = null;
+  if (livingEffectRaw) {
+    try {
+      livingEffect = JSON.parse(livingEffectRaw);
+    } catch (e) {
+      showHudToast(
+        t(
+          "class_editor.invalid_living_effect_json",
+          "Invalid living effect JSON",
+        ),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     fallbackLabel: labelVal || idVal,
     targetKind: targetKindVal,
     sourceItemIds: sourceItemIds,
     logicSpec: logicSpec,
+    livingEffect: livingEffect,
     labels: buildLabelsPayload(nameFiVal),
   };
   var url = actionClassEditId

@@ -426,6 +426,15 @@ export function virtualWorldManageActionClassesToolHandler(
       cost: args.cost ?? undefined,
       produces: args.produces ?? undefined,
       removes: args.removes ?? undefined,
+      // Fall back to the stored row on update so a caller that sends only the
+      // fields it wants to change doesn't wipe the rest (upsert is a full
+      // replace). On create there is nothing to fall back to.
+      targeting: args.targeting ?? (existing ? existing.targeting : undefined),
+      validWhen: args.validWhen ?? (existing ? existing.validWhen : undefined),
+      experience:
+        args.experience ?? (existing ? existing.experience : undefined),
+      livingEffect:
+        args.livingEffect ?? (existing ? existing.livingEffect : undefined),
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:

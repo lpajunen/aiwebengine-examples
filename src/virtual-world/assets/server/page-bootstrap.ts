@@ -460,6 +460,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         </label>
         <label><span data-i18n-key="class_editor.source_items_label">Source items (comma-sep)</span> <input id="ac-source-items" type="text" placeholder="kantele" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.logic_spec_label">Logic spec (JSON)</span> <textarea id="ac-logic-spec" rows="3" placeholder='{"conditions":[],"effects":[]}'></textarea></label>
+        <label><span data-i18n-key="class_editor.living_effect_label">Living effect (JSON)</span> <textarea id="ac-living-effect" rows="3" placeholder='{"affects":"target","field":"values.currentHitPoints","op":"add","amount":1}'></textarea></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitActionClassForm()" data-i18n-key="class_editor.save">Save</button>

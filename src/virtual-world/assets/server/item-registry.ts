@@ -1130,6 +1130,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["removes"] | undefined,
     experience: parseJson(row.experience_json, undefined) as
       ActionDefinition["experience"] | undefined,
+    livingEffect: parseJson(row.living_effect_json, undefined) as
+      ActionDefinition["livingEffect"] | undefined,
     fatigueCost:
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
@@ -1165,6 +1167,7 @@ function actionClassToDbRow(
   produces_json: string;
   removes_json: string;
   experience_json: string;
+  living_effect_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
@@ -1189,6 +1192,9 @@ function actionClassToDbRow(
     produces_json: record.produces ? JSON.stringify(record.produces) : "",
     removes_json: record.removes ? JSON.stringify(record.removes) : "",
     experience_json: record.experience ? JSON.stringify(record.experience) : "",
+    living_effect_json: record.livingEffect
+      ? JSON.stringify(record.livingEffect)
+      : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
     // the integer column) — omit the key entirely instead of writing null
@@ -1422,6 +1428,27 @@ function backfillActionClassDefaults(
     if (existing.validWhen === undefined && def.validWhen !== undefined) {
       existing.validWhen = def.validWhen;
       changed = true;
+    }
+    // livingEffect carries a spell's entire behavior — its gates, its damage
+    // and its toasts — so a built-in row nobody owns resyncs with the code
+    // rather than adopting once, on the same reasoning as targeting above: a
+    // fill-only-if-absent rule would freeze the first shape that ever reached
+    // the DB and quietly ignore every later rebalance. A creator-owned row is
+    // theirs and is left untouched.
+    if (def.livingEffect !== undefined) {
+      const livingEffectIsCodeOwned =
+        !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+      if (existing.livingEffect === undefined) {
+        existing.livingEffect = def.livingEffect;
+        changed = true;
+      } else if (
+        livingEffectIsCodeOwned &&
+        JSON.stringify(existing.livingEffect) !==
+          JSON.stringify(def.livingEffect)
+      ) {
+        existing.livingEffect = def.livingEffect;
+        changed = true;
+      }
     }
     if (changed) {
       upsertActionClassRow(actionClassToDbRow(existing, now));

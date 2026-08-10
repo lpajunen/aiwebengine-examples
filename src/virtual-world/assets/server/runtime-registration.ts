@@ -369,10 +369,11 @@ export function registerVirtualWorldRuntime(): void {
           "living",
           "item_nearby",
           "living_nearby",
+          "point",
           "inventory",
         ],
         description:
-          "What the action targets. item/living require the target on the actor's own tile; item_nearby/living_nearby allow the target up to 5 tiles away",
+          "What the action targets. item/living require the target on the actor's own tile; item_nearby/living_nearby allow the target up to 5 tiles away; point is a free tile the client aims at, required by an area livingEffect",
       },
       sourceItemIds: {
         type: "array",
@@ -446,6 +447,78 @@ export function registerVirtualWorldRuntime(): void {
         },
         description:
           "Optional item types removed from the action's target tile when the action succeeds (e.g. remove_portal)",
+      },
+      livingEffect: {
+        type: "object",
+        description:
+          "Optional mutation of a living's values — the generic spell verb behind heal/harm/firebolt/fireball. logicSpec writes the source item's state; this writes a targeted living's.",
+        properties: {
+          affects: {
+            type: "string",
+            enum: ["target", "area"],
+            description:
+              '"target" affects the single living named by target_living_id; "area" affects every eligible living within targeting.areaRadius of the aimed tile (needs targetKind "point")',
+          },
+          targetKinds: {
+            type: "array",
+            items: { type: "string", enum: ["player", "npc"] },
+            description:
+              "Which living kinds may be affected; omit for both. heal is players-only, harm/fireball NPCs-only.",
+          },
+          allowSelf: {
+            type: "boolean",
+            description:
+              "May the actor affect themselves? Defaults to true; firebolt sets false.",
+          },
+          actorConditions: {
+            type: "array",
+            items: { type: "object" },
+            description:
+              'Gates on the actor, e.g. [{"field":"class_id","op":"ne","value":"player_ghost","errorMessage":"error.ghost_cannot_fight"}]. A failure rejects the action.',
+          },
+          targetConditions: {
+            type: "array",
+            items: { type: "object" },
+            description:
+              'Gates on each candidate target, reading class_id / values.* / state.*; a condition may compare against another field via "ref" (heal uses currentHitPoints lt maxHitPoints). A failure rejects that target, or skips it in area mode.',
+          },
+          field: {
+            type: "string",
+            description:
+              'Field path inside the living to change; must sit under "values." (e.g. values.currentHitPoints)',
+          },
+          op: {
+            type: "string",
+            enum: ["add", "sub", "set"],
+            description: "How amount combines with the current value",
+          },
+          amount: {
+            type: "number",
+            description:
+              'Magnitude for roll "fixed"; ignored when roll is "attack_roll"',
+          },
+          roll: {
+            type: "string",
+            enum: ["fixed", "attack_roll"],
+            description:
+              '"fixed" (default) applies amount exactly; "attack_roll" rolls d20 against the target armorClass and then 1..(actor weaponClass), so it can miss and scales with the caster weapon',
+          },
+          maxField: {
+            type: "string",
+            description:
+              "Optional upper bound as another field path, e.g. values.maxHitPoints for a heal",
+          },
+          lethal: {
+            type: "boolean",
+            description:
+              "When true the value floors at 0 and reaching 0 resolves the target's death (NPC corpse / player ghost) and awards the action's experience scaled by target level",
+          },
+          toasts: {
+            type: "object",
+            description:
+              "Per-outcome toasts: hit / kill / miss, each {message, messageKey}. Single-target messages may use {target}; area messages may use {struck} and {kills}.",
+          },
+        },
       },
       fatigueCost: {
         type: "number",

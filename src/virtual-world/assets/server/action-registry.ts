@@ -179,6 +179,69 @@ export interface ActionDefinition {
   // action's own handler remains the server-side authority); conditions may
   // reference the target's `type`, `state.*` (items) and `values.*` (livings).
   validWhen?: ActionCondition[];
+  // Declarative mutation of a *living's* values — the generic verb behind
+  // heal/harm/firebolt/fireball, and the only way to author a new spell
+  // without a code branch. See applyLivingEffect (fight-helpers.ts) for the
+  // resolution and the livingEffect block in tree-action-helpers.ts for
+  // targeting/aggregation. logicSpec stays the item-state counterpart: that
+  // one writes the *source item's* state, this one writes a living's.
+  livingEffect?: ActionLivingEffect;
+}
+
+// A toast variant for one livingEffect outcome. `message` is the English
+// fallback (it may carry {token} placeholders, which the client substitutes
+// into the fallback as well as into the localized string), `messageKey` the
+// i18n key the client prefers — same contract as execution.toastMessage.
+export interface ActionLivingEffectToast {
+  message: string;
+  messageKey?: string;
+}
+
+export interface ActionLivingEffect {
+  // "target" mutates the single living named by body.target_living_id;
+  // "area" mutates every eligible living within targeting.areaRadius of the
+  // resolved point (targetKind "point").
+  affects: "target" | "area";
+  // Which living kinds may be affected; missing == both. heal is players-only,
+  // harm/fireball NPCs-only, firebolt either.
+  targetKinds?: Array<"player" | "npc">;
+  // May the actor affect themselves? Missing == true (self-heal works);
+  // firebolt sets false so a mis-tap cannot immolate the caster.
+  allowSelf?: boolean;
+  // Gates evaluated with evaluateEntityConditions against the actor and each
+  // candidate target, reading `class_id`, `values.*` and `state.*`. This is
+  // where "a ghost cannot cast" and "the target is already at full health"
+  // live — as data, not as a class-name comparison in code. A failing actor
+  // condition rejects the action; a failing target condition rejects that
+  // target ("target" mode) or silently skips it ("area" mode).
+  actorConditions?: ActionCondition[];
+  targetConditions?: ActionCondition[];
+  // The mutation, as a field path within the living (`values.currentHitPoints`)
+  // plus how to combine `amount` with the current value.
+  field: string;
+  op: "add" | "sub" | "set";
+  amount?: number;
+  // "fixed" (default) applies `amount` exactly — heal's +1, harm's -1.
+  // "attack_roll" ignores `amount` and rolls combat instead: d20 against the
+  // target's armorClass, then 1..(actor's effective weaponClass) subtracted,
+  // so the strike scales with the caster's wielded weapon and can miss.
+  roll?: "fixed" | "attack_roll";
+  // Optional upper bound as another field path (heal clamps to
+  // `values.maxHitPoints`), so an overshooting amount cannot exceed it.
+  maxField?: string;
+  // When set, the value floors at 0 and reaching 0 resolves the target's death
+  // (NPC corpse / player ghost) and awards the action's `experience` scaled by
+  // the target's level, exactly as a won fight does.
+  lethal?: boolean;
+  toasts?: {
+    // Applied and survived.
+    hit?: ActionLivingEffectToast;
+    // Applied and lethal (needs `lethal`).
+    kill?: ActionLivingEffectToast;
+    // Nothing was affected: an attack_roll that missed, or an area burst that
+    // caught no eligible living.
+    miss?: ActionLivingEffectToast;
+  };
 }
 
 // Shared targeting for melee/manipulation actions (poke and the item-targeted
@@ -849,6 +912,49 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       rangeShape: "line",
       approach: "none",
     },
+    // The "player_ghost" literals below are seed *data*, not a code branch:
+    // they land in this action's DB row, where a creator can retarget them at
+    // whatever class their own death flow uses. Every livingEffect gate reads
+    // a class id the same way, so no new spell needs code to be ghost-aware.
+    livingEffect: {
+      affects: "target",
+      targetKinds: ["npc", "player"],
+      allowSelf: false,
+      actorConditions: [
+        {
+          field: "class_id",
+          op: "ne",
+          value: "player_ghost",
+          errorMessage: "error.ghost_cannot_fight",
+        },
+      ],
+      targetConditions: [
+        {
+          field: "class_id",
+          op: "ne",
+          value: "player_ghost",
+          errorMessage: "error.target_is_ghost",
+        },
+      ],
+      field: "values.currentHitPoints",
+      op: "sub",
+      roll: "attack_roll",
+      lethal: true,
+      toasts: {
+        hit: {
+          message: "Your firebolt scorches {target}.",
+          messageKey: "tree_action.firebolt_hit_toast",
+        },
+        kill: {
+          message: "Your firebolt burns {target} to ash!",
+          messageKey: "tree_action.firebolt_kill_toast",
+        },
+        miss: {
+          message: "Your firebolt fizzles past {target}.",
+          messageKey: "tree_action.firebolt_miss_toast",
+        },
+      },
+    },
   },
   // Area attack (DESIGN-targeting.md step 4, `radius` shape): a reticle is
   // placed on any tile within `range`, and every living within `areaRadius`
@@ -868,6 +974,35 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       areaRadius: 2,
       approach: "none",
     },
+    // Same strike as firebolt, aimed at a tile instead of a living: `area`
+    // reads areaRadius off the targeting spec above. The miss toast's {struck}
+    // and {kills} tokens are filled by the aggregate, not per target.
+    livingEffect: {
+      affects: "area",
+      targetKinds: ["npc"],
+      actorConditions: [
+        {
+          field: "class_id",
+          op: "ne",
+          value: "player_ghost",
+          errorMessage: "error.ghost_cannot_fight",
+        },
+      ],
+      field: "values.currentHitPoints",
+      op: "sub",
+      roll: "attack_roll",
+      lethal: true,
+      toasts: {
+        hit: {
+          message: "Your fireball erupts — {struck} struck, {kills} slain.",
+          messageKey: "tree_action.fireball_toast",
+        },
+        miss: {
+          message: "Your fireball scorches empty ground.",
+          messageKey: "tree_action.fireball_miss_toast",
+        },
+      },
+    },
   },
   heal: {
     id: "heal",
@@ -880,6 +1015,37 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       rangeShape: "line",
       approach: "none",
     },
+    // The mirror image of harm, and the proof the verb is not combat-only:
+    // same field, opposite op, no roll and not lethal. "Already at full
+    // health" is a field-to-field condition rather than a code check.
+    livingEffect: {
+      affects: "target",
+      targetKinds: ["player"],
+      targetConditions: [
+        {
+          field: "class_id",
+          op: "ne",
+          value: "player_ghost",
+          errorMessage: "error.target_is_ghost",
+        },
+        {
+          field: "values.currentHitPoints",
+          op: "lt",
+          ref: "values.maxHitPoints",
+          errorMessage: "error.target_at_full_health",
+        },
+      ],
+      field: "values.currentHitPoints",
+      op: "add",
+      amount: 1,
+      maxField: "values.maxHitPoints",
+      toasts: {
+        hit: {
+          message: "You heal {target}.",
+          messageKey: "tree_action.heal_toast",
+        },
+      },
+    },
   },
   harm: {
     id: "harm",
@@ -891,6 +1057,35 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       range: 8,
       rangeShape: "line",
       approach: "none",
+    },
+    // Fixed damage with no attack roll, so the spell stays independent of the
+    // caster's wielded weapon — the distinction firebolt's `attack_roll`
+    // makes, expressed purely as data.
+    livingEffect: {
+      affects: "target",
+      targetKinds: ["npc"],
+      actorConditions: [
+        {
+          field: "class_id",
+          op: "ne",
+          value: "player_ghost",
+          errorMessage: "error.ghost_cannot_fight",
+        },
+      ],
+      field: "values.currentHitPoints",
+      op: "sub",
+      amount: 1,
+      lethal: true,
+      toasts: {
+        hit: {
+          message: "Your harm spell wounds {target}.",
+          messageKey: "tree_action.harm_toast",
+        },
+        kill: {
+          message: "Your harm spell destroys {target}.",
+          messageKey: "tree_action.harm_kill_toast",
+        },
+      },
     },
   },
   summon_knife: {

@@ -320,6 +320,8 @@ export function createActionClassHandler(context: any) {
     cost: body && body.cost ? body.cost : undefined,
     produces: body && body.produces ? body.produces : undefined,
     removes: body && body.removes ? body.removes : undefined,
+    experience: body && body.experience ? body.experience : undefined,
+    livingEffect: body && body.livingEffect ? body.livingEffect : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
@@ -426,6 +428,17 @@ export function updateActionClassHandler(context: any) {
       body && body.produces !== undefined ? body.produces : existing.produces,
     removes:
       body && body.removes !== undefined ? body.removes : existing.removes,
+    // Carried over from the stored row when the caller omits them: the class
+    // editor posts a partial record, and dropping these would silently strip a
+    // spell's kill XP or its whole behavior on an unrelated label edit.
+    experience:
+      body && body.experience !== undefined
+        ? body.experience
+        : existing.experience,
+    livingEffect:
+      body && body.livingEffect !== undefined
+        ? body.livingEffect
+        : existing.livingEffect,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)

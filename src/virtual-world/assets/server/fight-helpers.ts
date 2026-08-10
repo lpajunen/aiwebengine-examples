@@ -11,6 +11,12 @@ import {
   savePlayerInventory,
   upsertWorldItem,
 } from "./item-storage.ts";
+import { ActionLivingEffect } from "./action-registry.ts";
+import {
+  evaluateEntityConditions,
+  getFieldValue,
+  setFieldValue,
+} from "./action-logic-interpreter.ts";
 import { getActionDefinition, getItemStateTemplate } from "./item-registry.ts";
 import { getLivingClassWithRefresh } from "./living-registry.ts";
 import { deleteNPCById, loadWorldNPCs, saveWorldNPCs } from "./npc-storage.ts";
@@ -293,28 +299,41 @@ function resolvePlayerDeath(
   });
 }
 
-// One-shot ranged hit for line-shape attacks (firebolt/bow): a single strike
-// resolved from the caster's current tile with no persistent fight and no
-// pursuit. The per-strike math mirrors resolveCombatHit (d20 vs armorClass,
-// 1..weaponClass damage, corpse/ghost death, level-scaled kill XP) but stands
-// alone so the fight tick is untouched. Attacker is always a player; the caller
-// has already validated the target exists and is within range.
-export function applyRangedHitToLiving(
-  worldId: string,
-  attackerId: string,
-  targetId: string,
-  targetType: "npc" | "player",
-  killExperienceBase: number,
-): {
-  result: "miss" | "hit" | "kill";
-  damage: number;
+// ── Declarative living effects ────────────────────────────────────────────
+// The engine behind ActionLivingEffect (action-registry.ts): one strike or
+// blessing against one living, described entirely by the action's data. This
+// replaced the hand-written firebolt/fireball/heal/harm handlers — the per-hit
+// math still mirrors resolveCombatHit (d20 vs armorClass, 1..weaponClass
+// damage, corpse/ghost death, level-scaled kill XP) but which of those steps
+// run, and on what field, now comes from the action class row.
+//
+// The actor is always a player. `field` addresses a path inside the living and
+// must sit under `values.` — that is the part of a living this function
+// persists; a path anywhere else resolves to undefined and writes nothing.
+// The caller resolves *who* is in range (see the livingEffect block in
+// tree-action-helpers.ts) and evaluates the actor gate once; this function owns
+// the per-target gate, the mutation, the death flow and the broadcasts.
+export interface LivingEffectOutcome {
+  // "blocked" means a targetConditions gate rejected this target and
+  // errorMessage says which; single-target callers surface it, area callers
+  // skip the target and keep going.
+  result: "miss" | "hit" | "kill" | "blocked";
+  errorMessage?: string;
+  // Signed change actually written to `field` (negative for damage).
+  delta: number;
   target_label: string;
   experience_gained?: number;
   values?: Record<string, unknown>;
-} {
-  const attackerWeaponClass = effectiveWeaponClass(
-    loadPlayerInventory(attackerId),
-  );
+}
+
+export function applyLivingEffect(
+  worldId: string,
+  actorId: string,
+  targetId: string,
+  targetType: "npc" | "player",
+  effect: ActionLivingEffect,
+  killExperienceBase: number,
+): LivingEffectOutcome {
   const targetLabel =
     targetType === "npc"
       ? getNPCDisplayName(worldId, targetId)
@@ -324,65 +343,119 @@ export function applyRangedHitToLiving(
   const targetNpc = targetType === "npc" ? npcs[targetId] : null;
   const targetInv =
     targetType === "player" ? loadPlayerInventory(targetId) : null;
-  const targetValues = targetInv
+  if (!targetNpc && !targetInv) {
+    return {
+      result: "blocked",
+      errorMessage: "error.target_living_not_found",
+      delta: 0,
+      target_label: targetLabel,
+    };
+  }
+  const targetValues: Record<string, unknown> = targetInv
     ? targetInv.values || {}
     : targetNpc
       ? targetNpc.values || {}
       : {};
-  const armorClass = Number(targetValues.armorClass) || 0;
+  const targetClassId = targetInv
+    ? targetInv.class_id
+    : targetNpc
+      ? targetNpc.class_id
+      : "";
 
-  const attackRoll = 1 + Math.floor(Math.random() * 20);
-  const isHit =
-    attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
-  if (!isHit) {
-    return { result: "miss", damage: 0, target_label: targetLabel };
+  const gate = evaluateEntityConditions(effect.targetConditions, {
+    class_id: targetClassId,
+    values: targetValues,
+  });
+  if (!gate.ok) {
+    return {
+      result: "blocked",
+      errorMessage: gate.errorMessage,
+      delta: 0,
+      target_label: targetLabel,
+    };
   }
 
-  const damage = 1 + Math.floor(Math.random() * attackerWeaponClass);
-  const currentHitPoints = Number(targetValues.currentHitPoints) || 0;
-  const nextHitPoints = Math.max(0, currentHitPoints - damage);
+  // Magnitude: either the flat configured amount, or a rolled attack that can
+  // miss outright and scales with the caster's wielded weapon.
+  let magnitude = Math.floor(Number(effect.amount || 0));
+  if (effect.roll === "attack_roll") {
+    const armorClass = Number(targetValues.armorClass) || 0;
+    const attackRoll = 1 + Math.floor(Math.random() * 20);
+    const isHit =
+      attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+    if (!isHit) {
+      return { result: "miss", delta: 0, target_label: targetLabel };
+    }
+    magnitude =
+      1 +
+      Math.floor(
+        Math.random() * effectiveWeaponClass(loadPlayerInventory(actorId)),
+      );
+  }
 
-  if (nextHitPoints > 0) {
-    if (targetType === "npc" && targetNpc) {
-      targetNpc.values = Object.assign({}, targetValues, {
-        currentHitPoints: nextHitPoints,
-      });
+  const context: Record<string, unknown> = {
+    values: Object.assign({}, targetValues),
+  };
+  const current = Number(getFieldValue(context, effect.field) || 0);
+  let next =
+    effect.op === "set"
+      ? magnitude
+      : effect.op === "add"
+        ? current + magnitude
+        : current - magnitude;
+  if (effect.maxField) {
+    const cap = Number(getFieldValue(context, effect.maxField));
+    if (Number.isFinite(cap)) next = Math.min(next, cap);
+  }
+  // Only a lethal effect floors at zero; a non-lethal one leaves the value
+  // wherever the arithmetic lands, since an arbitrary living value has no
+  // reason to treat zero as a boundary.
+  if (effect.lethal) next = Math.max(0, next);
+  setFieldValue(context, effect.field, next);
+  const nextValues = context.values as Record<string, unknown>;
+  const delta = next - current;
+
+  const isDeath = Boolean(effect.lethal) && next <= 0 && delta < 0;
+
+  if (!isDeath) {
+    if (targetNpc) {
+      targetNpc.values = nextValues;
       saveWorldNPCs(worldId, { [targetId]: targetNpc });
       broadcastNPCValuesChanged(worldId, targetId, targetNpc.values);
     } else if (targetInv) {
-      targetInv.values = Object.assign({}, targetValues, {
-        currentHitPoints: nextHitPoints,
-      });
+      targetInv.values = nextValues;
       savePlayerInventory(targetId, targetInv);
       broadcastPlayerValuesChanged(worldId, targetId, targetInv.values);
-      sendRecipientScopedStreamEvent(targetId, "fight_hit_taken", {
-        attacker_label: getEffectiveNick(attackerId),
-        damage: damage,
-      });
+      if (delta < 0) {
+        sendRecipientScopedStreamEvent(targetId, "fight_hit_taken", {
+          attacker_label: getEffectiveNick(actorId),
+          damage: -delta,
+        });
+      }
     }
-    return { result: "hit", damage: damage, target_label: targetLabel };
+    return { result: "hit", delta: delta, target_label: targetLabel };
   }
 
-  // Lethal strike: award level-scaled kill XP, then resolve the death.
+  // Lethal: award level-scaled kill XP, then resolve the death.
   let experienceGained = 0;
-  let attackerValues: Record<string, unknown> | undefined;
+  let actorValues: Record<string, unknown> | undefined;
   if (killExperienceBase > 0) {
     const targetLevel = Math.max(
       1,
       Math.floor(Number(targetValues.level || 1)),
     );
     experienceGained = killExperienceBase * targetLevel;
-    const attackerInv = loadPlayerInventory(attackerId);
-    attackerInv.values.experience =
-      Math.floor(Number(attackerInv.values.experience || 0)) + experienceGained;
-    attackerInv.values.totalExperience =
-      Math.floor(Number(attackerInv.values.totalExperience || 0)) +
+    const actorInv = loadPlayerInventory(actorId);
+    actorInv.values.experience =
+      Math.floor(Number(actorInv.values.experience || 0)) + experienceGained;
+    actorInv.values.totalExperience =
+      Math.floor(Number(actorInv.values.totalExperience || 0)) +
       experienceGained;
-    savePlayerInventory(attackerId, attackerInv);
-    broadcastPlayerValuesChanged(worldId, attackerId, attackerInv.values);
-    attackerValues = attackerInv.values;
+    savePlayerInventory(actorId, actorInv);
+    broadcastPlayerValuesChanged(worldId, actorId, actorInv.values);
+    actorValues = actorInv.values;
   }
-  if (targetType === "npc" && targetNpc) {
+  if (targetNpc) {
     resolveNPCDeath(worldId, targetId, targetNpc);
   } else if (targetInv) {
     const players = loadWorldPlayers(worldId);
@@ -391,44 +464,12 @@ export function applyRangedHitToLiving(
   }
   return {
     result: "kill",
-    damage: damage,
+    delta: delta,
     target_label: targetLabel,
     ...(experienceGained > 0
-      ? { experience_gained: experienceGained, values: attackerValues }
+      ? { experience_gained: experienceGained, values: actorValues }
       : {}),
   };
-}
-
-// Applies a spell effect with no attack roll or weapon scaling. This keeps
-// fixed-damage spells independent of the wielder's combat stats.
-export function applyFixedDamageToNPC(
-  worldId: string,
-  targetId: string,
-  damage: number,
-): { result: "hit" | "kill"; damage: number; target_label: string } | null {
-  const npcs = loadWorldNPCs(worldId);
-  const targetNpc = npcs[targetId];
-  if (!targetNpc) return null;
-
-  const actualDamage = Math.max(1, Math.floor(damage));
-  const targetValues = targetNpc.values || {};
-  const nextHitPoints = Math.max(
-    0,
-    (Number(targetValues.currentHitPoints) || 0) - actualDamage,
-  );
-  const targetLabel = getNPCDisplayName(worldId, targetId);
-
-  if (nextHitPoints > 0) {
-    targetNpc.values = Object.assign({}, targetValues, {
-      currentHitPoints: nextHitPoints,
-    });
-    saveWorldNPCs(worldId, { [targetId]: targetNpc });
-    broadcastNPCValuesChanged(worldId, targetId, targetNpc.values);
-    return { result: "hit", damage: actualDamage, target_label: targetLabel };
-  }
-
-  resolveNPCDeath(worldId, targetId, targetNpc);
-  return { result: "kill", damage: actualDamage, target_label: targetLabel };
 }
 
 function resolveCombatHit(

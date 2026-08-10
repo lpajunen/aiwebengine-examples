@@ -20,11 +20,7 @@ import {
 import { getPlayerWorld } from "./player-persistence.ts";
 import { deleteFollowState, saveFollowState } from "./follow-storage.ts";
 import { deleteFightState, saveFightState } from "./fight-storage.ts";
-import {
-  applyFixedDamageToNPC,
-  applyRangedHitToLiving,
-  wieldedWeapon,
-} from "./fight-helpers.ts";
+import { applyLivingEffect, wieldedWeapon } from "./fight-helpers.ts";
 import { getDefaultPlayerLivingClassId } from "./living-registry.ts";
 import {
   addPendingAction,
@@ -102,6 +98,7 @@ import { getItemChangeDefinition } from "./item-events.ts";
 import { getWorldEventDefinition } from "./world-events.ts";
 import {
   evaluateConditions,
+  evaluateEntityConditions,
   applyEffects,
 } from "./action-logic-interpreter.ts";
 import {
@@ -1856,43 +1853,202 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "firebolt") {
-    if (inv.class_id === "player_ghost") {
+  // Declarative living effects (action-registry.ts `livingEffect`). One block
+  // serves every spell: firebolt, fireball, heal and harm are now four rows of
+  // data rather than four handlers, and a creator's new spell needs no code at
+  // all. This block owns *targeting* — who is in reach, and whether the actor
+  // may act — while applyLivingEffect owns the mutation, death and broadcasts.
+  const livingEffect = actionDefinition ? actionDefinition.livingEffect : null;
+  if (livingEffect) {
+    const actorGate = evaluateEntityConditions(livingEffect.actorConditions, {
+      class_id: inv.class_id,
+      values: inv.values,
+    });
+    if (!actorGate.ok) {
       return {
         status: 200,
-        payload: { ok: false, error: "error.ghost_cannot_fight" },
+        payload: {
+          ok: false,
+          error: actorGate.errorMessage || "error.action_condition_not_met",
+        },
       };
     }
+
+    const effectTargeting = resolveActionTargeting(actionDefinition);
+    const reach = resolveEffectiveActionRange(effectTargeting, null);
+    const allowedKinds = Array.isArray(livingEffect.targetKinds)
+      ? livingEffect.targetKinds
+      : ["player", "npc"];
+    const allowsNPCs = allowedKinds.indexOf("npc") !== -1;
+    const allowsPlayers = allowedKinds.indexOf("player") !== -1;
+    const allowSelf = livingEffect.allowSelf !== false;
+    // Kill XP: the action's configured base, scaled per victim by their level
+    // inside applyLivingEffect — the same deal a won fight gets.
+    const killBase =
+      actionDefinition.experience && actionDefinition.experience.onKill
+        ? Math.floor(Number(actionDefinition.experience.amount || 0))
+        : 0;
+
+    function livingEffectToast(
+      variant: "hit" | "kill" | "miss",
+      params: Record<string, unknown>,
+    ): Record<string, unknown> {
+      const toasts = livingEffect ? livingEffect.toasts : undefined;
+      const spec = toasts ? toasts[variant] : undefined;
+      if (!spec) return {};
+      // Substitute the tokens into the English fallback too: a spec with no
+      // messageKey never reaches the client's tFormat, which only formats when
+      // a key is present.
+      let english = String(spec.message || "");
+      Object.keys(params).forEach(function (name) {
+        english = english.split("{" + name + "}").join(String(params[name]));
+      });
+      return toastFields(String(spec.messageKey || ""), english, params);
+    }
+
+    if (livingEffect.affects === "area") {
+      if (!resolvedTarget.inBounds) {
+        return {
+          status: 200,
+          payload: { ok: false, error: "error.target_out_of_bounds" },
+        };
+      }
+      // The reticle tile must itself be within casting range of the actor;
+      // areaRadius then spreads outward from the reticle, not from the actor.
+      if (
+        !isWithinTileDistance(
+          resolvedTarget.row,
+          resolvedTarget.col,
+          canonical.row,
+          canonical.col,
+          reach,
+        )
+      ) {
+        return {
+          status: 200,
+          payload: { ok: false, error: "error.target_out_of_range" },
+        };
+      }
+      const areaRadius = Math.max(
+        0,
+        Math.floor(Number(effectTargeting.areaRadius) || 0),
+      );
+      // Candidate ids are captured up front; a lethal strike removes its
+      // target, which the next strike's fresh load simply won't find.
+      const areaTargets: Array<{ id: string; kind: "player" | "npc" }> = [];
+      if (allowsNPCs) {
+        const npcsInBlast = loadWorldNPCs(worldId);
+        Object.keys(npcsInBlast).forEach(function (npcId) {
+          const npc = npcsInBlast[npcId];
+          if (!npc) return;
+          if (
+            isWithinTileDistance(
+              npc.row,
+              npc.col,
+              resolvedTarget.row,
+              resolvedTarget.col,
+              areaRadius,
+            )
+          ) {
+            areaTargets.push({ id: npcId, kind: "npc" });
+          }
+        });
+      }
+      if (allowsPlayers) {
+        const playersInBlast = loadWorldPlayers(worldId);
+        Object.keys(playersInBlast).forEach(function (playerId) {
+          if (!allowSelf && playerId === userId) return;
+          const player = playersInBlast[playerId];
+          if (!player) return;
+          if (
+            isWithinTileDistance(
+              player.row,
+              player.col,
+              resolvedTarget.row,
+              resolvedTarget.col,
+              areaRadius,
+            )
+          ) {
+            areaTargets.push({ id: playerId, kind: "player" });
+          }
+        });
+      }
+
+      let struckCount = 0;
+      let killCount = 0;
+      let totalDelta = 0;
+      let totalXp = 0;
+      let latestValues: Record<string, unknown> | undefined;
+      for (let ai = 0; ai < areaTargets.length; ai++) {
+        const outcome = applyLivingEffect(
+          worldId,
+          userId,
+          areaTargets[ai].id,
+          areaTargets[ai].kind,
+          livingEffect,
+          killBase,
+        );
+        // A blocked target failed its own gate (a ghost caught in the blast);
+        // in area mode that is a skip, not an error for the whole cast.
+        if (outcome.result === "hit" || outcome.result === "kill") {
+          struckCount++;
+          totalDelta += outcome.delta;
+        }
+        if (outcome.result === "kill") {
+          killCount++;
+          if (outcome.experience_gained) {
+            totalXp += outcome.experience_gained;
+            latestValues = outcome.values;
+          }
+        }
+      }
+      const areaParams = {
+        struck: String(struckCount),
+        kills: String(killCount),
+      };
+      return {
+        status: 200,
+        payload: buildConfiguredSuccessPayload({
+          ...livingEffectToast(struckCount > 0 ? "hit" : "miss", areaParams),
+          result: struckCount > 0 ? "hit" : "miss",
+          struck_count: struckCount,
+          kill_count: killCount,
+          total_damage: totalDelta < 0 ? -totalDelta : 0,
+          ...(totalXp > 0
+            ? { experience_gained: totalXp, values: latestValues }
+            : {}),
+        }),
+      };
+    }
+
     const targetLivingId = String((body && body.target_living_id) || "");
-    if (!targetLivingId || targetLivingId === userId) {
+    if (!targetLivingId || (!allowSelf && targetLivingId === userId)) {
       return {
         status: 200,
         payload: { ok: false, error: "error.target_living_required" },
       };
     }
-    const reach = actionDefinition
-      ? resolveEffectiveActionRange(
-          resolveActionTargeting(actionDefinition),
-          null,
-        )
-      : NEARBY_TARGET_TILE_DISTANCE;
-    const npcsHere = loadWorldNPCs(worldId);
-    const targetNpc = npcsHere[targetLivingId];
+    // NPCs are looked up first so an id that somehow names both resolves the
+    // same way it did before, then players. Either lookup only happens when
+    // the effect admits that kind at all.
     let targetKind: "player" | "npc" | null = null;
-    if (
-      targetNpc &&
-      isWithinTileDistance(
-        targetNpc.row,
-        targetNpc.col,
-        canonical.row,
-        canonical.col,
-        reach,
-      )
-    ) {
-      targetKind = "npc";
-    } else {
-      const worldPlayers = loadWorldPlayers(worldId);
-      const targetPlayer = worldPlayers[targetLivingId];
+    if (allowsNPCs) {
+      const targetNpc = loadWorldNPCs(worldId)[targetLivingId];
+      if (
+        targetNpc &&
+        isWithinTileDistance(
+          targetNpc.row,
+          targetNpc.col,
+          canonical.row,
+          canonical.col,
+          reach,
+        )
+      ) {
+        targetKind = "npc";
+      }
+    }
+    if (!targetKind && allowsPlayers) {
+      const targetPlayer = loadWorldPlayers(worldId)[targetLivingId];
       if (
         targetPlayer &&
         isWithinTileDistance(
@@ -1912,291 +2068,44 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_living_not_found" },
       };
     }
-    if (
-      targetKind === "player" &&
-      loadPlayerInventory(targetLivingId).class_id === "player_ghost"
-    ) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_is_ghost" },
-      };
-    }
-    // Kill XP: firebolt's configured base scaled by target level, same as fight.
-    const fireboltExp =
-      actionDefinition && actionDefinition.experience
-        ? actionDefinition.experience
-        : undefined;
-    const killBase =
-      fireboltExp && fireboltExp.onKill
-        ? Math.floor(Number(fireboltExp.amount || 0))
-        : 0;
-    const hit = applyRangedHitToLiving(
+
+    const outcome = applyLivingEffect(
       worldId,
       userId,
       targetLivingId,
       targetKind,
+      livingEffect,
       killBase,
     );
-    const toastKey =
-      hit.result === "kill"
-        ? "tree_action.firebolt_kill_toast"
-        : hit.result === "hit"
-          ? "tree_action.firebolt_hit_toast"
-          : "tree_action.firebolt_miss_toast";
-    const toastFallback =
-      hit.result === "kill"
-        ? "Your firebolt burns " + hit.target_label + " to ash!"
-        : hit.result === "hit"
-          ? "Your firebolt scorches " + hit.target_label + "."
-          : "Your firebolt fizzles past " + hit.target_label + ".";
+    if (outcome.result === "blocked") {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: outcome.errorMessage || "error.action_condition_not_met",
+        },
+      };
+    }
+    const toastVariant =
+      outcome.result === "kill"
+        ? "kill"
+        : outcome.result === "miss"
+          ? "miss"
+          : "hit";
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        ...toastFields(toastKey, toastFallback, { target: hit.target_label }),
+        ...livingEffectToast(toastVariant, { target: outcome.target_label }),
         target_living_id: targetLivingId,
-        target_living_label: hit.target_label,
-        result: hit.result,
-        damage: hit.damage,
-        ...(hit.experience_gained
-          ? { experience_gained: hit.experience_gained, values: hit.values }
-          : {}),
-      }),
-    };
-  }
-
-  if (action === "heal") {
-    const targetPlayerId = String((body && body.target_living_id) || "");
-    const reach = actionDefinition
-      ? resolveEffectiveActionRange(
-          resolveActionTargeting(actionDefinition),
-          null,
-        )
-      : NEARBY_TARGET_TILE_DISTANCE;
-    const targetPlayer = loadWorldPlayers(worldId)[targetPlayerId];
-    if (
-      !targetPlayerId ||
-      !targetPlayer ||
-      !isWithinTileDistance(
-        targetPlayer.row,
-        targetPlayer.col,
-        canonical.row,
-        canonical.col,
-        reach,
-      )
-    ) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_living_not_found" },
-      };
-    }
-    const targetInv = loadPlayerInventory(targetPlayerId);
-    if (targetInv.class_id === "player_ghost") {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_is_ghost" },
-      };
-    }
-    const targetValues = targetInv.values || {};
-    const maxHitPoints = Number(targetValues.maxHitPoints) || 0;
-    const currentHitPoints = Number(targetValues.currentHitPoints) || 0;
-    if (currentHitPoints >= maxHitPoints) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_at_full_health" },
-      };
-    }
-    targetInv.values = Object.assign({}, targetValues, {
-      currentHitPoints: currentHitPoints + 1,
-    });
-    savePlayerInventory(targetPlayerId, targetInv);
-    broadcastPlayerValuesChanged(worldId, targetPlayerId, targetInv.values);
-    const targetLabel = getEffectiveNick(targetPlayerId);
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        ...toastFields(
-          "tree_action.heal_toast",
-          "You heal " + targetLabel + ".",
-          {
-            target: targetLabel,
-          },
-        ),
-        target_living_id: targetPlayerId,
-        target_living_label: targetLabel,
-      }),
-    };
-  }
-
-  if (action === "harm") {
-    if (inv.class_id === "player_ghost") {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.ghost_cannot_fight" },
-      };
-    }
-    const targetNpcId = String((body && body.target_living_id) || "");
-    const reach = actionDefinition
-      ? resolveEffectiveActionRange(
-          resolveActionTargeting(actionDefinition),
-          null,
-        )
-      : NEARBY_TARGET_TILE_DISTANCE;
-    const targetNpc = loadWorldNPCs(worldId)[targetNpcId];
-    if (
-      !targetNpcId ||
-      !targetNpc ||
-      !isWithinTileDistance(
-        targetNpc.row,
-        targetNpc.col,
-        canonical.row,
-        canonical.col,
-        reach,
-      )
-    ) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_living_not_found" },
-      };
-    }
-    const hit = applyFixedDamageToNPC(worldId, targetNpcId, 1);
-    if (!hit) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_living_not_found" },
-      };
-    }
-    const toastKey =
-      hit.result === "kill"
-        ? "tree_action.harm_kill_toast"
-        : "tree_action.harm_toast";
-    const toastFallback =
-      hit.result === "kill"
-        ? "Your harm spell destroys " + hit.target_label + "."
-        : "Your harm spell wounds " + hit.target_label + ".";
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        ...toastFields(toastKey, toastFallback, { target: hit.target_label }),
-        target_living_id: targetNpcId,
-        target_living_label: hit.target_label,
-        result: hit.result,
-        damage: hit.damage,
-      }),
-    };
-  }
-
-  if (action === "fireball") {
-    if (inv.class_id === "player_ghost") {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.ghost_cannot_fight" },
-      };
-    }
-    if (!resolvedTarget.inBounds) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_out_of_bounds" },
-      };
-    }
-    const fireballTargeting = actionDefinition
-      ? resolveActionTargeting(actionDefinition)
-      : null;
-    const reach = fireballTargeting
-      ? resolveEffectiveActionRange(fireballTargeting, null)
-      : NEARBY_TARGET_TILE_DISTANCE;
-    const areaRadius = fireballTargeting
-      ? Math.max(0, Math.floor(Number(fireballTargeting.areaRadius) || 0))
-      : 0;
-    // The reticle tile must be within casting range of the caster.
-    if (
-      !isWithinTileDistance(
-        resolvedTarget.row,
-        resolvedTarget.col,
-        canonical.row,
-        canonical.col,
-        reach,
-      )
-    ) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_out_of_range" },
-      };
-    }
-    const fireballExp =
-      actionDefinition && actionDefinition.experience
-        ? actionDefinition.experience
-        : undefined;
-    const killBase =
-      fireballExp && fireballExp.onKill
-        ? Math.floor(Number(fireballExp.amount || 0))
-        : 0;
-    // Strike every NPC within areaRadius (Chebyshev) of the reticle tile. Keys
-    // are captured up front; a lethal strike deletes its NPC, which the next
-    // strike's fresh load simply won't find.
-    const npcsInBlast = loadWorldNPCs(worldId);
-    let struckCount = 0;
-    let killCount = 0;
-    let totalDamage = 0;
-    let totalXp = 0;
-    let latestValues: Record<string, unknown> | undefined;
-    Object.keys(npcsInBlast).forEach(function (npcId) {
-      const npc = npcsInBlast[npcId];
-      if (!npc) return;
-      if (
-        !isWithinTileDistance(
-          npc.row,
-          npc.col,
-          resolvedTarget.row,
-          resolvedTarget.col,
-          areaRadius,
-        )
-      ) {
-        return;
-      }
-      const hit = applyRangedHitToLiving(
-        worldId,
-        userId,
-        npcId,
-        "npc",
-        killBase,
-      );
-      if (hit.result === "hit" || hit.result === "kill") {
-        struckCount++;
-        totalDamage += hit.damage;
-      }
-      if (hit.result === "kill") {
-        killCount++;
-        if (hit.experience_gained) {
-          totalXp += hit.experience_gained;
-          latestValues = hit.values;
-        }
-      }
-    });
-    const toastKey =
-      struckCount > 0
-        ? "tree_action.fireball_toast"
-        : "tree_action.fireball_miss_toast";
-    const toastFallback =
-      struckCount > 0
-        ? "Your fireball erupts — " +
-          struckCount +
-          " struck, " +
-          killCount +
-          " slain."
-        : "Your fireball scorches empty ground.";
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        ...toastFields(toastKey, toastFallback, {
-          struck: String(struckCount),
-          kills: String(killCount),
-        }),
-        result: struckCount > 0 ? "hit" : "miss",
-        struck_count: struckCount,
-        kill_count: killCount,
-        total_damage: totalDamage,
-        ...(totalXp > 0
-          ? { experience_gained: totalXp, values: latestValues }
+        target_living_label: outcome.target_label,
+        result: outcome.result,
+        delta: outcome.delta,
+        damage: outcome.delta < 0 ? -outcome.delta : 0,
+        ...(outcome.experience_gained
+          ? {
+              experience_gained: outcome.experience_gained,
+              values: outcome.values,
+            }
           : {}),
       }),
     };

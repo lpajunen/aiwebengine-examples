@@ -1093,6 +1093,7 @@ function runWorldDatabaseMigration(): void {
     ["addTextColumn", "produces_json", true],
     ["addTextColumn", "removes_json", true],
     ["addTextColumn", "experience_json", true],
+    ["addTextColumn", "living_effect_json", true],
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
     ["addTextColumn", "owner_ids_json", true],

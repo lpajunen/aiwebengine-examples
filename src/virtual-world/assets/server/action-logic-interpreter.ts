@@ -20,7 +20,10 @@ export interface ActionLogicSpec {
   effects?: ActionEffect[];
 }
 
-function getFieldValue(obj: Record<string, unknown>, path: string): unknown {
+export function getFieldValue(
+  obj: Record<string, unknown>,
+  path: string,
+): unknown {
   const parts = path.split(".");
   let cur: unknown = obj;
   for (let i = 0; i < parts.length; i++) {
@@ -32,7 +35,7 @@ function getFieldValue(obj: Record<string, unknown>, path: string): unknown {
   return cur;
 }
 
-function setFieldValue(
+export function setFieldValue(
   obj: Record<string, unknown>,
   path: string,
   value: unknown,
@@ -107,29 +110,32 @@ export function evaluateConditions(
   return { ok: true };
 }
 
-// Evaluates a `validWhen` precondition list against a *target* entity (a world
-// item or a living), used to decide whether an action is offered against that
-// target (DESIGN-targeting.md step 3). Unlike evaluateConditions (which reads
+// Evaluates a condition list against an *entity* (a world item or a living),
+// used both for `validWhen` preconditions (DESIGN-targeting.md step 3) and for
+// a livingEffect's actor/target gates. Unlike evaluateConditions (which reads
 // only item.state and skips stateless items), the context here also exposes the
-// target's `type` and living `values`, and each condition may compare `field`
-// to a literal `value` or — via `ref` — to another field. Returns true when
-// every condition passes (or there are none). Pure and dependency-free so the
-// browser client mirrors it in evaluateActionValidWhen (tiles-and-items.js).
-export function evaluateTargetConditions(
+// entity's `type`, `class_id` and living `values`, and each condition may
+// compare `field` to a literal `value` or — via `ref` — to another field.
+// Returns the first failing condition's errorMessage so a caller that rejects
+// the action can say why. Pure and dependency-free so the browser client can
+// mirror it in evaluateActionValidWhen (tiles-and-items.js).
+export function evaluateEntityConditions(
   conditions: ActionCondition[] | undefined,
-  target: {
+  entity: {
     type?: unknown;
+    class_id?: unknown;
     state?: Record<string, unknown>;
     values?: Record<string, unknown>;
     [key: string]: unknown;
   },
-): boolean {
-  if (!conditions || conditions.length === 0) return true;
+): { ok: boolean; errorMessage?: string } {
+  if (!conditions || conditions.length === 0) return { ok: true };
   const context: Record<string, unknown> = {
-    type: target.type,
-    state: target.state && typeof target.state === "object" ? target.state : {},
+    type: entity.type,
+    class_id: entity.class_id,
+    state: entity.state && typeof entity.state === "object" ? entity.state : {},
     values:
-      target.values && typeof target.values === "object" ? target.values : {},
+      entity.values && typeof entity.values === "object" ? entity.values : {},
   };
   for (let i = 0; i < conditions.length; i++) {
     const cond = conditions[i];
@@ -159,9 +165,29 @@ export function evaluateTargetConditions(
       default:
         pass = false;
     }
-    if (!pass) return false;
+    if (!pass) {
+      return {
+        ok: false,
+        errorMessage: cond.errorMessage || "Action condition not met",
+      };
+    }
   }
-  return true;
+  return { ok: true };
+}
+
+// Boolean shorthand over evaluateEntityConditions for the `validWhen` callers,
+// which only ever ask "is this action offered against this target?".
+export function evaluateTargetConditions(
+  conditions: ActionCondition[] | undefined,
+  target: {
+    type?: unknown;
+    class_id?: unknown;
+    state?: Record<string, unknown>;
+    values?: Record<string, unknown>;
+    [key: string]: unknown;
+  },
+): boolean {
+  return evaluateEntityConditions(conditions, target).ok;
 }
 
 export function applyEffects(

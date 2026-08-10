@@ -706,13 +706,14 @@ function getValidWhenField(ctx, path) {
 }
 
 /**
- * Client mirror of evaluateTargetConditions (action-logic-interpreter.ts):
+ * Client mirror of evaluateEntityConditions (action-logic-interpreter.ts):
  * whether an action's validWhen precondition holds for a given target, used to
  * hide inapplicable action buttons (DESIGN-targeting.md step 3). Conditions may
- * read the target's `type`, `state.*` and `values.*`, comparing `field` to a
- * literal `value` or another field via `ref`. No validWhen => always shown.
+ * read the target's `type`, `class_id`, `state.*` and `values.*`, comparing
+ * `field` to a literal `value` or another field via `ref`. No validWhen =>
+ * always shown.
  * @param {string} actionId
- * @param {{type?: *, state?: Record<string, *>, values?: Record<string, *>}} target
+ * @param {{type?: *, class_id?: *, state?: Record<string, *>, values?: Record<string, *>}} target
  * @returns {boolean}
  */
 function actionValidForTarget(actionId, target) {
@@ -721,6 +722,7 @@ function actionValidForTarget(actionId, target) {
   if (!Array.isArray(conds) || conds.length === 0) return true;
   var ctx = {
     type: target && target.type,
+    class_id: target && target.class_id,
     state:
       target && target.state && typeof target.state === "object"
         ? target.state

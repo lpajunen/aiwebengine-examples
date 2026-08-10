@@ -8,15 +8,34 @@ var selectedTileRow = -1;
 var selectedTileCol = -1;
 
 // Invisible flat plane covering the entire world grid, used only for raycasting
-var tileColliderGeo = new THREE.PlaneGeometry(COLS * TILE, ROWS * TILE);
 var tileColliderMat = new THREE.MeshBasicMaterial({
   visible: false,
   side: THREE.DoubleSide,
 });
-var tileCollider = new THREE.Mesh(tileColliderGeo, tileColliderMat);
+var tileCollider = new THREE.Mesh(
+  new THREE.PlaneGeometry(COLS * TILE, ROWS * TILE),
+  tileColliderMat,
+);
 tileCollider.rotation.x = -Math.PI / 2;
-tileCollider.position.set(mapCX, 0, mapCZ);
 scene.add(tileCollider);
+
+/**
+ * Resizes the pick plane to the current world and re-centres it. Travelling
+ * in place to a world of a different size leaves the plane covering the old
+ * extent, so rays either miss it or land outside the new bounds and tile
+ * selection silently stops working until the page is reloaded — which is what
+ * stepping through a rune gate does. Called from buildStaticWorldMeshes once
+ * it has recomputed ROWS/COLS.
+ *
+ * The centre is computed here rather than read from mapCX/mapCZ: those are set
+ * once when the scene is created and are themselves stale after a swap.
+ */
+function refreshTileCollider() {
+  if (tileCollider.geometry) tileCollider.geometry.dispose();
+  tileCollider.geometry = new THREE.PlaneGeometry(COLS * TILE, ROWS * TILE);
+  tileCollider.position.set((COLS * TILE) / 2, 0, (ROWS * TILE) / 2);
+}
+refreshTileCollider();
 
 /**
  * @param {number} clientX

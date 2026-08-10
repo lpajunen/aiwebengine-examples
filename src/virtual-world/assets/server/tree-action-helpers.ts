@@ -106,6 +106,7 @@ import {
   WORLD_TILE_HOUSE,
   WORLD_TILE_PINE_TREE,
   consumeLivingItemsByType,
+  worldTileValueForName,
   countItemsByType,
   countLivingItemsByType,
   findFirstLivingItemByTypes,
@@ -631,7 +632,9 @@ export function performTreeActionForUser(
       const treeState = trees[treeKey];
       const hasExistingTree = treeState && treeState.action === "plant";
       const wasTreeCut = treeState && treeState.action === "cut";
-      const baseHasTree = map[row] && map[row][col] === 2;
+      const baseHasTree =
+        map[row] &&
+        map[row][col] === worldTileValueForName(WORLD_TILE_PINE_TREE);
 
       if (validation.requireTreeState.kind === "plantable") {
         const plantable = checkTreePlantable(row, col, map, trees);

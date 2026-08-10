@@ -11,6 +11,7 @@ import {
   WORLD_TILE_HOUSE,
   WORLD_TILE_PINE_TREE,
   isWorldTileWalkable,
+  worldTileValueForName,
 } from "./world-domain.ts";
 import { deleteWorldRow, queryWorldRows, upsertWorldRow } from "./world-db.ts";
 
@@ -154,9 +155,15 @@ export function checkTreePlantable(
   const treeState = trees[tileKey];
   const hasExistingTree = treeState && treeState.action === "plant";
   const wasTreeCut = treeState && treeState.action === "cut";
-  const baseHasTree = map[row] && map[row][col] === 2;
+  const groundValue = worldTileValueForName(WORLD_TILE_GROUND);
+  const baseHasTree =
+    map[row] && map[row][col] === worldTileValueForName(WORLD_TILE_PINE_TREE);
 
-  if (map[row] && map[row][col] !== 0 && !wasTreeCut) {
+  // Bare ground specifically, not merely a walkable square: a sapling does not
+  // go into a cave floor or a plank floor. Named rather than compared against
+  // the raw tile values 0 and 2, which is how the same check elsewhere came to
+  // mean "ground" by accident.
+  if (map[row] && map[row][col] !== groundValue && !wasTreeCut) {
     return { ok: false, reason: "tile_occupied" };
   }
   if (hasExistingTree || (baseHasTree && !wasTreeCut)) {

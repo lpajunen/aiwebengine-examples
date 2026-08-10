@@ -3,8 +3,10 @@ import {
   WORLD_TILE_GROUND,
   WORLD_TILE_PINE_TREE,
   createLivingSlotsFromDefinitions,
+  isWorldTileWalkable,
   LivingState,
   normalizeLivingState,
+  worldTileValueForName,
 } from "./world-domain.ts";
 import {
   isReservedTile,
@@ -128,12 +130,18 @@ export function tickNPCMovement(params: {
     const nr = n.row + dirs[i].dr;
     const nc = n.col + dirs[i].dc;
     const key = nr + "_" + nc;
+    // Ask the tile registry whether the square can be stood on, rather than
+    // testing for tile value 0. That literal meant "ground", so an NPC in any
+    // world whose floor is not plain ground — a cave (cave_floor), a house
+    // interior (wood_floor), an island beach (sand) — found every neighbour
+    // unwalkable and stood still forever. Pursuit and fighting already used
+    // this helper, which is why only idle wandering was affected.
     const walkable =
       nr >= 0 &&
       nr < params.rows &&
       nc >= 0 &&
       nc < params.cols &&
-      params.map[nr][nc] === 0;
+      isWorldTileWalkable(params.map[nr][nc]);
     if (!walkable) continue;
     if (params.occupiedPlayers[key]) continue;
     if (params.occupiedNPCs[key]) continue;
@@ -325,7 +333,8 @@ export function tickNPCTreeActions(params: {
       }
       const hasPlantedTree =
         params.trees[treeKey] && params.trees[treeKey].action === "plant";
-      const baseHasTree = params.map[tr][tc] === 2;
+      const baseHasTree =
+        params.map[tr][tc] === worldTileValueForName(WORLD_TILE_PINE_TREE);
       const alreadyCut =
         params.trees[treeKey] && params.trees[treeKey].action === "cut";
       if ((hasPlantedTree || baseHasTree) && !alreadyCut) {
@@ -334,7 +343,7 @@ export function tickNPCTreeActions(params: {
           cut_by: params.npcId,
           timestamp: params.now,
         };
-        params.map[tr][tc] = 0;
+        params.map[tr][tc] = worldTileValueForName(WORLD_TILE_GROUND);
         n.rotation = params.directionToRotation(
           treeDirs[td].dr,
           treeDirs[td].dc,
@@ -362,7 +371,10 @@ export function tickNPCTreeActions(params: {
         params.trees[treeKey] && params.trees[treeKey].action === "plant";
       const wasTreeCut =
         params.trees[treeKey] && params.trees[treeKey].action === "cut";
-      const groundWalkable = params.map[tr][tc] === 0;
+      // Planting still wants bare ground specifically, not merely a walkable
+      // square — a sapling does not go into a cave floor or a plank floor.
+      const groundWalkable =
+        params.map[tr][tc] === worldTileValueForName(WORLD_TILE_GROUND);
       if (
         groundWalkable &&
         !hasExistingTree &&
@@ -373,7 +385,12 @@ export function tickNPCTreeActions(params: {
           planted_by: params.npcId,
           timestamp: params.now,
         };
-        if (wasTreeCut || params.map[tr][tc] === 0) params.map[tr][tc] = 2;
+        if (
+          wasTreeCut ||
+          params.map[tr][tc] === worldTileValueForName(WORLD_TILE_GROUND)
+        ) {
+          params.map[tr][tc] = worldTileValueForName(WORLD_TILE_PINE_TREE);
+        }
         n.rotation = params.directionToRotation(
           treeDirs[td].dr,
           treeDirs[td].dc,

@@ -744,6 +744,10 @@ function buildStaticWorldMeshes() {
   COLS = MAP[0] ? MAP[0].length : 0;
   appState.world.rows = ROWS;
   appState.world.cols = COLS;
+  // The tile inspector's pick plane is sized to the world, so it has to follow
+  // a size change. Guarded because this runs once at the end of this file,
+  // before client-tile-detail.js has loaded.
+  if (typeof refreshTileCollider === "function") refreshTileCollider();
 
   disposeStaticWorldMeshes();
 

@@ -520,6 +520,45 @@ export function registerVirtualWorldRuntime(): void {
           },
         },
       },
+      linkedWorld: {
+        type: "object",
+        description:
+          "Creates a brand-new world and a matched pair of items joining the target tile to it — the verb behind build_portal and build_door.",
+        properties: {
+          itemId: {
+            type: "string",
+            description:
+              "Item planted on the target tile, and its twin in the new world",
+          },
+          itemState: {
+            type: "object",
+            description:
+              "State stamped on both ends (a door starts { open: true })",
+          },
+          destinationFrom: {
+            type: "string",
+            enum: ["request", "fixed"],
+            description:
+              '"request" reads the caller\'s destination_world_* fields (optionally naming a world class); "fixed" always builds the world described by the fields below',
+          },
+          worldClassId: {
+            type: "string",
+            description: "Destination world class, for destinationFrom fixed",
+          },
+          worldType: {
+            type: "string",
+            description: "Destination base type, for destinationFrom fixed",
+          },
+          rows: { type: "number" },
+          cols: { type: "number" },
+          returnOffset: {
+            type: "object",
+            description:
+              "Where the return item is planted relative to the destination spawn tile; omit for underfoot (a portal), { row: -1, col: 0 } to hang it on the wall north (a door)",
+            properties: { row: { type: "number" }, col: { type: "number" } },
+          },
+        },
+      },
       fatigueCost: {
         type: "number",
         description:

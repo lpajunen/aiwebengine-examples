@@ -186,6 +186,40 @@ export interface ActionDefinition {
   // targeting/aggregation. logicSpec stays the item-state counterpart: that
   // one writes the *source item's* state, this one writes a living's.
   livingEffect?: ActionLivingEffect;
+  // Creates a brand-new world and a matched pair of items linking this tile to
+  // it — the verb behind build_portal and build_door. See the linkedWorld
+  // block in tree-action-helpers.ts.
+  linkedWorld?: ActionLinkedWorld;
+}
+
+// A "build a way into a new world" spec. The two built-in instances differ
+// only in the values below: a portal lets the player pick the destination and
+// sits underfoot at the far end, a door always opens into a house interior and
+// hangs on the wall beside the arrival tile. Anything else that wants the same
+// shape — a hatch down to a cave, a gate into a walled garden — is a new
+// action row, not new code.
+export interface ActionLinkedWorld {
+  // Item planted on the action's target tile, and its twin in the new world.
+  itemId: string;
+  // State stamped on both ends. A door starts { open: true } so the
+  // build-then-enter flow works without closing and reopening it.
+  itemState?: Record<string, unknown>;
+  // Where the destination world's shape comes from. "request" reads the
+  // client's destination_world_* fields, which may name a world class that
+  // supplies the base preset and default size (what the portal builder's
+  // world picker sends). "fixed" always builds the world described below,
+  // with no picker — a door only ever leads to a house interior.
+  destinationFrom: "request" | "fixed";
+  worldClassId?: string;
+  worldType?: string;
+  rows?: number;
+  cols?: number;
+  // Where the return item is planted, relative to the destination's spawn
+  // tile. Missing/{0,0} puts it underfoot, which is what a portal wants;
+  // {-1,0} hangs it on the wall directly north, which is what a door wants —
+  // a door needs a wall to read as a door, and travel finds it either way
+  // because it scans the 8-neighbour radius.
+  returnOffset?: { row: number; col: number };
 }
 
 // A toast variant for one livingEffect outcome. `message` is the English
@@ -468,6 +502,23 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         errorMessage: "error.door_already_hangs",
       },
     },
+    // A door is a portal skin with the destination nailed down: always a
+    // house interior (wood floor, house walls), always 12x12, and the return
+    // door hangs in the wall north of where the traveller arrives.
+    linkedWorld: {
+      itemId: "door",
+      itemState: { open: true },
+      destinationFrom: "fixed",
+      // The literal rather than WORLD_TYPE_BUILDING: importing world-domain.ts
+      // here would close a cycle (world-domain -> item-registry ->
+      // action-registry) that the engine rejects outright, and like every other
+      // id in this file it is seed data a creator can retarget in the DB row.
+      worldType: "building",
+      worldClassId: "building",
+      rows: 12,
+      cols: 12,
+      returnOffset: { row: -1, col: 0 },
+    },
   },
   remove_door: {
     id: "remove_door",
@@ -529,6 +580,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
         kind: "absent",
         errorMessage: "error.portal_already_exists",
       },
+    },
+    // The player picks the destination, so the world comes from the request;
+    // the return portal sits on the arrival tile itself.
+    linkedWorld: {
+      itemId: "portal",
+      destinationFrom: "request",
     },
   },
   remove_portal: {

@@ -1132,6 +1132,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["experience"] | undefined,
     livingEffect: parseJson(row.living_effect_json, undefined) as
       ActionDefinition["livingEffect"] | undefined,
+    linkedWorld: parseJson(row.linked_world_json, undefined) as
+      ActionDefinition["linkedWorld"] | undefined,
     fatigueCost:
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
@@ -1168,6 +1170,7 @@ function actionClassToDbRow(
   removes_json: string;
   experience_json: string;
   living_effect_json: string;
+  linked_world_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
@@ -1194,6 +1197,9 @@ function actionClassToDbRow(
     experience_json: record.experience ? JSON.stringify(record.experience) : "",
     living_effect_json: record.livingEffect
       ? JSON.stringify(record.livingEffect)
+      : "",
+    linked_world_json: record.linkedWorld
+      ? JSON.stringify(record.linkedWorld)
       : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
@@ -1447,6 +1453,22 @@ function backfillActionClassDefaults(
           JSON.stringify(def.livingEffect)
       ) {
         existing.livingEffect = def.livingEffect;
+        changed = true;
+      }
+    }
+    // Same code-owned resync rule as livingEffect above, for the same reason:
+    // linkedWorld is the whole behavior of a build-a-way-in action.
+    if (def.linkedWorld !== undefined) {
+      const linkedWorldIsCodeOwned =
+        !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+      if (existing.linkedWorld === undefined) {
+        existing.linkedWorld = def.linkedWorld;
+        changed = true;
+      } else if (
+        linkedWorldIsCodeOwned &&
+        JSON.stringify(existing.linkedWorld) !== JSON.stringify(def.linkedWorld)
+      ) {
+        existing.linkedWorld = def.linkedWorld;
         changed = true;
       }
     }

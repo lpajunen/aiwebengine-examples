@@ -104,7 +104,9 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // matches this number, so a forgotten bump means the new column is never
 // created on an already-migrated database.
 // v2: living class visual_style/color + item class style columns.
-export const VWORLD_SCHEMA_VERSION = 3;
+// v4: action class living_effect_json + linked_world_json; living class
+//     death_class_id/corpse_item_id/revive_class_id/combatant.
+export const VWORLD_SCHEMA_VERSION = 4;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

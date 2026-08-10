@@ -81,7 +81,6 @@ import {
   isWithinTileDistance,
   isWorldTileWalkable,
   normalizeWorldType,
-  WORLD_TYPE_BUILDING,
 } from "./world-domain.ts";
 import { isReservedTile } from "./world-reservations.ts";
 import {
@@ -114,6 +113,14 @@ import {
   LivingState,
   replaceLivingItemById,
 } from "./world-domain.ts";
+
+// Where a linkedWorld action's traveller arrives in the world it creates, and
+// the anchor its return item is offset from. A freshly created world carries no
+// spawn reservations, so getDefaultSpawnPosition falls through to (1, 1) for
+// it — this mirrors that rather than querying it, because the world is seeded
+// after the destination is written onto the item.
+const LINKED_WORLD_SPAWN_ROW = 1;
+const LINKED_WORLD_SPAWN_COL = 1;
 
 // Build the toast fields for a payload: the i18n key the client localizes,
 // plus the pre-assembled English string as the fallback, and any {token}
@@ -2241,152 +2248,117 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "build_door") {
-    // A door is a portal whose destination is always a house interior
-    // (WORLD_TYPE_BUILDING: wood floor, house walls) — no world-type picker.
-    // Same linked-pair machinery as build_portal: plant the door on the faced
-    // house-wall tile, seed the interior, then drop a matching return door at
-    // the interior's spawn tile pointing back here.
-    const targetTileKey = targetRow + "_" + targetCol;
-    const createdInterior = createWorldOfType(
-      WORLD_TYPE_BUILDING,
-      { rows: 12, cols: 12 },
-      WORLD_TYPE_BUILDING,
-    );
-    const doorItem: Record<string, any> = {
-      id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "door",
-      created_at: Date.now(),
-      // A freshly hung door starts open, preserving the build-then-enter flow;
-      // close_door seals it (see the door_travel open gate below).
-      state: { open: true },
-      destination_world_id: createdInterior.world_id,
-      destination_world_type: createdInterior.world_type,
-      destination_world_rows: createdInterior.rows,
-      destination_world_cols: createdInterior.cols,
-      // The interior's default spawn tile (see getDefaultSpawnPosition). The
-      // player lands here, on the wood floor, with the matching return door
-      // hung in the wall tile directly north (see below).
-      destination_row: 1,
-      destination_col: 1,
-    };
-    if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
-    worldItems[targetTileKey].push(doorItem);
-    upsertWorldItem(worldId, targetRow, targetCol, doorItem);
-    maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
-      doorItem,
-    ]);
+  // Linked worlds (action-registry.ts `linkedWorld`): build a brand-new world
+  // and a matched pair of items joining this tile to it. build_portal and
+  // build_door were near-identical copies of this — the only real differences
+  // were which item to plant, where the destination comes from, and whether
+  // the far-side twin sits underfoot or on the wall — so all three are data
+  // now and a third way in needs no code.
+  const linkedWorld = actionDefinition ? actionDefinition.linkedWorld : null;
+  if (linkedWorld) {
+    let destWorldType = String(linkedWorld.worldType || "");
+    let destWorldClassId = String(linkedWorld.worldClassId || "");
+    let destDimensions: { rows?: number; cols?: number } | undefined =
+      linkedWorld.rows !== undefined || linkedWorld.cols !== undefined
+        ? { rows: linkedWorld.rows, cols: linkedWorld.cols }
+        : undefined;
 
-    // Seed the interior's item manifest before planting the return door — a
-    // brand-new world's stale `seeded` marker would otherwise make the first
-    // visitor's reseed wipe the door (see the build_portal note below).
-    ensureWorldItems(createdInterior.world_id);
-
-    const returnDoorItem: Record<string, any> = {
-      id:
-        "w" +
-        createdInterior.world_id +
-        "_i" +
-        nextWorldItemId(createdInterior.world_id),
-      type: "door",
-      created_at: Date.now(),
-      state: { open: true },
-      destination_world_id: worldId,
-      destination_row: targetRow,
-      destination_col: targetCol,
-    };
-    // Hang the return door on the wall (a non-walkable house border tile),
-    // not on the open wood floor — a door needs a wall to read as a door. The
-    // interior's border ring is house tiles (WORLD_TYPE_BUILDING walls), so
-    // (0, 1) is the wall directly north of the spawn at (1, 1); door_travel
-    // finds it from the spawn since it scans the 8-neighbour radius.
-    upsertWorldItem(createdInterior.world_id, 0, 1, returnDoorItem);
-
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload(),
-    };
-  }
-
-  if (action === "build_portal") {
-    const targetTileKey = targetRow + "_" + targetCol;
-    // A world class (creator-defined world type) supplies the base preset and
-    // default size; explicit rows/cols in the request still win over the class.
-    let portalWorldType = requestedPortalWorldType;
-    let portalDimensions = requestedPortalDimensions;
-    if (requestedWorldClassId) {
-      const worldClass = getWorldClassWithRefresh(requestedWorldClassId);
-      if (!worldClass) {
-        return {
-          status: 200,
-          payload: { ok: false, error: "error.world_class_not_found" },
+    if (linkedWorld.destinationFrom === "request") {
+      destWorldType = requestedPortalWorldType;
+      destDimensions = requestedPortalDimensions;
+      destWorldClassId = requestedWorldClassId;
+      // A world class (creator-defined world type) supplies the base preset
+      // and default size; explicit rows/cols in the request still win.
+      if (requestedWorldClassId) {
+        const worldClass = getWorldClassWithRefresh(requestedWorldClassId);
+        if (!worldClass) {
+          return {
+            status: 200,
+            payload: { ok: false, error: "error.world_class_not_found" },
+          };
+        }
+        destWorldType = normalizeWorldType(worldClass.baseType);
+        destDimensions = {
+          rows:
+            destDimensions && destDimensions.rows !== undefined
+              ? destDimensions.rows
+              : worldClass.rows,
+          cols:
+            destDimensions && destDimensions.cols !== undefined
+              ? destDimensions.cols
+              : worldClass.cols,
         };
       }
-      portalWorldType = normalizeWorldType(worldClass.baseType);
-      portalDimensions = {
-        rows:
-          portalDimensions && portalDimensions.rows !== undefined
-            ? portalDimensions.rows
-            : worldClass.rows,
-        cols:
-          portalDimensions && portalDimensions.cols !== undefined
-            ? portalDimensions.cols
-            : worldClass.cols,
-      };
     }
-    const createdDestinationWorld = createWorldOfType(
-      portalWorldType,
-      portalDimensions,
-      requestedWorldClassId || portalWorldType,
+
+    const createdWorld = createWorldOfType(
+      destWorldType,
+      destDimensions,
+      destWorldClassId || destWorldType,
     );
-    const portalItem: Record<string, any> = {
+
+    const targetTileKey = targetRow + "_" + targetCol;
+    const linkedItem: Record<string, any> = {
       id: "w" + worldId + "_i" + nextWorldItemId(worldId),
-      type: "portal",
+      type: linkedWorld.itemId,
       created_at: Date.now(),
-      destination_world_id: createdDestinationWorld.world_id,
-      destination_world_type: createdDestinationWorld.world_type,
-      destination_world_rows: createdDestinationWorld.rows,
-      destination_world_cols: createdDestinationWorld.cols,
-      // The new world's default spawn tile (see getDefaultSpawnPosition) -
-      // where the matching return portal below is placed.
-      destination_row: 1,
-      destination_col: 1,
+      destination_world_id: createdWorld.world_id,
+      destination_world_type: createdWorld.world_type,
+      destination_world_rows: createdWorld.rows,
+      destination_world_cols: createdWorld.cols,
+      // Where the traveller lands: the new world's default spawn tile (see
+      // getDefaultSpawnPosition — 1,1 for a world with no spawn reservations,
+      // which a freshly created one never has).
+      destination_row: LINKED_WORLD_SPAWN_ROW,
+      destination_col: LINKED_WORLD_SPAWN_COL,
     };
-    if (requestedWorldClassId) {
-      portalItem.destination_world_class_id = requestedWorldClassId;
+    if (linkedWorld.itemState) {
+      linkedItem.state = Object.assign({}, linkedWorld.itemState);
+    }
+    // Informational only (nothing reads it back): record the class when one
+    // was actually chosen, rather than when it merely echoes the world type.
+    if (destWorldClassId && destWorldClassId !== createdWorld.world_type) {
+      linkedItem.destination_world_class_id = destWorldClassId;
     }
     if (!worldItems[targetTileKey]) worldItems[targetTileKey] = [];
-    worldItems[targetTileKey].push(portalItem);
-    upsertWorldItem(worldId, targetRow, targetCol, portalItem);
+    worldItems[targetTileKey].push(linkedItem);
+    upsertWorldItem(worldId, targetRow, targetCol, linkedItem);
     maybePersistConfiguredItemMutation(targetRow, targetCol, worldItems, [
-      portalItem,
+      linkedItem,
     ]);
 
-    // Seed the destination world's item manifest FIRST, then plant the return
-    // portal on top. ensureWorldItems wipes and reseeds any world whose
-    // `seeded` marker is stale (a brand-new world's is 0), so if the return
-    // portal were planted before the world was seeded, the first player to
-    // step through would trigger that reseed and delete it. Seeding here marks
-    // the world current, so the portal we add below survives.
-    ensureWorldItems(createdDestinationWorld.world_id);
+    // Seed the destination's item manifest FIRST, then plant the return item
+    // on top. ensureWorldItems wipes and reseeds any world whose `seeded`
+    // marker is stale (a brand-new world's is 0), so a return item planted
+    // before the world was seeded would be deleted by the first visitor's
+    // reseed. Seeding here marks the world current, so what we add below
+    // survives.
+    ensureWorldItems(createdWorld.world_id);
 
-    // Seed a portal back at the new world's default spawn tile (1,1 for any
-    // non-oak world, see getDefaultSpawnPosition), pointing at this exact
-    // tile, so the player who steps through isn't stranded there and lands
-    // back where they built the portal rather than at world's spawn point.
-    const returnPortalItem: Record<string, any> = {
+    // The twin, pointing back at this exact tile so whoever steps through is
+    // not stranded and returns to where they built rather than to the spawn.
+    const returnItem: Record<string, any> = {
       id:
         "w" +
-        createdDestinationWorld.world_id +
+        createdWorld.world_id +
         "_i" +
-        nextWorldItemId(createdDestinationWorld.world_id),
-      type: "portal",
+        nextWorldItemId(createdWorld.world_id),
+      type: linkedWorld.itemId,
       created_at: Date.now(),
       destination_world_id: worldId,
       destination_row: targetRow,
       destination_col: targetCol,
     };
-    upsertWorldItem(createdDestinationWorld.world_id, 1, 1, returnPortalItem);
+    if (linkedWorld.itemState) {
+      returnItem.state = Object.assign({}, linkedWorld.itemState);
+    }
+    const returnOffset = linkedWorld.returnOffset;
+    upsertWorldItem(
+      createdWorld.world_id,
+      LINKED_WORLD_SPAWN_ROW + (returnOffset ? Number(returnOffset.row) : 0),
+      LINKED_WORLD_SPAWN_COL + (returnOffset ? Number(returnOffset.col) : 0),
+      returnItem,
+    );
 
     return {
       status: 200,

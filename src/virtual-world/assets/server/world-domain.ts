@@ -4,8 +4,26 @@ export const COLS = 100;
 export const MIN_WORLD_DIM = 8;
 export const MAX_WORLD_DIM = 200;
 
-export const WORLD_MOD_LAYER_TERRAIN = "terrain";
-export const WORLD_MOD_LAYER_OBJECT = "object";
+import {
+  TILE_LAYER_OBJECT,
+  TILE_LAYER_TERRAIN,
+  getWorldTileDef,
+  isWorldTileWalkable,
+  worldTileNameForValue,
+  worldTileValueForName,
+} from "./tile-registry.ts";
+
+// Tile types now live in their own class repository (tile-registry.ts); these
+// re-exports keep every existing importer pointed at world-domain, which is
+// where the rest of the world vocabulary is.
+export {
+  getWorldTileDef,
+  isWorldTileWalkable,
+  worldTileNameForValue,
+  worldTileValueForName,
+};
+export const WORLD_MOD_LAYER_TERRAIN = TILE_LAYER_TERRAIN;
+export const WORLD_MOD_LAYER_OBJECT = TILE_LAYER_OBJECT;
 
 export type WorldModLayer =
   typeof WORLD_MOD_LAYER_TERRAIN | typeof WORLD_MOD_LAYER_OBJECT;
@@ -369,19 +387,6 @@ export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   },
 };
 
-// Derived from the table above rather than hand-maintained beside it: the two
-// used to be edited in lockstep, which is one more place a new tile type had
-// to be remembered.
-export const WORLD_TILE_NAME_BY_VALUE: Record<number, WorldTileName> =
-  Object.keys(WORLD_TILE_DEFS).reduce(function (
-    acc: Record<number, WorldTileName>,
-    tileName,
-  ) {
-    const name = tileName as WorldTileName;
-    acc[WORLD_TILE_DEFS[name].value] = name;
-    return acc;
-  }, {});
-
 const WORLD_FLAVOR_TEXTS = [
   "A low rune-song lingers between the spruce boughs.",
   "Rowan charms sway softly where the pine paths meet.",
@@ -503,25 +508,6 @@ export function getWorldBoundaryTileName(worldType: string): WorldTileName {
   if (normalizedType === WORLD_TYPE_BUILDING) return WORLD_TILE_HOUSE;
   if (normalizedType === WORLD_TYPE_VILLAGE) return WORLD_TILE_STICK_FENCE;
   return WORLD_TILE_SPRUCE_THICKET;
-}
-
-export function getWorldTileDef(tileName: string): WorldTileDef {
-  return (
-    WORLD_TILE_DEFS[tileName as WorldTileName] ||
-    WORLD_TILE_DEFS[WORLD_TILE_GROUND]
-  );
-}
-
-export function worldTileNameForValue(tileValue: number): WorldTileName {
-  return WORLD_TILE_NAME_BY_VALUE[Number(tileValue)] || WORLD_TILE_GROUND;
-}
-
-export function worldTileValueForName(tileName: string): number {
-  return getWorldTileDef(tileName).value;
-}
-
-export function isWorldTileWalkable(tileValue: number): boolean {
-  return !!getWorldTileDef(worldTileNameForValue(tileValue)).walkable;
 }
 
 export function createWorldId(): string {

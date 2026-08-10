@@ -30,6 +30,16 @@ import {
 } from "./world-class-storage.ts";
 import { reconcileWorldPlacements } from "./world-placement-reconcile.ts";
 import {
+  deleteTileClass,
+  getAllTileClasses,
+  getTileClass,
+  nextFreeTileValue,
+  refreshTileClassCache,
+  TILE_LAYER_TERRAIN,
+  TILE_VISUAL_STYLES,
+  upsertTileClass,
+} from "./tile-registry.ts";
+import {
   canManageClass,
   normalizeOwnerIdsInput,
   userHasCreatorStone,
@@ -1026,5 +1036,202 @@ export function deleteWorldClassHandler(context: any) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
   deleteWorldClass(classId);
+  return ResponseBuilder.json({ ok: true, deleted_id: classId });
+}
+
+// ── Tile classes ─────────────────────────────────────────────────────────
+// The vocabulary the map itself is made of. A tile's numeric `value` is a
+// runtime encoding (maps are regenerated from a seed; world mods store the
+// tile id), so it only has to be unique — the repository assigns the next
+// free one on create.
+
+/**
+ * @param {*} raw
+ * @returns {*}
+ */
+function normalizeTileVisual(raw: any) {
+  if (!raw || typeof raw !== "object") return undefined;
+  var style = String(raw.style || "");
+  if (TILE_VISUAL_STYLES.indexOf(style as any) === -1) return undefined;
+  var visual: any = { style: style };
+  if (raw.color !== undefined) visual.color = Number(raw.color);
+  if (raw.colorAlt !== undefined) visual.colorAlt = Number(raw.colorAlt);
+  if (raw.y !== undefined) visual.y = Number(raw.y);
+  return visual;
+}
+
+/**
+ * @param {*} context
+ */
+export function tileClassesHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  refreshTileClassCache();
+  return ResponseBuilder.json({ ok: true, tile_classes: getAllTileClasses() });
+}
+
+/**
+ * @param {*} context
+ */
+export function createTileClassHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
+  }
+  var id = String((body && body.id) || "").trim();
+  if (!id) {
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  refreshTileClassCache();
+  if (getTileClass(id)) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.tile_class_exists" },
+      400,
+    );
+  }
+  var record = {
+    id: id,
+    value:
+      body && body.value !== undefined
+        ? Math.floor(Number(body.value))
+        : nextFreeTileValue(),
+    walkable: !!(body && body.walkable),
+    layer: String((body && body.layer) || TILE_LAYER_TERRAIN),
+    visual: normalizeTileVisual(body && body.visual),
+    ownerIds: [context.request.auth.userId],
+    labels: normalizeClassLabels(body && body.labels),
+  };
+  var write = upsertTileClass(record);
+  if (!write || !write.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "error.tile_class_upsert_failed" +
+          (write && write.error ? ": " + String(write.error) : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, tile_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+export function updateTileClassHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  if (!classId) {
+    return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "error.invalid_json_body" }, 400);
+  }
+  refreshTileClassCache();
+  var existing = getTileClass(classId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.tile_class_not_found" },
+      404,
+    );
+  }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
+  }
+  var record = {
+    id: classId,
+    value:
+      body && body.value !== undefined
+        ? Math.floor(Number(body.value))
+        : existing.value,
+    walkable:
+      body && body.walkable !== undefined ? !!body.walkable : existing.walkable,
+    layer: String((body && body.layer) || existing.layer),
+    visual:
+      body && body.visual !== undefined
+        ? normalizeTileVisual(body.visual)
+        : existing.visual,
+    ownerIds:
+      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    labels:
+      body && body.labels !== undefined
+        ? normalizeClassLabels(body.labels)
+        : existing.labels,
+  };
+  var write = upsertTileClass(record);
+  if (!write || !write.ok) {
+    return ResponseBuilder.json(
+      {
+        ok: false,
+        error:
+          "error.tile_class_upsert_failed" +
+          (write && write.error ? ": " + String(write.error) : ""),
+      },
+      500,
+    );
+  }
+  return ResponseBuilder.json({ ok: true, tile_class: record });
+}
+
+/**
+ * @param {*} context
+ */
+export function deleteTileClassHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  if (!userHasCreatorStone(context.request.auth.userId)) {
+    return ResponseBuilder.json(
+      { error: "error.editing_rights_required" },
+      403,
+    );
+  }
+  var classId = String(
+    (context.request.params && context.request.params.id) || "",
+  );
+  refreshTileClassCache();
+  var existing = getTileClass(classId);
+  if (!existing) {
+    return ResponseBuilder.json(
+      { ok: false, error: "error.tile_class_not_found" },
+      404,
+    );
+  }
+  if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
+    return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
+  }
+  deleteTileClass(classId);
   return ResponseBuilder.json({ ok: true, deleted_id: classId });
 }

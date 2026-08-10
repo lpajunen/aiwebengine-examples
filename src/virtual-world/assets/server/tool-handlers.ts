@@ -38,6 +38,16 @@ import {
 } from "./living-registry.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import {
+  deleteTileClass,
+  getAllTileClasses,
+  getTileClass,
+  nextFreeTileValue,
+  refreshTileClassCache,
+  TILE_LAYER_TERRAIN,
+  TILE_VISUAL_STYLES,
+  upsertTileClass,
+} from "./tile-registry.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
@@ -780,6 +790,104 @@ export function virtualWorldManageWorldClassesToolHandler(
     }
     deleteWorldClass(id);
     return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+}
+
+export function virtualWorldManageTileClassesToolHandler(context: any): string {
+  const userId = getAuthenticatedUserId(context);
+  if (!userId) {
+    return JSON.stringify({ ok: false, error: "Authentication required" });
+  }
+  if (!userHasCreatorStone(userId)) {
+    return JSON.stringify({ ok: false, error: "Editing rights required" });
+  }
+  const args = context.args || {};
+  const action = String(args.action || "list");
+  refreshTileClassCache();
+
+  if (action === "list") {
+    return JSON.stringify({ ok: true, tile_classes: getAllTileClasses() });
+  }
+
+  const id = String(args.id || "").trim();
+  if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+
+  if (action === "get") {
+    const cls = getTileClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "Tile class not found" });
+    return JSON.stringify({ ok: true, tile_class: cls });
+  }
+
+  if (action === "delete") {
+    const cls = getTileClass(id);
+    if (!cls)
+      return JSON.stringify({ ok: false, error: "Tile class not found" });
+    if (!canManageClass(userId, cls.ownerIds)) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
+    }
+    deleteTileClass(id);
+    return JSON.stringify({ ok: true, deleted_id: id });
+  }
+
+  if (action === "create" || action === "update") {
+    const existing = action === "update" ? getTileClass(id) : null;
+    if (action === "update" && !existing) {
+      return JSON.stringify({ ok: false, error: "Tile class not found" });
+    }
+    if (existing && !canManageClass(userId, existing.ownerIds)) {
+      return JSON.stringify({ ok: false, error: "Not class owner" });
+    }
+    let visual = existing ? existing.visual : undefined;
+    if (args.visual !== undefined) {
+      const style = String((args.visual && args.visual.style) || "");
+      visual =
+        TILE_VISUAL_STYLES.indexOf(style as any) === -1
+          ? undefined
+          : (Object.assign({}, args.visual, { style: style }) as any);
+    }
+    const record = {
+      id: id,
+      value:
+        args.value !== undefined
+          ? Math.floor(Number(args.value))
+          : existing
+            ? existing.value
+            : nextFreeTileValue(),
+      walkable:
+        args.walkable !== undefined
+          ? !!args.walkable
+          : existing
+            ? existing.walkable
+            : false,
+      layer: String(
+        args.layer || (existing ? existing.layer : TILE_LAYER_TERRAIN),
+      ),
+      visual: visual,
+      ownerIds: existing
+        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        : [userId],
+      labels:
+        args.labels !== undefined
+          ? normalizeClassLabels(args.labels)
+          : existing
+            ? existing.labels
+            : {},
+    };
+    const writeResult = upsertTileClass(record);
+    if (!writeResult || !writeResult.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "Tile class upsert failed" +
+          (writeResult && writeResult.error
+            ? ": " + String(writeResult.error)
+            : ""),
+      });
+    }
+    return JSON.stringify({ ok: true, tile_class: record });
   }
 
   return JSON.stringify({ ok: false, error: "Unknown action: " + action });

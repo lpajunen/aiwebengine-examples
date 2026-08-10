@@ -18,8 +18,6 @@ import {
   TREE_ACTION_BY_ITEM_TYPE,
   WORLD_MOD_LAYER_OBJECT,
   WORLD_MOD_LAYER_TERRAIN,
-  WORLD_TILE_DEFS,
-  WORLD_TILE_NAME_BY_VALUE,
   WORLD_TYPE_FOREST,
   worldTileValueForName,
 } from "./server/world-domain.ts";
@@ -169,6 +167,7 @@ import {
   upsertActionClass as upsertActionClassImpl,
   deleteActionClass as deleteActionClassImpl,
 } from "./server/item-registry.ts";
+import { bootstrapTileClasses as bootstrapTileClassesImpl } from "./server/tile-registry.ts";
 import {
   bootstrapLivingClasses as bootstrapLivingClassesImpl,
   deleteLivingClass as deleteLivingClassImpl,
@@ -197,6 +196,7 @@ import {
   virtualWorldManageItemClassesToolHandler as virtualWorldManageItemClassesToolHandlerImpl,
   virtualWorldManageActionClassesToolHandler as virtualWorldManageActionClassesToolHandlerImpl,
   virtualWorldManageLivingClassesToolHandler as virtualWorldManageLivingClassesToolHandlerImpl,
+  virtualWorldManageTileClassesToolHandler as virtualWorldManageTileClassesToolHandlerImpl,
   virtualWorldManageWorldClassesToolHandler as virtualWorldManageWorldClassesToolHandlerImpl,
 } from "./server/tool-handlers.ts";
 import {
@@ -276,6 +276,10 @@ import {
   createLivingClassHandler as createLivingClassHandlerImpl,
   updateLivingClassHandler as updateLivingClassHandlerImpl,
   deleteLivingClassHandler as deleteLivingClassHandlerImpl,
+  tileClassesHandler as tileClassesHandlerImpl,
+  createTileClassHandler as createTileClassHandlerImpl,
+  updateTileClassHandler as updateTileClassHandlerImpl,
+  deleteTileClassHandler as deleteTileClassHandlerImpl,
   worldClassesHandler as worldClassesHandlerImpl,
   createWorldClassHandler as createWorldClassHandlerImpl,
   reconcileWorldHandler as reconcileWorldHandlerImpl,
@@ -411,6 +415,26 @@ function updateLivingClassHandler(context) {
 /** @param {*} context */
 function deleteLivingClassHandler(context) {
   return deleteLivingClassHandlerImpl(context);
+}
+
+/** @param {*} context */
+function tileClassesHandler(context) {
+  return tileClassesHandlerImpl(context);
+}
+
+/** @param {*} context */
+function createTileClassHandler(context) {
+  return createTileClassHandlerImpl(context);
+}
+
+/** @param {*} context */
+function updateTileClassHandler(context) {
+  return updateTileClassHandlerImpl(context);
+}
+
+/** @param {*} context */
+function deleteTileClassHandler(context) {
+  return deleteTileClassHandlerImpl(context);
 }
 /** @param {*} context */
 function worldClassesHandler(context) {
@@ -560,6 +584,11 @@ function virtualWorldManageLivingClassesToolHandler(context) {
 }
 
 /** @param {*} context */
+function virtualWorldManageTileClassesToolHandler(context) {
+  return virtualWorldManageTileClassesToolHandlerImpl(context);
+}
+
+/** @param {*} context */
 function virtualWorldManageWorldClassesToolHandler(context) {
   return virtualWorldManageWorldClassesToolHandlerImpl(context);
 }
@@ -599,6 +628,9 @@ function init() {
   phase("register", registerVirtualWorldRuntimeImpl);
   phase("world_schema", ensureWorldDatabaseSchema);
   phase("chat_schema", ensureChatDatabaseSchema);
+  // Tile classes first: the other repositories and the map generator resolve
+  // tile ids through them.
+  phase("tile_classes", bootstrapTileClassesImpl);
   phase("item_classes", bootstrapItemClassesImpl);
   phase("action_classes", bootstrapActionClassesImpl);
   phase("living_classes", bootstrapLivingClassesImpl);

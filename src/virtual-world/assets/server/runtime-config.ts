@@ -79,6 +79,7 @@ export const VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
 export const VWORLD_LIVING_CLASS_TABLE = "vworld_living_classes";
+export const VWORLD_TILE_CLASS_TABLE = "vworld_tile_classes";
 // Deployment configuration, deliberately not world-class content: a class is a
 // reusable template, while a deployment needs one concrete world instance to
 // drop new players into. Change these to move the game's front door.
@@ -108,7 +109,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 //     death_class_id/corpse_item_id/revive_class_id/combatant.
 // v5: action class item_effect_json.
 // v6: living class behavior_json.
-export const VWORLD_SCHEMA_VERSION = 6;
+// v7: vworld_tile_classes table.
+export const VWORLD_SCHEMA_VERSION = 7;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

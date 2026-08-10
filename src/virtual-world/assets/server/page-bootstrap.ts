@@ -1,5 +1,5 @@
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
-import { WORLD_TILE_DEFS } from "./world-domain.ts";
+import { getTileDefs } from "./tile-registry.ts";
 import {
   ActiveActionEntry,
   getActiveActionsForUser,
@@ -208,7 +208,7 @@ export function buildVirtualWorldPageState(
   // payload and skips the avoidable server work of assembling them.
   if (includeRegistries) {
     const livingClasses = getAllLivingClasses();
-    state.worldTileDefs = WORLD_TILE_DEFS;
+    state.worldTileDefs = getTileDefs();
     state.itemRegistry = getBootstrapRegistry();
     state.livingRegistry = {
       classes: Array.isArray(livingClasses)

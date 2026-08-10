@@ -12,12 +12,13 @@ import {
   getWorldDimensions,
   getWorldType,
 } from "./world-bootstrap.ts";
-import {
-  isWorldTileWalkable,
-  getActionsForItemType,
-  WORLD_TILE_NAME_BY_VALUE,
-} from "./world-domain.ts";
+import { isWorldTileWalkable, getActionsForItemType } from "./world-domain.ts";
 import { loadWorldHouses, loadWorldMods } from "./world-mod-storage.ts";
+import {
+  getTileClass,
+  worldTileNameForValue as tileNameForValue,
+  worldTileValueForName as tileValueForName,
+} from "./tile-registry.ts";
 import {
   buildInventorySelectors,
   getAllLivingItems,
@@ -33,10 +34,12 @@ type CanonicalState = {
 };
 
 export function worldTileNameForValue(tileValue: number): string {
-  if (WORLD_TILE_NAME_BY_VALUE[tileValue]) {
-    return WORLD_TILE_NAME_BY_VALUE[tileValue];
-  }
-  return "unknown";
+  const known = tileNameForValue(tileValue);
+  // The registry falls back to "ground" for an unknown value; this caller
+  // reports it as unknown instead, since it is naming a tile for a player.
+  return getTileClass(known) && tileValueForName(known) === Number(tileValue)
+    ? known
+    : "unknown";
 }
 
 export function getAvailableWorldActions(

@@ -759,6 +759,71 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageLivingClassesToolHandler",
   );
 
+  const virtualWorldManageTileClassesSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "get", "create", "update", "delete"],
+        description: "Operation to perform on tile class definitions",
+        default: "list",
+      },
+      id: {
+        type: "string",
+        description: "Tile class ID (required for get, create, update, delete)",
+      },
+      value: {
+        type: "number",
+        description:
+          "Numeric encoding used in map arrays; must be unique. Omit on create to take the next free one. Maps are regenerated and world mods store the tile id, so this is runtime-only.",
+      },
+      walkable: {
+        type: "boolean",
+        description: "Whether livings can stand on this tile",
+      },
+      layer: {
+        type: "string",
+        enum: ["terrain", "object"],
+        description:
+          "Which world-mod layer a mod painting this tile belongs to",
+      },
+      visual: {
+        type: "object",
+        description:
+          "How the client draws it: a style naming one of its mesh recipes plus colors. Omit for a tile drawn by a pass of its own (ground, spruce_thicket, pine_tree, house).",
+        properties: {
+          style: {
+            type: "string",
+            enum: ["floor", "water", "rock", "mountain", "fence"],
+          },
+          color: { type: "number" },
+          colorAlt: {
+            type: "number",
+            description:
+              'Second color: the other parity shade for "floor", the rails for "fence"',
+          },
+          y: { type: "number", description: "Height the recipe sits at" },
+        },
+      },
+      ownerIds: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Owners of the row. A built-in with no owner is resynced from code on every bootstrap; take ownership to keep an edit.",
+      },
+      labels: {
+        type: "object",
+        description: "Per-locale display names",
+      },
+    },
+  });
+  safeRegisterTool(
+    "virtualWorldManageTileClasses",
+    "List, get, create, update, or delete tile class definitions — the vocabulary worlds are made of",
+    virtualWorldManageTileClassesSchema,
+    "virtualWorldManageTileClassesToolHandler",
+  );
+
   const virtualWorldManageWorldClassesSchema = JSON.stringify({
     type: "object",
     properties: {
@@ -1020,6 +1085,22 @@ export function registerVirtualWorldRuntime(): void {
   safeRegisterRoute(
     "/virtual-world/living-classes/:id",
     "deleteLivingClassHandler",
+    "DELETE",
+  );
+  safeRegisterRoute("/virtual-world/tile-classes", "tileClassesHandler", "GET");
+  safeRegisterRoute(
+    "/virtual-world/tile-classes",
+    "createTileClassHandler",
+    "POST",
+  );
+  safeRegisterRoute(
+    "/virtual-world/tile-classes/:id",
+    "updateTileClassHandler",
+    "PUT",
+  );
+  safeRegisterRoute(
+    "/virtual-world/tile-classes/:id",
+    "deleteTileClassHandler",
     "DELETE",
   );
   safeRegisterRoute(

@@ -17,6 +17,7 @@ import {
   VWORLD_FOLLOW_TABLE,
   VWORLD_ITEM_CLASS_TABLE,
   VWORLD_LIVING_CLASS_TABLE,
+  VWORLD_TILE_CLASS_TABLE,
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
   VWORLD_NPC_TICK_LEASE_TABLE,
@@ -1208,6 +1209,46 @@ function runWorldDatabaseMigration(): void {
   step("addUniqueIndex", VWORLD_LIVING_CLASS_TABLE, function () {
     return database.addUniqueIndex(
       VWORLD_LIVING_CLASS_TABLE,
+      JSON.stringify(["class_id"]),
+    );
+  });
+
+  step("createTable", VWORLD_TILE_CLASS_TABLE, function () {
+    return database.createTable(VWORLD_TILE_CLASS_TABLE);
+  });
+  [
+    ["addTextColumn", "class_id", false],
+    ["addIntegerColumn", "tile_value", false],
+    ["addIntegerColumn", "walkable", false],
+    ["addTextColumn", "layer", false],
+    ["addTextColumn", "visual_json", true],
+    ["addTextColumn", "owner_ids_json", true],
+    ["addTextColumn", "labels_json", true],
+    ["addIntegerColumn", "created_at", false],
+    ["addIntegerColumn", "updated_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_TILE_CLASS_TABLE,
+      function () {
+        return entry[0] === "addIntegerColumn"
+          ? database.addIntegerColumn(
+              VWORLD_TILE_CLASS_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            )
+          : database.addTextColumn(
+              VWORLD_TILE_CLASS_TABLE,
+              String(entry[1]),
+              Boolean(entry[2]),
+            );
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_TILE_CLASS_TABLE, function () {
+    return database.addUniqueIndex(
+      VWORLD_TILE_CLASS_TABLE,
       JSON.stringify(["class_id"]),
     );
   });

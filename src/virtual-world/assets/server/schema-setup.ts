@@ -1095,6 +1095,7 @@ function runWorldDatabaseMigration(): void {
     ["addTextColumn", "experience_json", true],
     ["addTextColumn", "living_effect_json", true],
     ["addTextColumn", "linked_world_json", true],
+    ["addTextColumn", "item_effect_json", true],
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
     ["addTextColumn", "owner_ids_json", true],

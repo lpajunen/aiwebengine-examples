@@ -106,7 +106,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // v2: living class visual_style/color + item class style columns.
 // v4: action class living_effect_json + linked_world_json; living class
 //     death_class_id/corpse_item_id/revive_class_id/combatant.
-export const VWORLD_SCHEMA_VERSION = 4;
+// v5: action class item_effect_json.
+export const VWORLD_SCHEMA_VERSION = 5;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

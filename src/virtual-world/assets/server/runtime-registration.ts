@@ -520,6 +520,55 @@ export function registerVirtualWorldRuntime(): void {
           },
         },
       },
+      itemEffect: {
+        type: "object",
+        description:
+          "Optional mutation of a target item's state — the item counterpart to livingEffect, and the verb behind break and fix. The target is an item on the action's target tile, named by target_item_id.",
+        properties: {
+          targetConditions: {
+            type: "array",
+            items: { type: "object" },
+            description:
+              "Gates on the target item, reading its type and state.*; a failure rejects the action",
+          },
+          field: {
+            type: "string",
+            description:
+              'Field path inside the item; must sit under "state." (e.g. state.currentHitPoints)',
+          },
+          op: { type: "string", enum: ["add", "sub", "set"] },
+          amount: { type: "number" },
+          roll: {
+            type: "string",
+            enum: ["fixed", "attack_roll"],
+            description:
+              '"fixed" (default) applies amount exactly; "attack_roll" rolls d20 against the item\'s state.armorClass then 1..(actor weaponClass), so it can miss',
+          },
+          maxField: {
+            type: "string",
+            description:
+              "Optional upper bound as another field path (state.maxHitPoints for a repair). A clamped no-op reports the `none` toast and still succeeds.",
+          },
+          destroyAtZero: {
+            type: "boolean",
+            description: "Reaching zero removes the item from the world",
+          },
+          changeEventId: {
+            type: "string",
+            description: "Item-change event broadcast on an ordinary change",
+          },
+          destroyEventId: {
+            type: "string",
+            description:
+              "Item-change event broadcast when the item is destroyed",
+          },
+          toasts: {
+            type: "object",
+            description:
+              "Per-outcome toasts: hit / destroy / miss / none, each {message, messageKey}. {target} is the item's label.",
+          },
+        },
+      },
       linkedWorld: {
         type: "object",
         description:

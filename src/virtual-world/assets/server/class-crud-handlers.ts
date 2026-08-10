@@ -323,6 +323,7 @@ export function createActionClassHandler(context: any) {
     experience: body && body.experience ? body.experience : undefined,
     livingEffect: body && body.livingEffect ? body.livingEffect : undefined,
     linkedWorld: body && body.linkedWorld ? body.linkedWorld : undefined,
+    itemEffect: body && body.itemEffect ? body.itemEffect : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)
@@ -444,6 +445,10 @@ export function updateActionClassHandler(context: any) {
       body && body.linkedWorld !== undefined
         ? body.linkedWorld
         : existing.linkedWorld,
+    itemEffect:
+      body && body.itemEffect !== undefined
+        ? body.itemEffect
+        : existing.itemEffect,
     fatigueCost:
       body && body.fatigueCost !== undefined
         ? Number(body.fatigueCost)

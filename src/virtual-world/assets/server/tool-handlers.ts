@@ -437,6 +437,8 @@ export function virtualWorldManageActionClassesToolHandler(
         args.livingEffect ?? (existing ? existing.livingEffect : undefined),
       linkedWorld:
         args.linkedWorld ?? (existing ? existing.linkedWorld : undefined),
+      itemEffect:
+        args.itemEffect ?? (existing ? existing.itemEffect : undefined),
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:

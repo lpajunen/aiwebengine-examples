@@ -222,10 +222,59 @@ export interface ActionDefinition {
   // targeting/aggregation. logicSpec stays the item-state counterpart: that
   // one writes the *source item's* state, this one writes a living's.
   livingEffect?: ActionLivingEffect;
+  // The same idea aimed at an item on the target tile rather than at a
+  // living — see the itemEffect block in tree-action-helpers.ts.
+  itemEffect?: ActionItemEffect;
   // Creates a brand-new world and a matched pair of items linking this tile to
   // it — the verb behind build_portal and build_door. See the linkedWorld
   // block in tree-action-helpers.ts.
   linkedWorld?: ActionLinkedWorld;
+}
+
+// Declarative mutation of an *item's* state, the counterpart to
+// ActionLivingEffect: break and fix were two hand-written handlers doing the
+// same arithmetic on state.currentHitPoints that heal and harm do on a
+// living's values. The target is an item on the action's target tile, named by
+// the request's target_item_id.
+//
+// logicSpec remains the other item-state writer, and the two do different
+// jobs: logicSpec edits the *source* item the actor is holding (tuning a
+// kantele), while this edits the item being acted upon.
+export interface ActionItemEffect {
+  // Gates on the target item, evaluated with evaluateEntityConditions against
+  // its `type` and `state.*`. A failure rejects the action.
+  targetConditions?: ActionCondition[];
+  // Field path inside the item; must sit under `state.`, which is the part of
+  // an item this persists.
+  field: string;
+  op: "add" | "sub" | "set";
+  amount?: number;
+  // "fixed" (default) applies `amount` exactly. "attack_roll" ignores it and
+  // rolls instead: d20 against the item's own state.armorClass, then
+  // 1..(actor's weaponClass) — so a swing at a crate can miss, and a stronger
+  // actor breaks it faster.
+  roll?: "fixed" | "attack_roll";
+  // Optional upper bound as another field path, e.g. state.maxHitPoints for a
+  // repair. An effect clamped to a no-op is not a failure: it reports the
+  // `none` toast and still succeeds, which is how fixing an undamaged item
+  // stays a remark rather than an error.
+  maxField?: string;
+  // Reaching zero removes the item from the world.
+  destroyAtZero?: boolean;
+  // Item-change event ids broadcast to the world (see item-events.ts): one for
+  // an ordinary change, one for the destruction.
+  changeEventId?: string;
+  destroyEventId?: string;
+  toasts?: {
+    // Applied, and the item survived.
+    hit?: ActionLivingEffectToast;
+    // Applied, and the item was destroyed (needs destroyAtZero).
+    destroy?: ActionLivingEffectToast;
+    // An attack_roll that missed.
+    miss?: ActionLivingEffectToast;
+    // The mutation would have changed nothing.
+    none?: ActionLivingEffectToast;
+  };
 }
 
 // A "build a way into a new world" spec. The two built-in instances differ
@@ -929,6 +978,28 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
     targeting: WALK_ADJACENT_TARGETING,
+    itemEffect: {
+      field: "state.currentHitPoints",
+      op: "sub",
+      roll: "attack_roll",
+      destroyAtZero: true,
+      changeEventId: "item_break_damage",
+      destroyEventId: "item_break_destroy",
+      toasts: {
+        hit: {
+          message: "You hit.",
+          messageKey: "tree_action.attack_hit_toast",
+        },
+        destroy: {
+          message: "You hit. You destroyed {target}.",
+          messageKey: "tree_action.attack_destroy_toast",
+        },
+        miss: {
+          message: "You missed.",
+          messageKey: "tree_action.attack_miss_toast",
+        },
+      },
+    },
   },
   fix: {
     id: "fix",
@@ -941,6 +1012,26 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     validWhen: [
       { field: "state.currentHitPoints", op: "lt", ref: "state.maxHitPoints" },
     ],
+    // The mirror of break: same field, opposite op, no roll, and clamped to
+    // the item's own maximum so repairing an undamaged one is a no-op remark
+    // rather than a failure.
+    itemEffect: {
+      field: "state.currentHitPoints",
+      op: "add",
+      amount: 1,
+      maxField: "state.maxHitPoints",
+      changeEventId: "item_fix",
+      toasts: {
+        hit: {
+          message: "You fix {target}.",
+          messageKey: "tree_action.fix_toast",
+        },
+        none: {
+          message: "{target} is already at full health.",
+          messageKey: "tree_action.fix_full_toast",
+        },
+      },
+    },
   },
   bury: {
     id: "bury",

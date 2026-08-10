@@ -1142,6 +1142,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["livingEffect"] | undefined,
     linkedWorld: parseJson(row.linked_world_json, undefined) as
       ActionDefinition["linkedWorld"] | undefined,
+    itemEffect: parseJson(row.item_effect_json, undefined) as
+      ActionDefinition["itemEffect"] | undefined,
     fatigueCost:
       row.fatigue_cost === null || row.fatigue_cost === undefined
         ? undefined
@@ -1179,6 +1181,7 @@ function actionClassToDbRow(
   experience_json: string;
   living_effect_json: string;
   linked_world_json: string;
+  item_effect_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
   owner_ids_json: string;
@@ -1208,6 +1211,9 @@ function actionClassToDbRow(
       : "",
     linked_world_json: record.linkedWorld
       ? JSON.stringify(record.linkedWorld)
+      : "",
+    item_effect_json: record.itemEffect
+      ? JSON.stringify(record.itemEffect)
       : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
@@ -1498,6 +1504,21 @@ function backfillActionClassDefaults(
           JSON.stringify(def.livingEffect)
       ) {
         existing.livingEffect = def.livingEffect;
+        changed = true;
+      }
+    }
+    // Same code-owned resync rule as livingEffect, for the same reason.
+    if (def.itemEffect !== undefined) {
+      const itemEffectIsCodeOwned =
+        !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+      if (existing.itemEffect === undefined) {
+        existing.itemEffect = def.itemEffect;
+        changed = true;
+      } else if (
+        itemEffectIsCodeOwned &&
+        JSON.stringify(existing.itemEffect) !== JSON.stringify(def.itemEffect)
+      ) {
+        existing.itemEffect = def.itemEffect;
         changed = true;
       }
     }

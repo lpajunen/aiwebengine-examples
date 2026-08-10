@@ -93,6 +93,8 @@ import {
   evaluateConditions,
   evaluateEntityConditions,
   applyEffects,
+  getFieldValue,
+  setFieldValue,
 } from "./action-logic-interpreter.ts";
 import {
   WORLD_TILE_GROUND,
@@ -450,6 +452,28 @@ export function performTreeActionForUser(
     });
   }
 
+  // Broadcasts one item-change event by id, if the id names a known
+  // definition. The itemEffect block names its own ids per outcome (damaged
+  // vs destroyed), which execution.itemChange's single id cannot express.
+  function broadcastConfiguredItemChangeById(
+    eventId: string,
+    row: number,
+    col: number,
+    items: any[],
+  ): void {
+    const itemChange = getItemChangeDefinition(eventId);
+    if (!itemChange) return;
+    broadcastItemChange(
+      worldId,
+      "player",
+      userId,
+      itemChange.id,
+      row,
+      col,
+      items,
+    );
+  }
+
   function maybeBroadcastConfiguredItemChange(
     row: number,
     col: number,
@@ -457,14 +481,8 @@ export function performTreeActionForUser(
   ): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.itemChange) return;
-    const itemChange = getItemChangeDefinition(execution.itemChange.eventId);
-    if (!itemChange) return;
-
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      itemChange.id,
+    broadcastConfiguredItemChangeById(
+      execution.itemChange.eventId,
       row,
       col,
       items,
@@ -1283,7 +1301,12 @@ export function performTreeActionForUser(
     };
   }
 
-  if (action === "break") {
+  // Declarative item effects (action-registry.ts `itemEffect`). break and fix
+  // were two handlers doing the same arithmetic on an item's
+  // state.currentHitPoints that heal and harm do on a living's values; both
+  // are data now, and a creator's "sharpen" or "corrode" needs no code.
+  const itemEffect = actionDefinition ? actionDefinition.itemEffect : null;
+  if (itemEffect) {
     const targetItemId = String((body && body.target_item_id) || "");
     if (!targetItemId) {
       return {
@@ -1291,12 +1314,11 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_item_required" },
       };
     }
-    const breakTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
-    const itemsHere = getTileItemsSnapshot(
+    const effectTileKey = resolvedTarget.row + "_" + resolvedTarget.col;
+    const targetItem = getTileItemsSnapshot(
       resolvedTarget.row,
       resolvedTarget.col,
-    );
-    const targetItem = itemsHere.find(function (item) {
+    ).find(function (item) {
       return item && String(item.id) === targetItemId;
     });
     if (!targetItem) {
@@ -1305,6 +1327,21 @@ export function performTreeActionForUser(
         payload: { ok: false, error: "error.target_item_not_found" },
       };
     }
+
+    const itemGate = evaluateEntityConditions(
+      itemEffect.targetConditions,
+      targetItem,
+    );
+    if (!itemGate.ok) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: itemGate.errorMessage || "error.action_condition_not_met",
+        },
+      };
+    }
+
     const targetItemDef = getItemDefinition(String(targetItem.type || ""));
     const targetItemLabel = targetItemDef
       ? targetItemDef.visuals.fallbackLabel
@@ -1313,62 +1350,107 @@ export function performTreeActionForUser(
       targetItem.state && typeof targetItem.state === "object"
         ? targetItem.state
         : {};
-    const armorClass = Number(itemState.armorClass) || 0;
 
-    // d20 attack roll: 1 always misses, 20 always hits, otherwise a hit
-    // requires beating (not just matching) the item's armor class.
-    const attackRoll = 1 + Math.floor(Math.random() * 20);
-    const isHit =
-      attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+    function itemEffectToast(
+      variant: "hit" | "destroy" | "miss" | "none",
+    ): Record<string, unknown> {
+      const toasts = itemEffect ? itemEffect.toasts : undefined;
+      const spec = toasts ? toasts[variant] : undefined;
+      if (!spec) return {};
+      const params = { target: targetItemLabel };
+      let english = String(spec.message || "");
+      Object.keys(params).forEach(function (name) {
+        english = english
+          .split("{" + name + "}")
+          .join(String((params as Record<string, unknown>)[name]));
+      });
+      return toastFields(String(spec.messageKey || ""), english, params);
+    }
 
-    if (!isHit) {
+    // Magnitude: the flat configured amount, or a rolled swing that can miss
+    // outright and scales with what the actor is wielding.
+    let magnitude = Math.floor(Number(itemEffect.amount || 0));
+    if (itemEffect.roll === "attack_roll") {
+      const armorClass = Number(itemState.armorClass) || 0;
+      const attackRoll = 1 + Math.floor(Math.random() * 20);
+      const isHit =
+        attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+      if (!isHit) {
+        return {
+          status: 200,
+          payload: buildConfiguredSuccessPayload({
+            ...itemEffectToast("miss"),
+            target_item_id: targetItemId,
+            result: "miss",
+          }),
+        };
+      }
+      magnitude =
+        1 +
+        Math.floor(
+          Math.random() *
+            Math.max(1, Number((inv.values && inv.values.weaponClass) || 0)),
+        );
+    }
+
+    const context: Record<string, unknown> = {
+      state: Object.assign({}, itemState),
+    };
+    const current = Number(getFieldValue(context, itemEffect.field) || 0);
+    let next =
+      itemEffect.op === "set"
+        ? magnitude
+        : itemEffect.op === "add"
+          ? current + magnitude
+          : current - magnitude;
+    if (itemEffect.maxField) {
+      const cap = Number(getFieldValue(context, itemEffect.maxField));
+      if (Number.isFinite(cap)) next = Math.min(next, cap);
+    }
+    if (itemEffect.destroyAtZero) next = Math.max(0, next);
+    setFieldValue(context, itemEffect.field, next);
+    const delta = next - current;
+
+    // A clamped no-op is not a failure — repairing an undamaged item is a
+    // remark, not an error.
+    if (delta === 0) {
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          ...toastFields("tree_action.attack_miss_toast", "You missed."),
+          ...itemEffectToast("none"),
           target_item_id: targetItemId,
+          result: "none",
         }),
       };
     }
 
-    const attackerWeaponClass = Math.max(
-      1,
-      Number((inv.values && inv.values.weaponClass) || 0),
-    );
-    const damage = 1 + Math.floor(Math.random() * attackerWeaponClass);
-    const currentHitPoints = Number(itemState.currentHitPoints) || 0;
-    const nextHitPoints = Math.max(0, currentHitPoints - damage);
-
-    if (nextHitPoints <= 0) {
-      if (Array.isArray(worldItems[breakTileKey])) {
-        worldItems[breakTileKey] = worldItems[breakTileKey].filter(function (
+    if (itemEffect.destroyAtZero && next <= 0) {
+      if (Array.isArray(worldItems[effectTileKey])) {
+        worldItems[effectTileKey] = worldItems[effectTileKey].filter(function (
           item: any,
         ) {
           return item && String(item.id) !== targetItemId;
         });
-        if (worldItems[breakTileKey].length === 0) {
-          delete worldItems[breakTileKey];
+        if (worldItems[effectTileKey].length === 0) {
+          delete worldItems[effectTileKey];
         }
       }
       deleteWorldItemById(String(targetItem.id));
-      broadcastItemChange(
-        worldId,
-        "player",
-        userId,
-        "item_break_destroy",
-        resolvedTarget.row,
-        resolvedTarget.col,
-        [targetItem],
-      );
+      if (itemEffect.destroyEventId) {
+        broadcastConfiguredItemChangeById(
+          itemEffect.destroyEventId,
+          resolvedTarget.row,
+          resolvedTarget.col,
+          [targetItem],
+        );
+      }
       return {
         status: 200,
         payload: buildConfiguredSuccessPayload({
-          ...toastFields(
-            "tree_action.attack_destroy_toast",
-            "You hit. You destroyed " + targetItemLabel + ".",
-            { target: targetItemLabel },
-          ),
+          ...itemEffectToast("destroy"),
           target_item_id: targetItemId,
+          result: "destroy",
+          delta: delta,
           tile_items: getTileItemsSnapshot(
             resolvedTarget.row,
             resolvedTarget.col,
@@ -1377,110 +1459,28 @@ export function performTreeActionForUser(
       };
     }
 
-    targetItem.state = Object.assign({}, itemState, {
-      currentHitPoints: nextHitPoints,
-    });
+    targetItem.state = context.state as Record<string, unknown>;
     upsertWorldItem(
       worldId,
       resolvedTarget.row,
       resolvedTarget.col,
       targetItem,
     );
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "item_break_damage",
-      resolvedTarget.row,
-      resolvedTarget.col,
-      getTileItemsSnapshot(resolvedTarget.row, resolvedTarget.col),
-    );
+    if (itemEffect.changeEventId) {
+      broadcastConfiguredItemChangeById(
+        itemEffect.changeEventId,
+        resolvedTarget.row,
+        resolvedTarget.col,
+        getTileItemsSnapshot(resolvedTarget.row, resolvedTarget.col),
+      );
+    }
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
-        ...toastFields("tree_action.attack_hit_toast", "You hit."),
+        ...itemEffectToast("hit"),
         target_item_id: targetItemId,
-        tile_items: getTileItemsSnapshot(
-          resolvedTarget.row,
-          resolvedTarget.col,
-        ),
-      }),
-    };
-  }
-
-  if (action === "fix") {
-    const targetItemId = String((body && body.target_item_id) || "");
-    if (!targetItemId) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_item_required" },
-      };
-    }
-    const itemsHere = getTileItemsSnapshot(
-      resolvedTarget.row,
-      resolvedTarget.col,
-    );
-    const targetItem = itemsHere.find(function (item) {
-      return item && String(item.id) === targetItemId;
-    });
-    if (!targetItem) {
-      return {
-        status: 200,
-        payload: { ok: false, error: "error.target_item_not_found" },
-      };
-    }
-    const targetItemDef = getItemDefinition(String(targetItem.type || ""));
-    const targetItemLabel = targetItemDef
-      ? targetItemDef.visuals.fallbackLabel
-      : String(targetItem.type || "item");
-    const itemState =
-      targetItem.state && typeof targetItem.state === "object"
-        ? targetItem.state
-        : {};
-    const maxHitPoints = Number(itemState.maxHitPoints) || 0;
-    const currentHitPoints = Number(itemState.currentHitPoints) || 0;
-
-    if (currentHitPoints >= maxHitPoints) {
-      return {
-        status: 200,
-        payload: buildConfiguredSuccessPayload({
-          ...toastFields(
-            "tree_action.fix_full_toast",
-            targetItemLabel + " is already at full health.",
-            { target: targetItemLabel },
-          ),
-          target_item_id: targetItemId,
-        }),
-      };
-    }
-
-    targetItem.state = Object.assign({}, itemState, {
-      currentHitPoints: currentHitPoints + 1,
-    });
-    upsertWorldItem(
-      worldId,
-      resolvedTarget.row,
-      resolvedTarget.col,
-      targetItem,
-    );
-    broadcastItemChange(
-      worldId,
-      "player",
-      userId,
-      "item_fix",
-      resolvedTarget.row,
-      resolvedTarget.col,
-      getTileItemsSnapshot(resolvedTarget.row, resolvedTarget.col),
-    );
-    return {
-      status: 200,
-      payload: buildConfiguredSuccessPayload({
-        ...toastFields(
-          "tree_action.fix_toast",
-          "You fix " + targetItemLabel + ".",
-          { target: targetItemLabel },
-        ),
-        target_item_id: targetItemId,
+        result: "hit",
+        delta: delta,
         tile_items: getTileItemsSnapshot(
           resolvedTarget.row,
           resolvedTarget.col,

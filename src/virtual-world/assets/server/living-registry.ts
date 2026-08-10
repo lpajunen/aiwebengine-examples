@@ -256,6 +256,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     size: "large",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.5 },
   },
   npc_wolf: {
     id: "npc_wolf",
@@ -268,6 +269,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     aggressive: true,
     visualStyle: "wolfish",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.2 },
   },
   npc_bear: {
     id: "npc_bear",
@@ -280,6 +282,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     aggressive: true,
     visualStyle: "bearish",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.2 },
   },
   npc_dog: {
     id: "npc_dog",
@@ -291,6 +294,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "doggish",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.2 },
   },
   // Horse and donkey are the same equine recipe: the donkey just pins a grey
   // coat where the horse leaves the color automatic (bay/chestnut browns
@@ -306,6 +310,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "equine",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.45 },
   },
   npc_donkey: {
     id: "npc_donkey",
@@ -318,6 +323,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     visualStyle: "equine",
     color: "#8f867c",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.5 },
   },
   npc_chicken: {
     id: "npc_chicken",
@@ -329,6 +335,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     valueSchema: defaultFatigueValueSchema(),
     visualStyle: "birdlike",
     corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.15 },
   },
 };
 
@@ -459,6 +466,14 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
     // Absent (a row seeded before this column existed) reads as a combatant,
     // matching the "missing == true" default on LivingClassRecord.
     combatant: row.combatant !== 0 && row.combatant !== false,
+    behavior: (function () {
+      try {
+        const parsed = JSON.parse(row.behavior_json || "{}");
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    })(),
   };
 }
 
@@ -484,6 +499,7 @@ function livingClassToDbRow(
   corpse_item_id: string;
   revive_class_id: string;
   combatant: number;
+  behavior_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -504,6 +520,7 @@ function livingClassToDbRow(
     corpse_item_id: String(record.corpseItemId || ""),
     revive_class_id: String(record.reviveClassId || ""),
     combatant: record.combatant === false ? 0 : 1,
+    behavior_json: JSON.stringify(record.behavior || {}),
     default_items_json: JSON.stringify(record.defaultItems || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
@@ -543,6 +560,7 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     corpseItemId: String(cls.corpseItemId || ""),
     reviveClassId: String(cls.reviveClassId || ""),
     combatant: cls.combatant !== false,
+    behavior: Object.assign({}, cls.behavior || {}),
   };
 }
 
@@ -556,10 +574,17 @@ export function bootstrapLivingClasses(): void {
     if (record.id) cache[record.id] = record;
   }
 
-  // The two reserved built-in IDs are always resynced to the current code
-  // definition (rather than only backfilled when missing) so that schema
-  // additions here (e.g. new labelKey/fallbackLabel fields) reach rows that
-  // were already seeded by an older deploy. Custom classes are untouched.
+  // A built-in whose row nobody owns is resynced to the current code
+  // definition rather than merely backfilled when missing, so schema
+  // additions here (a new labelKey, the behavior block) reach rows seeded by
+  // an older deploy. A row someone has taken ownership of is left alone —
+  // the same rule the item and action repositories use, and the reason an
+  // admin can retune a built-in and have it survive the next deploy.
+  //
+  // Without the ownership check this loop rewrote all fourteen built-ins on
+  // every cache refresh, which meant an edit through the class editor or the
+  // MCP tool was reverted before it could ever take effect: the repository
+  // looked writable and silently was not.
   const ids = Object.keys(DEFAULT_LIVING_CLASSES);
   let seeded = 0;
   let resynced = 0;
@@ -567,10 +592,15 @@ export function bootstrapLivingClasses(): void {
     const classId = ids[i];
     const cls = getBuiltInLivingClass(classId);
     if (!cls) continue;
-    const existed = !!cache[classId];
+    const existing = cache[classId];
+    const isOwned =
+      !!existing &&
+      Array.isArray(existing.ownerIds) &&
+      existing.ownerIds.length > 0;
+    if (isOwned) continue;
     upsertLivingClassRow(livingClassToDbRow(cls, now));
     cache[classId] = cls;
-    if (existed) {
+    if (existing) {
       resynced++;
     } else {
       seeded++;

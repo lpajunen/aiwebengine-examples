@@ -1,4 +1,5 @@
 import { getLivingClass } from "./living-registry.ts";
+import { DEFAULT_NPC_BEHAVIOR } from "./runtime-config.ts";
 import {
   WORLD_TILE_GROUND,
   WORLD_TILE_PINE_TREE,
@@ -78,6 +79,39 @@ export function buildOccupiedNPCMap(
   return occupiedNPCs;
 }
 
+/**
+ * The per-tick odds this NPC acts on, from its living class, falling back to
+ * DEFAULT_NPC_BEHAVIOR for anything the class leaves out. These were four
+ * literals inline below, identical for every class — a wolf idled exactly as
+ * often as a chicken.
+ * @returns every field resolved to a number
+ */
+function npcBehavior(npc: any): {
+  idleChance: number;
+  pickUpChance: number;
+  dropChance: number;
+  forageChance: number;
+} {
+  const cls = getLivingClass(String((npc && npc.class_id) || ""));
+  const configured = (cls && cls.behavior) || {};
+  function pick(value: unknown, fallback: number): number {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  }
+  return {
+    idleChance: pick(configured.idleChance, DEFAULT_NPC_BEHAVIOR.idleChance),
+    pickUpChance: pick(
+      configured.pickUpChance,
+      DEFAULT_NPC_BEHAVIOR.pickUpChance,
+    ),
+    dropChance: pick(configured.dropChance, DEFAULT_NPC_BEHAVIOR.dropChance),
+    forageChance: pick(
+      configured.forageChance,
+      DEFAULT_NPC_BEHAVIOR.forageChance,
+    ),
+  };
+}
+
 export function normalizeNPCInventoryState(npc: any): void {
   ensureNPCSlotsAndBag(npc);
   const livingClass = getLivingClass(String(npc.class_id || ""));
@@ -108,7 +142,7 @@ export function tickNPCMovement(params: {
   ) => void;
 }): boolean {
   const n = params.npc;
-  if (Math.random() < 0.35) {
+  if (Math.random() < npcBehavior(n).idleChance) {
     n.state = "idle";
     n.ts = params.now;
     return false;
@@ -216,7 +250,8 @@ export function tickNPCItemInteractions(params: {
   let itemChanges = false;
   const living = ensureNPCSlotsAndBag(n);
 
-  if (pickableItems.length > 0 && Math.random() < 0.65) {
+  const behavior = npcBehavior(n);
+  if (pickableItems.length > 0 && Math.random() < behavior.pickUpChance) {
     // Claim by delete: only grant items whose rows this tick actually
     // removed, so racing players/instances cannot dupe them.
     const claimed = params.deleteWorldItems(pickableItems);
@@ -257,7 +292,7 @@ export function tickNPCItemInteractions(params: {
     hasChanges = true;
   }
 
-  if (Math.random() < 0.12) {
+  if (Math.random() < behavior.dropChance) {
     let dropItem = null;
     if (living.bag.length > 0) {
       dropItem = living.bag.shift();
@@ -306,7 +341,10 @@ export function tickNPCTreeActions(params: {
 }): { hasChanges: boolean; treeChanges: boolean } {
   const n = params.npc;
   const npcTreeActions = params.getInventoryTreeActions(n);
-  if (npcTreeActions.length === 0 || Math.random() >= 0.08) {
+  if (
+    npcTreeActions.length === 0 ||
+    Math.random() >= npcBehavior(n).forageChance
+  ) {
     return { hasChanges: false, treeChanges: false };
   }
 

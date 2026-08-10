@@ -606,6 +606,12 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? existing.combatant !== false
             : true,
+      behavior:
+        args.behavior && typeof args.behavior === "object"
+          ? args.behavior
+          : existing
+            ? existing.behavior
+            : {},
       ownerIds: existing
         ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
         : [userId],

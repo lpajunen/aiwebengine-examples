@@ -191,6 +191,18 @@ export interface LivingClassRecord {
   // whatever class declares a reviveClassId, rather than testing for a ghost
   // by name. Missing == this class cannot be revived.
   reviveClassId?: string;
+  // Per-tick odds shaping how this class behaves when left to itself: how
+  // often it stands still rather than stepping, how readily it picks things
+  // up or drops them, how often it uses a tree tool it carries. Any field
+  // left out falls back to DEFAULT_NPC_BEHAVIOR (runtime-config.ts), which is
+  // what every class was hardcoded to before this existed. Meaningless for
+  // kind "player".
+  behavior?: {
+    idleChance?: number;
+    pickUpChance?: number;
+    dropChance?: number;
+    forageChance?: number;
+  };
   // Whether this living may take part in combat at all — as attacker or as
   // target. False makes a class untouchable and harmless: the built-in
   // player_ghost sets it, which is what stops a dead player from fighting on,

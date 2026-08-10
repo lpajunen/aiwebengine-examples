@@ -719,6 +719,32 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Living class this class returns to when revived — the inverse of deathClassId, and what the pray action reads. Empty means this class cannot be revived.",
       },
+      behavior: {
+        type: "object",
+        description:
+          "Per-tick odds shaping how this class acts when left alone; any field omitted falls back to the built-in default.",
+        properties: {
+          idleChance: {
+            type: "number",
+            description:
+              "Chance of standing still instead of stepping (default 0.35)",
+          },
+          pickUpChance: {
+            type: "number",
+            description:
+              "Chance of picking up pickable items underfoot (default 0.65)",
+          },
+          dropChance: {
+            type: "number",
+            description: "Chance of dropping something carried (default 0.12)",
+          },
+          forageChance: {
+            type: "number",
+            description:
+              "Chance of using a carried tree tool nearby (default 0.08)",
+          },
+        },
+      },
       combatant: {
         type: "boolean",
         description:

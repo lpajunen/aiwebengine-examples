@@ -519,6 +519,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.corpse_item_label">Corpse item (left on the death tile; blank = none)</span> <input id="lc-corpse-item" type="text" placeholder="npc_corpse" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.revive_class_label">Revive class (what praying restores; blank = cannot revive)</span> <input id="lc-revive-class" type="text" placeholder="player_human" autocomplete="off"></label>
         <label><input id="lc-combatant" type="checkbox" checked> <span data-i18n-key="class_editor.combatant">Combatant (may fight and be fought)</span></label>
+        <label><span data-i18n-key="class_editor.behavior_label">Behaviour (JSON: idleChance, pickUpChance, dropChance, forageChance)</span> <textarea id="lc-behavior" rows="2" placeholder='{"idleChance":0.2}'></textarea></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitLivingClassForm()" data-i18n-key="class_editor.save">Save</button>

@@ -107,13 +107,30 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // v4: action class living_effect_json + linked_world_json; living class
 //     death_class_id/corpse_item_id/revive_class_id/combatant.
 // v5: action class item_effect_json.
-export const VWORLD_SCHEMA_VERSION = 5;
+// v6: living class behavior_json.
+export const VWORLD_SCHEMA_VERSION = 6;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true
 // (see LivingClassRecord in world-domain.ts) starts a fight against a player
 // standing on its tile.
 export const NPC_AGGRO_CHANCE = 0.4;
+// Per-tick odds governing what an NPC does with itself, and the values every
+// class used to be stuck with — they were four literals scattered through
+// npc-tick-helpers.ts, identical for a wolf, a chicken and a woodsman. A
+// living class can now override any of them (LivingClassRecord.behavior), so
+// temperament is content; these remain the defaults for anything that does
+// not say otherwise.
+export const DEFAULT_NPC_BEHAVIOR = {
+  // Chance of standing still instead of taking a step.
+  idleChance: 0.35,
+  // Chance of picking up whatever pickable items share the NPC's tile.
+  pickUpChance: 0.65,
+  // Chance of dropping something it is carrying.
+  dropChance: 0.12,
+  // Chance of using a tree tool it carries on a neighbouring square.
+  forageChance: 0.08,
+};
 // Max Chebyshev tile distance for actions with targetKind "item_nearby" or
 // "living_nearby" (e.g. follow, fight) — see resolveActionTarget() in
 // tree-action-helpers.ts and isWithinTileDistance() in world-domain.ts.

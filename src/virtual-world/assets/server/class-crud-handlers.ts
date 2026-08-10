@@ -590,6 +590,10 @@ export function createLivingClassHandler(context: any) {
     corpseItemId: String((body && body.corpseItemId) || ""),
     reviveClassId: String((body && body.reviveClassId) || ""),
     combatant: !(body && body.combatant === false),
+    behavior:
+      body && body.behavior && typeof body.behavior === "object"
+        ? body.behavior
+        : {},
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
   };
@@ -702,6 +706,10 @@ export function updateLivingClassHandler(context: any) {
       body && body.combatant !== undefined
         ? !!body.combatant
         : existing.combatant !== false,
+    behavior:
+      body && body.behavior && typeof body.behavior === "object"
+        ? body.behavior
+        : existing.behavior,
     ownerIds:
       normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
     labels:

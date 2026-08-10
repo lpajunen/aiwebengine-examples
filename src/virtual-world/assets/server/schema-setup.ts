@@ -1180,6 +1180,7 @@ function runWorldDatabaseMigration(): void {
     ["addTextColumn", "corpse_item_id", true],
     ["addTextColumn", "revive_class_id", true],
     ["addIntegerColumn", "combatant", true],
+    ["addTextColumn", "behavior_json", true],
     ["addTextColumn", "owner_ids_json", true],
     ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],

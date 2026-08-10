@@ -1027,6 +1027,8 @@ function cancelLivingClassEdit() {
   ).value = "";
   /** @type {HTMLInputElement} */ (requireElementById("lc-combatant")).checked =
     true;
+  /** @type {HTMLTextAreaElement} */ (requireElementById("lc-behavior")).value =
+    "";
   requireElementById("living-class-form-title").textContent = t(
     "class_editor.new_living_type",
     "New living type",
@@ -1147,6 +1149,21 @@ function submitLivingClassForm() {
   var combatantVal = /** @type {HTMLInputElement} */ (
     requireElementById("lc-combatant")
   ).checked;
+  var behaviorRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-behavior")
+  ).value.trim();
+  var behavior = {};
+  if (behaviorRaw) {
+    try {
+      behavior = JSON.parse(behaviorRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_behavior_json", "Invalid behaviour JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     kind: kindVal,
@@ -1155,6 +1172,7 @@ function submitLivingClassForm() {
     corpseItemId: corpseItemId,
     reviveClassId: reviveClassId,
     combatant: combatantVal,
+    behavior: behavior,
     slotDefinitions: slotDefinitions,
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,

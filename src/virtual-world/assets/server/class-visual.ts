@@ -52,7 +52,13 @@ export type ItemVisualStyle =
   | "orb"
   | "plant"
   | "scroll"
-  | "book";
+  | "book"
+  // A landmark rather than a carryable: an item with a fixture style renders
+  // as its own standalone mesh at the centre of its tile and takes the place
+  // of whatever terrain feature the map would draw there (a broadleaf stands
+  // instead of the pine on its square). See ITEM_FIXTURE_STYLE_BUILDERS in
+  // client-world-render.js.
+  | "broadleaf";
 
 export const ITEM_VISUAL_STYLES: ItemVisualStyle[] = [
   "block",
@@ -65,6 +71,7 @@ export const ITEM_VISUAL_STYLES: ItemVisualStyle[] = [
   "plant",
   "scroll",
   "book",
+  "broadleaf",
 ];
 
 export const DEFAULT_ITEM_VISUAL_STYLE: ItemVisualStyle = "block";

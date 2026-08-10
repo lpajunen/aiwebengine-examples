@@ -1297,5 +1297,8 @@ function inventoryItemLabel(item) {
       registryItem.fallback_label || humanizeType(type),
     );
   }
-  return t(itemTypeToLabelKey(type), humanizeType(type));
+  // Reached only for a type the registry has never heard of: every class ships
+  // a label_key and a fallback_label. A per-type table of the built-ins' keys
+  // used to sit in i18n.js for this fallback, duplicating item-registry.ts.
+  return humanizeType(type);
 }

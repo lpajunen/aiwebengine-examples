@@ -340,9 +340,6 @@ function renderTileDetailPanel() {
   var col = selectedTileCol;
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
   var key = row + "_" + col;
-  var oakTile = getOldOakTile();
-  var isOakCenter = !!oakTile && row === oakTile.row && col === oakTile.col;
-
   requireElementById("tile-detail-title").textContent =
     t("tile.square", "Square") + " (" + col + ", " + row + ")";
 
@@ -354,8 +351,11 @@ function renderTileDetailPanel() {
   } else if (terrainType === clientTileValueForName("house")) {
     terrainLabel = t("terrain.house", "House block");
   } else if (terrainType === clientTileValueForName("pine_tree")) {
-    if (isOakCenter || isOldOakTile(row, col)) {
-      terrainLabel = t("terrain.old_oak", "Old oak");
+    // A fixture standing here replaces the pine, so name the square after the
+    // landmark itself rather than after the terrain it covers.
+    var pineFixture = getTileFixtureItem(row, col);
+    if (pineFixture) {
+      terrainLabel = inventoryItemLabel(pineFixture);
     } else {
       terrainLabel =
         treeMod && treeMod.action === "plant"

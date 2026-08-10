@@ -334,6 +334,10 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       color: 0x4a3222,
       labelKey: "item.old_oak.name",
       fallbackLabel: "Old oak",
+      // A fixture style: the client draws the oak as its own landmark mesh on
+      // its tile and skips the pine it would otherwise instance there. What
+      // used to be an `item.type === "old_oak"` test in three client passes.
+      style: "broadleaf",
     },
     actionIds: ["pray"],
   },

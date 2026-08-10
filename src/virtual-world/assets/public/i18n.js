@@ -142,7 +142,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       house: "House wall",
       tree: "Pine tree",
       tree_planted: "Pine tree (planted)",
-      old_oak: "Old oak",
       ocean: "Ocean",
       lake: "Lake",
       river: "River",
@@ -694,7 +693,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       house: "Talon seinä",
       tree: "Mänty",
       tree_planted: "Mänty (istutettu)",
-      old_oak: "Vanha tammi",
       ocean: "Meri",
       lake: "Järvi",
       river: "Joki",
@@ -1329,32 +1327,4 @@ function translateServerMessage(msg) {
   var suffix = colonIdx === -1 ? "" : raw.slice(colonIdx);
   var lastPart = key.split(".").pop() || key;
   return t(key, humanizeType(lastPart)) + suffix;
-}
-
-/**
- * @param {string} type
- * @returns {string}
- */
-function itemTypeToLabelKey(type) {
-  if (type === "saw") return "item.saw.name";
-  if (type === "hammer") return "item.hammer.name";
-  if (type === "knife") return "item.knife.name";
-  if (type === "flower") return "item.flower.name";
-  if (type === "tree_planter") return "item.tree_planter.name";
-  if (type === "portal_builder") return "item.portal_builder.name";
-  if (type === "kantele") return "item.kantele.name";
-  if (type === "rowan_charm") return "item.rowan_charm.name";
-  if (type === "rune_stone") return "item.rune_stone.name";
-  if (type === "juniper_bundle") return "item.juniper_bundle.name";
-  if (type === "birch_bark_letter") return "item.birch_bark_letter.name";
-  if (type === "blessing_marker") return "item.blessing_marker.name";
-  if (type === "portal") return "item.portal.name";
-  if (type === "door") return "item.door.name";
-  if (type === "spellbook") return "item.spellbook.name";
-  if (type === "shaman_talisman") return "item.shaman_talisman.name";
-  if (type === "starter_kit") return "item.starter_kit.name";
-  if (type === "creator_stone") return "item.creator_stone.name";
-  if (type === "old_oak") return "item.old_oak.name";
-  if (type === "training_dummy") return "item.training_dummy.name";
-  return "item.unknown.name";
 }

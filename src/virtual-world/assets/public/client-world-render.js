@@ -113,40 +113,74 @@ var matHouseRoof = new THREE.MeshLambertMaterial({ color: 0x81503c });
 var matHouseDoor = new THREE.MeshLambertMaterial({ color: 0x4e311f });
 var matHouseChimney = new THREE.MeshLambertMaterial({ color: 0x6a6767 });
 
-// The old oak renders as its own hand-built mesh rather than a pine instance,
-// so the pine passes below have to skip its tile. Which tile that is comes from
-// the world's items — the oak is wherever its world class placed it — instead of
-// a coordinate the server used to inject for the one world that had one.
-/** @type {{row: number, col: number} | null} */
-var oldOakTile = null;
+// ── Item fixtures ────────────────────────────────────────────────────────
+// An item whose class names a fixture style is a landmark, not something lying
+// on the ground: it renders as its own standalone mesh at the centre of its
+// tile, and the terrain feature the map would draw on that tile is suppressed
+// (the oak stands *instead of* the pine on its square). Which tiles those are
+// comes from the world's items, so any number of fixtures in any number of
+// worlds work — this used to be a single `type === "old_oak"` test in three
+// separate passes, which could only ever describe one landmark.
+//
+// Like every other entry in ITEM_VISUAL_STYLE_SPECS, the mesh recipe itself is
+// code and the class picks it by name; a creator gets a second oak by setting
+// style "broadleaf" on their class, not by editing this file.
+/** @type {Record<string, (x: number, z: number) => any>} */
+var ITEM_FIXTURE_STYLE_BUILDERS = {
+  broadleaf: buildBroadleafFixture,
+};
 
-/** @returns {{row: number, col: number} | null} */
-function findOldOakTile() {
+/** Tiles holding a fixture item, as "row_col" keys. @type {Record<string, boolean>} */
+var fixtureTiles = {};
+
+/**
+ * @param {string} type
+ * @returns {boolean} whether this item type renders as a standalone fixture
+ */
+function isFixtureItemType(type) {
+  return !!ITEM_FIXTURE_STYLE_BUILDERS[itemVisualStyle(type)];
+}
+
+/** Rebuilds the fixture-tile set from the current world items. */
+function refreshFixtureTiles() {
+  fixtureTiles = {};
   for (var tileKey in worldItemsByTile) {
     var tileItems = worldItemsByTile[tileKey];
     if (!tileItems) continue;
     for (var i = 0; i < tileItems.length; i++) {
-      if (tileItems[i] && tileItems[i].type === "old_oak") {
-        var parts = String(tileKey).split("_");
-        return { row: Number(parts[0]), col: Number(parts[1]) };
+      if (tileItems[i] && isFixtureItemType(tileItems[i].type)) {
+        fixtureTiles[String(tileKey)] = true;
+        break;
       }
     }
   }
-  return null;
-}
-
-/** @returns {{row: number, col: number} | null} */
-function getOldOakTile() {
-  return oldOakTile;
 }
 
 /**
  * @param {number} row
  * @param {number} col
- * @returns {boolean}
+ * @returns {boolean} whether a fixture stands here, so terrain features skip it
  */
-function isOldOakTile(row, col) {
-  return !!oldOakTile && row === oldOakTile.row && col === oldOakTile.col;
+function tileHasItemFixture(row, col) {
+  return fixtureTiles[row + "_" + col] === true;
+}
+
+/**
+ * The first fixture item on a tile, so callers can name it (the tile inspector
+ * labels the square after the landmark standing on it).
+ * @param {number} row
+ * @param {number} col
+ * @returns {any}
+ */
+function getTileFixtureItem(row, col) {
+  var tileItems = worldItemsByTile[row + "_" + col];
+  if (!Array.isArray(tileItems)) return null;
+  for (var i = 0; i < tileItems.length; i++) {
+    if (tileItems[i] && isFixtureItemType(tileItems[i].type)) {
+      return tileItems[i];
+    }
+  }
+  return null;
 }
 
 // ── Build tiles with InstancedMesh (efficient for large worlds) ────────────
@@ -202,17 +236,18 @@ function setTreeMeshVisibility(visible) {
   iPineCanopyLow.visible = display;
   iPineCanopyMid.visible = display;
   iPineCanopyTop.visible = display;
-  if (oakGroup) oakGroup.visible = display;
+  if (fixtureGroup) fixtureGroup.visible = display;
 }
 
-function buildOakGroup() {
-  // Recomputed here rather than cached across worlds: this runs on every world
-  // (re)build, before the pine passes that call isOldOakTile.
-  oldOakTile = findOldOakTile();
-  if (!oldOakTile) return null;
+/**
+ * The broadleaf recipe: a tapered trunk under a clustered canopy, built around
+ * the given tile centre. One of the ITEM_FIXTURE_STYLE_BUILDERS.
+ * @param {number} oakX
+ * @param {number} oakZ
+ * @returns {any}
+ */
+function buildBroadleafFixture(oakX, oakZ) {
   var group = new THREE.Group();
-  var oakX = tileX(oldOakTile.col);
-  var oakZ = tileZ(oldOakTile.row);
 
   var oakTrunk = new THREE.Mesh(geoOakTrunk, matOakTrunk);
   oakTrunk.position.set(oakX, 0.65, oakZ);
@@ -248,6 +283,32 @@ function buildOakGroup() {
   canopyFront.receiveShadow = true;
   group.add(canopyFront);
 
+  return group;
+}
+
+/**
+ * Builds every fixture standing in the current world into one group.
+ * Recomputed on each world (re)build, and before the terrain passes that ask
+ * tileHasItemFixture which squares to leave alone.
+ * @returns {any} the group, or null when this world has no fixtures
+ */
+function buildFixtureGroup() {
+  refreshFixtureTiles();
+  var group = null;
+  for (var tileKey in fixtureTiles) {
+    var parts = String(tileKey).split("_");
+    var row = Number(parts[0]);
+    var col = Number(parts[1]);
+    if (!isFinite(row) || !isFinite(col)) continue;
+    var item = getTileFixtureItem(row, col);
+    if (!item) continue;
+    var build = ITEM_FIXTURE_STYLE_BUILDERS[itemVisualStyle(item.type)];
+    if (!build) continue;
+    var mesh = build(tileX(col), tileZ(row));
+    if (!mesh) continue;
+    if (!group) group = new THREE.Group();
+    group.add(mesh);
+  }
   return group;
 }
 
@@ -291,7 +352,7 @@ function countTilesByValue(tileValue) {
 /** @type {any} */ var iPineCanopyLow = null;
 /** @type {any} */ var iPineCanopyMid = null;
 /** @type {any} */ var iPineCanopyTop = null;
-/** @type {any} */ var oakGroup = null;
+/** @type {any} */ var fixtureGroup = null;
 
 /**
  * @param {string} tileName
@@ -571,7 +632,7 @@ function countRenderablePines() {
     for (var col = 0; col < COLS; col++) {
       if (
         MAP[row][col] === clientTileValueForName("pine_tree") &&
-        !isOldOakTile(row, col)
+        !tileHasItemFixture(row, col)
       ) {
         count++;
       }
@@ -746,7 +807,7 @@ function rebuildPineInstances() {
     for (var col = 0; col < COLS; col++) {
       if (
         MAP[row][col] !== clientTileValueForName("pine_tree") ||
-        isOldOakTile(row, col)
+        tileHasItemFixture(row, col)
       ) {
         continue;
       }
@@ -804,9 +865,9 @@ function disposeStaticWorldMeshes() {
     iSpruceCanopyMid,
     iSpruceCanopyTop,
   ]);
-  if (oakGroup) {
-    scene.remove(oakGroup);
-    oakGroup = null;
+  if (fixtureGroup) {
+    scene.remove(fixtureGroup);
+    fixtureGroup = null;
   }
 }
 
@@ -855,7 +916,7 @@ function buildStaticWorldMeshes() {
     matSpruceTop,
     cntSpruce,
   );
-  oakGroup = buildOakGroup();
+  fixtureGroup = buildFixtureGroup();
 
   iGroundA.receiveShadow = true;
   iGroundB.receiveShadow = true;
@@ -903,7 +964,7 @@ function buildStaticWorldMeshes() {
     iSpruceCanopyMid,
     iSpruceCanopyTop,
   );
-  if (oakGroup) scene.add(oakGroup);
+  if (fixtureGroup) scene.add(fixtureGroup);
 
   rebuildFloorOverlayMeshes();
   rebuildTerrainFeatureMeshes();
@@ -1020,21 +1081,10 @@ function itemTypeColor(type) {
   if (registryItem && Number(registryItem.color)) {
     return Number(registryItem.color);
   }
-  if (type === "saw") return 0xbfc6d0;
-  if (type === "hammer") return 0x8f7f6d;
-  if (type === "knife") return 0xd8dee8;
-  if (type === "flower") return 0xec6ea4;
-  if (type === "tree_planter") return 0x54d08a;
-  if (type === "portal_builder") return 0xff9f1c;
-  if (type === "kantele") return 0xc58d52;
-  if (type === "rowan_charm") return 0xc73a32;
-  if (type === "rune_stone") return 0x7b7f8a;
-  if (type === "juniper_bundle") return 0x51764f;
-  if (type === "birch_bark_letter") return 0xe4d2a0;
-  if (type === "blessing_marker") return 0xb54434;
-  if (type === "portal") return 0x5ad7ff;
-  if (type === "door") return 0x9c6b3f;
-  if (type === "training_dummy") return 0xb08968;
+  // Every class ships its own color, so this is only reached by a class that
+  // deliberately left the color automatic (0) or by a type the registry has
+  // never heard of. There used to be a per-type table of the built-ins' colors
+  // here as well, a second copy of what item-registry.ts already says.
   return 0xf3ca40;
 }
 
@@ -1344,7 +1394,9 @@ function rebuildItemMeshes() {
     if (!Array.isArray(arr)) continue;
     for (var i = 0; i < arr.length; i++) {
       var item = arr[i];
-      if (item.type === "old_oak") continue;
+      // Fixtures are drawn by buildFixtureGroup as landmarks on their tile,
+      // not as one of the small items sharing the tile's 3x3 grid.
+      if (isFixtureItemType(item.type)) continue;
       // The door is the one style whose look depends on item state (shut vs
       // ajar) and on its tile, so it keeps its own slab geometry and wall
       // placement; every other style comes from the shared recipes.

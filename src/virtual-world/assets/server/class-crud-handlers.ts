@@ -868,6 +868,7 @@ export function createWorldClassHandler(context: any) {
     itemSpawns: body && body.itemSpawns,
     npcSpawns: body && body.npcSpawns,
     placements: body && body.placements,
+    generation: body && body.generation,
     ownerIds: [context.request.auth.userId],
     labels: body && body.labels,
   });
@@ -963,6 +964,10 @@ export function updateWorldClassHandler(context: any) {
       body && body.placements !== undefined
         ? body.placements
         : existing.placements,
+    generation:
+      body && body.generation !== undefined
+        ? body.generation
+        : existing.generation,
     // Preserved across creator edits: only a code-side bump reclaims a system
     // class's placements, and an editor round-trip must not look like one.
     placementRevision: existing.placementRevision,

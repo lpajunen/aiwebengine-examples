@@ -944,6 +944,22 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Deterministic authored contents (landmarks, structures, fixed NPCs, portals) — distinct from the random itemSpawns/npcSpawns manifests",
       },
+      generation: {
+        type: "object",
+        description:
+          "How this class's worlds are generated: floorTile / boundaryTile / wallTile plus an ordered list of passes (enclosures, wall_segments, coast, river, blobs, scatter). Omit or null to use the base type's preset. Terrain is regenerated rather than stored, so editing this changes every existing world of the class — world mods layered on top survive.",
+        properties: {
+          floorTile: { type: "string" },
+          boundaryTile: { type: "string" },
+          wallTile: { type: "string" },
+          passes: {
+            type: "array",
+            items: { type: "object" },
+            description:
+              "Ordered passes. Each has a kind and its parameters; order matters because every pass draws from the same world-seeded sequence.",
+          },
+        },
+      },
     },
   });
   safeRegisterTool(

@@ -187,7 +187,18 @@ export function createWorldOfType(
 
 export function generateMap(worldId: string | number): number[][] {
   const info = getWorldInfo(worldId);
-  return generateWorldMap(worldId, info.world_type, info.rows, info.cols);
+  // A class may carry its own generation spec; without one the world falls
+  // back to its base type's preset (world-generation.ts).
+  const worldClass = info.world_class_id
+    ? getWorldClassWithRefresh(String(info.world_class_id))
+    : null;
+  return generateWorldMap(
+    worldId,
+    info.world_type,
+    info.rows,
+    info.cols,
+    worldClass ? worldClass.generation : null,
+  );
 }
 
 export function getEffectiveMap(worldId: string): number[][] {

@@ -1399,6 +1399,9 @@ function editWorldClass(id) {
         Array.isArray(wc.npcSpawns) && wc.npcSpawns.length
           ? JSON.stringify(wc.npcSpawns, null, 2)
           : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("wc-generation")
+      ).value = wc.generation ? JSON.stringify(wc.generation, null, 2) : "";
       worldClassPlacements = Array.isArray(wc.placements)
         ? JSON.parse(JSON.stringify(wc.placements))
         : [];
@@ -1925,6 +1928,9 @@ function cancelWorldClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("wc-npc-spawns")
   ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-generation")
+  ).value = "";
   worldClassPlacements = [];
   renderWorldClassPlacements();
   showPlacementErrors([]);
@@ -1969,6 +1975,24 @@ function submitWorldClassForm() {
   var npcSpawnsRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("wc-npc-spawns")
   ).value.trim();
+  var generationRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("wc-generation")
+  ).value.trim();
+  // Null rather than undefined for a blank box: undefined is dropped by
+  // JSON.stringify and the server would keep the stored spec, leaving no way
+  // to hand a class back to its base type's preset.
+  var generation = null;
+  if (generationRaw) {
+    try {
+      generation = JSON.parse(generationRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_generation_json", "Invalid generation JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var itemSpawns = [];
   if (itemSpawnsRaw) {
     try {
@@ -2015,6 +2039,7 @@ function submitWorldClassForm() {
     fallbackLabel: labelVal || idVal,
     itemSpawns: itemSpawns,
     npcSpawns: npcSpawns,
+    generation: generation,
     placements: worldClassPlacements,
     labels: buildLabelsPayload(nameFiVal),
   };

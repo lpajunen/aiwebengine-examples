@@ -1,27 +1,23 @@
 import {
   COLS,
-  getWorldBoundaryTileName,
-  getWorldFloorTileName,
-  getWorldWallTileName,
   isWorldTileWalkable,
   mulberry32,
   ROWS,
-  WORLD_TILE_BRIDGE,
   WORLD_TILE_GROUND,
-  WORLD_TILE_LAKE,
-  WORLD_TILE_MOUNTAIN,
-  WORLD_TILE_OCEAN,
-  WORLD_TILE_PINE_TREE,
-  WORLD_TILE_RIVER,
-  WORLD_TILE_ROCK,
-  WORLD_TYPE_CAVE,
-  WORLD_TYPE_FOREST,
-  WORLD_TYPE_ISLAND,
-  WORLD_TYPE_VILLAGE,
   worldTileValueForName,
   WORLD_MOD_LAYER_TERRAIN,
   WORLD_MOD_LAYER_OBJECT,
 } from "./world-domain.ts";
+import {
+  BlobPass,
+  CoastPass,
+  EnclosurePass,
+  getDefaultWorldGeneration,
+  RiverPass,
+  ScatterPass,
+  WallSegmentPass,
+  WorldGenerationSpec,
+} from "./world-generation.ts";
 import {
   applyWorldReservationsToMap,
   getReservationBounds,
@@ -48,12 +44,14 @@ export function generateWorldMap(
   worldType: string,
   rows: number = ROWS,
   cols: number = COLS,
+  generation?: WorldGenerationSpec | null,
 ): number[][] {
   const seed = parseInt(String(worldId), 10);
   const rand = mulberry32(seed);
-  const floorTileName = getWorldFloorTileName(worldType);
-  const boundaryTileName = getWorldBoundaryTileName(worldType);
-  const wallTileName = getWorldWallTileName(worldType);
+  const spec = generation || getDefaultWorldGeneration(worldType);
+  const floorTileName = spec.floorTile;
+  const boundaryTileName = spec.boundaryTile;
+  const wallTileName = spec.wallTile;
   // Feature counts below are tuned for the default 100×100 world; scale them
   // with the map area so smaller worlds get proportionally fewer features.
   const areaFactor = (rows * cols) / (ROWS * COLS);
@@ -67,68 +65,6 @@ export function generateWorldMap(
   }
 
   paintWorldBorder(map, boundaryTileName);
-
-  // Enclosures need room for position offset 3 + max extent 12 + border.
-  if (rows >= 22 && cols >= 22) {
-    const enclosureCount = Math.round(30 * areaFactor);
-    for (let i = 0; i < enclosureCount; i++) {
-      const rr = 3 + Math.floor(rand() * (rows - 18));
-      const cc = 3 + Math.floor(rand() * (cols - 18));
-      const rh = 4 + Math.floor(rand() * 9);
-      const rw = 4 + Math.floor(rand() * 9);
-      for (let dr = 0; dr <= rh; dr++) {
-        for (let dc = 0; dc <= rw; dc++) {
-          if (
-            (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
-            isWorldTileWalkable(map[rr + dr][cc + dc])
-          ) {
-            map[rr + dr][cc + dc] = worldTileValueForName(wallTileName);
-          }
-        }
-      }
-      const mh = Math.floor(rh / 2);
-      const mw = Math.floor(rw / 2);
-      map[rr][cc + mw] = worldTileValueForName(floorTileName);
-      map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
-      map[rr + mh][cc] = worldTileValueForName(floorTileName);
-      map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
-    }
-  }
-
-  if (rows >= 22 && cols >= 22) {
-    const wallSegmentCount = Math.round(40 * areaFactor);
-    for (let i = 0; i < wallSegmentCount; i++) {
-      if (rand() > 0.5) {
-        const r0 = 2 + Math.floor(rand() * (rows - 4));
-        const c0 = 2 + Math.floor(rand() * (cols - 20));
-        const len = 6 + Math.floor(rand() * 14);
-        const gap = Math.floor(rand() * len);
-        for (let k = 0; k < len; k++) {
-          if (
-            k !== gap &&
-            c0 + k < cols - 1 &&
-            isWorldTileWalkable(map[r0][c0 + k])
-          ) {
-            map[r0][c0 + k] = worldTileValueForName(wallTileName);
-          }
-        }
-      } else {
-        const r0 = 2 + Math.floor(rand() * (rows - 20));
-        const c0 = 2 + Math.floor(rand() * (cols - 4));
-        const len = 6 + Math.floor(rand() * 14);
-        const gap = Math.floor(rand() * len);
-        for (let k = 0; k < len; k++) {
-          if (
-            k !== gap &&
-            r0 + k < rows - 1 &&
-            isWorldTileWalkable(map[r0 + k][c0])
-          ) {
-            map[r0 + k][c0] = worldTileValueForName(wallTileName);
-          }
-        }
-      }
-    }
-  }
 
   function paintTerrainCircle(
     centerRow: number,
@@ -149,30 +85,101 @@ export function generateWorldMap(
     }
   }
 
-  // Coast, river, and lakes assume enough interior to leave land; skip them
-  // on small maps rather than flooding the whole world. Villages keep the
-  // river (crossed by bridges below) but skip the ocean coastline and lakes,
-  // which don't fit a walled settlement.
-  if (worldType === WORLD_TYPE_FOREST && rows >= 26 && cols >= 26) {
-    const coastWidth = 7 + Math.floor(rand() * 6);
+  function passFits(pass: { minRows?: number; minCols?: number }): boolean {
+    if (pass.minRows !== undefined && rows < pass.minRows) return false;
+    if (pass.minCols !== undefined && cols < pass.minCols) return false;
+    return true;
+  }
+
+  function passCount(count: number, scaleWithArea?: boolean): number {
+    return scaleWithArea ? Math.round(count * areaFactor) : count;
+  }
+
+  function runEnclosures(pass: EnclosurePass): void {
+    const tile = pass.tile || wallTileName;
+    const span = pass.maxSize + 6;
+    const total = passCount(pass.count, pass.scaleWithArea);
+    for (let i = 0; i < total; i++) {
+      const rr = 3 + Math.floor(rand() * (rows - span));
+      const cc = 3 + Math.floor(rand() * (cols - span));
+      const rh =
+        pass.minSize + Math.floor(rand() * (pass.maxSize - pass.minSize + 1));
+      const rw =
+        pass.minSize + Math.floor(rand() * (pass.maxSize - pass.minSize + 1));
+      for (let dr = 0; dr <= rh; dr++) {
+        for (let dc = 0; dc <= rw; dc++) {
+          if (
+            (dr === 0 || dr === rh || dc === 0 || dc === rw) &&
+            isWorldTileWalkable(map[rr + dr][cc + dc])
+          ) {
+            map[rr + dr][cc + dc] = worldTileValueForName(tile);
+          }
+        }
+      }
+      const mh = Math.floor(rh / 2);
+      const mw = Math.floor(rw / 2);
+      map[rr][cc + mw] = worldTileValueForName(floorTileName);
+      map[rr + rh][cc + mw] = worldTileValueForName(floorTileName);
+      map[rr + mh][cc] = worldTileValueForName(floorTileName);
+      map[rr + mh][cc + rw] = worldTileValueForName(floorTileName);
+    }
+  }
+
+  function runWallSegments(pass: WallSegmentPass): void {
+    const tile = pass.tile || wallTileName;
+    const lengthRange = pass.maxLength - pass.minLength + 1;
+    const span = pass.maxLength + 1;
+    const total = passCount(pass.count, pass.scaleWithArea);
+    for (let i = 0; i < total; i++) {
+      if (rand() > 0.5) {
+        const r0 = 2 + Math.floor(rand() * (rows - 4));
+        const c0 = 2 + Math.floor(rand() * (cols - span));
+        const len = pass.minLength + Math.floor(rand() * lengthRange);
+        const gap = Math.floor(rand() * len);
+        for (let k = 0; k < len; k++) {
+          if (
+            k !== gap &&
+            c0 + k < cols - 1 &&
+            isWorldTileWalkable(map[r0][c0 + k])
+          ) {
+            map[r0][c0 + k] = worldTileValueForName(tile);
+          }
+        }
+      } else {
+        const r0 = 2 + Math.floor(rand() * (rows - span));
+        const c0 = 2 + Math.floor(rand() * (cols - 4));
+        const len = pass.minLength + Math.floor(rand() * lengthRange);
+        const gap = Math.floor(rand() * len);
+        for (let k = 0; k < len; k++) {
+          if (
+            k !== gap &&
+            r0 + k < rows - 1 &&
+            isWorldTileWalkable(map[r0 + k][c0])
+          ) {
+            map[r0 + k][c0] = worldTileValueForName(tile);
+          }
+        }
+      }
+    }
+  }
+
+  function runCoast(pass: CoastPass): void {
+    const coastWidth =
+      pass.minWidth + Math.floor(rand() * (pass.maxWidth - pass.minWidth + 1));
     for (let coastRow = 1; coastRow < rows - 1; coastRow++) {
-      const coastInset = Math.floor(rand() * 4);
+      const coastInset = Math.floor(rand() * pass.insetRange);
       for (
         let coastCol = cols - 1 - coastWidth - coastInset;
         coastCol < cols - 1;
         coastCol++
       ) {
         if (coastCol <= 0 || coastCol >= cols - 1) continue;
-        map[coastRow][coastCol] = worldTileValueForName(WORLD_TILE_OCEAN);
+        map[coastRow][coastCol] = worldTileValueForName(pass.tile);
       }
     }
   }
 
-  if (
-    (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_VILLAGE) &&
-    rows >= 26 &&
-    cols >= 26
-  ) {
+  function runRiver(pass: RiverPass): void {
     // Tracks which columns the river occupies at each row so bridges below
     // can be painted exactly over the river instead of guessing its path.
     const riverColsByRow: Record<number, number[]> = {};
@@ -210,88 +217,79 @@ export function generateWorldMap(
         riverOffset <= riverRadius;
         riverOffset++
       ) {
-        map[riverRow][riverCol + riverOffset] =
-          worldTileValueForName(WORLD_TILE_RIVER);
+        map[riverRow][riverCol + riverOffset] = worldTileValueForName(
+          pass.tile,
+        );
         riverCols.push(riverCol + riverOffset);
       }
       riverColsByRow[riverRow] = riverCols;
     }
 
-    if (worldType === WORLD_TYPE_VILLAGE) {
-      // Two crossings north/south of center, each two rows wide, kept clear
-      // of the oak clearing reservation (applied after this function returns
-      // for the oak world) so both riverbanks stay reachable on foot.
-      const bridgeRows = [Math.round(rows * 0.25), Math.round(rows * 0.75)];
-      for (const bridgeRow of bridgeRows) {
+    const fractions = pass.bridgeAtRowFractions;
+    if (pass.bridgeTile && Array.isArray(fractions)) {
+      // Each crossing is two rows wide, kept clear of any clearing reservation
+      // (applied after this function returns) so both banks stay reachable.
+      for (let i = 0; i < fractions.length; i++) {
+        const bridgeRow = Math.round(rows * Number(fractions[i]));
         for (const bridgeSpanRow of [bridgeRow, bridgeRow + 1]) {
           const riverCols = riverColsByRow[bridgeSpanRow];
           if (!riverCols) continue;
           for (const col of riverCols) {
-            map[bridgeSpanRow][col] = worldTileValueForName(WORLD_TILE_BRIDGE);
+            map[bridgeSpanRow][col] = worldTileValueForName(pass.bridgeTile);
           }
         }
       }
     }
+  }
 
-    if (worldType === WORLD_TYPE_FOREST) {
-      for (let lakeIndex = 0; lakeIndex < 3; lakeIndex++) {
-        paintTerrainCircle(
-          12 + Math.floor(rand() * (rows - 24)),
-          12 + Math.floor(rand() * (cols - 24)),
-          2 + Math.floor(rand() * 3),
-          WORLD_TILE_LAKE,
-        );
-      }
+  function runBlobs(pass: BlobPass): void {
+    const radiusRange = pass.maxRadius - pass.minRadius + 1;
+    const total = passCount(pass.count, pass.scaleWithArea);
+    for (let i = 0; i < total; i++) {
+      paintTerrainCircle(
+        pass.margin + Math.floor(rand() * (rows - pass.margin * 2)),
+        pass.margin + Math.floor(rand() * (cols - pass.margin * 2)),
+        pass.minRadius + Math.floor(rand() * radiusRange),
+        pass.tile,
+      );
     }
   }
 
-  if (worldType === WORLD_TYPE_FOREST || worldType === WORLD_TYPE_CAVE) {
-    if (rows >= 22 && cols >= 22) {
-      for (let mountainIndex = 0; mountainIndex < 5; mountainIndex++) {
-        paintTerrainCircle(
-          10 + Math.floor(rand() * (rows - 20)),
-          10 + Math.floor(rand() * (cols - 20)),
-          2 + Math.floor(rand() * 3),
-          WORLD_TILE_MOUNTAIN,
-        );
-      }
-    }
-    const rockCount = Math.round(140 * areaFactor);
-    for (let rockIndex = 0; rockIndex < rockCount; rockIndex++) {
-      const rockRow = 1 + Math.floor(rand() * (rows - 2));
-      const rockCol = 1 + Math.floor(rand() * (cols - 2));
-      if (
-        isWorldTileWalkable(map[rockRow][rockCol]) ||
-        map[rockRow][rockCol] === worldTileValueForName(WORLD_TILE_GROUND)
-      ) {
-        map[rockRow][rockCol] = worldTileValueForName(WORLD_TILE_ROCK);
-      }
-    }
-  }
-
-  const treeScatterCount = Math.round(
-    (worldType === WORLD_TYPE_FOREST
-      ? 500
-      : worldType === WORLD_TYPE_ISLAND
-        ? 140
-        : 0) * areaFactor,
-  );
-  if (treeScatterCount > 0) {
-    for (let i = 0; i < treeScatterCount; i++) {
+  function runScatter(pass: ScatterPass): void {
+    const total = passCount(pass.count, pass.scaleWithArea);
+    for (let i = 0; i < total; i++) {
       const r = 1 + Math.floor(rand() * (rows - 2));
       const c = 1 + Math.floor(rand() * (cols - 2));
-      if (map[r][c] === worldTileValueForName(floorTileName)) {
-        map[r][c] = worldTileValueForName(WORLD_TILE_PINE_TREE);
-      }
+      const current = map[r][c];
+      const eligible =
+        pass.on === "floor"
+          ? current === worldTileValueForName(floorTileName)
+          : isWorldTileWalkable(current) ||
+            current === worldTileValueForName(WORLD_TILE_GROUND);
+      if (eligible) map[r][c] = worldTileValueForName(pass.tile);
     }
+  }
+
+  // Passes run in the order the spec lists them, and each draws from the same
+  // seeded sequence — so the order is part of what a world looks like, not
+  // just what it contains.
+  const passes = Array.isArray(spec.passes) ? spec.passes : [];
+  for (let i = 0; i < passes.length; i++) {
+    const pass = passes[i];
+    if (!passFits(pass)) continue;
+    if (pass.kind === "enclosures") runEnclosures(pass);
+    else if (pass.kind === "wall_segments") runWallSegments(pass);
+    else if (pass.kind === "coast") runCoast(pass);
+    else if (pass.kind === "river") runRiver(pass);
+    else if (pass.kind === "blobs") runBlobs(pass);
+    else if (pass.kind === "scatter") runScatter(pass);
   }
 
   // Authored terrain is part of generation, not a post-step: the page state's
   // `map` is this raw generated map (the client applies world mods itself), so
   // a landmark's footprint and its cleared area have to be painted here to be
-  // visible at all. Previously gated on the start world's id, which is exactly
-  // why only Birdhaven ever got one. A world whose class declares no
-  // placements resolves to nothing and this returns the map untouched.
+  // visible at all. A world whose class declares no placements resolves to
+  // nothing and this returns the map untouched.
   applyWorldReservationsToMap(map, worldId);
 
   // Keep the default spawn corner walkable — but not at the cost of carving a

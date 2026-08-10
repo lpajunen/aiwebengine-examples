@@ -22,6 +22,10 @@ import {
 } from "./world-db.ts";
 import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
 import {
+  normalizeWorldGeneration,
+  WorldGenerationSpec,
+} from "./world-generation.ts";
+import {
   normalizeWorldClassPlacements,
   validateWorldClassPlacements,
   WorldClassPlacement,
@@ -50,6 +54,14 @@ export type WorldClassRecord = {
   // the random spawn manifests above, which stay responsible for ambient
   // population.
   placements: WorldClassPlacement[];
+  // How this class's worlds are generated. Null means "use the base type's
+  // preset" (world-generation.ts), which is what every built-in does — the
+  // presets are seed data there rather than duplicated onto every row.
+  //
+  // Terrain is not stored, only regenerated: editing this changes what every
+  // existing world of this class looks like. World mods layered on top (built
+  // houses, planted trees, painted tiles) survive, since those are rows.
+  generation: WorldGenerationSpec | null;
   // Bumped in code whenever a *system* class's seeded placements change, so
   // the backfill below knows to rewrite an already-seeded row. Creator-owned
   // classes leave it at 0; nothing reads it for them.
@@ -181,6 +193,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     npcSpawns: copySpawnEntries(npcSpawns),
     placements: [],
     placementRevision: 0,
+    generation: null,
     ownerIds: [],
     labels: BUILTIN_WORLD_CLASS_LABELS_FI[worldType]
       ? { fi: BUILTIN_WORLD_CLASS_LABELS_FI[worldType] }
@@ -336,6 +349,7 @@ function birdhavenWorldClassRecord(): WorldClassRecord {
     itemSpawns: copySpawnEntries(BUILTIN_ITEM_SPAWNS),
     npcSpawns: copySpawnEntries(BUILTIN_VILLAGE_NPC_SPAWNS),
     placements: birdhavenPlacements(),
+    generation: null,
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
     labels: { fi: "Lintukoto" },
@@ -358,6 +372,7 @@ export function adventurersGuildWorldClassRecord(): WorldClassRecord {
     itemSpawns: [],
     npcSpawns: [],
     placements: adventurersGuildPlacements(),
+    generation: null,
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
     labels: { fi: "Seikkailijoiden kilta" },
@@ -383,6 +398,7 @@ export function normalizeWorldClassRecord(record: {
   npcSpawns?: unknown;
   placements?: unknown;
   placementRevision?: unknown;
+  generation?: unknown;
   ownerIds?: unknown;
   labels?: unknown;
 }): WorldClassRecord {
@@ -399,6 +415,7 @@ export function normalizeWorldClassRecord(record: {
     itemSpawns: normalizeSpawnEntries(record.itemSpawns),
     npcSpawns: normalizeSpawnEntries(record.npcSpawns),
     placements: normalizeWorldClassPlacements(record.placements),
+    generation: normalizeWorldGeneration(record.generation),
     placementRevision: normalizePlacementRevision(record.placementRevision),
     ownerIds: normalizeOwnerIds(record.ownerIds),
     labels: normalizeClassLabels(record.labels),
@@ -434,6 +451,7 @@ function worldClassFromDbRow(row: any): WorldClassRecord {
         return [];
       }
     })(),
+    generation: normalizeWorldGeneration(row.generation_json),
     placementRevision: row.placement_revision,
     ownerIds: (function () {
       try {
@@ -459,6 +477,7 @@ function worldClassToDbRow(
   item_spawns_json: string;
   npc_spawns_json: string;
   placements_json: string;
+  generation_json: string;
   placement_revision: number;
   owner_ids_json: string;
   labels_json: string;
@@ -476,6 +495,7 @@ function worldClassToDbRow(
     item_spawns_json: JSON.stringify(record.itemSpawns || []),
     npc_spawns_json: JSON.stringify(record.npcSpawns || []),
     placements_json: JSON.stringify(record.placements || []),
+    generation_json: record.generation ? JSON.stringify(record.generation) : "",
     // Never null: the engine's DB rejects a null write into an INTEGER column.
     placement_revision: normalizePlacementRevision(record.placementRevision),
     owner_ids_json: JSON.stringify(record.ownerIds || []),

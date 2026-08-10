@@ -734,6 +734,10 @@ export function virtualWorldManageWorldClassesToolHandler(
         args.placements !== undefined
           ? args.placements
           : existing && existing.placements,
+      generation:
+        args.generation !== undefined
+          ? args.generation
+          : existing && existing.generation,
       // Only a code-side revision bump reclaims a system class's placements;
       // an MCP round-trip must not look like one.
       placementRevision: existing && existing.placementRevision,

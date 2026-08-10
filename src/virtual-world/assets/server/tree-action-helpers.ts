@@ -58,6 +58,7 @@ import {
   buildItemInspection,
   getActionDefinition,
   getItemDefinition,
+  getSourceItemIdsForAction,
   isPickableWorldItem,
 } from "./item-registry.ts";
 import { ActionDefinition } from "./action-registry.ts";
@@ -1098,10 +1099,10 @@ export function performTreeActionForUser(
   let logicSourceItem: any | null = null;
   if (actionDefinition && actionDefinition.logicSpec) {
     const logicSpec = actionDefinition.logicSpec;
-    const sourceItemIds = Array.isArray(actionDefinition.sourceItemIds)
-      ? actionDefinition.sourceItemIds
-      : [];
-    logicSourceItem = findFirstLivingItemByTypes(inv, sourceItemIds);
+    logicSourceItem = findFirstLivingItemByTypes(
+      inv,
+      getSourceItemIdsForAction(action),
+    );
     if (logicSourceItem) {
       const condResult = evaluateConditions(logicSpec, logicSourceItem);
       if (!condResult.ok) {
@@ -1135,9 +1136,7 @@ export function performTreeActionForUser(
     // A door and a rune gate travel identically — read the destination off the
     // faced/underfoot portal-kind item (door_travel's source is ["door"],
     // portal_travel's is ["portal"]) and switch worlds.
-    const portalItemIds = actionDefinition
-      ? actionDefinition.sourceItemIds
-      : [];
+    const portalItemIds = getSourceItemIdsForAction(action);
     const portalEntry = nearbyTileItems.find(function (item) {
       return isValidItem(item) && portalItemIds.indexOf(item.type) !== -1;
     });

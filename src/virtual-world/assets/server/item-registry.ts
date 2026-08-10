@@ -391,16 +391,84 @@ export function getAllActionIds(): string[] {
   return Object.keys(_actionClassCache as Record<string, ActionClassRecord>);
 }
 
+// Reverse index of action.sourceItemIds — which actions each item type grants
+// by having been named by them. Rebuilt whenever the action cache is.
+let _actionsBySourceItem: Record<string, string[]> = {};
+
+function rebuildActionsBySourceItem(
+  cache: Record<string, ActionClassRecord>,
+): void {
+  const index: Record<string, string[]> = {};
+  Object.keys(cache).forEach(function (actionId) {
+    const sources = cache[actionId].sourceItemIds;
+    if (!Array.isArray(sources)) return;
+    for (let i = 0; i < sources.length; i++) {
+      const itemId = String(sources[i] || "");
+      if (!itemId) continue;
+      if (!index[itemId]) index[itemId] = [];
+      if (index[itemId].indexOf(actionId) === -1) index[itemId].push(actionId);
+    }
+  });
+  _actionsBySourceItem = index;
+}
+
+/**
+ * Which actions an item type grants. The relation is written from both ends —
+ * an item class lists actionIds, an action lists the sourceItemIds it is
+ * granted by — and this is the union, so declaring either side is enough.
+ *
+ * They used to have to agree: an action naming an item in sourceItemIds but
+ * missing from that item's actionIds simply did not work, failing with
+ * error.missing_required_item_for_action and nothing to say why. Every
+ * built-in did agree, so the union changes nothing that already existed.
+ */
 export function getActionsForItemType(itemId: string): string[] {
+  const id = String(itemId || "");
+  let own: string[] = [];
   if (_itemClassCache) {
-    const cls = _itemClassCache[String(itemId || "")];
-    if (cls && Array.isArray(cls.actionIds)) return cls.actionIds.slice();
-    // item not in cache (e.g. no class defined) → no actions
-    return [];
+    const cls = _itemClassCache[id];
+    if (cls && Array.isArray(cls.actionIds)) own = cls.actionIds;
+  } else {
+    const item = getItemDefinition(id);
+    if (item && Array.isArray(item.actionIds)) own = item.actionIds;
   }
-  const item = getItemDefinition(itemId);
-  if (!item || !Array.isArray(item.actionIds)) return [];
-  return item.actionIds.slice();
+  const granted = _actionsBySourceItem[id];
+  if (!granted || granted.length === 0) return own.slice();
+  const out = own.slice();
+  for (let i = 0; i < granted.length; i++) {
+    if (out.indexOf(granted[i]) === -1) out.push(granted[i]);
+  }
+  return out;
+}
+
+/**
+ * Which item types an action is granted by — the mirror of
+ * getActionsForItemType, and the union of the same two declarations: the
+ * action's own sourceItemIds, plus every item class listing this action in
+ * its actionIds.
+ *
+ * Both directions have to resolve, because sourceItemIds does double duty: it
+ * says what grants the action *and* which carried or underfoot item the action
+ * reads (the kantele a logicSpec tunes, the door a travel steps through).
+ * Declaring only the item side used to leave that second job with nothing to
+ * find, so the action ran and silently did nothing.
+ */
+export function getSourceItemIdsForAction(actionId: string): string[] {
+  const id = String(actionId || "");
+  const action = getActionDefinition(id);
+  const own =
+    action && Array.isArray(action.sourceItemIds) ? action.sourceItemIds : [];
+  const out = own.slice();
+  const itemSource = _itemClassCache || ITEM_DEFINITIONS;
+  Object.keys(itemSource).forEach(function (itemId) {
+    const cls = (itemSource as Record<string, { actionIds?: string[] }>)[
+      itemId
+    ];
+    if (!cls || !Array.isArray(cls.actionIds)) return;
+    if (cls.actionIds.indexOf(id) === -1) return;
+    if (out.indexOf(itemId) === -1) out.push(itemId);
+  });
+  return out;
 }
 
 export function getPrimaryActionForItemType(itemId: string): string | null {
@@ -516,7 +584,9 @@ export function getBootstrapRegistry(): {
         color: cls.visuals.color,
         size: normalizeClassSize(cls.visuals.size),
         style: normalizeItemVisualStyle(cls.visuals.style),
-        action_ids: cls.actionIds.slice(),
+        // The union of both directions, so the client offers an action that
+        // named this item without the item having to name it back.
+        action_ids: getActionsForItemType(itemId),
         kind: cls.kind,
         non_pickable: !!cls.nonPickable,
       };
@@ -531,7 +601,7 @@ export function getBootstrapRegistry(): {
         color: item.visuals.color,
         size: normalizeClassSize(item.visuals.size),
         style: normalizeItemVisualStyle(item.visuals.style),
-        action_ids: item.actionIds.slice(),
+        action_ids: getActionsForItemType(itemId),
         kind: item.kind,
         non_pickable: !!item.nonPickable,
       };
@@ -1568,6 +1638,7 @@ export function bootstrapActionClasses(): void {
   }
 
   _actionClassCache = cache;
+  rebuildActionsBySourceItem(cache);
 }
 
 export function refreshActionClassCache(): void {
@@ -1588,6 +1659,7 @@ export function refreshActionClassCache(): void {
   }
 
   _actionClassCache = cache;
+  rebuildActionsBySourceItem(cache);
 }
 
 export function getAllActionClasses(): ActionClassRecord[] {

@@ -146,7 +146,7 @@ export function tickWorldNPCs(
       if (fatigueAfterTick !== fatigueBeforeTick) {
         npc.values.fatigue = fatigueAfterTick;
         hasChanges = true;
-        broadcastNPCValuesChanged(worldId, npcId, npc.values);
+        broadcastNPCValuesChanged(worldId, npcId, npc.values, npc.class_id);
       }
     }
 

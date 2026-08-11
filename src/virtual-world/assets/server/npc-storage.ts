@@ -205,6 +205,32 @@ export function loadNPCDisplayName(worldId: string, npcId: string): string {
   return resolveNPCDisplayName(worldId, npcId, { identity: identity });
 }
 
+/**
+ * How many NPCs of each living class a world currently holds. Reads the rows
+ * without building living state — the respawn guard only needs a headcount,
+ * and this runs on the tick.
+ */
+export function countNPCsByClass(worldId: string): Record<string, number> {
+  const rows = queryWorldRows(
+    VWORLD_NPC_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    1000,
+    "id",
+    "asc",
+  );
+  const counts: Record<string, number> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.npc_id) continue;
+    const classId =
+      typeof row.living_class_id === "string" && row.living_class_id
+        ? String(row.living_class_id)
+        : getDefaultNPCLivingClassId();
+    counts[classId] = (counts[classId] || 0) + 1;
+  }
+  return counts;
+}
+
 export function deleteNPCById(npcId: string): void {
   deleteWorldRowsWhere(
     VWORLD_NPC_TABLE,

@@ -103,11 +103,21 @@ function isRecordLike(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+// The class is only needed to decide which of a living's values are public.
+// Every emitter of an NPC event already holds the NPC, so `payloadClassId`
+// lets it say so — and the fallback below is what made this quadratic: one
+// full load-and-normalize of every NPC row in the world, per moved NPC, per
+// tick. With ~100 NPCs in a world that is ~10k row normalizations a tick,
+// which is enough to get the tick killed with "call handler: interrupted".
 function getLivingClassForPublicEvent(
   worldId: string,
   kind: "player" | "npc",
   livingId: string,
+  payloadClassId: unknown,
 ): ReturnType<typeof getLivingClass> {
+  if (typeof payloadClassId === "string" && payloadClassId) {
+    return getLivingClass(payloadClassId);
+  }
   if (kind === "player") {
     return getLivingClass(loadPlayerInventory(livingId).class_id);
   }
@@ -161,7 +171,7 @@ export function sendWorldScopedStreamEvent(
 
   const values = toPublicLivingValues(
     { values: payload.values },
-    getLivingClassForPublicEvent(worldId, kind, rawId),
+    getLivingClassForPublicEvent(worldId, kind, rawId, payload.class_id),
   );
   if (typeof payload.class_id === "string" || Object.keys(values).length > 0) {
     sendWorldScopedEvent(worldId, "living_updated", {
@@ -200,14 +210,21 @@ export function broadcastPlayerValuesChanged(
   });
 }
 
+/**
+ * @param classId the NPC's living class, which every caller has in hand —
+ * without it the stream layer has to load the whole world to find it, once per
+ * idling NPC per tick.
+ */
 export function broadcastNPCValuesChanged(
   worldId: string,
   npcId: string,
   values: Record<string, unknown>,
+  classId: unknown,
 ): void {
   sendWorldScopedStreamEvent(String(worldId), "npc_values_changed", {
     npc_id: String(npcId),
     values: values,
+    class_id: classId,
   });
 }
 

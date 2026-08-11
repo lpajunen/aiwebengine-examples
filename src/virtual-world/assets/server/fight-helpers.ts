@@ -236,6 +236,7 @@ function stepNPCTowardTarget(
     sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
       npc_id: npcId,
       display_name: resolveNPCDisplayName(worldId, npcId, npc),
+      class_id: npc.class_id,
       row: npc.row,
       col: npc.col,
       seq: npc.seq,
@@ -458,7 +459,12 @@ export function applyLivingEffect(
     if (targetNpc) {
       targetNpc.values = nextValues;
       saveWorldNPCs(worldId, { [targetId]: targetNpc });
-      broadcastNPCValuesChanged(worldId, targetId, targetNpc.values);
+      broadcastNPCValuesChanged(
+        worldId,
+        targetId,
+        targetNpc.values,
+        targetNpc.class_id,
+      );
     } else if (targetInv) {
       targetInv.values = nextValues;
       savePlayerInventory(targetId, targetInv);
@@ -559,7 +565,12 @@ function resolveCombatHit(
         currentHitPoints: nextHitPoints,
       });
       saveWorldNPCs(worldId, { [fight.target_id]: target });
-      broadcastNPCValuesChanged(worldId, fight.target_id, target.values);
+      broadcastNPCValuesChanged(
+        worldId,
+        fight.target_id,
+        target.values,
+        target.class_id,
+      );
     } else if (targetInv) {
       const attackerLabel =
         fight.attacker_type === "npc"

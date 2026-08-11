@@ -195,6 +195,9 @@ export function tickNPCMovement(params: {
     params.sendWorldScopedStreamEvent(String(params.worldId), "npc_moved", {
       npc_id: params.npcId,
       display_name: resolveNPCDisplayName(params.worldId, params.npcId, n),
+      // Saves the stream layer a full world load to answer "which class is
+      // this?" — see getLivingClassForPublicEvent in stream-broadcast.ts.
+      class_id: n.class_id,
       row: n.row,
       col: n.col,
       seq: n.seq,

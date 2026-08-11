@@ -833,6 +833,29 @@ export function ensureWorldItems(worldId: string): void {
 // walkable empty tile — used by spawn-timers.ts when a manifest-tracked
 // item's respawn timer comes due. Returns the placed item (with position) or
 // null if no empty tile could be found.
+/**
+ * How many world items of each type a world currently holds — the item twin of
+ * countNPCsByClass, used by the respawn guard in spawn-timers.ts.
+ */
+export function countWorldItemsByType(worldId: string): Record<string, number> {
+  const rows = queryWorldRows(
+    VWORLD_WORLD_ITEM_TABLE,
+    JSON.stringify({ world_id: String(worldId) }),
+    5000,
+    "id",
+    "asc",
+  );
+  const counts: Record<string, number> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.item_id) continue;
+    const type = String(row.type || "");
+    if (!type) continue;
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
 export function spawnSingleWorldItem(
   worldId: string,
   itemType: string,

@@ -49,7 +49,7 @@ import {
   parseWorldDbResult,
   runInWorldTransaction,
 } from "./world-db.ts";
-import { getInventoryTreeActions, getNPCDisplayName } from "./world-domain.ts";
+import { getInventoryTreeActions } from "./world-domain.ts";
 import { loadWorldTrees, saveWorldTrees } from "./world-mod-storage.ts";
 import { LivingState } from "./world-domain.ts";
 import { PublicLivingSnapshot } from "./world-domain.ts";
@@ -129,7 +129,6 @@ export function tickWorldNPCs(
       cols: mapCols,
       shuffleDirections: shuffleDirections,
       directionToRotation: directionToRotation,
-      getNPCDisplayName: getNPCDisplayName,
       sendWorldScopedStreamEvent: sendWorldScopedStreamEvent,
     });
     if (npcMoved) {
@@ -307,5 +306,5 @@ export function getWorldNPCSnapshot(worldId: string): PublicLivingSnapshot[] {
   markNPCWorldActive(worldId);
   maybeTickWorldNPCs(worldId);
   const npcs = ensureWorldNPCs(worldId);
-  return buildWorldNPCSnapshot(worldId, npcs, getNPCDisplayName);
+  return buildWorldNPCSnapshot(worldId, npcs);
 }

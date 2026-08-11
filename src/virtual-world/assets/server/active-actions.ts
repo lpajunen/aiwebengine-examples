@@ -2,8 +2,9 @@ import { loadFightState } from "./fight-storage.ts";
 import { loadFollowState } from "./follow-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { loadUserApproachActions } from "./pending-action-storage.ts";
+import { loadNPCDisplayName } from "./npc-storage.ts";
 import { getEffectiveNick } from "./social-state.ts";
-import { fromStoredWorldTimestamp, getNPCDisplayName } from "./world-domain.ts";
+import { fromStoredWorldTimestamp } from "./world-domain.ts";
 
 export interface ActiveActionEntry {
   // "follow"/"fight", or a walk-then-act approach's action id (e.g. "poke").
@@ -22,7 +23,7 @@ function resolveLivingLabel(
   targetId: string,
 ): string {
   return targetType === "npc"
-    ? getNPCDisplayName(worldId, targetId)
+    ? loadNPCDisplayName(worldId, targetId)
     : getEffectiveNick(targetId);
 }
 

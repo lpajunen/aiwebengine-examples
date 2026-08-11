@@ -903,10 +903,30 @@ function makeNPCAvatar(npcId, classId) {
  * @returns {string}
  */
 function npcDisplayName(npcId) {
-  if (npcAvatars[npcId] && npcAvatars[npcId].displayName) {
-    return npcAvatars[npcId].displayName;
+  var entry = npcAvatars[npcId];
+  if (entry && entry.displayName) {
+    // An authored NPC may carry per-locale names the server could not pick
+    // between (it does not know the viewer's locale); display_name is the
+    // canonical text and doubles as the fallback here, same as a class label.
+    return localizeLabel(
+      entry.identity && entry.identity.labels,
+      "",
+      entry.displayName,
+    );
   }
   return shortenId(npcId);
+}
+
+/**
+ * The authored lore line for an NPC, localized, or "" for the ambient
+ * population — nobody wrote anything about them.
+ * @param {string} npcId
+ * @returns {string}
+ */
+function npcDescription(npcId) {
+  var identity = npcAvatars[npcId] ? npcAvatars[npcId].identity : null;
+  if (!identity) return "";
+  return localizeLabel(identity.descriptions, "", identity.description || "");
 }
 
 /**
@@ -945,6 +965,10 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
       row: Number(row),
       col: Number(col),
       displayName: displayName || shortenId(npcId),
+      identity:
+        npcData && npcData.identity && typeof npcData.identity === "object"
+          ? npcData.identity
+          : null,
       class_id: initialClassId,
       slots:
         npcData && npcData.slots && typeof npcData.slots === "object"
@@ -966,6 +990,11 @@ function upsertNPCAvatar(npcId, row, col, seq, rotation, displayName, npcData) {
     npcAvatars[npcId].row = Number(row);
     npcAvatars[npcId].col = Number(col);
     if (displayName) npcAvatars[npcId].displayName = displayName;
+    // Only a full snapshot carries identity; a movement event has none, and
+    // must not blank out a name the snapshot established.
+    if (npcData && npcData.identity && typeof npcData.identity === "object") {
+      npcAvatars[npcId].identity = npcData.identity;
+    }
     if (npcData && npcData.slots && typeof npcData.slots === "object") {
       npcAvatars[npcId].slots = npcData.slots;
     }

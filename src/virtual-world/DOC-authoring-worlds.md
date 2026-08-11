@@ -36,6 +36,41 @@ same tile, every world of that class, and reconcilable later.
 `terrain`/`structure`. The editor's picker only offers valid options; a
 mismatch is rejected on save with the placement's index.
 
+## Naming an NPC
+
+An ambient NPC gets a name hashed from its id — "Kylli Salo" — which is fine
+for wildlife and useless for a character anyone is meant to remember. Give an
+`npc` placement an `identity` and it becomes somebody:
+
+```json
+{
+  "id": "gate_guard",
+  "kind": "npc",
+  "classId": "npc_human",
+  "position": { "strategy": "exact", "row": 12, "col": 40 },
+  "identity": {
+    "name": "Aino the Gatekeeper",
+    "labels": { "fi": "Portinvartija Aino" },
+    "description": "Has kept this gate since the rowan was a sapling.",
+    "descriptions": { "fi": "On vartioinut porttia pihlajan taimesta asti." }
+  }
+}
+```
+
+- `name` is the canonical text. It replaces the generated name everywhere the
+  NPC is referred to: nameplate, tile inspector, combat messages, the active
+  actions panel.
+- `labels` / `descriptions` are per-locale overrides, keyed the same way class
+  labels are (`fi` today). The server sends the canonical text and the map; the
+  client picks.
+- `description` is the lore line shown under the name in the tile inspector.
+  This is where a character's history goes — nothing else displays it yet.
+
+Names are copied onto the NPC when its placement materializes, so renaming the
+guard in the class updates the guard standing in every existing world of that
+class the next time it loads. Only placements can name an NPC; random spawns
+keep their hashed names, which is what tells the two apart at a glance.
+
 ## Reservations: rules a landmark imposes on its surroundings
 
 A placement may reserve an area — a circle or rectangle — carrying rules:

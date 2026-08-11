@@ -7,6 +7,7 @@ import {
   isWorldTileWalkable,
   LivingState,
   normalizeLivingState,
+  resolveNPCDisplayName,
   worldTileValueForName,
 } from "./world-domain.ts";
 import {
@@ -134,7 +135,6 @@ export function tickNPCMovement(params: {
   cols: number;
   shuffleDirections: (dirs: Array<{ dr: number; dc: number }>) => void;
   directionToRotation: (dr: number, dc: number) => number;
-  getNPCDisplayName: (worldId: string, npcId: string) => string;
   sendWorldScopedStreamEvent: (
     worldId: string,
     eventType: string,
@@ -194,7 +194,7 @@ export function tickNPCMovement(params: {
 
     params.sendWorldScopedStreamEvent(String(params.worldId), "npc_moved", {
       npc_id: params.npcId,
-      display_name: params.getNPCDisplayName(params.worldId, params.npcId),
+      display_name: resolveNPCDisplayName(params.worldId, params.npcId, n),
       row: n.row,
       col: n.col,
       seq: n.seq,

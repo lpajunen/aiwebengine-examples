@@ -76,6 +76,7 @@ import {
 import { CLASS_OWNED_LIVING_VALUE_KEYS } from "./runtime-config.ts";
 import { ClassSize } from "./class-size.ts";
 import { LivingVisualStyle } from "./class-visual.ts";
+import { normalizeClassLabels } from "./class-labels.ts";
 
 export {
   getActionDefinition,
@@ -263,6 +264,26 @@ export interface LivingState {
   values: Record<string, unknown>;
 }
 
+// Authored identity for one living *instance*, as opposed to the class it is
+// an instance of: this is what makes an NPC "Aino the Gatekeeper" rather than
+// another anonymous human. Written by a world class's `npc` placement (see
+// world-placements.ts) and carried on the NPC row, so a named guard keeps its
+// name across ticks, restarts and the world being unloaded.
+//
+// Naming follows the class convention: `name` is the canonical English text
+// and `labels` holds per-locale overrides the client prefers (localizeLabel).
+// There is no labelKey — authored content has no i18n bundle entry to point
+// at. `description` is the lore line the tile inspector shows.
+//
+// An NPC with no identity falls back to getNPCDisplayName's hashed name, which
+// is what every ambient spawn still gets.
+export interface LivingIdentity {
+  name?: string;
+  labels?: Record<string, string>;
+  description?: string;
+  descriptions?: Record<string, string>;
+}
+
 // The public world-facing identity of a living. "creature" remains a
 // class-authoring kind, but runtime public entities are presently players or
 // NPCs.
@@ -287,6 +308,11 @@ export interface PublicLivingSnapshot {
   class_id: string;
   slots: Record<string, PublicEquippedItem | null>;
   values: Record<string, unknown>;
+  // Present only for a living someone authored an identity for. `display_name`
+  // above already carries the canonical name, so this adds what the server
+  // cannot resolve on the viewer's behalf: the per-locale name overrides and
+  // the description.
+  identity?: LivingIdentity;
 }
 
 export interface PublicLivingSnapshotInput {
@@ -457,6 +483,63 @@ export function getNPCDisplayName(worldId: string, npcId: string): string {
       Math.floor(seed / NPC_NAME_PREFIXES.length) % NPC_NAME_SUFFIXES.length
     ];
   return prefix + " " + suffix;
+}
+
+/**
+ * Accepts a parsed object or a JSON string (an NPC row's `identity_json`, a
+ * placement's authored block) and returns a clean identity, or null when
+ * nothing was authored. Lenient by design: it runs on the DB read path, where
+ * a malformed value must still yield a loadable NPC.
+ * @returns null rather than an empty object, so callers can persist absence
+ */
+export function normalizeLivingIdentity(raw: unknown): LivingIdentity | null {
+  // The overwhelmingly common case is "nothing authored", which reaches here
+  // as "" from an NPC row's identity_json. Bail before the parse: throwing and
+  // catching once per NPC per tick is expensive enough to matter, and the NPC
+  // tick is already the first thing the engine interrupts.
+  if (!raw) return null;
+  let source: unknown = raw;
+  if (typeof raw === "string") {
+    if (!raw.trim()) return null;
+    try {
+      source = JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+  if (!isRecordLike(source)) return null;
+  const out: LivingIdentity = {};
+  const name = typeof source.name === "string" ? source.name.trim() : "";
+  if (name) out.name = name;
+  const description =
+    typeof source.description === "string" ? source.description.trim() : "";
+  if (description) out.description = description;
+  const labels = normalizeClassLabels(source.labels);
+  if (Object.keys(labels).length > 0) out.labels = labels;
+  const descriptions = normalizeClassLabels(source.descriptions);
+  if (Object.keys(descriptions).length > 0) out.descriptions = descriptions;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * The name to show for an NPC: its authored one when a placement gave it one,
+ * and the hashed name every ambient spawn gets otherwise. Only the canonical
+ * text — a locale override travels to the client in the snapshot's `identity`,
+ * since the server does not know the viewer's locale.
+ * Reads `npc.identity` as-is rather than re-normalizing it: every load path
+ * already normalized it once, and this runs per NPC per snapshot.
+ * @param npc the NPC record, whose `identity` is consulted; may be absent
+ */
+export function resolveNPCDisplayName(
+  worldId: string,
+  npcId: string,
+  npc: unknown,
+): string {
+  if (isRecordLike(npc) && isRecordLike(npc.identity)) {
+    const name = npc.identity.name;
+    if (typeof name === "string" && name) return name;
+  }
+  return getNPCDisplayName(worldId, npcId);
 }
 
 export function normalizeWorldDimension(
@@ -833,7 +916,7 @@ export function toPublicLivingSnapshot(
       : input.livingClass && input.livingClass.id
         ? input.livingClass.id
         : "";
-  return {
+  const snapshot: PublicLivingSnapshot = {
     id: String(input.id),
     kind: input.kind,
     display_name: String(input.displayName || ""),
@@ -845,6 +928,25 @@ export function toPublicLivingSnapshot(
     slots: toPublicLivingSlots(living),
     values: toPublicLivingValues(living, input.livingClass),
   };
+  // The name itself is already in display_name; only the parts the client has
+  // to resolve for itself travel here, and only when something was authored.
+  if (isRecordLike(living.identity)) {
+    const identity: LivingIdentity = {};
+    if (isRecordLike(living.identity.labels)) {
+      identity.labels = living.identity.labels as Record<string, string>;
+    }
+    if (typeof living.identity.description === "string") {
+      identity.description = living.identity.description;
+    }
+    if (isRecordLike(living.identity.descriptions)) {
+      identity.descriptions = living.identity.descriptions as Record<
+        string,
+        string
+      >;
+    }
+    if (Object.keys(identity).length > 0) snapshot.identity = identity;
+  }
+  return snapshot;
 }
 
 export function getEquippedItems(inv: unknown): InventoryItem[] {

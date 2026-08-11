@@ -40,7 +40,7 @@ import {
 } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
 import { runInWorldTransaction } from "./world-db.ts";
-import { getNPCDisplayName, isWorldTileWalkable } from "./world-domain.ts";
+import { isWorldTileWalkable, resolveNPCDisplayName } from "./world-domain.ts";
 
 function directionToRotation(dr: number, dc: number): number {
   if (dr > 0) return 0;
@@ -235,7 +235,7 @@ function stepNPCTowardTarget(
     saveWorldNPCs(worldId, { [npcId]: npc });
     sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
       npc_id: npcId,
-      display_name: getNPCDisplayName(worldId, npcId),
+      display_name: resolveNPCDisplayName(worldId, npcId, npc),
       row: npc.row,
       col: npc.col,
       seq: npc.seq,
@@ -372,13 +372,12 @@ export function applyLivingEffect(
   effect: ActionLivingEffect,
   killExperienceBase: number,
 ): LivingEffectOutcome {
-  const targetLabel =
-    targetType === "npc"
-      ? getNPCDisplayName(worldId, targetId)
-      : getEffectiveNick(targetId);
-
   const npcs = targetType === "npc" ? loadWorldNPCs(worldId) : {};
   const targetNpc = targetType === "npc" ? npcs[targetId] : null;
+  const targetLabel =
+    targetType === "npc"
+      ? resolveNPCDisplayName(worldId, targetId, targetNpc)
+      : getEffectiveNick(targetId);
   const targetInv =
     targetType === "player" ? loadPlayerInventory(targetId) : null;
   if (!targetNpc && !targetInv) {
@@ -537,7 +536,7 @@ function resolveCombatHit(
 
   const targetLabel =
     fight.target_type === "npc"
-      ? getNPCDisplayName(worldId, fight.target_id)
+      ? resolveNPCDisplayName(worldId, fight.target_id, target)
       : getEffectiveNick(fight.target_id);
 
   if (!isHit) {
@@ -564,7 +563,7 @@ function resolveCombatHit(
     } else if (targetInv) {
       const attackerLabel =
         fight.attacker_type === "npc"
-          ? getNPCDisplayName(worldId, fight.attacker_id)
+          ? resolveNPCDisplayName(worldId, fight.attacker_id, attacker)
           : getEffectiveNick(fight.attacker_id);
       targetInv.values = Object.assign({}, targetValues, {
         currentHitPoints: nextHitPoints,

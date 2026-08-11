@@ -593,6 +593,11 @@ function renderTileDetailPanel() {
         '<div class="tile-living-name">' +
         escHtml(npcDisplayName(npcEntry.id)) +
         "</div>";
+      var npcLore = npcDescription(npcEntry.id);
+      if (npcLore) {
+        html +=
+          '<div class="tile-living-description">' + escHtml(npcLore) + "</div>";
+      }
       if (npcData.class_id) {
         html +=
           '<div class="tile-row">' +

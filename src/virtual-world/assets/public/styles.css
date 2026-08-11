@@ -642,6 +642,13 @@ canvas {
   color: #a8d8ff;
   padding: 3px 0;
 }
+#hud-tile-detail .tile-living-description {
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.72);
+  font-style: italic;
+  padding: 0 0 3px;
+}
 #hud-tile-detail .tile-empty {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.4);

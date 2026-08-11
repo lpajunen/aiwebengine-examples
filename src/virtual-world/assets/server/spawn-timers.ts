@@ -3,7 +3,7 @@ import { getLivingClass } from "./living-registry.ts";
 import { spawnSingleWorldItem } from "./item-storage.ts";
 import { spawnSingleWorldNPC } from "./npc-storage.ts";
 import { getWorldClassForWorld } from "./world-bootstrap.ts";
-import { getNPCDisplayName } from "./world-domain.ts";
+import { resolveNPCDisplayName } from "./world-domain.ts";
 import {
   broadcastItemChange,
   sendWorldScopedStreamEvent,
@@ -81,7 +81,11 @@ export function processDueSpawnTimers(worldId: string, nowMs: number): void {
       if (placed) {
         sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
           npc_id: placed.npcId,
-          display_name: getNPCDisplayName(worldId, placed.npcId),
+          display_name: resolveNPCDisplayName(
+            worldId,
+            placed.npcId,
+            placed.npc,
+          ),
           row: placed.npc.row,
           col: placed.npc.col,
           seq: placed.npc.seq,

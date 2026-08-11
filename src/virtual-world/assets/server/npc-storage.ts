@@ -16,8 +16,11 @@ import {
   createLivingSlotsFromDefinitions,
   fromStoredWorldTimestamp,
   isWorldTileWalkable,
+  LivingIdentity,
+  normalizeLivingIdentity,
   normalizeLivingState,
   PublicLivingSnapshot,
+  resolveNPCDisplayName,
   stripClassOwnedLivingState,
   toPublicLivingSnapshot,
   toStoredWorldTimestamp,
@@ -49,9 +52,8 @@ type NPCState = {
   slots?: unknown;
   bag?: unknown;
   values?: unknown;
+  identity?: LivingIdentity;
 };
-
-type NPCDisplayNameResolver = (worldId: string, npcId: string) => string;
 
 function normalizeSafeInt(
   value: unknown,
@@ -102,7 +104,7 @@ export function loadWorldNPCs(worldId: string): Record<string, any> {
       const safeRow = normalizeSafeInt(row.row, 1, 0, 99);
       const safeCol = normalizeSafeInt(row.col, 1, 0, 99);
       const safeSeq = normalizeSafeInt(row.seq, 0, 0, 2147483647);
-      fromRows[String(row.npc_id)] = {
+      const npc: any = {
         row: safeRow,
         col: safeCol,
         seq: safeSeq,
@@ -116,6 +118,12 @@ export function loadWorldNPCs(worldId: string): Record<string, any> {
         bag: living.bag,
         values: living.values,
       };
+      // Normalized once here, so every reader downstream (and the display-name
+      // resolver in particular, which runs per NPC per snapshot) can trust the
+      // shape without re-parsing.
+      const identity = normalizeLivingIdentity(row.identity_json);
+      if (identity) npc.identity = identity;
+      fromRows[String(row.npc_id)] = npc;
     }
     return fromRows;
   }
@@ -164,6 +172,10 @@ export function saveWorldNPCs(
         slots_json: JSON.stringify(persisted.slots),
         bag_json: JSON.stringify(persisted.bag),
         values_json: JSON.stringify(persisted.values),
+        // "" rather than null: the column is nullable text, but an empty
+        // string round-trips through normalizeLivingIdentity to "no identity"
+        // and keeps every row the same shape.
+        identity_json: npc.identity ? JSON.stringify(npc.identity) : "",
       };
       const existingRow = querySingleWorldRow(
         VWORLD_NPC_TABLE,
@@ -176,6 +188,21 @@ export function saveWorldNPCs(
       }
     },
   );
+}
+
+/**
+ * The name of one NPC given only its id — for callers that hold a reference to
+ * an NPC (a fight row, a follow row) rather than a loaded world. Reads the one
+ * row instead of every NPC in the world, and falls back to the hashed name
+ * exactly as the in-memory resolver does.
+ */
+export function loadNPCDisplayName(worldId: string, npcId: string): string {
+  const row = querySingleWorldRow(
+    VWORLD_NPC_TABLE,
+    JSON.stringify({ npc_id: String(npcId) }),
+  );
+  const identity = row ? normalizeLivingIdentity(row.identity_json) : null;
+  return resolveNPCDisplayName(worldId, npcId, { identity: identity });
 }
 
 export function deleteNPCById(npcId: string): void {
@@ -268,7 +295,6 @@ export function saveNPCLastTick(worldId: string, lastTickTs: number): void {
 export function buildWorldNPCSnapshot(
   worldId: string,
   npcs: Record<string, any>,
-  getNPCDisplayName: NPCDisplayNameResolver,
 ): PublicLivingSnapshot[] {
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
@@ -280,7 +306,7 @@ export function buildWorldNPCSnapshot(
     return toPublicLivingSnapshot({
       id: npcId,
       kind: "npc",
-      displayName: getNPCDisplayName(worldId, npcId),
+      displayName: resolveNPCDisplayName(worldId, npcId, n),
       row: Number(n.row),
       col: Number(n.col),
       seq: Number(n.seq || 0),
@@ -398,6 +424,22 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
 // so a fixed NPC is re-adopted rather than duplicated. A fixed NPC that was
 // killed and swept from the world does come back on the next load, which is
 // the point — an authored guard is part of the world, not ambient population.
+// Copies a placement's authored identity onto the NPC it owns, and reports
+// whether anything changed so the caller can decide to persist. Compared by
+// serialized value, which is safe because both sides come out of
+// normalizeLivingIdentity and so carry their keys in the same order.
+function applyPlacementIdentity(
+  npc: any,
+  identity: LivingIdentity | undefined,
+): boolean {
+  const desired = identity ? JSON.stringify(identity) : "";
+  const current = npc && npc.identity ? JSON.stringify(npc.identity) : "";
+  if (desired === current) return false;
+  if (identity) npc.identity = identity;
+  else delete npc.identity;
+  return true;
+}
+
 export function materializeWorldNPCPlacements(
   worldId: string,
   npcs: Record<string, any>,
@@ -424,11 +466,22 @@ export function materializeWorldNPCPlacements(
     const existing = instances[placement.id];
     const recordedNpcId =
       existing && existing.data ? String(existing.data.npcId || "") : "";
-    if (recordedNpcId && npcs[recordedNpcId]) continue;
+    if (recordedNpcId && npcs[recordedNpcId]) {
+      // The NPC is already here, so materialization has nothing to create —
+      // but its identity is authored on the class, and a creator who renames
+      // the gatekeeper expects the guard standing in every existing world to
+      // answer to the new name. Cheap to check: this loop already holds both
+      // sides.
+      if (applyPlacementIdentity(npcs[recordedNpcId], placement.identity)) {
+        changed = true;
+      }
+      continue;
+    }
 
     const npcId = recordedNpcId || "placement_" + String(placement.id);
     const built = buildNPCAtTile(worldId, row, col, classId);
     if (!built) continue;
+    applyPlacementIdentity(built, placement.identity);
     npcs[npcId] = built;
     changed = true;
     saveWorldPlacementInstance({

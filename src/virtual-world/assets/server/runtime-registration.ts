@@ -946,6 +946,17 @@ export function registerVirtualWorldRuntime(): void {
               description:
                 "Class-owned initial state. For portals, state.destination selects the linked world: {mode: ensure_world_class|existing_world|source_world, worldClassId?, worldId?, entryPlacementId?}",
             },
+            identity: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                labels: { type: "object" },
+                description: { type: "string" },
+                descriptions: { type: "object" },
+              },
+              description:
+                "Who this placement is, for npc placements: name is the canonical English name shown instead of the generated one, labels holds per-locale names ({fi: ...}), description is the lore line the tile inspector shows and descriptions its per-locale form. Editing it renames the NPC in every existing world of this class.",
+            },
             reservations: {
               type: "array",
               items: {

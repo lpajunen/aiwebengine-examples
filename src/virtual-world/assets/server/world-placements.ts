@@ -19,7 +19,11 @@
 
 import { getItemClass } from "./item-registry.ts";
 import { getLivingClass } from "./living-registry.ts";
-import { WORLD_TILE_DEFS } from "./world-domain.ts";
+import {
+  LivingIdentity,
+  normalizeLivingIdentity,
+  WORLD_TILE_DEFS,
+} from "./world-domain.ts";
 import { isReservationRule } from "./runtime-config.ts";
 
 // Closed set until a new engine primitive exists to back a new member.
@@ -82,6 +86,13 @@ export type WorldClassPlacement = {
   position: PlacementPosition;
   state: Record<string, unknown>;
   reservations: PlacementReservation[];
+  // Who this placement *is*, as opposed to what class it instantiates — the
+  // difference between "a human stands here" and "Aino the Gatekeeper stands
+  // here". Consumed today by `npc` placements, which copy it onto the NPC they
+  // materialize (see materializeWorldNPCPlacements); the block itself is not
+  // NPC-specific, so a named fixture can use it when a reader for that exists.
+  // Absent for the ordinary case, which keeps the hashed name.
+  identity?: LivingIdentity;
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -165,7 +176,7 @@ function normalizePlacement(raw: unknown): WorldClassPlacement | null {
     }
   }
 
-  return {
+  const placement: WorldClassPlacement = {
     id: id,
     kind: kind,
     classId: classId,
@@ -177,6 +188,9 @@ function normalizePlacement(raw: unknown): WorldClassPlacement | null {
     state: asObject(obj.state) || {},
     reservations: reservations,
   };
+  const identity = normalizeLivingIdentity(obj.identity);
+  if (identity) placement.identity = identity;
+  return placement;
 }
 
 export function normalizeWorldClassPlacements(
@@ -317,6 +331,94 @@ function validateReservation(
   }
 }
 
+// A name has to fit a nameplate and a description a tile-inspector line, so
+// both are bounded here rather than letting a paste of prose through to every
+// client in the world.
+const MAX_IDENTITY_NAME_LENGTH = 60;
+const MAX_IDENTITY_DESCRIPTION_LENGTH = 500;
+
+function validateIdentityTextMap(
+  raw: unknown,
+  field: string,
+  maxLength: number,
+  prefix: string,
+  errors: string[],
+): void {
+  const map = asObject(raw);
+  if (!map) {
+    errors.push(prefix + ": identity." + field + " must be an object");
+    return;
+  }
+  for (const locale of Object.keys(map)) {
+    const value = map[locale];
+    if (typeof value !== "string") {
+      errors.push(
+        prefix + ": identity." + field + "." + locale + " must be a string",
+      );
+    } else if (value.length > maxLength) {
+      errors.push(
+        prefix +
+          ": identity." +
+          field +
+          "." +
+          locale +
+          " must be at most " +
+          maxLength +
+          " characters",
+      );
+    }
+  }
+}
+
+function validateIdentity(
+  raw: unknown,
+  prefix: string,
+  errors: string[],
+): void {
+  const obj = asObject(raw);
+  if (!obj) {
+    errors.push(prefix + ": identity must be an object");
+    return;
+  }
+  const texts: Array<[string, number]> = [
+    ["name", MAX_IDENTITY_NAME_LENGTH],
+    ["description", MAX_IDENTITY_DESCRIPTION_LENGTH],
+  ];
+  for (const [field, maxLength] of texts) {
+    if (obj[field] === undefined) continue;
+    if (typeof obj[field] !== "string") {
+      errors.push(prefix + ": identity." + field + " must be a string");
+    } else if (String(obj[field]).length > maxLength) {
+      errors.push(
+        prefix +
+          ": identity." +
+          field +
+          " must be at most " +
+          maxLength +
+          " characters",
+      );
+    }
+  }
+  if (obj.labels !== undefined) {
+    validateIdentityTextMap(
+      obj.labels,
+      "labels",
+      MAX_IDENTITY_NAME_LENGTH,
+      prefix,
+      errors,
+    );
+  }
+  if (obj.descriptions !== undefined) {
+    validateIdentityTextMap(
+      obj.descriptions,
+      "descriptions",
+      MAX_IDENTITY_DESCRIPTION_LENGTH,
+      prefix,
+      errors,
+    );
+  }
+}
+
 // Returns one message per problem found — empty means the placements are safe
 // to persist. Never throws; callers surface the list to the creator.
 export function validateWorldClassPlacements(
@@ -394,6 +496,10 @@ export function validateWorldClassPlacements(
           prefix + ": position.col must be within 0.." + (dims.cols - 1),
         );
       }
+    }
+
+    if (obj.identity !== undefined) {
+      validateIdentity(obj.identity, prefix, errors);
     }
 
     if (obj.state !== undefined) {

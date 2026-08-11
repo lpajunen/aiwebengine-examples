@@ -1594,6 +1594,40 @@ function renderPlacementRow(placement, index) {
   }
   html += "</div>";
 
+  // Who stands here, as opposed to what class it is. Only offered for NPCs:
+  // they are the placements a player can be told about by name, and nothing
+  // reads an authored identity off the other kinds yet.
+  if (kind === "npc") {
+    var identity = placement.identity || {};
+    var identityLabels = identity.labels || {};
+    var identityDescriptions = identity.descriptions || {};
+    html +=
+      '<div class="wc-placement-sub">' +
+      '<input placeholder="name" value="' +
+      escapeAttrValue(identity.name) +
+      '" oninput="updatePlacementIdentity(' +
+      index +
+      ",'name',this.value)\">" +
+      '<input placeholder="name (fi)" value="' +
+      escapeAttrValue(identityLabels.fi) +
+      '" oninput="updatePlacementIdentity(' +
+      index +
+      ",'labels.fi',this.value)\">" +
+      "</div>" +
+      '<div class="wc-placement-sub">' +
+      '<input placeholder="description" value="' +
+      escapeAttrValue(identity.description) +
+      '" oninput="updatePlacementIdentity(' +
+      index +
+      ",'description',this.value)\">" +
+      '<input placeholder="description (fi)" value="' +
+      escapeAttrValue(identityDescriptions.fi) +
+      '" oninput="updatePlacementIdentity(' +
+      index +
+      ",'descriptions.fi',this.value)\">" +
+      "</div>";
+  }
+
   if (kind === "portal") {
     var mode = destination ? String(destination.mode || "") : "";
     html +=
@@ -1654,6 +1688,37 @@ function renderWorldClassPlacements() {
 function updatePlacementField(index, field, value) {
   if (!worldClassPlacements[index]) return;
   worldClassPlacements[index][field] = value;
+  renderWorldClassPreview();
+}
+
+/**
+ * Writes one authored-identity field, where `field` is either a plain key
+ * ("name") or a locale entry ("labels.fi"). Empty input removes the key rather
+ * than storing "", so clearing a field leaves no identity behind at all and
+ * the NPC falls back to its generated name.
+ * @param {number} index
+ * @param {string} field
+ * @param {string} value
+ */
+function updatePlacementIdentity(index, field, value) {
+  var placement = worldClassPlacements[index];
+  if (!placement) return;
+  if (!placement.identity) placement.identity = {};
+  var identity = placement.identity;
+  var text = String(value || "").trim();
+  var parts = field.split(".");
+  if (parts.length === 2) {
+    var map = identity[parts[0]] || {};
+    if (text) map[parts[1]] = text;
+    else delete map[parts[1]];
+    if (Object.keys(map).length) identity[parts[0]] = map;
+    else delete identity[parts[0]];
+  } else if (text) {
+    identity[field] = text;
+  } else {
+    delete identity[field];
+  }
+  if (!Object.keys(identity).length) delete placement.identity;
   renderWorldClassPreview();
 }
 

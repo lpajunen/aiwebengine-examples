@@ -40,12 +40,59 @@ import {
 } from "./runtime-config.ts";
 type SchemaCollector = Array<any> | undefined;
 
-function isBenignSchemaResult(result: any): boolean {
+function isBenignSchemaResult(op: string, result: any): boolean {
+  // createTable answers with {success, tableName, physicalName} or {error}.
+  // An empty/unparseable answer is neither, and treating it as success is how
+  // a script with no tables at all can look healthy: every later column op and
+  // query fails with "table not found", each one individually shrugged off as
+  // a missing-row case, and the game runs entirely on in-memory defaults. Only
+  // createTable is held to this — the column ops legitimately return nothing.
+  if (op === "createTable" && !result) return false;
   if (!result || !result.error) return true;
   const msg = String(result.error || "").toLowerCase();
+  // "already exists" is the ordinary answer on every re-run, for createTable as
+  // much as for a column or index — the engine reports the collision rather
+  // than a success. It therefore cannot tell a healthy table from one whose
+  // registry entry was lost while the relation outlived it (seen 2026-08-11,
+  // after the database was recreated underneath the engine). What separates
+  // them is the *consequence*: a registered table's column steps then succeed,
+  // while an orphaned one rejects every one of them with "not found for this
+  // script". So the column/index failures below are the alarm worth raising,
+  // and the cure for that alarm is dropping the orphaned script_<id>_*
+  // relations so createTable can register them again.
   return (
     msg.indexOf("already exists") !== -1 || msg.indexOf("duplicate") !== -1
   );
+}
+
+// Schema failures are counted per run and reported once, through console.error
+// rather than vwLog: vwLog is compiled out unless VW_DEBUG is on, and "the
+// database did not come up" must never be invisible in production. One line
+// per run, not per step — a broken deployment fails every step it tries.
+// Table creation and column addition are tracked apart because they fail for
+// different reasons and only one of them is actionable: a createTable that
+// answers nothing may still have made the table, while a column step rejected
+// with "table not found" says the table this very run just created is not
+// visible to it — which is the symptom worth reading.
+let schemaCreateFailureCount = 0;
+let schemaAlterFailureCount = 0;
+let firstAlterFailure = "";
+
+export function reportSchemaSetupOutcome(scope: string): void {
+  if (schemaCreateFailureCount === 0 && schemaAlterFailureCount === 0) return;
+  console.error(
+    "[vworld] " +
+      scope +
+      " schema setup failed: " +
+      schemaCreateFailureCount +
+      " createTable, " +
+      schemaAlterFailureCount +
+      " column/index step(s)" +
+      (firstAlterFailure ? "; first column failure: " + firstAlterFailure : ""),
+  );
+  schemaCreateFailureCount = 0;
+  schemaAlterFailureCount = 0;
+  firstAlterFailure = "";
 }
 
 function reportSchemaResult(
@@ -55,12 +102,29 @@ function reportSchemaResult(
   result: any,
   columnName: string | undefined,
 ): void {
-  if (isBenignSchemaResult(result)) return;
+  if (isBenignSchemaResult(op, result)) return;
+  const error = String(
+    result && result.error ? result.error : "empty response",
+  );
+  if (op === "createTable") {
+    schemaCreateFailureCount += 1;
+  } else {
+    schemaAlterFailureCount += 1;
+    if (!firstAlterFailure) {
+      firstAlterFailure =
+        op +
+        " " +
+        tableName +
+        (columnName ? "." + columnName : "") +
+        ": " +
+        error;
+    }
+  }
   vwLog(scope + " schema setup failed", {
     op: op,
     table: tableName,
     column: columnName || "",
-    error: String(result && result.error ? result.error : "unknown"),
+    error: error,
   });
 }
 
@@ -579,6 +643,7 @@ export function ensureWorldDatabaseSchema(): void {
   ensureSchemaVersionTable();
   runWorldDatabaseMigration();
   recordSchemaVersion("world");
+  reportSchemaSetupOutcome("world");
 }
 
 function runWorldDatabaseMigration(): void {
@@ -1464,6 +1529,7 @@ export function ensureChatDatabaseSchema(collector?: Array<any>): void {
     ensureSchemaVersionTable();
     runChatDatabaseMigration(undefined);
     recordSchemaVersion("chat");
+    reportSchemaSetupOutcome("chat");
     return;
   }
   runChatDatabaseMigration(collector);

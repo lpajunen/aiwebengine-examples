@@ -19,6 +19,8 @@ catch-all:
   and its own remaining steps.
 - [DOC-authoring-worlds.md](DOC-authoring-worlds.md) — authoring placements
   and linked worlds without code.
+- [TODO-storytelling.md](TODO-storytelling.md) — NPC interaction, dialogue,
+  quests, and the authoring gaps that work left open.
 
 ## Highest priority (concrete, low-effort)
 

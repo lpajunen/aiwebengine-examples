@@ -1692,8 +1692,11 @@ function renderPlacementRow(placement, index) {
     "</div>";
 
   // One reservation per placement in the UI, which covers every authored
-  // landmark so far. The stored schema allows several; extras are preserved
-  // untouched and remain editable through MCP.
+  // landmark so far. The stored schema allows several: editing the radius or
+  // the rules touches only the first and leaves any others alone, but the
+  // checkbox speaks for the whole list — unchecking it means "this placement
+  // reserves nothing", and clears them all. Author more than one through MCP
+  // and edit them there.
   html +=
     '<div class="wc-placement-sub"><label><input type="checkbox"' +
     (reservation ? " checked" : "") +
@@ -1861,12 +1864,21 @@ function updatePlacementIdentity(index, field, value) {
 function updatePlacementKind(index, kind) {
   var placement = worldClassPlacements[index];
   if (!placement) return;
+  var previousKind = String(placement.kind || "");
   placement.kind = kind;
   // The class list is kind-specific, so an id left over from the previous kind
   // would fail validation on save. Snap to a valid option instead.
   var options = placementClassOptions(kind);
   if (options.indexOf(String(placement.classId)) === -1) {
     placement.classId = options.length ? options[0] : "";
+  }
+  // A destination belongs to a portal. Left behind by a kind change it is
+  // invisible — the row only renders for portals — but it is still submitted
+  // and still validated, so a half-filled one (a mode chosen, no world class
+  // yet) fails the save complaining about a field the form no longer shows.
+  // That is a dead end a creator cannot see their way out of.
+  if (previousKind === "portal" && kind !== "portal" && placement.state) {
+    delete placement.state.destination;
   }
   renderWorldClassPlacements();
 }
@@ -1892,9 +1904,19 @@ function updatePlacementPosition(index, axis, value) {
 function togglePlacementReservation(index, on) {
   var placement = worldClassPlacements[index];
   if (!placement) return;
-  placement.reservations = on
-    ? [{ kind: "circle", radius: 3, rules: ["block_plant", "block_build"] }]
-    : [];
+  if (!on) {
+    placement.reservations = [];
+  } else if (
+    !Array.isArray(placement.reservations) ||
+    placement.reservations.length === 0
+  ) {
+    // Only seed a default into an empty list. Checking a box that is already
+    // checked cannot happen from the UI, but replacing a creator's authored
+    // reservations with defaults is not something to leave one refactor away.
+    placement.reservations = [
+      { kind: "circle", radius: 3, rules: ["block_plant", "block_build"] },
+    ];
+  }
   renderWorldClassPlacements();
 }
 

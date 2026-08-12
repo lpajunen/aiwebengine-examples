@@ -362,6 +362,11 @@ export function buildWorldNPCSnapshot(
   worldId: string,
   npcs: Record<string, any>,
 ): PublicLivingSnapshot[] {
+  // Which of these livings can be talked to. Resolved once for the whole
+  // snapshot rather than per NPC: the class half is a cached lookup, but the
+  // placement half needs the instance rows, and asking for those per NPC would
+  // put a query inside a loop over every living in the world.
+  const talkers = buildTalkingNPCSet(worldId, npcs);
   return Object.keys(npcs).map(function (npcId) {
     const n = npcs[npcId] || {};
     const classId =
@@ -379,8 +384,55 @@ export function buildWorldNPCSnapshot(
       rotation: Number.isFinite(Number(n.rotation)) ? Number(n.rotation) : 0,
       living: n,
       livingClass: livingClass,
+      canTalk: talkers[npcId] === true,
     });
   });
+}
+
+/**
+ * The ids of NPCs with something to say — from their class, or from the
+ * placement that created them, which can give a conversation to a living whose
+ * class has none.
+ */
+function buildTalkingNPCSet(
+  worldId: string,
+  npcs: Record<string, any>,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  const npcIds = Object.keys(npcs);
+  let anyPlacementDialogue = false;
+  const worldClass = getWorldClassForWorld(worldId);
+  const placements =
+    worldClass && Array.isArray(worldClass.placements)
+      ? worldClass.placements
+      : [];
+  const dialogueByPlacementId: Record<string, boolean> = {};
+  for (let i = 0; i < placements.length; i++) {
+    if (placements[i] && placements[i].dialogue) {
+      dialogueByPlacementId[String(placements[i].id)] = true;
+      anyPlacementDialogue = true;
+    }
+  }
+
+  for (let i = 0; i < npcIds.length; i++) {
+    const npc = npcs[npcIds[i]];
+    const cls = getLivingClass(String((npc && npc.class_id) || ""));
+    if (cls && cls.dialogue && (cls.dialogue.nodes || []).length > 0) {
+      out[npcIds[i]] = true;
+    }
+  }
+  // The instance rows are only worth reading when some placement actually
+  // authored a conversation — otherwise this is a query for nothing on a path
+  // that runs on every state poll.
+  if (!anyPlacementDialogue) return out;
+  const instances = loadWorldPlacementInstances(worldId);
+  Object.keys(instances).forEach(function (placementId) {
+    if (!dialogueByPlacementId[placementId]) return;
+    const data = instances[placementId] && instances[placementId].data;
+    const npcId = data ? String(data.npcId || "") : "";
+    if (npcId && npcs[npcId]) out[npcId] = true;
+  });
+  return out;
 }
 
 export function ensureWorldNPCs(worldId: string): Record<string, any> {

@@ -20,8 +20,11 @@
 import { getItemClass } from "./item-registry.ts";
 import { getLivingClass } from "./living-registry.ts";
 import {
+  DialogueSpec,
   LivingIdentity,
+  normalizeDialogueSpec,
   normalizeLivingIdentity,
+  validateDialogueSpec,
   WORLD_TILE_DEFS,
 } from "./world-domain.ts";
 import { isReservationRule } from "./runtime-config.ts";
@@ -93,6 +96,15 @@ export type WorldClassPlacement = {
   // NPC-specific, so a named fixture can use it when a reader for that exists.
   // Absent for the ordinary case, which keeps the hashed name.
   identity?: LivingIdentity;
+  // What *this* living says, overriding whatever its class says. A class's
+  // dialogue is what every gatekeeper has in common; this is what only the one
+  // standing at this gate knows.
+  //
+  // Unlike `identity` it is not copied onto the NPC when it materializes: a
+  // conversation runs to kilobytes and an NPC row is rewritten every tick, so
+  // it stays here and is read when someone actually talks. See
+  // resolveDialogueTarget in dialogue-helpers.ts.
+  dialogue?: DialogueSpec;
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -190,6 +202,8 @@ function normalizePlacement(raw: unknown): WorldClassPlacement | null {
   };
   const identity = normalizeLivingIdentity(obj.identity);
   if (identity) placement.identity = identity;
+  const dialogue = normalizeDialogueSpec(obj.dialogue);
+  if (dialogue) placement.dialogue = dialogue;
   return placement;
 }
 
@@ -500,6 +514,14 @@ export function validateWorldClassPlacements(
 
     if (obj.identity !== undefined) {
       validateIdentity(obj.identity, prefix, errors);
+    }
+
+    if (obj.dialogue !== undefined) {
+      validateDialogueSpec(obj.dialogue, prefix + ".dialogue").forEach(
+        function (message) {
+          errors.push(prefix + ": " + message);
+        },
+      );
     }
 
     if (obj.state !== undefined) {

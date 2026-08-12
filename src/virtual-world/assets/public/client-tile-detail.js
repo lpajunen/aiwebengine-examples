@@ -600,7 +600,7 @@ function renderTileDetailPanel() {
       }
       // Only where there is something to say: a class with no dialogue offers
       // no Talk, which is most wildlife.
-      if (livingClassHasDialogue(String(npcData.class_id || ""))) {
+      if (livingCanTalk(npcData)) {
         html +=
           '<button class="tile-talk-btn" onclick="openDialogue(\'' +
           escHtml(String(npcEntry.id)) +

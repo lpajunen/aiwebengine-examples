@@ -19,6 +19,8 @@
 
 import { evaluateEntityConditions } from "./action-logic-interpreter.ts";
 import { getLivingClass } from "./living-registry.ts";
+import { getWorldClassForWorld } from "./world-bootstrap.ts";
+import { loadWorldPlacementInstances } from "./world-placement-instances.ts";
 import { loadPlayerInventory } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { loadWorldNPCs } from "./npc-storage.ts";
@@ -28,6 +30,7 @@ import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import {
   DialogueChoice,
   DialogueNode,
+  DialogueSpec,
   isWithinTileDistance,
   resolveNPCDisplayName,
 } from "./world-domain.ts";
@@ -132,13 +135,15 @@ function resolveDialogueTarget(
     return null;
   }
 
+  // This living's own conversation wins over its class's: the class says what
+  // every gatekeeper has in common, the placement what only the one at this
+  // gate knows. Read here rather than copied onto the NPC when it materializes
+  // — a conversation runs to kilobytes and an NPC row is rewritten every tick.
   const livingClass = getLivingClass(String(npc.class_id || ""));
-  const nodes =
-    livingClass &&
-    livingClass.dialogue &&
-    Array.isArray(livingClass.dialogue.nodes)
-      ? livingClass.dialogue.nodes
-      : [];
+  const placed = placementDialogueFor(worldId, targetLivingId);
+  const spec =
+    placed || (livingClass ? livingClass.dialogue : undefined) || null;
+  const nodes = spec && Array.isArray(spec.nodes) ? spec.nodes : [];
   if (nodes.length === 0) return null;
 
   return {
@@ -147,6 +152,33 @@ function resolveDialogueTarget(
     nodes: nodes,
     displayName: resolveNPCDisplayName(worldId, targetLivingId, npc),
   };
+}
+
+/**
+ * The conversation authored on the placement that created this NPC, if any.
+ * Costs one instance lookup, paid only when somebody actually talks.
+ */
+function placementDialogueFor(
+  worldId: string,
+  npcId: string,
+): DialogueSpec | null {
+  const worldClass = getWorldClassForWorld(worldId);
+  if (!worldClass || !Array.isArray(worldClass.placements)) return null;
+  const instances = loadWorldPlacementInstances(worldId);
+  const placementIds = Object.keys(instances);
+  for (let i = 0; i < placementIds.length; i++) {
+    const instance = instances[placementIds[i]];
+    if (!instance || !instance.data) continue;
+    if (String(instance.data.npcId || "") !== npcId) continue;
+    for (let p = 0; p < worldClass.placements.length; p++) {
+      const placement = worldClass.placements[p];
+      if (placement && String(placement.id) === placementIds[i]) {
+        return placement.dialogue || null;
+      }
+    }
+    return null;
+  }
+  return null;
 }
 
 function findNode(nodes: DialogueNode[], nodeId: string): DialogueNode | null {

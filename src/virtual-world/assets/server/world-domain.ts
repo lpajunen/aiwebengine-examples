@@ -214,6 +214,104 @@ export interface DialogueSpec {
   nodes: DialogueNode[];
 }
 
+/**
+ * Lenient shaping for the read path: returns a usable conversation or null,
+ * never throws. A node with no id or no text is dropped rather than taken
+ * along, since neither can be rendered or navigated to.
+ */
+export function normalizeDialogueSpec(raw: unknown): DialogueSpec | null {
+  let source: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      source = JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+  if (!isRecordLike(source) || !Array.isArray(source.nodes)) return null;
+  const nodes: DialogueNode[] = [];
+  for (let i = 0; i < source.nodes.length; i++) {
+    const node = source.nodes[i];
+    if (!isRecordLike(node)) continue;
+    const id = String(node.id || "").trim();
+    const text = typeof node.text === "string" ? node.text : "";
+    if (!id || !text) continue;
+    nodes.push(node as unknown as DialogueNode);
+  }
+  return nodes.length > 0 ? { nodes: nodes } : null;
+}
+
+// A conversation is deep enough that a typo in it is easy to make and hard to
+// see — a choice pointing at a node that does not exist simply ends the
+// conversation, which looks like the NPC having nothing more to say. So the
+// write path checks the shape and the internal references, and reports every
+// problem at once.
+const MAX_DIALOGUE_TEXT_LENGTH = 1000;
+
+export function validateDialogueSpec(raw: unknown, prefix: string): string[] {
+  const errors: string[] = [];
+  if (!isRecordLike(raw)) {
+    return [prefix + " must be an object"];
+  }
+  if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) {
+    return [prefix + ".nodes must be a non-empty array"];
+  }
+  const ids: Record<string, boolean> = {};
+  for (let i = 0; i < raw.nodes.length; i++) {
+    const at = prefix + ".nodes[" + i + "]";
+    const node: unknown = raw.nodes[i];
+    if (!isRecordLike(node)) {
+      errors.push(at + " must be an object");
+      continue;
+    }
+    const id = String(node.id || "").trim();
+    if (!id) errors.push(at + ".id is required");
+    else if (ids[id]) errors.push(at + ': duplicate node id "' + id + '"');
+    else ids[id] = true;
+    if (typeof node.text !== "string" || !node.text) {
+      errors.push(at + ".text is required");
+    } else if (node.text.length > MAX_DIALOGUE_TEXT_LENGTH) {
+      errors.push(
+        at +
+          ".text must be at most " +
+          MAX_DIALOGUE_TEXT_LENGTH +
+          " characters",
+      );
+    }
+    if (node.choices !== undefined && !Array.isArray(node.choices)) {
+      errors.push(at + ".choices must be an array");
+    }
+  }
+  // References are checked after every id is known, so the order nodes are
+  // written in does not matter.
+  for (let i = 0; i < raw.nodes.length; i++) {
+    const node: unknown = raw.nodes[i];
+    if (!isRecordLike(node) || !Array.isArray(node.choices)) continue;
+    for (let c = 0; c < node.choices.length; c++) {
+      const at = prefix + ".nodes[" + i + "].choices[" + c + "]";
+      const choice: unknown = node.choices[c];
+      if (!isRecordLike(choice)) {
+        errors.push(at + " must be an object");
+        continue;
+      }
+      if (typeof choice.text !== "string" || !choice.text) {
+        errors.push(at + ".text is required");
+      }
+      const next = choice.next === undefined ? "" : String(choice.next);
+      if (next && !ids[next]) {
+        errors.push(at + ': next names no node ("' + next + '")');
+      }
+      if (
+        choice.action !== undefined &&
+        !getActionDefinition(String(choice.action))
+      ) {
+        errors.push(at + ': unknown action "' + String(choice.action) + '"');
+      }
+    }
+  }
+  return errors;
+}
+
 export interface LivingClassRecord {
   id: string;
   kind: LivingKind;
@@ -377,6 +475,11 @@ export interface PublicLivingSnapshot {
   // cannot resolve on the viewer's behalf: the per-locale name overrides and
   // the description.
   identity?: LivingIdentity;
+  // Whether this living has anything to say, so the client can offer Talk
+  // where it means something. Sent rather than derived client-side because a
+  // placement can give a conversation to a living whose class has none, and
+  // the client only holds the classes.
+  can_talk?: boolean;
 }
 
 export interface PublicLivingSnapshotInput {
@@ -389,6 +492,7 @@ export interface PublicLivingSnapshotInput {
   rotation: number;
   living: unknown;
   livingClass?: LivingClassRecord | null;
+  canTalk?: boolean;
 }
 
 // These values affect a living's observable condition or combat capability.
@@ -1010,6 +1114,7 @@ export function toPublicLivingSnapshot(
     }
     if (Object.keys(identity).length > 0) snapshot.identity = identity;
   }
+  if (input.canTalk) snapshot.can_talk = true;
   return snapshot;
 }
 

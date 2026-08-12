@@ -46,6 +46,7 @@ import {
 } from "./http-handler-helpers.ts";
 import { getAllLivingClasses } from "./living-registry.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import { validateDialogueSpec } from "./world-domain.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
@@ -599,6 +600,15 @@ export function createLivingClassHandler(context: any) {
   if (!id) {
     return ResponseBuilder.json({ ok: false, error: "error.missing_id" }, 400);
   }
+  if (body && body.dialogue) {
+    const dialogueErrors = validateDialogueSpec(body.dialogue, "dialogue");
+    if (dialogueErrors.length > 0) {
+      return ResponseBuilder.json(
+        { error: "error.invalid_dialogue", dialogue_errors: dialogueErrors },
+        400,
+      );
+    }
+  }
   var record = {
     id: id,
     kind: normalizeLivingKind(body && body.kind, "creature"),
@@ -695,6 +705,15 @@ export function updateLivingClassHandler(context: any) {
     existing.ownerIds,
     context.request.auth.userId,
   );
+  if (body && body.dialogue) {
+    const dialogueErrors = validateDialogueSpec(body.dialogue, "dialogue");
+    if (dialogueErrors.length > 0) {
+      return ResponseBuilder.json(
+        { error: "error.invalid_dialogue", dialogue_errors: dialogueErrors },
+        400,
+      );
+    }
+  }
   var record = {
     id: classId,
     kind: normalizeLivingKind(body && body.kind, existing.kind),

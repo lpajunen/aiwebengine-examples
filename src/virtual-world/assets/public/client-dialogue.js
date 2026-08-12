@@ -10,16 +10,21 @@
 var dialogueState = null;
 
 /**
- * Whether this living has anything to say, from the class registry the page
- * shipped — so the tile inspector can offer Talk only where it means
- * something rather than on every chicken.
- * @param {string} classId
+ * Whether this living has anything to say, so the tile inspector offers Talk
+ * where it means something rather than on every chicken.
+ *
+ * The server's `can_talk` is the answer when it is present: a placement can
+ * give a conversation to a living whose class has none, and the client only
+ * holds the classes. The class check remains as the fallback for a snapshot
+ * taken before the flag existed.
+ * @param {any} npcData
  * @returns {boolean}
  */
-function livingClassHasDialogue(classId) {
+function livingCanTalk(npcData) {
+  if (npcData && npcData.can_talk === true) return true;
   var classes =
     LIVING_REGISTRY && LIVING_REGISTRY.classes ? LIVING_REGISTRY.classes : {};
-  var cls = classes[String(classId || "")];
+  var cls = classes[String((npcData && npcData.class_id) || "")];
   return !!(
     cls &&
     cls.dialogue &&

@@ -1086,6 +1086,12 @@ function editLivingClass(id) {
       /** @type {HTMLInputElement} */ (
         requireElementById("lc-combatant")
       ).checked = lc.combatant !== false;
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("lc-behavior")
+      ).value = lc.behavior ? JSON.stringify(lc.behavior, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("lc-dialogue")
+      ).value = lc.dialogue ? JSON.stringify(lc.dialogue, null, 2) : "";
       requireElementById("living-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -1140,6 +1146,8 @@ function cancelLivingClassEdit() {
   /** @type {HTMLInputElement} */ (requireElementById("lc-combatant")).checked =
     true;
   /** @type {HTMLTextAreaElement} */ (requireElementById("lc-behavior")).value =
+    "";
+  /** @type {HTMLTextAreaElement} */ (requireElementById("lc-dialogue")).value =
     "";
   requireElementById("living-class-form-title").textContent = t(
     "class_editor.new_living_type",
@@ -1276,6 +1284,24 @@ function submitLivingClassForm() {
       return;
     }
   }
+  var dialogueRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("lc-dialogue")
+  ).value.trim();
+  // Explicit null rather than undefined when the box is empty: undefined is
+  // dropped by JSON.stringify and the server would keep the stored
+  // conversation, leaving no way to take one back off.
+  var dialogue = null;
+  if (dialogueRaw) {
+    try {
+      dialogue = JSON.parse(dialogueRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_dialogue_json", "Invalid dialogue JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     kind: kindVal,
@@ -1285,6 +1311,7 @@ function submitLivingClassForm() {
     reviveClassId: reviveClassId,
     combatant: combatantVal,
     behavior: behavior,
+    dialogue: dialogue,
     slotDefinitions: slotDefinitions,
     valueTemplate: valueTemplate,
     valueSchema: valueSchema,

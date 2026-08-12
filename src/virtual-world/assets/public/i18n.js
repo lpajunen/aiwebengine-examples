@@ -362,6 +362,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       logic_spec_label: "Logic spec (JSON)",
       living_effect_label: "Living effect (JSON)",
       execution_label: "Execution (JSON)",
+      behavior_label:
+        "Behaviour (JSON: idleChance, pickUpChance, dropChance, forageChance, roamRadius, movement)",
+      dialogue_label: "Dialogue (JSON: what it says when talked to)",
       cost_label: "Cost (JSON)",
       produces_label: "Produces (JSON)",
       experience_label: "Experience (JSON)",
@@ -427,6 +430,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       invalid_logic_spec_json: "Invalid logic spec JSON",
       invalid_living_effect_json: "Invalid living effect JSON",
       invalid_execution_json: "Invalid execution JSON",
+      invalid_behavior_json: "Invalid behaviour JSON",
+      invalid_dialogue_json: "Invalid dialogue JSON",
       invalid_field_json: "Invalid JSON in",
       claimed_ownership:
         "Saved. This built-in type is yours now — deploys will no longer change it.",
@@ -935,6 +940,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       logic_spec_label: "Logiikkamäärittely (JSON)",
       living_effect_label: "Olentovaikutus (JSON)",
       execution_label: "Suoritus (JSON)",
+      behavior_label:
+        "Käyttäytyminen (JSON: idleChance, pickUpChance, dropChance, forageChance, roamRadius, movement)",
+      dialogue_label: "Vuoropuhelu (JSON: mitä se sanoo puhuteltaessa)",
       cost_label: "Hinta (JSON)",
       produces_label: "Tuottaa (JSON)",
       experience_label: "Kokemus (JSON)",
@@ -999,6 +1007,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       invalid_logic_spec_json: "Virheellinen logiikkamäärittelyn JSON",
       invalid_living_effect_json: "Virheellinen olentovaikutuksen JSON",
       invalid_execution_json: "Virheellinen suorituksen JSON",
+      invalid_behavior_json: "Virheellinen käyttäytymisen JSON",
+      invalid_dialogue_json: "Virheellinen vuoropuhelun JSON",
       invalid_field_json: "Virheellinen JSON kentässä",
       claimed_ownership:
         "Tallennettu. Tämä sisäänrakennettu tyyppi on nyt sinun — julkaisut eivät enää muuta sitä.",

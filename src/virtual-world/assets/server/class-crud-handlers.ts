@@ -630,6 +630,10 @@ export function createLivingClassHandler(context: any) {
       body && body.behavior && typeof body.behavior === "object"
         ? body.behavior
         : {},
+    dialogue:
+      body && body.dialogue && typeof body.dialogue === "object"
+        ? body.dialogue
+        : undefined,
     isDefault: !!(body && body.isDefault),
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
@@ -752,6 +756,12 @@ export function updateLivingClassHandler(context: any) {
       body && body.behavior && typeof body.behavior === "object"
         ? body.behavior
         : existing.behavior,
+    // Explicit null clears a conversation; omitted keeps the stored one, the
+    // same rule the editor's other JSON boxes follow.
+    dialogue:
+      body && body.dialogue !== undefined
+        ? body.dialogue || undefined
+        : existing.dialogue,
     isDefault:
       body && body.isDefault !== undefined
         ? !!body.isDefault

@@ -289,6 +289,7 @@ import {
 import {
   getVirtualWorldPage as getVirtualWorldPageImpl,
   worldStateHandler as worldStateHandlerImpl,
+  dialogueHandler as dialogueHandlerImpl,
   virtualWorldEventsStreamCustomizer as virtualWorldEventsStreamCustomizerImpl,
   itemsHandler as itemsHandlerImpl,
   itemActionHandler as itemActionHandlerImpl,
@@ -465,6 +466,11 @@ function getVirtualWorldPage(context) {
 /** @param {*} context */
 function worldStateHandler(context) {
   return worldStateHandlerImpl(context);
+}
+
+/** @param {*} context */
+function dialogueHandler(context) {
+  return dialogueHandlerImpl(context);
 }
 /** @param {*} context */
 function virtualWorldEventsStreamCustomizer(context) {

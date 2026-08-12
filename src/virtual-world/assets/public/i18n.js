@@ -455,6 +455,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       npcs_section: "NPCs",
       bag_items: "Bag items:",
       none: "None",
+      talk: "Talk",
     },
     nick: {
       redirecting_to_logout: "Redirecting to logout...",
@@ -1027,6 +1028,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       npcs_section: "NPC:t",
       bag_items: "Reppuesineitä:",
       none: "Ei mitään",
+      talk: "Puhu",
     },
     nick: {
       redirecting_to_logout: "Ohjataan uloskirjautumiseen...",

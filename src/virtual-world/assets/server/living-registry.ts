@@ -477,6 +477,22 @@ function livingClassFromDbRow(row: any): LivingClassRecord {
         return {};
       }
     })(),
+    // Absent rather than an empty object when there is no conversation: the
+    // difference is "this living has nothing to say", which is what decides
+    // whether Talk is offered at all.
+    dialogue: (function () {
+      try {
+        const parsed = JSON.parse(row.dialogue_json || "");
+        return parsed &&
+          typeof parsed === "object" &&
+          Array.isArray(parsed.nodes) &&
+          parsed.nodes.length > 0
+          ? parsed
+          : undefined;
+      } catch (e) {
+        return undefined;
+      }
+    })(),
   };
 }
 
@@ -504,6 +520,7 @@ function livingClassToDbRow(
   combatant: number;
   is_default: number;
   behavior_json: string;
+  dialogue_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -526,6 +543,7 @@ function livingClassToDbRow(
     combatant: record.combatant === false ? 0 : 1,
     is_default: record.isDefault ? 1 : 0,
     behavior_json: JSON.stringify(record.behavior || {}),
+    dialogue_json: record.dialogue ? JSON.stringify(record.dialogue) : "",
     default_items_json: JSON.stringify(record.defaultItems || []),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),

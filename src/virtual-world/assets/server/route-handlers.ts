@@ -1,5 +1,9 @@
 // Game HTTP route handlers, page handler, and SSE stream customizer.
 import {
+  advanceDialogueForUser,
+  openDialogueForUser,
+} from "./dialogue-helpers.ts";
+import {
   buildResyncForUser,
   getCurrentWorldStateForHttpUser,
   getDirectMessageHistoryForUser,
@@ -541,4 +545,32 @@ export function treeActionHandler(context: any) {
     withInventorySelectors(handled.payload),
     handled.status,
   );
+}
+
+/**
+ * Talking to a living. One route for both halves of a conversation: a request
+ * naming only a target opens it, one that also names a node and a choice
+ * advances it. Every step re-validates where the client says it is, so the
+ * conversation cannot be walked out of order or from across the map.
+ * @param {*} context
+ */
+export function dialogueHandler(context: any) {
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  const userId = context.request.auth.userId;
+  let body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON body" }, 400);
+  }
+  const handled =
+    body && body.node_id !== undefined
+      ? advanceDialogueForUser(userId, body)
+      : openDialogueForUser(
+          userId,
+          String((body && body.target_living_id) || ""),
+        );
+  return ResponseBuilder.json(handled.payload, handled.status);
 }

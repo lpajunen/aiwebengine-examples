@@ -598,6 +598,16 @@ function renderTileDetailPanel() {
         html +=
           '<div class="tile-living-description">' + escHtml(npcLore) + "</div>";
       }
+      // Only where there is something to say: a class with no dialogue offers
+      // no Talk, which is most wildlife.
+      if (livingClassHasDialogue(String(npcData.class_id || ""))) {
+        html +=
+          '<button class="tile-talk-btn" onclick="openDialogue(\'' +
+          escHtml(String(npcEntry.id)) +
+          "')\">" +
+          escHtml(t("tile.talk", "Talk")) +
+          "</button>";
+      }
       if (npcData.class_id) {
         html +=
           '<div class="tile-row">' +

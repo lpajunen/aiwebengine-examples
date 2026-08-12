@@ -633,6 +633,12 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? existing.behavior
             : {},
+      dialogue:
+        args.dialogue !== undefined
+          ? args.dialogue || undefined
+          : existing
+            ? existing.dialogue
+            : undefined,
       isDefault:
         args.isDefault !== undefined
           ? !!args.isDefault

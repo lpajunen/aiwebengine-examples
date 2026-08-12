@@ -116,7 +116,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 //      sender_kind (an NPC speaking rather than a player).
 // v11: world chat text_key, so an authored line localizes per reader.
 // v12: npc home_row/home_col, the post a leashed living returns to.
-export const VWORLD_SCHEMA_VERSION = 12;
+// v13: living class dialogue_json, what it says when talked to.
+export const VWORLD_SCHEMA_VERSION = 13;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

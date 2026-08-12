@@ -77,6 +77,7 @@ import { CLASS_OWNED_LIVING_VALUE_KEYS } from "./runtime-config.ts";
 import { ClassSize } from "./class-size.ts";
 import { LivingVisualStyle } from "./class-visual.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import { ActionCondition } from "./action-logic-interpreter.ts";
 
 export {
   getActionDefinition,
@@ -172,6 +173,47 @@ export interface LivingValueSchemaEntry {
 
 export type LivingValueSchema = Record<string, LivingValueSchemaEntry>;
 
+// ── Dialogue ──────────────────────────────────────────────────────────────
+//
+// What a living says when talked to, as data. Deliberately thin: a node is
+// text plus a list of choices, and a choice's *doing* is an existing action id
+// rather than a second copy of cost/produces/effects. That keeps one
+// vocabulary for "what happens" — a choice that hands over a flower runs the
+// same give_flower every other path runs, with its costs, its rewards, its XP
+// and its localized toasts — and leaves dialogue owning only what it is for:
+// what is said, and what may be said next.
+export interface DialogueChoice {
+  // What the player offers to say. `textKey` localizes it through the same
+  // path an action's messages do; text is the fallback.
+  text: string;
+  textKey?: string;
+  // The choice is only offered when these pass against the player (their
+  // living values — a quest flag an action set earlier, a level).
+  conditions?: ActionCondition[];
+  // An action id run against the living being talked to when this choice is
+  // taken. Everything an action can do, a choice can do.
+  action?: string;
+  // Node to move to afterwards. Absent ends the conversation.
+  next?: string;
+}
+
+export interface DialogueNode {
+  id: string;
+  // What the living says on arriving here.
+  text: string;
+  textKey?: string;
+  // Gate on the player. Opening a conversation picks the first node whose
+  // conditions pass, which is how a greeting differs before and after a quest;
+  // a `next` that names a node whose conditions fail ends the conversation
+  // instead, so an author who wants a fallback writes one.
+  conditions?: ActionCondition[];
+  choices?: DialogueChoice[];
+}
+
+export interface DialogueSpec {
+  nodes: DialogueNode[];
+}
+
 export interface LivingClassRecord {
   id: string;
   kind: LivingKind;
@@ -261,6 +303,9 @@ export interface LivingClassRecord {
   // English name stays in fallbackLabel. Optional so built-in literals — which
   // translate via labelKey — need not declare it. See class-labels.ts.
   labels?: Record<string, string>;
+  // What this living says when talked to. Missing means it has nothing to say
+  // and offers no Talk at all — most wildlife. See dialogue-helpers.ts.
+  dialogue?: DialogueSpec;
   // How big this living renders, purely cosmetically — a "large" class is a
   // double-scale version of the same avatar mesh. Optional; missing ==
   // "medium" (unchanged appearance). See class-size.ts.

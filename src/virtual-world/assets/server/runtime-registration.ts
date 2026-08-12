@@ -811,6 +811,12 @@ export function registerVirtualWorldRuntime(): void {
           },
         },
       },
+      dialogue: {
+        type: "object",
+        description:
+          "What this living says when talked to: {nodes: [{id, text, textKey?, conditions?, choices: [{text, textKey?, conditions?, action?, next?}]}]}. Opening picks the first node whose conditions pass against the player, which is how a greeting differs before and after a quest. A choice's `action` is an ordinary action id run against this living — that is where cost, produces, XP and toasts come from — and `next` names the node that follows. Omit dialogue entirely and the living offers no Talk.",
+        properties: { nodes: { type: "array", items: { type: "object" } } },
+      },
       isDefault: {
         type: "boolean",
         description:
@@ -1072,6 +1078,7 @@ export function registerVirtualWorldRuntime(): void {
     "client-panels.js",
     "client-container-panel.js",
     "client-chat.js",
+    "client-dialogue.js",
     "client-item-actions.js",
     "client-tile-detail.js",
     "client-aiming.js",
@@ -1109,6 +1116,7 @@ export function registerVirtualWorldRuntime(): void {
     "GET",
   );
   safeRegisterRoute("/virtual-world/world-state", "worldStateHandler", "GET");
+  safeRegisterRoute("/virtual-world/dialogue", "dialogueHandler", "POST");
   safeRegisterRoute("/virtual-world/heartbeat", "heartbeatHandler", "POST");
   safeRegisterRoute("/virtual-world/tree-action", "treeActionHandler", "POST");
   safeRegisterRoute("/virtual-world/cheat-items", "cheatItemsHandler", "POST");

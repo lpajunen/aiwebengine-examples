@@ -307,6 +307,13 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
        intercept taps meant for the world underneath it. -->
   <div id="speech-bubbles" aria-live="polite"></div>
 
+  <div class="hud" id="hud-dialogue" style="display:none;">
+    <div id="dialogue-speaker"></div>
+    <div id="dialogue-text"></div>
+    <div id="dialogue-choices"></div>
+    <button id="dialogue-close" onclick="closeDialogue()" data-i18n-key="dialogue.close">Close</button>
+  </div>
+
   <div class="hud" id="hud-active-actions" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">
@@ -680,6 +687,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <script src="/virtual-world/client-panels.js"></script>
   <script src="/virtual-world/client-container-panel.js"></script>
   <script src="/virtual-world/client-chat.js"></script>
+  <script src="/virtual-world/client-dialogue.js"></script>
   <script src="/virtual-world/client-item-actions.js"></script>
   <script src="/virtual-world/client-tile-detail.js"></script>
   <script src="/virtual-world/client-aiming.js"></script>

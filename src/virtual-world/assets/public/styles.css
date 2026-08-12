@@ -705,6 +705,73 @@ canvas {
   }
 }
 
+/* Dialogue: a panel the conversation lives in, above the HUD but below the
+   editors. Wide enough for a paragraph, and the choices read as a list of
+   things you could say rather than as toolbar buttons. */
+#hud-dialogue {
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 28px));
+  pointer-events: auto;
+  z-index: 1015;
+  border-color: rgba(232, 192, 122, 0.45);
+}
+#dialogue-speaker {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8c07a;
+  margin-bottom: 4px;
+}
+#dialogue-text {
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+#dialogue-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dialogue-choice {
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #eaf3ff;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.dialogue-choice:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+#dialogue-close {
+  margin-top: 10px;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #fff;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+#hud-tile-detail .tile-talk-btn {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  margin: 2px 0 4px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #f6e6c8;
+  background: rgba(232, 192, 122, 0.16);
+  border: 1px solid rgba(232, 192, 122, 0.45);
+  pointer-events: auto;
+}
+
 #joystick-container {
   position: absolute;
   bottom: 14px;

@@ -552,6 +552,20 @@ function editActionClass(id) {
       /** @type {HTMLTextAreaElement} */ (
         requireElementById("ac-living-effect")
       ).value = ac.livingEffect ? JSON.stringify(ac.livingEffect, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-execution")
+      ).value = ac.execution ? JSON.stringify(ac.execution, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (requireElementById("ac-cost")).value =
+        ac.cost ? JSON.stringify(ac.cost, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-produces")
+      ).value = ac.produces ? JSON.stringify(ac.produces, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-experience")
+      ).value = ac.experience ? JSON.stringify(ac.experience, null, 2) : "";
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById("ac-messages")
+      ).value = ac.messages ? JSON.stringify(ac.messages, null, 2) : "";
       requireElementById("action-class-form-title").textContent =
         t("class_editor.edit_prefix", "Edit:") + " " + String(id);
     })
@@ -585,6 +599,17 @@ function cancelActionClassEdit() {
   /** @type {HTMLTextAreaElement} */ (
     requireElementById("ac-living-effect")
   ).value = "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-execution")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (requireElementById("ac-cost")).value = "";
+  /** @type {HTMLTextAreaElement} */ (requireElementById("ac-produces")).value =
+    "";
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-experience")
+  ).value = "";
+  /** @type {HTMLTextAreaElement} */ (requireElementById("ac-messages")).value =
+    "";
   requireElementById("action-class-form-title").textContent = t(
     "class_editor.new_action_type",
     "New action type",
@@ -620,6 +645,40 @@ function submitActionClassForm() {
   var livingEffectRaw = /** @type {HTMLTextAreaElement} */ (
     requireElementById("ac-living-effect")
   ).value.trim();
+  var executionRaw = /** @type {HTMLTextAreaElement} */ (
+    requireElementById("ac-execution")
+  ).value.trim();
+  // Every remaining action field the editor exposes is edited as JSON, like
+  // logicSpec and livingEffect above: same explicit-null rule, so clearing a
+  // box actually removes the cost, the reward or the translations.
+  var jsonFields = [
+    { el: "ac-cost", key: "cost" },
+    { el: "ac-produces", key: "produces" },
+    { el: "ac-experience", key: "experience" },
+    { el: "ac-messages", key: "messages" },
+  ];
+  /** @type {Record<string, *>} */
+  var parsedJsonFields = {};
+  for (var jf = 0; jf < jsonFields.length; jf++) {
+    var raw = /** @type {HTMLTextAreaElement} */ (
+      requireElementById(jsonFields[jf].el)
+    ).value.trim();
+    if (!raw) {
+      parsedJsonFields[jsonFields[jf].key] = null;
+      continue;
+    }
+    try {
+      parsedJsonFields[jsonFields[jf].key] = JSON.parse(raw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_field_json", "Invalid JSON in") +
+          " " +
+          jsonFields[jf].key,
+        true,
+      );
+      return;
+    }
+  }
   var sourceItemIds = sourceItemsRaw
     .split(",")
     .map(function (s) {
@@ -656,6 +715,20 @@ function submitActionClassForm() {
       return;
     }
   }
+  // Same explicit-null rule as livingEffect above: an emptied box must be able
+  // to take an action's toasts and chat line back off.
+  var execution = null;
+  if (executionRaw) {
+    try {
+      execution = JSON.parse(executionRaw);
+    } catch (e) {
+      showHudToast(
+        t("class_editor.invalid_execution_json", "Invalid execution JSON"),
+        true,
+      );
+      return;
+    }
+  }
   var record = {
     id: idVal,
     fallbackLabel: labelVal || idVal,
@@ -663,6 +736,11 @@ function submitActionClassForm() {
     sourceItemIds: sourceItemIds,
     logicSpec: logicSpec,
     livingEffect: livingEffect,
+    execution: execution,
+    cost: parsedJsonFields.cost,
+    produces: parsedJsonFields.produces,
+    experience: parsedJsonFields.experience,
+    messages: parsedJsonFields.messages,
     labels: buildLabelsPayload(nameFiVal),
   };
   var url = actionClassEditId

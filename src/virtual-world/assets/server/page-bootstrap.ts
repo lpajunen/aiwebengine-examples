@@ -478,6 +478,11 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.source_items_label">Source items (comma-sep)</span> <input id="ac-source-items" type="text" placeholder="kantele" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.logic_spec_label">Logic spec (JSON)</span> <textarea id="ac-logic-spec" rows="3" placeholder='{"conditions":[],"effects":[]}'></textarea></label>
         <label><span data-i18n-key="class_editor.living_effect_label">Living effect (JSON)</span> <textarea id="ac-living-effect" rows="3" placeholder='{"affects":"target","field":"values.currentHitPoints","op":"add","amount":1}'></textarea></label>
+        <label><span data-i18n-key="class_editor.execution_label">Execution (JSON)</span> <textarea id="ac-execution" rows="3" placeholder='{"toastMessage":"You offer the flower.","worldChatText":"Take the east path.","worldChatTextKey":"my.gate_hint","worldChatSpeaker":"target"}'></textarea></label>
+        <label><span data-i18n-key="class_editor.cost_label">Cost (JSON)</span> <textarea id="ac-cost" rows="2" placeholder='[{"itemId":"flower","count":1}]'></textarea></label>
+        <label><span data-i18n-key="class_editor.produces_label">Produces (JSON)</span> <textarea id="ac-produces" rows="2" placeholder='[{"itemId":"birch_bark_letter","count":1}]'></textarea></label>
+        <label><span data-i18n-key="class_editor.experience_label">Experience (JSON)</span> <textarea id="ac-experience" rows="2" placeholder='{"amount":2}'></textarea></label>
+        <label><span data-i18n-key="class_editor.messages_label">Messages (JSON, per locale)</span> <textarea id="ac-messages" rows="3" placeholder='{"my.gate_hint":{"en":"Take the east path.","fi":"Kulje itäistä polkua."}}'></textarea></label>
       </div>
       <div class="class-form-actions">
         <button onclick="submitActionClassForm()" data-i18n-key="class_editor.save">Save</button>

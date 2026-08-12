@@ -92,6 +92,64 @@ async function dynamicRegisterClient(registerUrl) {
   return res.json();
 }
 
+/**
+ * Success page shown in the browser after the callback succeeds. It counts down
+ * and then tries to close its own tab; browsers that refuse to close a tab the
+ * user opened themselves fall back to a "you may close this window" message.
+ * @param {number} closeAfterSeconds
+ * @returns {string}
+ */
+function successPage(closeAfterSeconds) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Login complete</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        margin: 4rem auto;
+        max-width: 32rem;
+        text-align: center;
+        color: #1f2933;
+      }
+      p { color: #52606d; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #12161c; color: #e4e7eb; }
+        p { color: #9aa5b1; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Login complete</h1>
+    <p id="status">Closing this tab in ${closeAfterSeconds} seconds…</p>
+    <script>
+      (function () {
+        var remaining = ${closeAfterSeconds};
+        var status = document.getElementById("status");
+        var timer = setInterval(function () {
+          remaining -= 1;
+          if (remaining > 0) {
+            status.textContent =
+              "Closing this tab in " + remaining + " second" +
+              (remaining === 1 ? "" : "s") + "…";
+            return;
+          }
+          clearInterval(timer);
+          status.textContent = "Closing…";
+          try {
+            window.close();
+          } catch (e) {}
+          setTimeout(function () {
+            status.textContent = "You may close this window.";
+          }, 500);
+        }, 1000);
+      })();
+    </script>
+  </body>
+</html>`;
+}
+
 async function main() {
   console.log(`Discovering OAuth metadata from ${metadataUrl}`);
   const meta = await fetchJson(metadataUrl);
@@ -179,7 +237,7 @@ async function main() {
 
         res.statusCode = 200;
         res.setHeader("content-type", "text/html");
-        res.end("<h1>Login complete</h1><p>You may close this window.</p>");
+        res.end(successPage(5));
 
         console.log(
           `Saved token to ${path.relative(process.cwd(), tokenPath)}`,

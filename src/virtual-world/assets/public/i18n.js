@@ -428,6 +428,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       invalid_living_effect_json: "Invalid living effect JSON",
       invalid_execution_json: "Invalid execution JSON",
       invalid_field_json: "Invalid JSON in",
+      claimed_ownership:
+        "Saved. This built-in type is yours now — deploys will no longer change it.",
       invalid_slot_definitions_json: "Invalid slot definitions JSON",
       slot_definitions_must_be_array: "Slot definitions must be a JSON array",
       invalid_value_template_json: "Invalid value template JSON",
@@ -997,6 +999,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       invalid_living_effect_json: "Virheellinen olentovaikutuksen JSON",
       invalid_execution_json: "Virheellinen suorituksen JSON",
       invalid_field_json: "Virheellinen JSON kentässä",
+      claimed_ownership:
+        "Tallennettu. Tämä sisäänrakennettu tyyppi on nyt sinun — julkaisut eivät enää muuta sitä.",
       invalid_slot_definitions_json: "Virheellinen paikkamäärittelyjen JSON",
       slot_definitions_must_be_array:
         "Paikkamäärittelyjen tulee olla JSON-taulukko",

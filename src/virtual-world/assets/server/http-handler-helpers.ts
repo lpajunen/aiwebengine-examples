@@ -102,6 +102,42 @@ export function canManageClass(
   return Array.isArray(ownerIds) && ownerIds.indexOf(userId) !== -1;
 }
 
+/**
+ * Who owns a class after an update.
+ *
+ * A row nobody owns is a built-in, and every class repository resyncs those
+ * from the code definition on each bootstrap — so editing one through the
+ * editor or the MCP tool used to be reverted before it could take effect. The
+ * save reported success and the change simply vanished, which is the worst
+ * possible answer.
+ *
+ * Editing an unowned row therefore claims it for the editor. The trade is
+ * explicit and worth stating: a claimed row stops receiving code-side changes
+ * on future deploys, because it is now content rather than a default. Callers
+ * report `claimed` back so the editor can say so.
+ *
+ * A non-empty ownerIds in the request still wins — that is how a row is handed
+ * to someone else. An *empty* one counts as "no opinion" rather than "owned by
+ * nobody": every caller that round-trips a fetched record sends the ownerIds
+ * it read back, so treating [] as a release would silently defeat the claim
+ * for exactly the callers this is meant to help. Releasing a row back to the
+ * code definition is not something anyone has needed; when it is, it wants a
+ * verb of its own rather than an empty array nobody meant to send.
+ */
+export function resolveUpdatedOwnerIds(
+  rawInput: unknown,
+  existingOwnerIds: string[] | null | undefined,
+  editorUserId: string,
+): { ownerIds: string[]; claimed: boolean } {
+  const explicit = normalizeOwnerIdsInput(rawInput);
+  if (explicit && explicit.length > 0) {
+    return { ownerIds: explicit, claimed: false };
+  }
+  const existing = Array.isArray(existingOwnerIds) ? existingOwnerIds : [];
+  if (existing.length > 0) return { ownerIds: existing, claimed: false };
+  return { ownerIds: [String(editorUserId)], claimed: true };
+}
+
 // Normalizes a client-supplied ownerIds array on class update (create always
 // force-sets [callerId] instead of trusting client input). Returns null when
 // the caller didn't send one, so callers fall back to the existing owner list.

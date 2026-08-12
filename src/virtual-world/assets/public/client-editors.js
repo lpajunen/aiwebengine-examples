@@ -7,6 +7,33 @@
 var LOCALE_FLAG_BY_CODE = { en: "🇬🇧", fi: "🇫🇮" };
 
 /**
+ * Save feedback for a class editor. Editing a built-in nobody owns claims it
+ * for you, and that is worth saying: the class stops following the code
+ * definition on future deploys, because it is now your content rather than a
+ * default. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
+ * @param {any} data
+ * @param {string} [what] optional name to include, for editors that show one
+ */
+function showClassSavedToast(data, what) {
+  if (data && data.claimed_ownership) {
+    showHudToast(
+      t(
+        "class_editor.claimed_ownership",
+        "Saved. This built-in type is yours now — deploys will no longer change it.",
+      ),
+      false,
+    );
+    return;
+  }
+  showHudToast(
+    what
+      ? t("class_editor.saved_prefix", "Saved") + " " + what
+      : t("class_editor.saved", "Saved!"),
+    false,
+  );
+}
+
+/**
  * Build the per-locale `labels` payload sent with a class record. The English
  * name lives in the record's fallbackLabel; this carries only the non-English
  * overrides (today just Finnish). Omitted/blank entries are simply left out.
@@ -382,7 +409,7 @@ function submitItemClassForm() {
         );
         return;
       }
-      showHudToast(t("class_editor.saved", "Saved!"), false);
+      showClassSavedToast(data);
       cancelItemClassEdit();
       renderItemClassList();
     })
@@ -765,7 +792,7 @@ function submitActionClassForm() {
         );
         return;
       }
-      showHudToast(t("class_editor.saved", "Saved!"), false);
+      showClassSavedToast(data);
       cancelActionClassEdit();
       renderActionClassList();
     })
@@ -1290,7 +1317,7 @@ function submitLivingClassForm() {
         );
         return;
       }
-      showHudToast(t("class_editor.saved", "Saved!"), false);
+      showClassSavedToast(data);
       cancelLivingClassEdit();
       renderLivingClassList();
     })
@@ -2229,7 +2256,7 @@ function submitWorldClassForm() {
         return;
       }
       showPlacementErrors([]);
-      showHudToast(t("class_editor.saved", "Saved!"), false);
+      showClassSavedToast(data);
       cancelWorldClassEdit();
       renderWorldClassList();
     })
@@ -2501,10 +2528,7 @@ function submitTileClassForm() {
         );
         return;
       }
-      showHudToast(
-        t("class_editor.saved_prefix", "Saved") + " " + idVal,
-        false,
-      );
+      showClassSavedToast(data, idVal);
       cancelTileClassEdit();
       renderTileClassList();
     })

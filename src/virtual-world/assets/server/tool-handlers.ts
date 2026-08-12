@@ -7,7 +7,7 @@ import { refreshWorldClassCache } from "./world-class-storage.ts";
 import {
   canManageClass,
   getAuthenticatedUserId,
-  normalizeOwnerIdsInput,
+  resolveUpdatedOwnerIds,
   userHasCreatorStone,
 } from "./http-handler-helpers.ts";
 import {
@@ -337,8 +337,12 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
         args.stateTemplate && typeof args.stateTemplate === "object"
           ? args.stateTemplate
           : {},
+      // Editing a row nobody owns claims it, the same rule the editor uses —
+      // otherwise the bootstrap resyncs a built-in from code and the change
+      // disappears. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
       ownerIds: existing
-        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        ? resolveUpdatedOwnerIds(args.ownerIds, existing.ownerIds, userId)
+            .ownerIds
         : [userId],
       labels:
         args.labels !== undefined
@@ -456,8 +460,12 @@ export function virtualWorldManageActionClassesToolHandler(
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:
         args.durationMs !== undefined ? Number(args.durationMs) : undefined,
+      // Editing a row nobody owns claims it, the same rule the editor uses —
+      // otherwise the bootstrap resyncs a built-in from code and the change
+      // disappears. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
       ownerIds: existing
-        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        ? resolveUpdatedOwnerIds(args.ownerIds, existing.ownerIds, userId)
+            .ownerIds
         : [userId],
       labels:
         args.labels !== undefined
@@ -631,8 +639,12 @@ export function virtualWorldManageLivingClassesToolHandler(
           : existing
             ? existing.isDefault
             : false,
+      // Editing a row nobody owns claims it, the same rule the editor uses —
+      // otherwise the bootstrap resyncs a built-in from code and the change
+      // disappears. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
       ownerIds: existing
-        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        ? resolveUpdatedOwnerIds(args.ownerIds, existing.ownerIds, userId)
+            .ownerIds
         : [userId],
       labels:
         args.labels !== undefined
@@ -752,8 +764,11 @@ export function virtualWorldManageWorldClassesToolHandler(
       placementRevision: existing && existing.placementRevision,
       ownerIds:
         action === "update"
-          ? normalizeOwnerIdsInput(args.ownerIds) ||
-            (existing && existing.ownerIds)
+          ? resolveUpdatedOwnerIds(
+              args.ownerIds,
+              existing && existing.ownerIds,
+              userId,
+            ).ownerIds
           : [userId],
       labels:
         args.labels !== undefined ? args.labels : existing && existing.labels,
@@ -879,8 +894,12 @@ export function virtualWorldManageTileClassesToolHandler(context: any): string {
         args.layer || (existing ? existing.layer : TILE_LAYER_TERRAIN),
       ),
       visual: visual,
+      // Editing a row nobody owns claims it, the same rule the editor uses —
+      // otherwise the bootstrap resyncs a built-in from code and the change
+      // disappears. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
       ownerIds: existing
-        ? normalizeOwnerIdsInput(args.ownerIds) || existing.ownerIds
+        ? resolveUpdatedOwnerIds(args.ownerIds, existing.ownerIds, userId)
+            .ownerIds
         : [userId],
       labels:
         args.labels !== undefined

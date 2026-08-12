@@ -98,6 +98,26 @@ back rather than freezing. That walk is greedy, so terrain it cannot route
 around (the far bank of a river) will strand it; loading the world puts any
 out-of-radius authored living back on its post, which is the backstop.
 
+## Editing a built-in type makes it yours
+
+Every class repository seeds its built-ins from code and **resyncs them on each
+bootstrap**, so a deploy can improve a default. That used to mean an edit to a
+built-in through the editor or the MCP tool was reverted before it took effect:
+the save reported success and the change vanished.
+
+Editing a type nobody owns now claims it for you, and the editor says so. The
+trade is real and worth knowing:
+
+- a **claimed** type is your content — it keeps your edits, and deploys no
+  longer change it;
+- an **untouched** built-in stays code-owned, and picks up improvements.
+
+Passing a non-empty `ownerIds` still wins, which is how a type is handed to
+someone else. An empty one counts as "no opinion", not "owned by nobody" — any
+client that round-trips a fetched record sends back the `ownerIds` it read, and
+treating that as a release would defeat the claim for exactly the callers it
+exists to help.
+
 ## Reservations: rules a landmark imposes on its surroundings
 
 A placement may reserve an area — a circle or rectangle — carrying rules:

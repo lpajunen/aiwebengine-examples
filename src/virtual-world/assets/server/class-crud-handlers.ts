@@ -41,7 +41,7 @@ import {
 } from "./tile-registry.ts";
 import {
   canManageClass,
-  normalizeOwnerIdsInput,
+  resolveUpdatedOwnerIds,
   userHasCreatorStone,
 } from "./http-handler-helpers.ts";
 import { getAllLivingClasses } from "./living-registry.ts";
@@ -176,6 +176,11 @@ export function updateItemClassHandler(context: any) {
   if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
+  const ownership = resolveUpdatedOwnerIds(
+    body && body.ownerIds,
+    existing.ownerIds,
+    context.request.auth.userId,
+  );
   var record = {
     id: classId,
     kind: String((body && body.kind) || existing.kind),
@@ -217,8 +222,7 @@ export function updateItemClassHandler(context: any) {
       body && body.stateTemplate && typeof body.stateTemplate === "object"
         ? body.stateTemplate
         : existing.stateTemplate,
-    ownerIds:
-      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    ownerIds: ownership.ownerIds,
     labels:
       body && body.labels !== undefined
         ? normalizeClassLabels(body.labels)
@@ -238,7 +242,12 @@ export function updateItemClassHandler(context: any) {
       500,
     );
   }
-  return ResponseBuilder.json({ ok: true, item_class: record });
+  return ResponseBuilder.json({
+    ok: true,
+    item_class: record,
+    // The editor tells the creator when a built-in has become theirs.
+    claimed_ownership: ownership.claimed,
+  });
 }
 
 /**
@@ -399,6 +408,11 @@ export function updateActionClassHandler(context: any) {
   if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
+  const ownership = resolveUpdatedOwnerIds(
+    body && body.ownerIds,
+    existing.ownerIds,
+    context.request.auth.userId,
+  );
   var record = {
     id: actionId,
     labelKey: String(body && body.labelKey ? body.labelKey : existing.labelKey),
@@ -475,8 +489,7 @@ export function updateActionClassHandler(context: any) {
       body && body.durationMs !== undefined
         ? Number(body.durationMs)
         : existing.durationMs,
-    ownerIds:
-      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    ownerIds: ownership.ownerIds,
     labels:
       body && body.labels !== undefined
         ? normalizeClassLabels(body.labels)
@@ -496,7 +509,12 @@ export function updateActionClassHandler(context: any) {
       500,
     );
   }
-  return ResponseBuilder.json({ ok: true, action_class: record });
+  return ResponseBuilder.json({
+    ok: true,
+    action_class: record,
+    // The editor tells the creator when a built-in has become theirs.
+    claimed_ownership: ownership.claimed,
+  });
 }
 
 /**
@@ -668,6 +686,11 @@ export function updateLivingClassHandler(context: any) {
   if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
+  const ownership = resolveUpdatedOwnerIds(
+    body && body.ownerIds,
+    existing.ownerIds,
+    context.request.auth.userId,
+  );
   var record = {
     id: classId,
     kind: normalizeLivingKind(body && body.kind, existing.kind),
@@ -733,8 +756,7 @@ export function updateLivingClassHandler(context: any) {
       body && body.isDefault !== undefined
         ? !!body.isDefault
         : existing.isDefault,
-    ownerIds:
-      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    ownerIds: ownership.ownerIds,
     labels:
       body && body.labels !== undefined
         ? normalizeClassLabels(body.labels)
@@ -754,7 +776,12 @@ export function updateLivingClassHandler(context: any) {
       500,
     );
   }
-  return ResponseBuilder.json({ ok: true, living_class: record });
+  return ResponseBuilder.json({
+    ok: true,
+    living_class: record,
+    // The editor tells the creator when a built-in has become theirs.
+    claimed_ownership: ownership.claimed,
+  });
 }
 
 /**
@@ -953,6 +980,11 @@ export function updateWorldClassHandler(context: any) {
   if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
+  const ownership = resolveUpdatedOwnerIds(
+    body && body.ownerIds,
+    existing.ownerIds,
+    context.request.auth.userId,
+  );
   var record = normalizeWorldClassRecord({
     id: classId,
     baseType:
@@ -984,8 +1016,7 @@ export function updateWorldClassHandler(context: any) {
     // Preserved across creator edits: only a code-side bump reclaims a system
     // class's placements, and an editor round-trip must not look like one.
     placementRevision: existing.placementRevision,
-    ownerIds:
-      body && body.ownerIds !== undefined ? body.ownerIds : existing.ownerIds,
+    ownerIds: ownership.ownerIds,
     labels: body && body.labels !== undefined ? body.labels : existing.labels,
   });
   var updatePlacementErrors = validateWorldClassPlacementsForWrite(
@@ -1018,7 +1049,12 @@ export function updateWorldClassHandler(context: any) {
       500,
     );
   }
-  return ResponseBuilder.json({ ok: true, world_class: record });
+  return ResponseBuilder.json({
+    ok: true,
+    world_class: record,
+    // The editor tells the creator when a built-in has become theirs.
+    claimed_ownership: ownership.claimed,
+  });
 }
 
 /**
@@ -1188,6 +1224,11 @@ export function updateTileClassHandler(context: any) {
   if (!canManageClass(context.request.auth.userId, existing.ownerIds)) {
     return ResponseBuilder.json(CLASS_OWNER_ERROR, 403);
   }
+  const ownership = resolveUpdatedOwnerIds(
+    body && body.ownerIds,
+    existing.ownerIds,
+    context.request.auth.userId,
+  );
   var record = {
     id: classId,
     value:
@@ -1201,8 +1242,7 @@ export function updateTileClassHandler(context: any) {
       body && body.visual !== undefined
         ? normalizeTileVisual(body.visual)
         : existing.visual,
-    ownerIds:
-      normalizeOwnerIdsInput(body && body.ownerIds) || existing.ownerIds,
+    ownerIds: ownership.ownerIds,
     labels:
       body && body.labels !== undefined
         ? normalizeClassLabels(body.labels)
@@ -1220,7 +1260,12 @@ export function updateTileClassHandler(context: any) {
       500,
     );
   }
-  return ResponseBuilder.json({ ok: true, tile_class: record });
+  return ResponseBuilder.json({
+    ok: true,
+    tile_class: record,
+    // The editor tells the creator when a built-in has become theirs.
+    claimed_ownership: ownership.claimed,
+  });
 }
 
 /**

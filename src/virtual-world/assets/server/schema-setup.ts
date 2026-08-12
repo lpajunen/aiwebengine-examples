@@ -1553,7 +1553,9 @@ function runChatDatabaseMigration(collector: Array<any> | undefined): void {
     ["addTextColumn", "world_id", false],
     ["addTextColumn", "sender_id", false],
     ["addTextColumn", "sender_nick", false],
+    ["addTextColumn", "sender_kind", true],
     ["addTextColumn", "text", false],
+    ["addTextColumn", "text_key", true],
     ["addIntegerColumn", "ts", false],
   ].forEach(function (entry) {
     step(

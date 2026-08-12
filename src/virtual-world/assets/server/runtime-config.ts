@@ -112,7 +112,10 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // v7: vworld_tile_classes table.
 // v8: world class generation_json.
 // v9: action class progression_json + messages_json; living class is_default.
-export const VWORLD_SCHEMA_VERSION = 9;
+// v10: npc identity_json (a placement's authored name/description); world chat
+//      sender_kind (an NPC speaking rather than a player).
+// v11: world chat text_key, so an authored line localizes per reader.
+export const VWORLD_SCHEMA_VERSION = 11;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

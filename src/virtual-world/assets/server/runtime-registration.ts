@@ -622,6 +622,37 @@ export function registerVirtualWorldRuntime(): void {
           toast: { type: "object" },
         },
       },
+      execution: {
+        type: "object",
+        description:
+          "What the action says and does on success. Only the authored text fields are listed here; the rest of the block (successPayload, itemMutation, worldMutation, worldEvent, itemChange) is machinery best left to the built-in actions.",
+        properties: {
+          toastMessage: {
+            type: "string",
+            description: "Shown to the actor when the action succeeds",
+          },
+          toastMessageKey: {
+            type: "string",
+            description:
+              "i18n key for toastMessage; give it text in `messages` to localize it",
+          },
+          startToastMessage: {
+            type: "string",
+            description: "Shown when a durationMs action starts",
+          },
+          startToastMessageKey: { type: "string" },
+          worldChatText: {
+            type: "string",
+            description: "Line posted to world chat when the action succeeds",
+          },
+          worldChatSpeaker: {
+            type: "string",
+            enum: ["actor", "target"],
+            description:
+              "Who says worldChatText: 'actor' (default) the player, or 'target' the NPC the action was aimed at — which is how an NPC answers. A non-NPC target falls back to the actor, so an action can never put words in another player's mouth.",
+          },
+        },
+      },
       messages: {
         type: "object",
         description:

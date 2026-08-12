@@ -113,6 +113,26 @@ export interface ActionDefinition {
     // still required so servers/older clients without the key stay readable.
     toastMessageKey?: string;
     worldChatText?: string;
+    // i18n key for the line above, localized exactly as toastMessageKey is:
+    // give the key per-locale text in this action's `messages` and each player
+    // reads the line in their own language. worldChatText stays required as
+    // the fallback, so a line is never blank for a locale nobody authored.
+    //
+    // Chat is history, not a passing toast: the key is stored on the row
+    // beside the text and resolved when the line is *rendered*, so a message
+    // written before a player switched language still comes out in the
+    // language they read now.
+    worldChatTextKey?: string;
+    // Who the line above is attributed to in world chat. "actor" (default) is
+    // the player performing the action — play_tune's line reads as something
+    // the player does. "target" attributes it to the living the action was
+    // aimed at (body.target_living_id), which is how an NPC answers: give the
+    // gatekeeper a flower and she is the one who says where the path leads.
+    //
+    // Falls back to the actor when the action resolved no living target, so a
+    // line is never silently dropped. See resolveConfiguredChatSpeaker in
+    // tree-action-helpers.ts.
+    worldChatSpeaker?: "actor" | "target";
     successPayload?: {
       includeTargetPosition?: boolean;
       includeWorldId?: boolean;

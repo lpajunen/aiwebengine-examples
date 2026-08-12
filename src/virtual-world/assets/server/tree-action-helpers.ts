@@ -1,4 +1,4 @@
-import { appendWorldChatMessage } from "./chat-storage.ts";
+import { appendWorldChatMessage, ChatSenderKind } from "./chat-storage.ts";
 import { getTargetTileFromRotation } from "./current-world-state.ts";
 import {
   grantAllItemsForUser,
@@ -37,7 +37,7 @@ import {
   loadWorldPlayers,
 } from "./player-snapshots.ts";
 import { getEffectiveNick } from "./social-state.ts";
-import { loadWorldNPCs } from "./npc-storage.ts";
+import { loadExistingNPCDisplayName, loadWorldNPCs } from "./npc-storage.ts";
 import {
   APPROACH_ACTION_MAX_MS,
   NEARBY_TARGET_TILE_DISTANCE,
@@ -106,7 +106,7 @@ import {
   countLivingItemsByType,
   findFirstLivingItemByTypes,
   findLivingItemById,
-  getNPCDisplayName,
+  resolveNPCDisplayName,
   isValidItem,
   LivingState,
   replaceLivingItemById,
@@ -342,23 +342,57 @@ export function performTreeActionForUser(
       : null;
   }
 
+  /**
+   * Who an action's configured chat line is attributed to. The default is the
+   * actor, which is what every line authored before NPCs could speak means.
+   *
+   * `worldChatSpeaker: "target"` hands the line to the living the action was
+   * aimed at — but only when that living is an NPC. A player target falls back
+   * to the actor deliberately: an action that could put authored words in
+   * another person's mouth is a griefing tool, and no story needs it.
+   */
+  function resolveConfiguredChatSpeaker(): {
+    id: string;
+    nick: string;
+    kind: ChatSenderKind;
+  } {
+    const actor = {
+      id: userId,
+      nick: getEffectiveNick(userId),
+      kind: "player" as ChatSenderKind,
+    };
+    const execution = getActionExecutionConfig();
+    if (!execution || execution.worldChatSpeaker !== "target") return actor;
+
+    const targetId = String((body && body.target_living_id) || "");
+    if (!targetId || targetId === userId) return actor;
+    const npcName = loadExistingNPCDisplayName(worldId, targetId);
+    if (!npcName) return actor;
+    return { id: targetId, nick: npcName, kind: "npc" };
+  }
+
   function maybeAppendConfiguredWorldChatMessage(): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.worldChatText) return;
 
-    const tuneMsg = {
+    const speaker = resolveConfiguredChatSpeaker();
+    const chatMsg = {
       id:
         "wc-" +
         Date.now().toString(36) +
         "-" +
         Math.random().toString(36).slice(2),
-      sender_id: userId,
-      sender_nick: getEffectiveNick(userId),
+      sender_id: speaker.id,
+      sender_nick: speaker.nick,
+      sender_kind: speaker.kind,
       text: execution.worldChatText,
+      ...(execution.worldChatTextKey
+        ? { text_key: execution.worldChatTextKey }
+        : {}),
       ts: Date.now(),
     };
-    appendWorldChatMessage(worldId, tuneMsg);
-    sendWorldScopedStreamEvent(String(worldId), "chat_message", tuneMsg);
+    appendWorldChatMessage(worldId, chatMsg);
+    sendWorldScopedStreamEvent(String(worldId), "chat_message", chatMsg);
   }
 
   function withConfiguredToastMessage(payload: any): any {
@@ -1069,7 +1103,9 @@ export function performTreeActionForUser(
       body && body.target_living_id ? String(body.target_living_id) : "";
     if (livingId) {
       const npcs = loadWorldNPCs(worldId);
-      if (npcs[livingId]) return getNPCDisplayName(worldId, livingId);
+      if (npcs[livingId]) {
+        return resolveNPCDisplayName(worldId, livingId, npcs[livingId]);
+      }
       return getEffectiveNick(livingId);
     }
     const itemId =
@@ -1679,7 +1715,11 @@ export function performTreeActionForUser(
       targetNpc.row === resolvedTarget.row &&
       targetNpc.col === resolvedTarget.col
     ) {
-      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetLivingLabel = resolveNPCDisplayName(
+        worldId,
+        targetLivingId,
+        targetNpc,
+      );
       targetFound = true;
     } else {
       const worldPlayers = loadWorldPlayers(worldId);
@@ -1746,7 +1786,11 @@ export function performTreeActionForUser(
         NEARBY_TARGET_TILE_DISTANCE,
       )
     ) {
-      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetLivingLabel = resolveNPCDisplayName(
+        worldId,
+        targetLivingId,
+        targetNpc,
+      );
       targetKind = "npc";
     } else {
       const worldPlayers = loadWorldPlayers(worldId);
@@ -1853,7 +1897,11 @@ export function performTreeActionForUser(
         fightReach,
       )
     ) {
-      targetLivingLabel = getNPCDisplayName(worldId, targetLivingId);
+      targetLivingLabel = resolveNPCDisplayName(
+        worldId,
+        targetLivingId,
+        targetNpc,
+      );
       targetKind = "npc";
     } else {
       const worldPlayers = loadWorldPlayers(worldId);

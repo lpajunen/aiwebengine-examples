@@ -197,12 +197,34 @@ export function saveWorldNPCs(
  * exactly as the in-memory resolver does.
  */
 export function loadNPCDisplayName(worldId: string, npcId: string): string {
-  const row = querySingleWorldRow(
+  const row = queryNPCRowById(npcId);
+  const identity = row ? normalizeLivingIdentity(row.identity_json) : null;
+  return resolveNPCDisplayName(worldId, npcId, { identity: identity });
+}
+
+function queryNPCRowById(npcId: string): any | null {
+  return querySingleWorldRow(
     VWORLD_NPC_TABLE,
     JSON.stringify({ npc_id: String(npcId) }),
   );
-  const identity = row ? normalizeLivingIdentity(row.identity_json) : null;
-  return resolveNPCDisplayName(worldId, npcId, { identity: identity });
+}
+
+/**
+ * The name of an NPC that actually stands in this world, or "" for an id that
+ * names no NPC here. The empty answer is the point: unlike loadNPCDisplayName,
+ * which invents a hashed name for a dangling reference, this is for callers
+ * deciding *whether* an id is an NPC at all — the chat speaker resolution asks
+ * exactly that before letting an action's line be spoken by its target.
+ */
+export function loadExistingNPCDisplayName(
+  worldId: string,
+  npcId: string,
+): string {
+  const row = queryNPCRowById(npcId);
+  if (!row || String(row.world_id || "") !== String(worldId)) return "";
+  return resolveNPCDisplayName(worldId, npcId, {
+    identity: normalizeLivingIdentity(row.identity_json),
+  });
 }
 
 /**

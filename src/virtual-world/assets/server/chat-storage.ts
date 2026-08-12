@@ -7,6 +7,33 @@ import {
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 
+// Who a world-chat line came from. Everything a player types is "player";
+// "npc" is what an action's configured line becomes when it is spoken by the
+// living it targeted rather than by the actor (execution.worldChatSpeaker),
+// which is how an NPC answers. The client renders the two differently, and
+// nothing may reply to an NPC line as if it were a person.
+export type ChatSenderKind = "player" | "npc";
+
+export interface WorldChatMessage {
+  id: string;
+  sender_id: string;
+  sender_nick: string;
+  // Optional on the way in so existing callers (a player typing) need not say
+  // the obvious; always set on the way out.
+  sender_kind?: ChatSenderKind;
+  text: string;
+  // i18n key for `text`, when an action authored one. Absent for anything a
+  // player typed — there is nothing to translate about their own words.
+  text_key?: string;
+  ts: number;
+}
+
+// Rows written before NPCs could speak carry no sender_kind, and a blank reads
+// as a person — which is what those rows are.
+function normalizeChatSenderKind(raw: unknown): ChatSenderKind {
+  return String(raw || "") === "npc" ? "npc" : "player";
+}
+
 function parseChatDbResult(raw: string | null | undefined): any {
   if (!raw) return null;
   try {
@@ -116,13 +143,7 @@ function pruneChatRows(
   }
 }
 
-function normalizeWorldChatRows(rows: any[]): Array<{
-  id: string;
-  sender_id: string;
-  sender_nick: string;
-  text: string;
-  ts: number;
-}> {
+function normalizeWorldChatRows(rows: any[]): WorldChatMessage[] {
   return rows
     .filter(function (row) {
       return row && typeof row.message_id === "string";
@@ -132,7 +153,9 @@ function normalizeWorldChatRows(rows: any[]): Array<{
         id: String(row.message_id),
         sender_id: String(row.sender_id || ""),
         sender_nick: String(row.sender_nick || ""),
+        sender_kind: normalizeChatSenderKind(row.sender_kind),
         text: String(row.text || ""),
+        ...(row.text_key ? { text_key: String(row.text_key) } : {}),
         ts: fromStoredChatTimestamp(row.ts),
       };
     });
@@ -162,13 +185,7 @@ function normalizeDMRows(rows: any[]): Array<{
     });
 }
 
-export function loadWorldChat(worldId: string): Array<{
-  id: string;
-  sender_id: string;
-  sender_nick: string;
-  text: string;
-  ts: number;
-}> {
+export function loadWorldChat(worldId: string): WorldChatMessage[] {
   const rows = queryChatRows(
     VWORLD_CHAT_TABLE,
     JSON.stringify({ world_id: String(worldId) }),
@@ -181,20 +198,16 @@ export function loadWorldChat(worldId: string): Array<{
 
 export function appendWorldChatMessage(
   worldId: string,
-  msg: {
-    id: string;
-    sender_id: string;
-    sender_nick: string;
-    text: string;
-    ts: number;
-  },
+  msg: WorldChatMessage,
 ): void {
   insertChatRow(VWORLD_CHAT_TABLE, {
     message_id: String(msg.id),
     world_id: String(worldId),
     sender_id: String(msg.sender_id || ""),
     sender_nick: String(msg.sender_nick || ""),
+    sender_kind: normalizeChatSenderKind(msg.sender_kind),
     text: String(msg.text || ""),
+    text_key: String(msg.text_key || ""),
     ts: toStoredChatTimestamp(Number(msg.ts || Date.now())),
   });
   pruneChatRows(

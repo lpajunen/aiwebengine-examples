@@ -15,18 +15,25 @@ function formatChatTime(ts) {
 
 /** @param {any} msg */
 function buildMsgHtml(msg) {
-  var isMe = msg.sender_id === playerId;
+  // An NPC speaking is never "me", however the ids happen to compare — the
+  // name is stored on the line and must not be swapped for the player's nick.
+  var isNpc = msg.sender_kind === "npc";
+  var isMe = !isNpc && msg.sender_id === playerId;
   // For own messages always reflect the current nick so renames apply retroactively.
   var nick = escapeHtml(
     isMe
       ? playerNick || msg.sender_nick || playerId.slice(0, 16)
       : msg.sender_nick || msg.sender_id.slice(0, 16),
   );
-  var text = escapeHtml(msg.text);
+  // An authored line carries an i18n key so each reader gets it in their own
+  // language; the stored text is the fallback. A player's own words have no
+  // key and are shown exactly as typed.
+  var text = escapeHtml(msg.text_key ? t(msg.text_key, msg.text) : msg.text);
   return (
     '<div class="chat-msg">' +
     '<span class="msg-nick' +
     (isMe ? " is-me" : "") +
+    (isNpc ? " is-npc" : "") +
     '">' +
     nick +
     ":</span>" +

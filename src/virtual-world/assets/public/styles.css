@@ -871,6 +871,11 @@ canvas {
 .chat-msg .msg-nick.is-me {
   color: #7dd3fc;
 }
+/* A living that is not a person talking: warmer than the player blues, so a
+   line from the world reads as such at a glance. */
+.chat-msg .msg-nick.is-npc {
+  color: #e8c07a;
+}
 .chat-msg .msg-ts {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);

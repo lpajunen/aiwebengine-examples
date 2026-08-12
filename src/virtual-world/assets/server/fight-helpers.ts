@@ -40,7 +40,11 @@ import {
 } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
 import { runInWorldTransaction } from "./world-db.ts";
-import { isWorldTileWalkable, resolveNPCDisplayName } from "./world-domain.ts";
+import {
+  isWorldTileWalkable,
+  LivingState,
+  resolveNPCDisplayName,
+} from "./world-domain.ts";
 
 function directionToRotation(dr: number, dc: number): number {
   if (dr > 0) return 0;
@@ -372,6 +376,16 @@ export function applyLivingEffect(
   targetType: "npc" | "player",
   effect: ActionLivingEffect,
   killExperienceBase: number,
+  // The caller's own copy of the *actor's* inventory, when it holds one.
+  //
+  // A player can be their own target, and then this function and its caller
+  // were reading the same database row into two separate objects: this one
+  // wrote the effect and saved, the caller's experience award then saved its
+  // older copy over the top, and the effect vanished having reported "hit".
+  // Sharing the object makes both writes land on one row, whichever saves
+  // last. Omitted by callers with no such copy (the combat tick), which then
+  // load it as before.
+  actorInventory?: LivingState | null,
 ): LivingEffectOutcome {
   const npcs = targetType === "npc" ? loadWorldNPCs(worldId) : {};
   const targetNpc = targetType === "npc" ? npcs[targetId] : null;
@@ -380,7 +394,11 @@ export function applyLivingEffect(
       ? resolveNPCDisplayName(worldId, targetId, targetNpc)
       : getEffectiveNick(targetId);
   const targetInv =
-    targetType === "player" ? loadPlayerInventory(targetId) : null;
+    targetType === "player"
+      ? actorInventory && targetId === actorId
+        ? actorInventory
+        : loadPlayerInventory(targetId)
+      : null;
   if (!targetNpc && !targetInv) {
     return {
       result: "blocked",

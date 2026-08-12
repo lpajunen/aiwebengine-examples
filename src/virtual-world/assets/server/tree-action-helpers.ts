@@ -2157,6 +2157,7 @@ export function performTreeActionForUser(
           areaTargets[ai].kind,
           livingEffect,
           killBase,
+          inv,
         );
         // A blocked target failed its own gate (a ghost caught in the blast);
         // in area mode that is a skip, not an error for the whole cast.
@@ -2246,6 +2247,7 @@ export function performTreeActionForUser(
       targetKind,
       livingEffect,
       killBase,
+      inv,
     );
     if (outcome.result === "blocked") {
       return {

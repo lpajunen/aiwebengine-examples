@@ -300,6 +300,11 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 
   <div class="hud" id="hud-toast" aria-live="polite"></div>
 
+  <!-- Speech bubbles are positioned over the 3D scene each frame from the
+       speaker's avatar (see updateSpeechBubbles), so this layer must not
+       intercept taps meant for the world underneath it. -->
+  <div id="speech-bubbles" aria-live="polite"></div>
+
   <div class="hud" id="hud-active-actions" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">

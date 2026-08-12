@@ -1042,3 +1042,155 @@ function syncNPCSnapshot(npcs) {
     if (!seen[npcId]) removeNPCAvatar(npcId);
   }
 }
+
+// ── Speech bubbles ────────────────────────────────────────────────────────
+//
+// A world-chat line, shown over the speaker's head for a few seconds. This is
+// the same message the chat panel receives — including the NPC lines an action
+// authors (execution.worldChatSpeaker) — so a conversation reads as happening
+// in the world rather than only in a panel nobody has open.
+//
+// DOM rather than sprites: the text is already localized and escaped for the
+// chat panel, wraps for free, and stays crisp at any distance. The cost is one
+// projection per visible bubble per frame, done in updateSpeechBubbles below.
+
+/** @type {Record<string, {el: HTMLElement, until: number}>} */
+var speechBubbles = {};
+
+// Long enough to read without leaving stale lines hanging over a wandering
+// NPC; scaled by length so a hint gets more time than a greeting.
+var SPEECH_BUBBLE_MIN_MS = 3500;
+var SPEECH_BUBBLE_PER_CHAR_MS = 45;
+var SPEECH_BUBBLE_MAX_MS = 11000;
+
+// Ids already bubbled, so an own line echoed back by the server does not
+// bubble twice. Capped and halved rather than grown forever: a busy world
+// would otherwise accumulate a key per chat line for the life of the session,
+// and only the most recent ids can still arrive as duplicates.
+var SPEECH_BUBBLE_SEEN_MAX = 400;
+/** @type {Record<string, boolean>} */
+var speechBubbleSeenMessages = {};
+
+/** @param {string} messageId */
+function markSpeechBubbleSeen(messageId) {
+  var ids = Object.keys(speechBubbleSeenMessages);
+  if (ids.length >= SPEECH_BUBBLE_SEEN_MAX) {
+    for (var i = 0; i < ids.length / 2; i++) {
+      delete speechBubbleSeenMessages[ids[i]];
+    }
+  }
+  speechBubbleSeenMessages[messageId] = true;
+}
+
+// Reused across frames: projecting each bubble allocated a Vector3 per bubble
+// per frame, and per-frame allocation in this codebase has a history of
+// costing more than the work it does.
+/** @type {any} */
+var speechBubbleProjection = null;
+
+/**
+ * The scene object a speaker's bubble should hover over, or null when the
+ * speaker is not visible here — a player in another world, or an NPC that
+ * despawned between speaking and this frame.
+ * @param {string} senderId
+ * @returns {any}
+ */
+function speechBubbleAnchor(senderId) {
+  if (senderId === playerId)
+    return typeof avatar !== "undefined" ? avatar : null;
+  if (npcAvatars[senderId]) return npcAvatars[senderId].group;
+  if (remoteAvatars[senderId]) return remoteAvatars[senderId].group;
+  return null;
+}
+
+/**
+ * Shows one chat message over its speaker. Ignores a message it has already
+ * shown: an own line arrives twice, once optimistically and once as the
+ * server's echo, and both carry the same id.
+ * @param {any} msg
+ */
+function showSpeechBubble(msg) {
+  if (!msg || !msg.id || !msg.sender_id) return;
+  if (speechBubbleSeenMessages[msg.id]) return;
+  markSpeechBubbleSeen(String(msg.id));
+
+  var text = msg.text_key ? t(msg.text_key, msg.text) : msg.text;
+  if (!text) return;
+  var senderId = String(msg.sender_id);
+  if (!speechBubbleAnchor(senderId)) return;
+
+  var container = document.getElementById("speech-bubbles");
+  if (!container) return;
+
+  // One bubble per speaker: a second line replaces the first rather than
+  // stacking, which is what a person talking looks like.
+  var existing = speechBubbles[senderId];
+  var el = existing ? existing.el : document.createElement("div");
+  if (!existing) {
+    el.className = "speech-bubble";
+    container.appendChild(el);
+  }
+  el.classList.toggle("is-npc", msg.sender_kind === "npc");
+  el.textContent = text;
+  speechBubbles[senderId] = {
+    el: el,
+    until:
+      performance.now() +
+      Math.min(
+        SPEECH_BUBBLE_MAX_MS,
+        SPEECH_BUBBLE_MIN_MS + text.length * SPEECH_BUBBLE_PER_CHAR_MS,
+      ),
+  };
+}
+
+/** @param {string} senderId */
+function removeSpeechBubble(senderId) {
+  var entry = speechBubbles[senderId];
+  if (!entry) return;
+  if (entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+  delete speechBubbles[senderId];
+}
+
+/**
+ * Re-anchors every live bubble to its speaker's current screen position, and
+ * retires the expired ones. Called once per frame from the render loop, after
+ * the avatars have been moved and before the scene is drawn.
+ */
+function updateSpeechBubbles() {
+  var ids = Object.keys(speechBubbles);
+  if (ids.length === 0) return;
+  var now = performance.now();
+  var width = window.innerWidth;
+  var height = window.innerHeight;
+
+  for (var i = 0; i < ids.length; i++) {
+    var senderId = ids[i];
+    var entry = speechBubbles[senderId];
+    var anchor = speechBubbleAnchor(senderId);
+    // The speaker left, died or despawned: the bubble goes with them.
+    if (now > entry.until || !anchor) {
+      removeSpeechBubble(senderId);
+      continue;
+    }
+
+    // Just above the head, and above a large class's taller head at that.
+    var scale = anchor.scale && anchor.scale.y ? anchor.scale.y : 1;
+    if (!speechBubbleProjection) speechBubbleProjection = new THREE.Vector3();
+    var point = speechBubbleProjection;
+    point.set(
+      anchor.position.x,
+      anchor.position.y + 1.45 * scale,
+      anchor.position.z,
+    );
+    point.project(camera);
+    // Behind the camera: projection mirrors the point to the wrong side of the
+    // screen, so hide rather than draw a bubble where nobody is standing.
+    if (point.z > 1) {
+      entry.el.style.display = "none";
+      continue;
+    }
+    entry.el.style.display = "block";
+    entry.el.style.left = ((point.x + 1) / 2) * width + "px";
+    entry.el.style.top = ((1 - point.y) / 2) * height + "px";
+  }
+}

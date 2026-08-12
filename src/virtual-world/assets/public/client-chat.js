@@ -86,6 +86,7 @@ function sendWorldChatMessage() {
           worldChatMessages.push(data.message);
           if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
         }
+        showSpeechBubble(data.message);
       }
     })
     .catch(function () {});

@@ -842,6 +842,9 @@ function initMultiplayer() {
       worldChatMessages.push(msg);
       if (chatPanelVisible && chatActiveTab === "world") renderWorldChat();
     }
+    // Over the speaker's head as well as in the panel — deduped by message id,
+    // so an own line echoed back does not bubble twice.
+    showSpeechBubble(msg);
   }
 
   /** @param {any} msg */

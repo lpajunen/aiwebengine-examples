@@ -129,6 +129,9 @@ function animate() {
   updateAimTargetHighlights(performance.now());
 
   updateCamera();
+  // After the avatars have been moved this frame, so a bubble never lags a
+  // tile behind the speaker.
+  updateSpeechBubbles();
   renderer.render(scene, camera);
 }
 

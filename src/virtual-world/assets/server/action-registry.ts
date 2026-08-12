@@ -367,8 +367,10 @@ export interface ActionLivingEffectToast {
 export interface ActionLivingEffect {
   // "target" mutates the single living named by body.target_living_id;
   // "area" mutates every eligible living within targeting.areaRadius of the
-  // resolved point (targetKind "point").
-  affects: "target" | "area";
+  // resolved point (targetKind "point"); "actor" mutates the player
+  // performing the action, which is how an action leaves a mark on whoever
+  // did it — a quest flag a later condition can read.
+  affects: "target" | "area" | "actor";
   // Which living kinds may be affected; missing == both. heal is players-only,
   // harm/fireball NPCs-only, firebolt either.
   targetKinds?: Array<"player" | "npc">;

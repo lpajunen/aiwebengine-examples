@@ -375,6 +375,33 @@ export function performTreeActionForUser(
     return { id: targetId, nick: npcName, kind: "npc" };
   }
 
+  /**
+   * Writes an `affects: "actor"` living effect onto the acting player — the
+   * verb behind a quest flag. Applied to the request's own inventory object so
+   * it rides along with whatever else this action saves, rather than through a
+   * second load that the experience award would overwrite.
+   */
+  function maybeApplyActorLivingEffect(): void {
+    const effect = actionDefinition ? actionDefinition.livingEffect : null;
+    if (!effect || effect.affects !== "actor" || !effect.field) return;
+    const context: Record<string, unknown> = { values: inv.values };
+    const current = Number(getFieldValue(context, effect.field) || 0);
+    const amount = Math.floor(Number(effect.amount || 0));
+    let next =
+      effect.op === "set"
+        ? amount
+        : effect.op === "add"
+          ? current + amount
+          : current - amount;
+    if (effect.maxField) {
+      const cap = Number(getFieldValue(context, effect.maxField));
+      if (Number.isFinite(cap)) next = Math.min(next, cap);
+    }
+    setFieldValue(context, effect.field, next);
+    savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
+  }
+
   function maybeAppendConfiguredWorldChatMessage(): void {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.worldChatText) return;
@@ -1975,7 +2002,28 @@ export function performTreeActionForUser(
   // all. This block owns *targeting* — who is in reach, and whether the actor
   // may act — while applyLivingEffect owns the mutation, death and broadcasts.
   const livingEffect = actionDefinition ? actionDefinition.livingEffect : null;
-  if (livingEffect) {
+  // An actor effect is a mark the action leaves on whoever performed it, not
+  // a thing it does to something else — so it skips this whole block (which
+  // exists to resolve a target) and is applied in the shared fallthrough
+  // instead, alongside the action's own cost, produces and chat line. Giving
+  // the gatekeeper a flower has to charge the flower *and* remember that it
+  // happened; an effect that short-circuited the action could only do one.
+  if (livingEffect && livingEffect.affects === "actor") {
+    const actorOnlyGate = evaluateEntityConditions(
+      livingEffect.actorConditions,
+      { class_id: inv.class_id, values: inv.values },
+    );
+    if (!actorOnlyGate.ok) {
+      return {
+        status: 200,
+        payload: {
+          ok: false,
+          error: actorOnlyGate.errorMessage || "error.action_condition_not_met",
+        },
+      };
+    }
+  }
+  if (livingEffect && livingEffect.affects !== "actor") {
     const actorGate = evaluateEntityConditions(livingEffect.actorConditions, {
       class_id: inv.class_id,
       values: inv.values,
@@ -2022,6 +2070,12 @@ export function performTreeActionForUser(
       return toastFields(String(spec.messageKey || ""), english, params);
     }
 
+    // Aimed at the actor rather than at anything they targeted: the verb
+    // behind a quest flag. An action can now write the player's own values —
+    // `values.quest_gate = 1` — which is what lets a conversation remember
+    // that it happened, and lets any later condition (a dialogue node, another
+    // action's validWhen) read it. Without this the whole condition
+    // vocabulary was readable but unwritable for players.
     if (livingEffect.affects === "area") {
       if (!resolvedTarget.inBounds) {
         return {
@@ -2492,6 +2546,7 @@ export function performTreeActionForUser(
     }
   }
 
+  maybeApplyActorLivingEffect();
   maybeAppendConfiguredWorldChatMessage();
   maybeApplyLogicEffects();
 

@@ -631,6 +631,25 @@ export function refreshWorldClassCache(): void {
   rebuildWorldClassCache(false);
 }
 
+/**
+ * Re-reads the world rows without the seeding/patching pass. Bumps the cache
+ * generation like any rebuild, so consumers memoizing off it (world
+ * reservations) re-derive. See class-cache.ts.
+ */
+export function reloadWorldClassCache(): void {
+  const dbRows = loadAllWorldClassRows();
+  if (dbRows.length === 0) {
+    return;
+  }
+  const cache: Record<string, WorldClassRecord> = {};
+  for (let i = 0; i < dbRows.length; i++) {
+    const record = worldClassFromDbRow(dbRows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  _worldClassCache = cache;
+  _worldClassCacheGeneration++;
+}
+
 // Same cache-miss tolerance as the item/living registries: an instance whose
 // init() timed out before bootstrapWorldClasses() would otherwise report that
 // no world classes exist, taking the spawn manifests with it.

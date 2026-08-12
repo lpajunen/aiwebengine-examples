@@ -255,6 +255,36 @@ export function refreshTileClassCache(): void {
   bootstrapTileClasses();
 }
 
+/**
+ * Re-reads the tile rows without the bootstrap's seeding pass, rebuilding the
+ * flat value/name/walkable maps with them — those are the cache as far as the
+ * hot per-tile lookups are concerned. See class-cache.ts.
+ */
+export function reloadTileClassCache(): void {
+  const rows = loadAllTileClassRows();
+  const cache: Record<string, TileClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = tileClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  if (Object.keys(cache).length === 0) {
+    // Nothing stored yet: leave the bootstrapped cache alone rather than
+    // blanking the tile vocabulary the whole world is drawn from.
+    return;
+  }
+  _tileClassCache = cache;
+  _tileNameByValue = {};
+  _tileValueByName = {};
+  _tileWalkableByValue = {};
+  Object.keys(cache).forEach(function (id) {
+    _tileNameByValue[cache[id].value] = id;
+    _tileValueByName[id] = cache[id].value;
+    _tileWalkableByValue[cache[id].value] = cache[id].walkable;
+  });
+  _missedTileValues = {};
+  _missedTileNames = {};
+}
+
 export function getAllTileClasses(): TileClassRecord[] {
   if (!_tileClassCache) refreshTileClassCache();
   const cache = _tileClassCache || {};

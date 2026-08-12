@@ -1,4 +1,5 @@
 import { appendWorldChatMessage, ChatSenderKind } from "./chat-storage.ts";
+import { maybeReloadClassCaches } from "./class-cache.ts";
 import { getTargetTileFromRotation } from "./current-world-state.ts";
 import {
   grantAllItemsForUser,
@@ -146,6 +147,9 @@ export function performTreeActionForUser(
   body: any,
   options?: { resuming?: boolean },
 ): { status: number; payload: any } {
+  // Before resolving the action: a creator who just edited it expects the
+  // next attempt to use the new definition, whichever instance stored it.
+  maybeReloadClassCaches();
   const rawAction = body && body.action;
   const action = String(rawAction || "");
   const actionDefinition = getActionDefinition(action);

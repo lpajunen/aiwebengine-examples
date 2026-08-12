@@ -630,6 +630,21 @@ export function refreshLivingClassCache(): void {
   bootstrapLivingClasses();
 }
 
+/**
+ * Re-reads the rows into the cache without the bootstrap's seeding pass, so it
+ * is safe to run periodically — see class-cache.ts. Built-ins missing a row
+ * are not re-added here; getLivingClass falls back to the code definition.
+ */
+export function reloadLivingClassCache(): void {
+  const rows = loadAllLivingClassRows();
+  const cache: Record<string, LivingClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = livingClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  _livingClassCache = cache;
+}
+
 // A null cache means this instance never got through bootstrapLivingClasses()
 // — init() can time out on a slow schema migration — so build it on demand
 // rather than reporting "no living classes". Without this the page bootstrap

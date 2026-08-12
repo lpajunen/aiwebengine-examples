@@ -903,6 +903,20 @@ export function refreshItemClassCache(): void {
   _itemClassCache = cache;
 }
 
+/**
+ * Re-reads the item rows without the backfill pass, so it is safe to run
+ * periodically — see class-cache.ts.
+ */
+export function reloadItemClassCache(): void {
+  const rows = loadAllItemClassRows();
+  const cache: Record<string, ItemClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = itemClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
+  _itemClassCache = cache;
+}
+
 export function getAllItemClasses(): ItemClassRecord[] {
   if (!_itemClassCache) refreshItemClassCache();
   return Object.keys(_itemClassCache as Record<string, ItemClassRecord>).map(
@@ -1707,6 +1721,21 @@ export function refreshActionClassCache(): void {
     });
   }
 
+  _actionClassCache = cache;
+  rebuildActionsBySourceItem(cache);
+}
+
+/**
+ * Re-reads the action rows without the backfill pass. Rebuilds the derived
+ * source-item index too — it is part of the cache, not a separate thing.
+ */
+export function reloadActionClassCache(): void {
+  const rows = loadAllActionClassRows();
+  const cache: Record<string, ActionClassRecord> = {};
+  for (let i = 0; i < rows.length; i++) {
+    const record = actionClassFromDbRow(rows[i]);
+    if (record.id) cache[record.id] = record;
+  }
   _actionClassCache = cache;
   rebuildActionsBySourceItem(cache);
 }

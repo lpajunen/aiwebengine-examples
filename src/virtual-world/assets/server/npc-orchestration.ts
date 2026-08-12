@@ -1,4 +1,5 @@
 import { vwLog } from "./diagnostics.ts";
+import { maybeReloadClassCaches } from "./class-cache.ts";
 import { isPickableWorldItem } from "./item-registry.ts";
 import {
   deleteWorldItems,
@@ -82,6 +83,10 @@ export function tickWorldNPCs(
   now: number,
   elapsedMs: number,
 ): void {
+  // Once per world tick: the tick reads living classes per NPC, and this is
+  // the coarse point where picking up another instance's class edits costs
+  // nothing (see class-cache.ts).
+  maybeReloadClassCaches();
   ensureWorldItems(worldId);
   const npcs = ensureWorldNPCs(worldId);
   processDueSpawnTimers(worldId, now);

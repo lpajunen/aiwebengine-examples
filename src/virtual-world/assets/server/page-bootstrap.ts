@@ -16,6 +16,7 @@ import {
   refreshLivingClassCache,
 } from "./living-registry.ts";
 import { markNPCWorldActive } from "./npc-storage.ts";
+import { maybeReloadClassCaches } from "./class-cache.ts";
 import {
   loadPlayerPosition,
   savePlayerPosition,
@@ -116,6 +117,7 @@ export function buildVirtualWorldPageState(
   authName: string,
   options?: { includeRegistries?: boolean },
 ): PageState {
+  maybeReloadClassCaches();
   const worldId = getOrCreatePlayerWorld(userId);
   markNPCWorldActive(worldId);
   ensureStarterKit(userId);

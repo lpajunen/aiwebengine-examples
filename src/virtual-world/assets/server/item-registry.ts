@@ -10,6 +10,7 @@ import {
   ACTION_DEFINITIONS,
   actionCategory,
   defaultTargetingForTargetKind,
+  resolveActionTargeting,
 } from "./action-registry.ts";
 import { ActionDefinition } from "./action-registry.ts";
 import {
@@ -625,7 +626,14 @@ export function getBootstrapRegistry(): {
       labels: normalizeClassLabels((action as ActionClassRecord).labels),
       canonical_id: action.canonicalId || action.id,
       target_kind: action.targetKind,
-      targeting: action.targeting,
+      // Resolved, never raw: an action class written by a creator carries no
+      // targeting at all (only the built-ins get theirs materialized onto the
+      // row at bootstrap), and the client reads a missing range as 0 — which
+      // silently means "only a target standing on my own tile", so an authored
+      // entity-targeted action was never offered in the palette. Filling the
+      // per-kind defaults here keeps that table in one place rather than
+      // making the client keep a second copy of it.
+      targeting: resolveActionTargeting(action),
       valid_when: action.validWhen,
       category: actionCategory(actionId),
       source_kind: worldMutation ? worldMutation.sourceKind : undefined,

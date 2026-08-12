@@ -455,7 +455,6 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
   const worldClass = getWorldClassForWorld(worldId);
   const npcSpawns = worldClass ? worldClass.npcSpawns : [];
   const npcs: Record<string, any> = {};
-  let nextIndex = 1;
 
   npcSpawns.forEach(function (entry) {
     if (!getLivingClass(entry.id)) return;
@@ -467,10 +466,9 @@ export function ensureWorldNPCs(worldId: string): Record<string, any> {
         mapCols,
         occupied,
         entry.id,
-        nextIndex,
+        seedNPCId(worldId, entry.id, count),
       );
       if (!placed) continue;
-      nextIndex++;
       npcs[placed.npcId] = placed.npc;
     }
   });
@@ -662,6 +660,23 @@ function applyNPCDefaultItems(
   return bag;
 }
 
+/**
+ * The id of the nth ambient NPC of a class in a world. Deterministic on
+ * purpose: seeding runs whenever a world is found with no NPCs at all, and
+ * nothing serializes it, so two requests arriving together both used to seed a
+ * full population — Birdhaven ended up with four times its manifest, 20
+ * chickens against a manifest of 5, because four callers raced after a restart.
+ *
+ * Making the ids a function of (world, class, ordinal) turns the second seed
+ * into a no-op instead of a duplicate: the unique index on npc_id rejects it,
+ * and a caller that reads the row first simply updates it. That is idempotency
+ * rather than a lock, so it holds however many callers race and needs no lease
+ * to expire correctly.
+ */
+function seedNPCId(worldId: string, classId: string, ordinal: number): string {
+  return "npc_" + worldId + "_" + classId + "_" + ordinal;
+}
+
 function placeNPCAtRandomTile(
   worldId: string,
   map: number[][],
@@ -669,7 +684,7 @@ function placeNPCAtRandomTile(
   mapCols: number,
   occupied: Record<string, boolean>,
   classId: string,
-  index: number,
+  npcId: string,
 ): { npcId: string; npc: any } | null {
   let attempts = 0;
   const maxAttempts = 4000;
@@ -690,8 +705,6 @@ function placeNPCAtRandomTile(
       continue;
     }
     occupied[tileKey] = true;
-    const npcId =
-      "npc_" + worldId + "_" + index + "_" + Date.now().toString(36);
     const livingClass = getLivingClass(classId);
     const slots = livingClass
       ? createLivingSlotsFromDefinitions(livingClass.slotDefinitions)
@@ -775,7 +788,15 @@ export function spawnSingleWorldNPC(
     mapCols,
     occupied,
     classId,
-    Object.keys(existing).length + 1,
+    // A respawn is a *new* living, not a re-seed, so its id must be its own —
+    // reusing a dead NPC's id would let a stale fight or follow row point at
+    // the replacement. Bounded instead by the manifest cap in spawn-timers.ts.
+    "npcr_" +
+      worldId +
+      "_" +
+      Date.now().toString(36) +
+      "_" +
+      Math.random().toString(36).slice(2, 8),
   );
   if (!placed) return null;
   saveWorldNPCs(worldId, { [placed.npcId]: placed.npc });

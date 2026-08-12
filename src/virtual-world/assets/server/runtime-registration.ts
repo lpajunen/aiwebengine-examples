@@ -793,6 +793,22 @@ export function registerVirtualWorldRuntime(): void {
             description:
               "Chance of using a carried tree tool nearby (default 0.08)",
           },
+          roamRadius: {
+            type: "number",
+            description:
+              "How far this living may stray from the tile it started on — its placement's tile, for an authored one. Omit for unleashed (the default); 0 keeps it on its own tile. A shopkeeper is roamRadius 0; a gatekeeper is roamRadius 0 plus aggressive. One dragged away by a fight walks back.",
+          },
+          movement: {
+            type: "string",
+            enum: ["wander", "flee"],
+            description:
+              "What it does when a player comes near: 'wander' (default) ignores them, 'flee' steps away.",
+          },
+          fleeRadius: {
+            type: "number",
+            description:
+              "How near a player must be for 'flee' to notice, in tiles (default 4)",
+          },
         },
       },
       isDefault: {

@@ -221,6 +221,25 @@ export interface LivingClassRecord {
     pickUpChance?: number;
     dropChance?: number;
     forageChance?: number;
+    // How far this living may stray from the tile it started on — its home,
+    // which for an authored placement is the post the creator put it on.
+    // Omitted means unleashed, which is what every class did before this
+    // existed. 0 means it never leaves its own tile.
+    //
+    // This is what makes a living stay somewhere: a shopkeeper is a class with
+    // roamRadius 0, and a gatekeeper is the same plus `aggressive`. Neither
+    // needed a "role" of its own — a role is a bundle of behaviors, and
+    // bundling them into one enum would make them impossible to mix.
+    //
+    // A living dragged beyond its radius (chased into a fight, say) walks back
+    // rather than freezing, so the post survives being left.
+    roamRadius?: number;
+    // What this living does when a player comes close. "wander" (default) does
+    // not care. "flee" makes it step away — a chicken scattering rather than
+    // strolling past a wolf.
+    movement?: "wander" | "flee";
+    // How near a player must be for "flee" to notice, in tiles.
+    fleeRadius?: number;
   };
   // Marks this class as the one a new living of its kind starts as: a fresh
   // player's body, or an NPC seeded without a class of its own. Exactly one

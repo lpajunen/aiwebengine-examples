@@ -53,6 +53,8 @@ type NPCState = {
   bag?: unknown;
   values?: unknown;
   identity?: LivingIdentity;
+  home_row?: unknown;
+  home_col?: unknown;
 };
 
 function normalizeSafeInt(
@@ -123,6 +125,12 @@ export function loadWorldNPCs(worldId: string): Record<string, any> {
       // shape without re-parsing.
       const identity = normalizeLivingIdentity(row.identity_json);
       if (identity) npc.identity = identity;
+      if (Number.isFinite(Number(row.home_row))) {
+        npc.home_row = Number(row.home_row);
+      }
+      if (Number.isFinite(Number(row.home_col))) {
+        npc.home_col = Number(row.home_col);
+      }
       fromRows[String(row.npc_id)] = npc;
     }
     return fromRows;
@@ -176,6 +184,16 @@ export function saveWorldNPCs(
         // string round-trips through normalizeLivingIdentity to "no identity"
         // and keeps every row the same shape.
         identity_json: npc.identity ? JSON.stringify(npc.identity) : "",
+        // Omitted rather than nulled when this NPC has no home: the engine
+        // rejects null on a nullable INTEGER column, and an absent home is a
+        // meaningful state (an unleashed living needs none).
+        ...(Number.isFinite(Number(npc.home_row)) &&
+        Number.isFinite(Number(npc.home_col))
+          ? {
+              home_row: Math.floor(Number(npc.home_row)),
+              home_col: Math.floor(Number(npc.home_col)),
+            }
+          : {}),
       };
       const existingRow = querySingleWorldRow(
         VWORLD_NPC_TABLE,
@@ -516,11 +534,49 @@ export function materializeWorldNPCPlacements(
       existing && existing.data ? String(existing.data.npcId || "") : "";
     if (recordedNpcId && npcs[recordedNpcId]) {
       // The NPC is already here, so materialization has nothing to create —
-      // but its identity is authored on the class, and a creator who renames
-      // the gatekeeper expects the guard standing in every existing world to
-      // answer to the new name. Cheap to check: this loop already holds both
-      // sides.
-      if (applyPlacementIdentity(npcs[recordedNpcId], placement.identity)) {
+      // but everything the placement authors about it can still have changed,
+      // and a creator who edits the gatekeeper expects the one standing in
+      // every existing world to follow. Cheap: this loop holds both sides.
+      const adopted = npcs[recordedNpcId];
+      if (applyPlacementIdentity(adopted, placement.identity)) changed = true;
+      // Repointing a placement at another class reclasses the living rather
+      // than leaving a human standing where a gatekeeper was authored. Its
+      // slots and values are re-normalized against the new class on the next
+      // load, and the client rebuilds the body in place.
+      if (String(adopted.class_id || "") !== classId) {
+        adopted.class_id = classId;
+        changed = true;
+      }
+      // And its post follows the placement, so moving the gate moves the
+      // guard's leash with it.
+      if (
+        Number(adopted.home_row) !== row ||
+        Number(adopted.home_col) !== col
+      ) {
+        adopted.home_row = row;
+        adopted.home_col = col;
+        changed = true;
+      }
+      // A leashed living found outside its radius is put back on its post.
+      // The tick already walks a strayed living home, but greedily — it
+      // cannot route around a river, and an authored guard stranded on the
+      // wrong bank is not a guard. Loading the world is the moment the
+      // authored template is reasserted anyway, so it is reasserted here too.
+      const adoptedClass = getLivingClass(classId);
+      const leash =
+        adoptedClass && adoptedClass.behavior
+          ? Number(adoptedClass.behavior.roamRadius)
+          : NaN;
+      if (
+        Number.isFinite(leash) &&
+        Math.max(
+          Math.abs(Number(adopted.row) - row),
+          Math.abs(Number(adopted.col) - col),
+        ) > leash
+      ) {
+        adopted.row = row;
+        adopted.col = col;
+        adopted.seq = Number(adopted.seq || 0) + 1;
         changed = true;
       }
       continue;
@@ -530,6 +586,11 @@ export function materializeWorldNPCPlacements(
     const built = buildNPCAtTile(worldId, row, col, classId);
     if (!built) continue;
     applyPlacementIdentity(built, placement.identity);
+    // buildNPCAtTile already homed it here, but say it explicitly: for an
+    // authored living the placement's tile *is* the post, and a leashed one
+    // walks back to it.
+    built.home_row = row;
+    built.home_col = col;
     npcs[npcId] = built;
     changed = true;
     saveWorldPlacementInstance({
@@ -682,6 +743,11 @@ function buildNPCAtTile(
     slots: slots,
     bag: bag,
     values: Object.assign({}, livingClass.valueTemplate || {}),
+    // Where this living belongs. Every NPC gets one, not just the authored
+    // ones: a class with a roamRadius leashes its wildlife to wherever they
+    // were spawned, which is what keeps a herd in its meadow.
+    home_row: row,
+    home_col: col,
   };
 }
 

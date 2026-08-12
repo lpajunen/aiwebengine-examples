@@ -465,6 +465,8 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
     ["addTextColumn", "bag_json", true],
     ["addTextColumn", "values_json", true],
     ["addTextColumn", "identity_json", true],
+    ["addIntegerColumn", "home_row", true],
+    ["addIntegerColumn", "home_col", true],
   ].forEach(function (entry) {
     runWorldSchemaStep(
       String(entry[0]),

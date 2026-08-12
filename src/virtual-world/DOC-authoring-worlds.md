@@ -71,6 +71,33 @@ guard in the class updates the guard standing in every existing world of that
 class the next time it loads. Only placements can name an NPC; random spawns
 keep their hashed names, which is what tells the two apart at a glance.
 
+## Giving a living a post
+
+An NPC left to itself wanders. A living class can be leashed instead, through
+its `behavior`:
+
+| You want                                             | Set                                   |
+| ---------------------------------------------------- | ------------------------------------- |
+| a shopkeeper who never leaves the counter            | `roamRadius: 0`                       |
+| a gatekeeper who holds the gate and fights intruders | `roamRadius: 0` + `aggressive: true`  |
+| a herd that stays in its meadow                      | `roamRadius: 6`                       |
+| a chicken that scatters when you approach            | `movement: "flee"` (and `fleeRadius`) |
+| today's behaviour                                    | leave `roamRadius` out                |
+
+There is deliberately no `role` field. A role is a bundle — a guard is "stays
+put" _and_ "fights" — and bundling those into one name would make them
+impossible to mix. Composing two fields gives you the guard, the shopkeeper and
+the herd without the engine having to know those words.
+
+The post itself is the tile the living started on: its placement's tile for an
+authored NPC, its spawn tile for ambient population. Move the placement and the
+post moves with it.
+
+A leashed living dragged out of its radius — chased into a fight, say — walks
+back rather than freezing. That walk is greedy, so terrain it cannot route
+around (the far bank of a river) will strand it; loading the world puts any
+out-of-radius authored living back on its post, which is the backstop.
+
 ## Reservations: rules a landmark imposes on its surroundings
 
 A placement may reserve an area — a circle or rectangle — carrying rules:

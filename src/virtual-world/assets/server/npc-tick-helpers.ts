@@ -92,6 +92,10 @@ function npcBehavior(npc: any): {
   pickUpChance: number;
   dropChance: number;
   forageChance: number;
+  // Absent means unleashed — see LivingClassRecord.behavior.roamRadius.
+  roamRadius: number | null;
+  movement: string;
+  fleeRadius: number;
 } {
   const cls = getLivingClass(String((npc && npc.class_id) || ""));
   const configured = (cls && cls.behavior) || {};
@@ -99,6 +103,7 @@ function npcBehavior(npc: any): {
     const num = Number(value);
     return Number.isFinite(num) ? num : fallback;
   }
+  const roam = Number(configured.roamRadius);
   return {
     idleChance: pick(configured.idleChance, DEFAULT_NPC_BEHAVIOR.idleChance),
     pickUpChance: pick(
@@ -110,7 +115,72 @@ function npcBehavior(npc: any): {
       configured.forageChance,
       DEFAULT_NPC_BEHAVIOR.forageChance,
     ),
+    roamRadius: Number.isFinite(roam) && roam >= 0 ? Math.floor(roam) : null,
+    movement: String(configured.movement || DEFAULT_NPC_BEHAVIOR.movement),
+    fleeRadius: pick(configured.fleeRadius, DEFAULT_NPC_BEHAVIOR.fleeRadius),
   };
+}
+
+// Two metrics, deliberately. Chebyshev measures the leash, because a radius
+// in this game is a square (isWithinTileDistance everywhere else agrees).
+// Manhattan orders the steps, because a living moves only orthogonally: under
+// Chebyshev a row step while the column difference dominates changes nothing,
+// so the greedy walk hits a plateau of equally-good moves and paces between
+// two tiles forever instead of coming home.
+function chebyshev(
+  rowA: number,
+  colA: number,
+  rowB: number,
+  colB: number,
+): number {
+  return Math.max(Math.abs(rowA - rowB), Math.abs(colA - colB));
+}
+
+function manhattan(
+  rowA: number,
+  colA: number,
+  rowB: number,
+  colB: number,
+): number {
+  return Math.abs(rowA - rowB) + Math.abs(colA - colB);
+}
+
+/**
+ * The tile a leashed living belongs on, or null when it has no home — an NPC
+ * from before homes were recorded, which simply wanders as it always did.
+ */
+function npcHome(npc: any): { row: number; col: number } | null {
+  const row = Number(npc && npc.home_row);
+  const col = Number(npc && npc.home_col);
+  if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+  return { row: row, col: col };
+}
+
+/**
+ * The nearest player within `radius`, or null. Reads the tile keys the tick
+ * already built rather than taking a second copy of the player list.
+ */
+function nearestPlayerWithin(
+  occupiedPlayers: Record<string, boolean>,
+  row: number,
+  col: number,
+  radius: number,
+): { row: number; col: number } | null {
+  let best: { row: number; col: number } | null = null;
+  let bestDistance = radius + 1;
+  const keys = Object.keys(occupiedPlayers);
+  for (let i = 0; i < keys.length; i++) {
+    const parts = keys[i].split("_");
+    const pr = Number(parts[0]);
+    const pc = Number(parts[1]);
+    if (!Number.isFinite(pr) || !Number.isFinite(pc)) continue;
+    const distance = chebyshev(pr, pc, row, col);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = { row: pr, col: pc };
+    }
+  }
+  return best;
 }
 
 export function normalizeNPCInventoryState(npc: any): void {
@@ -142,7 +212,26 @@ export function tickNPCMovement(params: {
   ) => void;
 }): boolean {
   const n = params.npc;
-  if (Math.random() < npcBehavior(n).idleChance) {
+  const behavior = npcBehavior(n);
+  const home = npcHome(n);
+
+  // A living leashed to a post but standing outside it walks back, and one
+  // fleeing does not dawdle — in both cases the step it wants is the whole
+  // point, so the idle roll is skipped.
+  const leashed = behavior.roamRadius !== null && !!home;
+  const strayed =
+    leashed &&
+    chebyshev(n.row, n.col, home!.row, home!.col) > behavior.roamRadius!;
+  const threat =
+    behavior.movement === "flee"
+      ? nearestPlayerWithin(
+          params.occupiedPlayers,
+          n.row,
+          n.col,
+          behavior.fleeRadius,
+        )
+      : null;
+  if (!strayed && !threat && Math.random() < behavior.idleChance) {
     n.state = "idle";
     n.ts = params.now;
     return false;
@@ -155,6 +244,28 @@ export function tickNPCMovement(params: {
     { dr: 0, dc: -1 },
   ];
   params.shuffleDirections(dirs);
+
+  // The recipe below is unchanged — try each direction, take the first tile
+  // that can be stood on. What a policy changes is only which directions are
+  // offered and in what order, so a new one is a comparator rather than
+  // another copy of the walk.
+  if (strayed) {
+    // Home first: nearest-to-home ordering, which is a greedy walk back.
+    dirs.sort(function (a, b) {
+      return (
+        manhattan(n.row + a.dr, n.col + a.dc, home!.row, home!.col) -
+        manhattan(n.row + b.dr, n.col + b.dc, home!.row, home!.col)
+      );
+    });
+  } else if (threat) {
+    // Away from the nearest player, furthest first.
+    dirs.sort(function (a, b) {
+      return (
+        manhattan(n.row + b.dr, n.col + b.dc, threat.row, threat.col) -
+        manhattan(n.row + a.dr, n.col + a.dc, threat.row, threat.col)
+      );
+    });
+  }
 
   let moved = false;
   const fromKey = n.row + "_" + n.col;
@@ -179,6 +290,15 @@ export function tickNPCMovement(params: {
     if (!walkable) continue;
     if (params.occupiedPlayers[key]) continue;
     if (params.occupiedNPCs[key]) continue;
+    // The leash. Not applied while strayed: outside its radius every step
+    // fails this test, and a living that cannot step cannot come home.
+    if (
+      leashed &&
+      !strayed &&
+      chebyshev(nr, nc, home!.row, home!.col) > behavior.roamRadius!
+    ) {
+      continue;
+    }
 
     n.row = nr;
     n.col = nc;

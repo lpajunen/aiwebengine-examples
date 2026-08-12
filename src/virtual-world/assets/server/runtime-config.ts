@@ -115,7 +115,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
 // v10: npc identity_json (a placement's authored name/description); world chat
 //      sender_kind (an NPC speaking rather than a player).
 // v11: world chat text_key, so an authored line localizes per reader.
-export const VWORLD_SCHEMA_VERSION = 11;
+// v12: npc home_row/home_col, the post a leashed living returns to.
+export const VWORLD_SCHEMA_VERSION = 12;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true
@@ -137,6 +138,12 @@ export const DEFAULT_NPC_BEHAVIOR = {
   dropChance: 0.12,
   // Chance of using a tree tool it carries on a neighbouring square.
   forageChance: 0.08,
+  // No leash and no reaction to players: what every class did before a living
+  // could be given a post to hold. `roamRadius` is deliberately absent rather
+  // than a large number — "unleashed" is not the same as "leashed very far",
+  // since an unleashed living needs no home at all.
+  movement: "wander",
+  fleeRadius: 4,
 };
 // Max Chebyshev tile distance for actions with targetKind "item_nearby" or
 // "living_nearby" (e.g. follow, fight) — see resolveActionTarget() in

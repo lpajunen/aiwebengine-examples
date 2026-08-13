@@ -28,7 +28,7 @@ To typecheck/lint a single file, invoke the underlying tools directly, e.g. `./n
 ### Fetching remote metadata (gitignored, regenerate as needed)
 
 ```bash
-make fetch-types           # types/aiwebengine.d.ts, types/aiwebengine-priv.d.ts
+make fetch-types           # types/aiwebengine.d.ts
 make fetch-openapi         # apis/openapi.json
 make fetch-graphql-schema  # schemas/schema.json
 make all                   # all of the above + format

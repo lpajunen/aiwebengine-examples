@@ -158,7 +158,7 @@ function sha256(data) {
 }
 
 /**
- * Upsert the entrypoint script (POST /upsert_script).
+ * Upsert the entrypoint script (POST /engine/upsert_script).
  * @param {string} token
  * @param {string} scriptUri
  * @param {string} absPath
@@ -166,7 +166,7 @@ function sha256(data) {
  */
 async function uploadScript(token, scriptUri, absPath) {
   const content = fs.readFileSync(absPath, "utf8");
-  const res = await fetch(`${serverHost}/upsert_script`, {
+  const res = await fetch(`${serverHost}/engine/upsert_script`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -185,7 +185,7 @@ async function uploadScript(token, scriptUri, absPath) {
 }
 
 /**
- * Upsert one asset (POST /assets) and optionally verify with a GET read-back.
+ * Upsert one asset (POST /engine/assets) and optionally verify with a GET read-back.
  * @param {string} token
  * @param {string} scriptUri
  * @param {string} assetName
@@ -198,7 +198,7 @@ async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
   const localHash = sha256(bytes);
   const q = `script=${encodeURIComponent(scriptUri)}`;
 
-  const res = await fetch(`${serverHost}/assets?${q}`, {
+  const res = await fetch(`${serverHost}/engine/assets?${q}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -223,7 +223,7 @@ async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
   }
 
   const readRes = await fetch(
-    `${serverHost}/assets?${q}&asset=${encodeURIComponent(assetName)}`,
+    `${serverHost}/engine/assets?${q}&asset=${encodeURIComponent(assetName)}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!readRes.ok) {

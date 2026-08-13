@@ -410,7 +410,7 @@ function scriptUpdatesDemoPage(context) {
 			formData.append('uri', uri);
 			formData.append('content', content);
 			
-			fetch('/upsert_script', {
+			fetch('/engine/upsert_script', {
 				method: 'POST',
 				body: formData
 			})
@@ -437,7 +437,7 @@ function scriptUpdatesDemoPage(context) {
 			const formData = new FormData();
 			formData.append('uri', uri);
 			
-			fetch('/delete_script', {
+			fetch('/engine/delete_script', {
 				method: 'POST',
 				body: formData
 			})

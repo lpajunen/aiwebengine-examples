@@ -181,7 +181,7 @@ async function uploadScript(token, scriptPath, scriptUri, dryRun) {
     content: scriptContent,
   }).toString();
 
-  const response = await fetch(`${serverHost}/upsert_script`, {
+  const response = await fetch(`${serverHost}/engine/upsert_script`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -260,7 +260,7 @@ async function uploadAsset(token, assetName, assetPath, scriptUri, dryRun) {
   const base64Content = content.toString("base64");
   const encodedScriptUri = encodeURIComponent(scriptUri);
   const response = await fetch(
-    `${serverHost}/assets?script=${encodedScriptUri}`,
+    `${serverHost}/engine/assets?script=${encodedScriptUri}`,
     {
       method: "POST",
       headers: {

@@ -182,12 +182,9 @@ describe("item classes", () => {
     // Only classes nobody owns are checked: a creator-owned class is *meant*
     // to have moved on from whatever the code seeded.
     //
-    // KNOWN DRIFT, deliberately listed rather than hidden: the stored `flower`
-    // row carries actionIds ["give_flower"] while the definition now says [],
-    // so the flower still offers "give" as a direct item action. Deciding
-    // whether to sync the row is a content call; until then this list keeps
-    // the check live for every other class.
-    const knownDrift = ["flower.actionIds"];
+    // This is the check that caught the stored `flower` still granting
+    // give_flower after the definition dropped it; that row has since been
+    // synced, and nothing here is allowed to drift again.
     const drifted: string[] = [];
     Object.keys(ITEM_DEFINITIONS).forEach(function (id) {
       const definition = ITEM_DEFINITIONS[id];
@@ -202,20 +199,7 @@ describe("item classes", () => {
         drifted.push(id + ".actionIds");
       }
     });
-    expect(
-      drifted.filter(function (entry) {
-        return knownDrift.indexOf(entry) === -1;
-      }),
-    ).toEqual([]);
-  });
-
-  test("the known drift is still exactly what it was", () => {
-    // The companion to the allowance above: if the flower row gets synced (or
-    // drifts further), this fails and the list has to be revisited rather than
-    // quietly outliving the problem.
-    const stored = getItemClass("flower");
-    expect(stored ? stored.actionIds : []).toEqual(["give_flower"]);
-    expect(ITEM_DEFINITIONS.flower.actionIds).toEqual([]);
+    expect(drifted).toEqual([]);
   });
 
   test("the repository holds at least the built-ins", () => {

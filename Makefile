@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run install outdated format format-check lint typecheck verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run install outdated format format-check lint typecheck test test-list verify
 
 # Server host configuration (can be overridden via environment variable)
 export SERVER_HOST ?= https://softagen.com
@@ -50,6 +50,15 @@ lint:
 
 typecheck:
 	npm run typecheck
+
+# Run every example's test modules on the server (POST /engine/run_tests).
+# Tests the *deployed* copy, so deploy first; needs `make oauth-login`.
+test:
+	npm run test
+
+# Show which scripts and test modules `make test` would run, calling nothing.
+test-list:
+	npm run test-list
 
 verify:
 	npm run verify

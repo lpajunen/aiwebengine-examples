@@ -46,6 +46,19 @@ make upload-virtual-world-dry-run   # dry run, no upload
 
 `SERVER_HOST` env var overrides the default server for all of the above (types/openapi/graphql fetch and uploads).
 
+### Tests
+
+```bash
+make test        # run every example's test modules on the server
+make test-list   # show which scripts and test modules would run, call nothing
+```
+
+A test module is an asset named `*.test.ts` (or .js/.jsx/.tsx) sitting beside the code it covers — see `src/virtual-world/assets/server/world-domain.test.ts`. `scripts/run-tests.js` scans `src/*/assets/` for them, then asks the server to run each owning script's suite via `POST /engine/run_tests`. Nothing runs locally: the engine executes the tests in the same sandbox that serves the script, so they exercise the real engine globals.
+
+It therefore tests the **deployed** copy. Deploy first (`make deploy-changed`) or a green run may be describing an older version of the file. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+
+Script URIs are derived from the directory name (`src/foo_bar` → `https://example.com/foo-bar`); exceptions live in `SCRIPT_URI_OVERRIDES` in `scripts/run-tests.js`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
+
 ## Architecture
 
 ### Script model

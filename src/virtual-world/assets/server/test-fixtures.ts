@@ -26,7 +26,11 @@ import {
   VWORLD_WORLD_PLACEMENT_TABLE,
   VWORLD_WORLD_TYPE_TABLE,
 } from "./runtime-config.ts";
-import { deleteWorldRowsWhere, runInWorldTransaction } from "./world-db.ts";
+import {
+  deleteWorldRowsWhere,
+  queryWorldRows,
+  runInWorldTransaction,
+} from "./world-db.ts";
 import { savePlayerPosition, savePlayerWorld } from "./player-persistence.ts";
 import { createWorldOfType, getEffectiveMap } from "./world-bootstrap.ts";
 import { isWorldTileWalkable } from "./world-domain.ts";
@@ -162,20 +166,66 @@ export function walkableRunFinder(
   };
 }
 
-/** Delete every row the fixtures created. Safe to call repeatedly. */
+let swept = false;
+
+/**
+ * Delete world-scoped rows whose world is gone, once per run.
+ *
+ * A world's contents are seeded by code that commits (world seeding does),
+ * while the world row itself is written by a fixture that does not — so a case
+ * whose cleanup is lost to the harness's rollback leaves items and NPCs behind
+ * with no world to belong to. Sweeping them here means a stray from an earlier
+ * run heals on the next one instead of accumulating in a live database.
+ */
+function sweepOrphanedWorldRows(): void {
+  if (swept) return;
+  swept = true;
+  const live: Record<string, boolean> = {};
+  queryWorldRows(VWORLD_WORLD_TYPE_TABLE, "{}", 1000, "id", "desc").forEach(
+    function (row) {
+      live[String(row.world_id || "")] = true;
+    },
+  );
+  for (let t = 0; t < WORLD_TABLES.length; t++) {
+    const table = WORLD_TABLES[t];
+    if (table === VWORLD_WORLD_TYPE_TABLE) continue;
+    const orphanWorlds: Record<string, boolean> = {};
+    queryWorldRows(table, "{}", 1000, "id", "desc").forEach(function (row) {
+      const worldId = String(row.world_id || "");
+      if (worldId && !live[worldId]) orphanWorlds[worldId] = true;
+    });
+    Object.keys(orphanWorlds).forEach(function (worldId) {
+      deleteWorldRowsWhere(table, JSON.stringify({ world_id: worldId }));
+    });
+  }
+}
+
+/**
+ * Delete every row the fixtures created. Safe to call repeatedly.
+ *
+ * The deletes run in a transaction of their own, and that is not decoration:
+ * code under test commits its writes (world seeding does), so those survive the
+ * run, while anything written — or deleted — outside a transaction is still
+ * inside the harness's and goes back when the run ends. An unwrapped delete
+ * therefore *looks* like it worked, right up until the rollback restores the
+ * rows it removed.
+ */
 export function cleanupTestData(): void {
-  for (let i = 0; i < createdUserIds.length; i++) {
-    const filters = JSON.stringify({ user_id: createdUserIds[i] });
-    for (let t = 0; t < PLAYER_TABLES.length; t++) {
-      deleteWorldRowsWhere(PLAYER_TABLES[t], filters);
+  runInWorldTransaction("test_cleanup", function () {
+    sweepOrphanedWorldRows();
+    for (let i = 0; i < createdUserIds.length; i++) {
+      const filters = JSON.stringify({ user_id: createdUserIds[i] });
+      for (let t = 0; t < PLAYER_TABLES.length; t++) {
+        deleteWorldRowsWhere(PLAYER_TABLES[t], filters);
+      }
     }
-  }
+    for (let i = 0; i < createdWorldIds.length; i++) {
+      const filters = JSON.stringify({ world_id: createdWorldIds[i] });
+      for (let t = 0; t < WORLD_TABLES.length; t++) {
+        deleteWorldRowsWhere(WORLD_TABLES[t], filters);
+      }
+    }
+  });
   createdUserIds.length = 0;
-  for (let i = 0; i < createdWorldIds.length; i++) {
-    const filters = JSON.stringify({ world_id: createdWorldIds[i] });
-    for (let t = 0; t < WORLD_TABLES.length; t++) {
-      deleteWorldRowsWhere(WORLD_TABLES[t], filters);
-    }
-  }
   createdWorldIds.length = 0;
 }

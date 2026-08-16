@@ -192,6 +192,13 @@ What the harness does not give (see
   rolled back. `test-fixtures.ts` spends that collision on an empty priming
   transaction before any fixture row exists, and every database-backed suite
   deletes its own rows in an `afterEach` rather than trusting the rollback.
+  Those deletes have to run in a transaction of their own: writes made by code
+  that commits (world seeding does) outlive the run, while an unwrapped delete
+  is still inside the harness's transaction and is undone with it — it looks
+  like it worked until the rollback puts the rows back. Because a case can
+  still lose its cleanup that way, the fixtures also sweep world-scoped rows
+  whose world no longer exists, once per run, so a stray heals on the next run
+  instead of accumulating.
 - **Rollback is DB-only** — asset writes, secret writes and outbound HTTP
   are real. No server module touches those today (classes live in DB rows),
   so nothing is off-limits for now; it becomes a constraint the moment one

@@ -10,12 +10,20 @@
 // `afterEach`, rather than trusting the rollback.
 
 import {
+  VWORLD_NPC_ACTIVE_WORLD_TABLE,
+  VWORLD_NPC_TABLE,
+  VWORLD_NPC_TICK_TABLE,
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
+  VWORLD_SPAWN_TIMER_TABLE,
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+  VWORLD_WORLD_MOD_TABLE,
+  VWORLD_WORLD_PLACEMENT_TABLE,
   VWORLD_WORLD_TYPE_TABLE,
 } from "./runtime-config.ts";
 import { deleteWorldRowsWhere, runInWorldTransaction } from "./world-db.ts";
@@ -32,6 +40,21 @@ const PLAYER_TABLES = [
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
   VWORLD_PLAYER_HEARTBEAT_TABLE,
+];
+
+// Everything a test world accumulates once something asks for its contents:
+// seeded items and their seed marker, NPCs and their tick bookkeeping, respawn
+// timers, materialized placements, and any tile a case modified.
+const WORLD_TABLES = [
+  VWORLD_WORLD_TYPE_TABLE,
+  VWORLD_WORLD_ITEM_TABLE,
+  VWORLD_WORLD_ITEM_META_TABLE,
+  VWORLD_WORLD_MOD_TABLE,
+  VWORLD_WORLD_PLACEMENT_TABLE,
+  VWORLD_NPC_TABLE,
+  VWORLD_NPC_ACTIVE_WORLD_TABLE,
+  VWORLD_NPC_TICK_TABLE,
+  VWORLD_SPAWN_TIMER_TABLE,
 ];
 
 const createdUserIds: string[] = [];
@@ -149,10 +172,10 @@ export function cleanupTestData(): void {
   }
   createdUserIds.length = 0;
   for (let i = 0; i < createdWorldIds.length; i++) {
-    deleteWorldRowsWhere(
-      VWORLD_WORLD_TYPE_TABLE,
-      JSON.stringify({ world_id: createdWorldIds[i] }),
-    );
+    const filters = JSON.stringify({ world_id: createdWorldIds[i] });
+    for (let t = 0; t < WORLD_TABLES.length; t++) {
+      deleteWorldRowsWhere(WORLD_TABLES[t], filters);
+    }
   }
   createdWorldIds.length = 0;
 }

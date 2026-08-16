@@ -147,17 +147,58 @@ mutation. Still missing:
 
 ### 10. Tests and observability
 
-**Today:** no test suite exists, and observability is `vwLog` lines only.
-Since item 7 removed dependency injection, a unit test now has to stand in
-for a module's imports rather than be handed fakes — which argues for
-testing the pure pieces first, where there is nothing to stand in for.
+**Today:** the runtime has a test harness — assets named `*.test.ts` beside
+the module they cover, run with `make test` (`POST /engine/run_tests`) — and
+three suites use it: `world-domain.test.ts` (pure domain helpers),
+`action-logic-interpreter.test.ts` (the interpreter that executes
+user-authored programs), and `move-player.test.ts` (the move endpoint,
+against the real database). Observability is still `vwLog` lines only.
 
-**Needed:** unit tests first for the code that silently regresses and is
-already pure — the action-logic interpreter (which executes user-authored
-programs), placement normalization/validation, the generation spec's passes,
-and targeting resolution. Then the stateful paths: move seq/lease logic and
-action costs/produces. Operationally: metrics (request rates, tick
-durations, DB error rates) and some tracing story from the runtime.
+The harness turned out to be stronger than this item originally assumed. A
+test does **not** have to stand in for a module's imports: the database is
+real and synchronous inside a case, and the run's writes are rolled back
+afterwards, so a case can create a world, place a player, call
+`movePlayerForUser`, and assert on the rows that came out. `Date.now` can be
+replaced and imported modules see the stub, which is how lease, heartbeat
+and timer logic gets tested without waiting. Handler-level code takes a
+plain `context` object, so route and tool handlers are directly callable.
+
+What the harness does not give (see
+[runtime capabilities](#capabilities-expected-from-the-runtime) item 10):
+
+- **No async**, so SSE delivery, scheduler-driven ticks and any concurrency
+  (two move leases racing, two tick leases racing) cannot be asserted — the
+  parts items 1–5 are about. Tick functions can still be called directly.
+- **Rollback is per run, not per case**: cases share one transaction, so
+  every case must mint its own ids and never assert on global row counts.
+- **Rollback is DB-only** — asset writes, secret writes and outbound HTTP
+  are real, so class CRUD paths that write assets must be avoided.
+- **No module stubbing**, no `beforeAll`/`afterAll`, no coverage, no
+  `only`/`skip` (the `filter` substring on the run is the only selector).
+- **No output channel**: `console.log` from a case goes nowhere, so the
+  assertion message has to carry the diagnosis. To print a value, fail on
+  purpose: `expect(JSON.stringify(report)).toBe("PRINT")`.
+- **No local run** — tests execute the deployed copy, so `make deploy-changed`
+  first or a green run describes an older file, and there is no CI gate that
+  does not deploy.
+- **No client-side testing at all**: `assets/public/client-*.js` has no
+  harness, which is the largest untested surface in the project.
+
+**Needed next**, in rough order — pure units where a regression is silent:
+placement normalization/validation (`world-placements.ts`), the reservation
+rules (`world-reservations.ts`), the generation spec's passes
+(`world-generation.ts`), targeting resolution (`action-registry.ts`, against
+[DESIGN-targeting.md](DESIGN-targeting.md)), map determinism
+(`world-map.ts`), and pursuit stepping (`pursuit-movement.ts`). Then the
+remaining stateful paths: item pick/drop/equip and container moves as an
+inventory-conservation check (item 3's integrity, expressed as a test),
+action costs/produces plus XP, class upsert/read-back/cache-refresh
+(including "every built-in seed row still exists", which is otherwise only
+caught in production), and spawn timers/NPC ticks driven by a stubbed clock.
+Handler contracts with fake contexts come last: unauthenticated shapes,
+creator-stone and owner-or-admin checks, and `schema-setup` idempotence.
+Operationally, unchanged: metrics (request rates, tick durations, DB error
+rates) and some tracing story from the runtime.
 
 ## Domain-model goals
 
@@ -307,6 +348,15 @@ primitives. Roughly in order of leverage:
    (e.g. `world_id`, `user_id`), and pagination beyond the fixed
    1000-row-limit query pattern, so hot queries like `loadWorldPlayers`
    scale past small worlds.
+10. **Test harness gaps** — the `*.test.ts` runner covers pure code and
+    DB-backed scenarios well (item 10). Missing, roughly in order of what
+    would buy the most: async cases (so SSE delivery and scheduled ticks can
+    be asserted at all), per-case rollback rather than per-run, a way to
+    drive two concurrent callers so lease and seq races can be tested, an
+    output channel from a case (today the only way to print is to fail an
+    assertion), and module stubbing for the few seams where a real DB is the
+    wrong tool. A local or CI-side runner would remove "deploy before you
+    can test"; a browser-side harness would reach `assets/public/`.
 
 ## What explicitly does _not_ need changing
 

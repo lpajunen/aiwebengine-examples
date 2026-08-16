@@ -193,7 +193,9 @@ What the harness does not give (see
   transaction before any fixture row exists, and every database-backed suite
   deletes its own rows in an `afterEach` rather than trusting the rollback.
 - **Rollback is DB-only** — asset writes, secret writes and outbound HTTP
-  are real, so class CRUD paths that write assets must be avoided.
+  are real. No server module touches those today (classes live in DB rows),
+  so nothing is off-limits for now; it becomes a constraint the moment one
+  does.
 - **No module stubbing**, no `beforeAll`/`afterAll`, no coverage, no
   `only`/`skip` (the `filter` substring on the run is the only selector).
 - **No output channel**: `console.log` from a case goes nowhere, so the

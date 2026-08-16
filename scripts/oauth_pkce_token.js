@@ -154,11 +154,11 @@ async function main() {
   console.log(`Discovering OAuth metadata from ${metadataUrl}`);
   const meta = await fetchJson(metadataUrl);
   const authorizationUrl = new URL(
-    meta.authorization_endpoint || "/oauth2/authorize",
+    meta.authorization_endpoint || "/engine/oauth2/authorize",
     issuer,
   ).toString();
   const tokenUrl = new URL(
-    meta.token_endpoint || "/oauth2/token",
+    meta.token_endpoint || "/engine/oauth2/token",
     issuer,
   ).toString();
   const registerUrl = meta.registration_endpoint

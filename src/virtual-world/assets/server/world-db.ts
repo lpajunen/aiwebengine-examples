@@ -90,15 +90,29 @@ export function deleteWorldRowsWhere(
     : 0;
 }
 
+// Depth of the transaction this execution has open. The engine's transactions
+// do not nest: a second `beginTransaction` starts nothing new, a `rollback`
+// from inside discards *everything* the transaction has done — including work
+// from before the inner begin — and the outer commit then reports "No active
+// transaction to commit". So only the outermost call may touch the API, and
+// every inner call joins the transaction that is already open. Pinned by
+// world-db.test.ts.
+let transactionDepth = 0;
+
 /**
- * Run fn inside a database transaction (or a savepoint when the handler is
- * already inside one). Fail-open: if the transaction cannot be started the
+ * Run fn inside a database transaction, joining the caller's transaction when
+ * one is already open. Fail-open: if the transaction cannot be started the
  * work still runs unwrapped — atomicity is lost but the game keeps working.
  * On exception the transaction is rolled back and the error rethrown; a
  * commit failure is logged (the runtime has already discarded the writes and
  * clients heal via resync).
  */
 export function runInWorldTransaction<T>(label: string, fn: () => T): T {
+  if (transactionDepth > 0) {
+    // Already inside one: run as part of it. An exception propagates to the
+    // outermost call, which owns the rollback.
+    return fn();
+  }
   let began = false;
   try {
     const beginResult = parseWorldDbResult(database.beginTransaction(5000));
@@ -117,9 +131,11 @@ export function runInWorldTransaction<T>(label: string, fn: () => T): T {
       error: String(e),
     });
   }
+  if (began) transactionDepth++;
   try {
     const result = fn();
     if (began) {
+      transactionDepth--;
       const commitResult = parseWorldDbResult(database.commitTransaction());
       if (commitResult && commitResult.error) {
         vwLog("transaction commit failed", {
@@ -131,6 +147,7 @@ export function runInWorldTransaction<T>(label: string, fn: () => T): T {
     return result;
   } catch (e) {
     if (began) {
+      transactionDepth--;
       try {
         database.rollbackTransaction();
       } catch (rollbackError) {

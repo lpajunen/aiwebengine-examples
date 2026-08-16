@@ -36,6 +36,9 @@ export function resolveApproachTargetTile(
   worldId: string,
   body: any,
 ): { row: number; col: number } | null {
+  // Number(null) is 0, so without this an empty body would resolve to tile
+  // (0, 0) and send the actor walking into the map's corner.
+  if (!body) return null;
   const livingId =
     body && body.target_living_id ? String(body.target_living_id) : "";
   if (livingId) {

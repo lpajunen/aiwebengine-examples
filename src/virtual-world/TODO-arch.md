@@ -149,10 +149,24 @@ mutation. Still missing:
 
 **Today:** the runtime has a test harness — assets named `*.test.ts` beside
 the module they cover, run with `make test` (`POST /engine/run_tests`) — and
-three suites use it: `world-domain.test.ts` (pure domain helpers),
-`action-logic-interpreter.test.ts` (the interpreter that executes
-user-authored programs), and `move-player.test.ts` (the move endpoint,
-against the real database). Observability is still `vwLog` lines only.
+eight suites use it: pure ones for the domain helpers
+(`world-domain.test.ts`), the interpreter that runs user-authored programs
+(`action-logic-interpreter.test.ts`), targeting resolution
+(`action-targeting.test.ts`), the generation spec
+(`world-generation.test.ts`) and placements (`world-placements.test.ts`);
+database-backed ones for the move endpoint (`move-player.test.ts`), pursuit
+stepping (`pursuit-movement.test.ts`) and the transaction helper
+(`world-db.test.ts`). `test-fixtures.ts` holds the shared world/player
+fixtures. Observability is still `vwLog` lines only.
+
+Writing them turned up two real defects, both now fixed and pinned:
+`allocateEventSeq` rolled back on failure while running inside a caller's
+transaction, which discarded the caller's writes (the engine has no
+savepoints, so an inner rollback discards the whole transaction);
+`runInWorldTransaction` now tracks depth and inner calls join the open
+transaction instead of opening or ending one. And
+`resolveApproachTargetTile` turned an absent body into tile (0, 0) via
+`Number(null)`, sending the actor to the map corner.
 
 The harness turned out to be stronger than this item originally assumed. A
 test does **not** have to stand in for a module's imports: the database is
@@ -171,6 +185,13 @@ What the harness does not give (see
   parts items 1–5 are about. Tick functions can still be called directly.
 - **Rollback is per run, not per case**: cases share one transaction, so
   every case must mint its own ids and never assert on global row counts.
+- **Rollback only holds until the code under test commits.** The first
+  script-level transaction of a run collides with the harness's own:
+  committing it discards everything the run has written so far (a case's
+  setup rows included), and everything written afterwards is real, not
+  rolled back. `test-fixtures.ts` spends that collision on an empty priming
+  transaction before any fixture row exists, and every database-backed suite
+  deletes its own rows in an `afterEach` rather than trusting the rollback.
 - **Rollback is DB-only** — asset writes, secret writes and outbound HTTP
   are real, so class CRUD paths that write assets must be avoided.
 - **No module stubbing**, no `beforeAll`/`afterAll`, no coverage, no
@@ -184,13 +205,10 @@ What the harness does not give (see
 - **No client-side testing at all**: `assets/public/client-*.js` has no
   harness, which is the largest untested surface in the project.
 
-**Needed next**, in rough order — pure units where a regression is silent:
-placement normalization/validation (`world-placements.ts`), the reservation
-rules (`world-reservations.ts`), the generation spec's passes
-(`world-generation.ts`), targeting resolution (`action-registry.ts`, against
-[DESIGN-targeting.md](DESIGN-targeting.md)), map determinism
-(`world-map.ts`), and pursuit stepping (`pursuit-movement.ts`). Then the
-remaining stateful paths: item pick/drop/equip and container moves as an
+**Needed next**, in rough order — the reservation rules
+(`world-reservations.ts`, which needs a world class with placements behind
+it) and map determinism (`world-map.ts`). Then the remaining stateful
+paths: item pick/drop/equip and container moves as an
 inventory-conservation check (item 3's integrity, expressed as a test),
 action costs/produces plus XP, class upsert/read-back/cache-refresh
 (including "every built-in seed row still exists", which is otherwise only
@@ -348,15 +366,25 @@ primitives. Roughly in order of leverage:
    (e.g. `world_id`, `user_id`), and pagination beyond the fixed
    1000-row-limit query pattern, so hot queries like `loadWorldPlayers`
    scale past small worlds.
-10. **Test harness gaps** — the `*.test.ts` runner covers pure code and
+10. **Transactions that nest** — `beginTransaction` documents "or create a
+    savepoint if already in a transaction", but a nested begin starts
+    nothing, a rollback from inside discards the entire transaction
+    (including work from before that begin), and the outer commit then
+    reports "No active transaction to commit". Real savepoints would let a
+    helper protect its own work without endangering its caller's; today
+    every helper has to know whether someone above it opened a transaction.
+11. **Test harness gaps** — the `*.test.ts` runner covers pure code and
     DB-backed scenarios well (item 10). Missing, roughly in order of what
-    would buy the most: async cases (so SSE delivery and scheduled ticks can
-    be asserted at all), per-case rollback rather than per-run, a way to
-    drive two concurrent callers so lease and seq races can be tested, an
-    output channel from a case (today the only way to print is to fail an
-    assertion), and module stubbing for the few seams where a real DB is the
-    wrong tool. A local or CI-side runner would remove "deploy before you
-    can test"; a browser-side harness would reach `assets/public/`.
+    would buy the most: a run-scoped rollback that survives the script
+    committing its own transactions (today the first commit ends the run's
+    rollback and everything after it is written for real), async cases (so
+    SSE delivery and scheduled ticks can be asserted at all), per-case
+    rather than per-run isolation, a way to drive two concurrent callers so
+    lease and seq races can be tested, an output channel from a case (today
+    the only way to print is to fail an assertion), and module stubbing for
+    the few seams where a real DB is the wrong tool. A local or CI-side
+    runner would remove "deploy before you can test"; a browser-side harness
+    would reach `assets/public/`.
 
 ## What explicitly does _not_ need changing
 

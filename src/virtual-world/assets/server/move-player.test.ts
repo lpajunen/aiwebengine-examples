@@ -1,15 +1,10 @@
 /**
  * Tests for the authoritative move endpoint.
  *
- * These run against the real database: the engine executes them in the same
- * sandbox that serves the script, and rolls the writes back when the run ends.
- * Every case therefore builds its own player in a world created for this run —
- * `newPlayer()` hands out a fresh user id, so cases never see each other's
- * rows even though they share one transaction.
- *
- * The world is created here rather than reusing the start world so the
- * `player_moved` events these moves broadcast go to a world no client is
- * watching.
+ * Database-backed: the engine executes them in the same sandbox that serves the
+ * script. Each case gets a world and players of its own from test-fixtures.ts
+ * and deletes them again afterwards — see that file for why the run's rollback
+ * is not enough on its own.
  */
 
 import { loadPlayerInventory } from "./item-storage.ts";
@@ -18,78 +13,41 @@ import {
   loadPlayerMoveLease,
   loadPlayerPosition,
   savePlayerMoveLease,
-  savePlayerPosition,
-  savePlayerWorld,
 } from "./player-persistence.ts";
-import { createWorldOfType, getEffectiveMap } from "./world-bootstrap.ts";
+import {
+  TestTile,
+  cleanupTestData,
+  createTestPlayer,
+  createTestWorld,
+  walkableRunFinder,
+} from "./test-fixtures.ts";
+import { getEffectiveMap } from "./world-bootstrap.ts";
 import { isWorldTileWalkable } from "./world-domain.ts";
 
-type Tile = { row: number; col: number };
-
 let worldId = "";
-let map: number[][] = [];
-let userCounter = 0;
+let walkableRun: (length: number) => TestTile[];
 
-/** Create the shared test world once, on first use. */
-function world(): string {
-  if (!worldId) {
-    worldId = createWorldOfType("forest", { rows: 24, cols: 24 }).world_id;
-    map = getEffectiveMap(worldId);
-  }
-  return worldId;
-}
+beforeEach(function () {
+  worldId = createTestWorld();
+  walkableRun = walkableRunFinder(worldId);
+});
 
-/**
- * Place a brand-new player at `start` with sequence `seq`, so the next move
- * the case sends must carry `seq + 1`.
- */
-function newPlayer(start: Tile, seq: number): string {
-  const userId = "test-move-" + ++userCounter + "-" + Date.now();
-  savePlayerWorld(userId, world());
-  savePlayerPosition(userId, world(), {
-    row: start.row,
-    col: start.col,
-    seq: seq,
-    rotation: 0,
-    session_id: "test-session",
-    ts: Date.now(),
-  });
-  return userId;
-}
+afterEach(function () {
+  cleanupTestData();
+});
 
-/** The first straight run of `length` walkable tiles, scanned row by row. */
-function walkableRun(length: number): Tile[] {
-  world();
-  for (let row = 0; row < map.length; row++) {
-    const cols = map[row] ? map[row].length : 0;
-    for (let col = 0; col + length <= cols; col++) {
-      let walkable = true;
-      for (let step = 0; step < length; step++) {
-        if (!isWorldTileWalkable(map[row][col + step])) {
-          walkable = false;
-          break;
-        }
-      }
-      if (walkable) {
-        const run: Tile[] = [];
-        for (let step = 0; step < length; step++) {
-          run.push({ row: row, col: col + step });
-        }
-        return run;
-      }
-    }
-  }
-  throw new Error("no walkable run of length " + length + " in the test world");
+function newPlayer(start: TestTile, seq: number): string {
+  return createTestPlayer(worldId, "move", start, seq);
 }
 
 /** A walkable tile that has an unwalkable tile directly beside it. */
-function walkableBesideBlocked(): { from: Tile; blocked: Tile } {
-  world();
+function walkableBesideBlocked(): { from: TestTile; blocked: TestTile } {
+  const map = getEffectiveMap(worldId);
   for (let row = 1; row < map.length - 1; row++) {
     const cols = map[row] ? map[row].length : 0;
     for (let col = 1; col < cols - 1; col++) {
       if (!isWorldTileWalkable(map[row][col])) continue;
-      const neighbours: Tile[] = [
+      const neighbours: TestTile[] = [
         { row: row - 1, col: col },
         { row: row + 1, col: col },
         { row: row, col: col - 1 },
@@ -211,7 +169,7 @@ describe("a batched move", () => {
     const result = movePlayerForUser(userId, {
       steps: [
         { row: run[1].row, col: run[1].col },
-        // Two tiles away from the previous step: not a single step.
+        // Several tiles away from the previous step: not a single step.
         { row: run[1].row + 5, col: run[1].col },
       ],
       seq: 1,
@@ -320,7 +278,7 @@ describe("a refused move", () => {
   test("refuses a batch beyond the cap instead of walking it", () => {
     const run = walkableRun(2);
     const userId = newPlayer(run[0], 0);
-    const steps: Tile[] = [];
+    const steps: TestTile[] = [];
     for (let i = 0; i < 61; i++) {
       steps.push({ row: run[1].row, col: run[1].col });
     }

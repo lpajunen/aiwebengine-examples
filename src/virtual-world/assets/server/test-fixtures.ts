@@ -96,12 +96,20 @@ export function testUserId(prefix: string): string {
  * is generated on every read, and private because the events a case triggers
  * are world-scoped: no client is watching this one.
  */
-export function createTestWorld(rows = 24, cols = 24): string {
+export function createTestWorld(
+  rows = 24,
+  cols = 24,
+  worldClassId?: string,
+): string {
   primeTransactions();
-  const worldId = createWorldOfType("forest", {
-    rows: rows,
-    cols: cols,
-  }).world_id;
+  const worldId = createWorldOfType(
+    "forest",
+    {
+      rows: rows,
+      cols: cols,
+    },
+    worldClassId,
+  ).world_id;
   createdWorldIds.push(worldId);
   return worldId;
 }

@@ -211,6 +211,14 @@ What the harness does not give (see
 - **No local run** — tests execute the deployed copy, so `make deploy-changed`
   first or a green run describes an older file, and there is no CI gate that
   does not deploy.
+- **Do not call a schema migration entry point from a test.**
+  `ensureWorldItemSchema` is 14 statements and 25 ms, but a case that also
+  called `ensureLateWorldDatabaseSchema` or `ensureWorldDatabaseSchema` ran
+  past the harness's 120-second budget — the same cost that keeps the full
+  migration behind a version marker in production. (Runs around that time also
+  hung and 503'd, which looked related; it was a Caddy fault, fixed by a server
+  restart.) `schema-setup.test.ts` exercises `runWorldSchemaStep` on individual
+  statements instead, which costs 17 ms and answers the question that matters.
 - **No client-side testing at all**: `assets/public/client-*.js` has no
   harness, which is the largest untested surface in the project.
 

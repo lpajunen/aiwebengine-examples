@@ -114,6 +114,16 @@ export function createTestWorld(
   return worldId;
 }
 
+/**
+ * Register a world the code under test created, so cleanup removes it too —
+ * `switchUserToNewWorld` and the portal actions make worlds of their own.
+ */
+export function trackTestWorld(worldId: string): string {
+  const id = String(worldId || "");
+  if (id && createdWorldIds.indexOf(id) === -1) createdWorldIds.push(id);
+  return id;
+}
+
 /** Place a tracked player at `start`, ready to be moved from sequence `seq`. */
 export function createTestPlayer(
   worldId: string,

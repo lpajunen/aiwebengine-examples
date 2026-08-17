@@ -12,6 +12,7 @@
 import {
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
+  VWORLD_NPC_TICK_LEASE_TABLE,
   VWORLD_NPC_TICK_TABLE,
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_INVENTORY_TABLE,
@@ -242,6 +243,12 @@ export function cleanupTestData(): void {
       for (let t = 0; t < WORLD_TABLES.length; t++) {
         deleteWorldRowsWhere(WORLD_TABLES[t], filters);
       }
+      // The tick lease is keyed by a string rather than a world_id column, so
+      // it is the one world-scoped row the loop above cannot reach.
+      deleteWorldRowsWhere(
+        VWORLD_NPC_TICK_LEASE_TABLE,
+        JSON.stringify({ lease_id: "npc_tick:" + createdWorldIds[i] }),
+      );
     }
   });
   createdUserIds.length = 0;

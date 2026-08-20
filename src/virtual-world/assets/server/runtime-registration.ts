@@ -1057,6 +1057,9 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageWorldClassesToolHandler",
   );
 
+  // virtual-world is the only script published on WORLD_HOST, so the bare root
+  // there should land on the welcome page rather than 404.
+  safeRegisterRoute("/", "rootRedirectHandler", "GET");
   safeRegisterAssetRoute("/virtual-world", "public/welcome.html");
   safeRegisterAssetRoute("/virtual-world/styles.css", "public/styles.css");
   safeRegisterAssetRoute("/virtual-world/app-state.js", "public/app-state.js");

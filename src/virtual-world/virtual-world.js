@@ -287,6 +287,7 @@ import {
   deleteWorldClassHandler as deleteWorldClassHandlerImpl,
 } from "./server/class-crud-handlers.ts";
 import {
+  rootRedirectHandler as rootRedirectHandlerImpl,
   getVirtualWorldPage as getVirtualWorldPageImpl,
   worldStateHandler as worldStateHandlerImpl,
   dialogueHandler as dialogueHandlerImpl,
@@ -457,6 +458,11 @@ function updateWorldClassHandler(context) {
 /** @param {*} context */
 function deleteWorldClassHandler(context) {
   return deleteWorldClassHandlerImpl(context);
+}
+
+/** @param {*} context */
+function rootRedirectHandler(context) {
+  return rootRedirectHandlerImpl(context);
 }
 
 /** @param {*} context */

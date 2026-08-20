@@ -49,6 +49,16 @@ import {
 } from "./world-domain.ts";
 
 /**
+ * Root route for the host virtual-world is published on (world.softagen.com):
+ * send visitors on to the welcome page instead of a 404.
+ *
+ * @param {*} context
+ */
+export function rootRedirectHandler(_context: any) {
+  return ResponseBuilder.redirect("/virtual-world");
+}
+
+/**
  * @param {*} context
  */
 export function getVirtualWorldPage(context: any) {

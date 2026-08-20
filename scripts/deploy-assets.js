@@ -22,14 +22,14 @@ require("dotenv").config();
 //   --dry-run             Print what would deploy, upload nothing
 //   --no-verify           Skip the sha256 read-back check
 // Env:
-//   SERVER_HOST (default: https://softagen.com)
+//   MANAGE_HOST (default: https://manage.softagen.com) - engine management API
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 
-const serverHost = process.env.SERVER_HOST || "https://softagen.com";
+const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 
 const DEFAULTS = {
@@ -166,7 +166,7 @@ function sha256(data) {
  */
 async function uploadScript(token, scriptUri, absPath) {
   const content = fs.readFileSync(absPath, "utf8");
-  const res = await fetch(`${serverHost}/engine/upsert_script`, {
+  const res = await fetch(`${manageHost}/engine/upsert_script`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -198,7 +198,7 @@ async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
   const localHash = sha256(bytes);
   const q = `script=${encodeURIComponent(scriptUri)}`;
 
-  const res = await fetch(`${serverHost}/engine/assets?${q}`, {
+  const res = await fetch(`${manageHost}/engine/assets?${q}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -223,7 +223,7 @@ async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
   }
 
   const readRes = await fetch(
-    `${serverHost}/engine/assets?${q}&asset=${encodeURIComponent(assetName)}`,
+    `${manageHost}/engine/assets?${q}&asset=${encodeURIComponent(assetName)}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!readRes.ok) {
@@ -303,7 +303,7 @@ async function main() {
   }
 
   console.log(
-    `${config.dryRun ? "[DRY RUN] " : ""}Deploying ${targets.length} file(s) to ${serverHost} (${config.scriptUri})`,
+    `${config.dryRun ? "[DRY RUN] " : ""}Deploying ${targets.length} file(s) to ${manageHost} (${config.scriptUri})`,
   );
   if (config.dryRun) {
     targets.forEach((t) =>

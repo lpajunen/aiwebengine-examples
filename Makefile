@@ -1,7 +1,12 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run install outdated format format-check lint typecheck test test-list verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck test test-list verify
 
-# Server host configuration (can be overridden via environment variable)
+# Host configuration (can be overridden via environment variables)
+# SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
+# serves the engine management API (/engine/...) and MCP (/mcp); WORLD_HOST is
+# the hostname the virtual-world example is published on.
 export SERVER_HOST ?= https://softagen.com
+export MANAGE_HOST ?= https://manage.softagen.com
+export WORLD_HOST ?= world.softagen.com
 
 # Default target: fetch types, OpenAPI, and GraphQL schema
 all:
@@ -32,6 +37,13 @@ deploy-changed:
 
 deploy-changed-dry-run:
 	node scripts/deploy-assets.js --dry-run $(FILES)
+
+# Publish virtual-world on WORLD_HOST (run once after deploying it; admin only)
+set-script-hosts:
+	npm run set-script-hosts
+
+set-script-hosts-dry-run:
+	npm run set-script-hosts-dry-run
 
 install:
 	npm run install

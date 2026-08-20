@@ -3,7 +3,8 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 
-const endpoint = process.env.SCHEMA_ENDPOINT || "https://softagen.com/graphql";
+const endpoint =
+  process.env.SCHEMA_ENDPOINT || "https://manage.softagen.com/graphql";
 let accessToken = process.env.OAUTH_TOKEN || process.env.BEARER_TOKEN;
 const cookie =
   process.env.GRAPHQL_COOKIE ||

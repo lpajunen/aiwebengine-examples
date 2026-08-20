@@ -24,7 +24,10 @@ This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` fo
 make upload-virtual-world
 ```
 
-Deploys `src/virtual-world/virtual-world.js` and assets from `src/virtual-world/assets/` to `https://softagen.com/`.
+Deploys `src/virtual-world/virtual-world.js` and assets from `src/virtual-world/assets/` through the
+management API at `https://manage.softagen.com/` (`MANAGE_HOST`). The deployed game is served from
+`https://world.softagen.com/virtual-world` (`WORLD_HOST`); other examples are served from
+`https://softagen.com/` (`SERVER_HOST`), the engine's default host.
 
 If you get `Token has expired`, re-authenticate first:
 
@@ -34,6 +37,12 @@ make upload-virtual-world
 ```
 
 A dry-run is available: `make upload-virtual-world-dry-run`.
+
+Publishing virtual-world on `world.softagen.com` is a one-time binding (administrators only):
+
+```bash
+make set-script-hosts        # or make set-script-hosts-dry-run to preview
+```
 
 Alternatively, use `aiwebengine-mcp` server tools for deployment and log retrieval when available.
 

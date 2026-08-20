@@ -1,9 +1,19 @@
 ---
 name: deploy-verify
-description: Deploy virtual-world to softagen.com and verify it works. Use after any code change to virtual-world, when asked to deploy/upload/verify, or when debugging why a deployed change misbehaves.
+description: Deploy virtual-world via manage.softagen.com and verify it on world.softagen.com. Use after any code change to virtual-world, when asked to deploy/upload/verify, or when debugging why a deployed change misbehaves.
 ---
 
-# Deploy and verify on softagen.com
+# Deploy via manage.softagen.com, verify on world.softagen.com
+
+The engine serves three hosts, and they are not interchangeable:
+
+- `https://manage.softagen.com` — the management API: everything under
+  `/engine/...`, plus `/mcp`, `/graphql` and OAuth. Deploys, log reads and
+  test runs go here. `/engine/*` **404s on softagen.com**.
+- `https://world.softagen.com` — where the virtual-world game is published;
+  verify the deployed game here.
+- `https://softagen.com` — the engine's default host for deployed solutions
+  (the other examples).
 
 softagen.com is nominally "production" but it is the owner's hobby/learning
 server and doubles as the test environment. **Always deploy there to test —
@@ -37,16 +47,17 @@ Bearer token for authenticated endpoints:
 TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('schemas/token.json','utf8')).access_token)")
 ```
 
-- Server up: `curl -s https://softagen.com/health` → 200.
-- Public pages/assets (no auth needed): `https://softagen.com/virtual-world`
-  → 200; spot-check changed static assets, e.g.
-  `curl -sI https://softagen.com/virtual-world/client-core.js` → 200 with
-  `content-type: application/javascript`.
+- Server up: `curl -s https://world.softagen.com/health` → 200.
+- Public pages/assets (no auth needed):
+  `https://world.softagen.com/virtual-world` → 200; spot-check changed static
+  assets, e.g.
+  `curl -sI https://world.softagen.com/virtual-world/client-core.js` → 200
+  with `content-type: application/javascript`.
 - **Script errors** (most important — catches transpilation/runtime failures):
 
   ```bash
   curl -s -H "Authorization: Bearer $TOKEN" \
-    "https://softagen.com/script_logs?uri=https://example.com/virtual-world"
+    "https://manage.softagen.com/engine/script_logs?uri=https://example.com/virtual-world"
   ```
 
   Look for FATAL/ERROR entries with timestamps (ms since epoch) _after_ the
@@ -54,21 +65,20 @@ TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('schemas/toke
   routes the change touched (curl the relevant `/virtual-world/...`
   endpoints), then re-fetch the logs.
 
-- General server logs: `GET https://softagen.com/api/logs` with the bearer
-  token (JSON array, newest first).
 - `/virtual-world/play` uses session-cookie auth: a CLI request gets a 302
   redirect even with a valid bearer token, and that 302 is itself the
   expected result. For UI/gameplay changes, ask the user to open
-  `https://softagen.com/virtual-world/play` in their browser and confirm.
+  `https://world.softagen.com/virtual-world/play` in their browser and
+  confirm.
 
 ## MCP server alternative
 
-`https://softagen.com/mcp` hosts an MCP server with tools for deploying,
+`https://manage.softagen.com/mcp` hosts an MCP server with tools for deploying,
 watching logs, and other testing. If it is connected in the current session
 (MCP tools available), prefer its log-watching tools over raw curl. It is
 not reachable via plain curl with the `schemas/token.json` bearer token —
 it requires its own MCP OAuth session, e.g.
-`claude mcp add --transport http softagen https://softagen.com/mcp` and
+`claude mcp add --transport http softagen https://manage.softagen.com/mcp` and
 authenticating via `/mcp`. The curl-based workflow above needs no MCP setup.
 
 ## If things break

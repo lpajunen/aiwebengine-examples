@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Scope
 
-This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server (default `https://softagen.com`) and export an `init()` function that registers HTTP routes, GraphQL resolvers, or streams. There is no local server to run — scripts execute remotely after upload.
+This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server and export an `init()` function that registers HTTP routes, GraphQL resolvers, or streams. There is no local server to run — scripts execute remotely after upload.
+
+Three hosts are involved, and they are not interchangeable:
+
+- **`MANAGE_HOST`** (default `https://manage.softagen.com`) — the management surface: the engine HTTP API under `/engine/...` (upload, assets, logs, tests), the MCP endpoint `/mcp`, the authenticated `/graphql` endpoint, and OAuth discovery. Every tooling script in `scripts/` talks to this host. `/engine/*` **404s on softagen.com**.
+- **`SERVER_HOST`** (default `https://softagen.com`) — the engine's default host for deployed solutions; where the example scripts' registered routes are served.
+- **`WORLD_HOST`** (default `world.softagen.com`) — the hostname the `virtual-world` example is published on, bound with `make set-script-hosts`.
 
 The primary development focus is **`src/virtual-world/`**, a multiplayer world/game example. Other directories under `src/` (`blog`, `feedback`, `chat_app`, `hello`, `mcp_tools_demo`, etc.) are small standalone single-file examples. Keep changes scoped to the relevant example directory unless explicitly asked to work across them.
 
@@ -38,13 +44,22 @@ make all                   # all of the above + format
 
 ```bash
 make oauth-login                    # re-authenticate if you get "Token has expired"
-make upload-virtual-world           # deploys virtual-world.js + assets/ to https://softagen.com
+make upload-virtual-world           # deploys virtual-world.js + assets/ via https://manage.softagen.com
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
-`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets`. There's a parallel `npm run upload-import-example` for `src/import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
+`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets`. There's a parallel `npm run upload-import-example` for `src/import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
 
-`SERVER_HOST` env var overrides the default server for all of the above (types/openapi/graphql fetch and uploads).
+The deployed virtual-world is served from `https://world.softagen.com/virtual-world`; the other examples from `https://softagen.com/<name>`.
+
+```bash
+make set-script-hosts               # bind virtual-world to WORLD_HOST (admin only, one-time)
+make set-script-hosts-dry-run       # preview
+```
+
+`scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/script_hosts?uri=…&hosts=…` (administrators only; `GET` reads the current binding, `DELETE` clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
+
+`MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi/graphql fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 
 ### Tests
 
@@ -106,9 +121,9 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 ### Repo layout
 
 - `src/` — one directory per example script; `virtual-world` is the actively developed one, others are static reference examples
-- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `fetch-graphql-schema.js`
+- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `set-script-hosts.js` (publish a script on a given host), `run-tests.js`, `fetch-graphql-schema.js`
 - `types/`, `apis/`, `schemas/` — fetched/gitignored metadata from the remote server (never hand-edit; regenerate via `make fetch-*`)
-- `schemas/token.json` — OAuth tokens, gitignored, never commit
+- `schemas/token.json` — OAuth tokens (issued by `MANAGE_HOST`), gitignored, never commit
 
 ## Security
 

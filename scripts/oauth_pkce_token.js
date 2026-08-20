@@ -1,14 +1,16 @@
 /// <reference types="node" />
 require("dotenv").config();
-// OAuth2 Authorization Code with PKCE helper for softagen.com
-// - Discovers endpoints via /.well-known/oauth-authorization-server
+// OAuth2 Authorization Code with PKCE helper for the AI Web Engine management API
+// - Discovers endpoints via <issuer>/.well-known/oauth-authorization-server
+//   (the discovered authorization/token endpoints may live on another host —
+//   the metadata document decides, not this script)
 // - Optionally performs dynamic client registration if CLIENT_ID not provided
 // - Launches a local HTTP callback server and opens default browser for login
 // - Exchanges authorization code for access token and saves to schemas/token.json
 // Usage:
 //   node scripts/oauth_pkce_token.js
 // Env:
-//   OAUTH_ISSUER (default: https://softagen.com)
+//   OAUTH_ISSUER (default: MANAGE_HOST, i.e. https://manage.softagen.com)
 //   OAUTH_CLIENT_ID (optional; if absent, tries dynamic registration)
 //   OAUTH_SCOPE (default: "openid")
 //   OAUTH_REDIRECT_PORT (default: 53134)
@@ -20,7 +22,10 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const issuer = process.env.OAUTH_ISSUER || "https://softagen.com";
+const issuer =
+  process.env.OAUTH_ISSUER ||
+  process.env.MANAGE_HOST ||
+  "https://manage.softagen.com";
 const metadataUrl = new URL(
   "/.well-known/oauth-authorization-server",
   issuer,
@@ -154,11 +159,11 @@ async function main() {
   console.log(`Discovering OAuth metadata from ${metadataUrl}`);
   const meta = await fetchJson(metadataUrl);
   const authorizationUrl = new URL(
-    meta.authorization_endpoint || "/engine/oauth2/authorize",
+    meta.authorization_endpoint || "/auth/oauth2/authorize",
     issuer,
   ).toString();
   const tokenUrl = new URL(
-    meta.token_endpoint || "/engine/oauth2/token",
+    meta.token_endpoint || "/auth/oauth2/token",
     issuer,
   ).toString();
   const registerUrl = meta.registration_endpoint

@@ -10,9 +10,21 @@ Deploy scripts using the deployer tool:
 cargo run --bin deployer --uri "https://example.com/blog" --file "src/blog.js"
 ```
 
-Or upload via the built-in editor at [https://softagen.com/editor](https://softagen.com/editor)
+Or upload via the built-in editor at [https://manage.softagen.com/editor](https://manage.softagen.com/editor)
 
 Or use MCP to upload scripts directly to your aiwebengine instance.
+
+## Hosts
+
+The engine serves three hosts:
+
+- `https://manage.softagen.com` — management surface: the engine HTTP API (`/engine/...`),
+  the MCP endpoint (`/mcp`), the authenticated GraphQL endpoint and OAuth. All deploys,
+  type/OpenAPI fetches and test runs go here (`MANAGE_HOST`).
+- `https://softagen.com` — the engine's default host for deployed solutions, where these
+  examples' routes are served (`SERVER_HOST`).
+- `https://world.softagen.com` — where the `virtual-world` example is published
+  (`WORLD_HOST`, bound with `make set-script-hosts`).
 
 ## Available Scripts
 
@@ -39,8 +51,8 @@ Or use MCP to upload scripts directly to your aiwebengine instance.
 
 For complete documentation, see:
 
-- [Example Scripts Reference](https://softagen.com/engine/docs/examples/index.md)
-- [Deployer Tool Guide](https://softagen.com/engine/docs/examples/deployer.md)
-- [MCP Tool Guide](https://softagen.com/engine/docs/mcp/index.md)
-- [Built-in Editor Guide](https://softagen.com/engine/docs/editor/index.md)
-- [aiwebengine Documentation](https://softagen.com/engine/docs/index.md)
+- [Example Scripts Reference](https://manage.softagen.com/engine/docs/examples/index.md)
+- [Deployer Tool Guide](https://manage.softagen.com/engine/docs/examples/deployer.md)
+- [MCP Tool Guide](https://manage.softagen.com/engine/docs/mcp/index.md)
+- [Built-in Editor Guide](https://manage.softagen.com/engine/docs/editor/index.md)
+- [aiwebengine Documentation](https://manage.softagen.com/engine/docs/index.md)

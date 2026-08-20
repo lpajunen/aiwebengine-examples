@@ -12,12 +12,14 @@ require("dotenv").config();
 //   --asset-prefix <prefix> Prefix to add to asset names (e.g., "docs/") (optional)
 //   --dry-run               Show what would be uploaded without actually uploading (optional)
 // Env:
-//   SERVER_HOST (default: https://softagen.com)
+//   MANAGE_HOST (default: https://manage.softagen.com) - engine management API
+//   SERVER_HOST (default: https://softagen.com) - where deployed solutions are served
 
 const fs = require("fs");
 const path = require("path");
 const { minimatch } = require("minimatch");
 
+const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const serverHost = process.env.SERVER_HOST || "https://softagen.com";
 
 /**
@@ -181,7 +183,7 @@ async function uploadScript(token, scriptPath, scriptUri, dryRun) {
     content: scriptContent,
   }).toString();
 
-  const response = await fetch(`${serverHost}/engine/upsert_script`, {
+  const response = await fetch(`${manageHost}/engine/upsert_script`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -260,7 +262,7 @@ async function uploadAsset(token, assetName, assetPath, scriptUri, dryRun) {
   const base64Content = content.toString("base64");
   const encodedScriptUri = encodeURIComponent(scriptUri);
   const response = await fetch(
-    `${serverHost}/engine/assets?script=${encodedScriptUri}`,
+    `${manageHost}/engine/assets?script=${encodedScriptUri}`,
     {
       method: "POST",
       headers: {
@@ -285,6 +287,30 @@ async function uploadAsset(token, assetName, assetPath, scriptUri, dryRun) {
   await response.json();
   console.log(`✓ Asset ${assetName} uploaded successfully`);
   return content.length;
+}
+
+/**
+ * Look up which host a script publishes on. Falls back to SERVER_HOST's hostname
+ * when the binding cannot be read (the endpoint is administrators-only).
+ * @param {string} token
+ * @param {string} scriptUri
+ * @returns {Promise<string>}
+ */
+async function publishedHost(token, scriptUri) {
+  const fallback = new URL(serverHost).host;
+  try {
+    const params = new URLSearchParams({ uri: scriptUri });
+    const response = await fetch(
+      `${manageHost}/engine/script_hosts?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return fallback;
+    const result = await response.json();
+    const hosts = result.publishedOn || result.hosts;
+    return Array.isArray(hosts) && hosts.length > 0 ? hosts[0] : fallback;
+  } catch (e) {
+    return fallback;
+  }
 }
 
 /**
@@ -343,7 +369,7 @@ async function main() {
     }
 
     const dryRunPrefix = config.dryRun ? "[DRY RUN] " : "";
-    console.log(`${dryRunPrefix}Uploading files to ${serverHost}...`);
+    console.log(`${dryRunPrefix}Uploading files to ${manageHost}...`);
     console.log("");
 
     let totalBytes = 0;
@@ -407,9 +433,8 @@ async function main() {
 
     if (!config.dryRun) {
       const scriptName = path.basename(scriptPath, ".js");
-      console.log(
-        `Visit ${serverHost}/engine/${scriptName} to see your changes.`,
-      );
+      const host = await publishedHost(token, config.scriptUri);
+      console.log(`Visit https://${host}/${scriptName} to see your changes.`);
     }
   } catch (err) {
     console.error("Error:", err instanceof Error ? err.message : String(err));

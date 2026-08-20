@@ -22,12 +22,12 @@ require("dotenv").config();
 //   --no-rollback       Keep the database writes the tests make
 //   --list              Print what would run, call nothing
 // Env:
-//   SERVER_HOST (default: https://softagen.com)
+//   MANAGE_HOST (default: https://manage.softagen.com) - engine management API
 
 const fs = require("fs");
 const path = require("path");
 
-const serverHost = process.env.SERVER_HOST || "https://softagen.com";
+const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 const srcDir = path.join(repoRoot, "src");
 
@@ -140,7 +140,7 @@ async function runTests(token, scriptUri, options) {
   });
   if (options.filter) query.set("filter", options.filter);
 
-  const res = await fetch(`${serverHost}/engine/run_tests?${query}`, {
+  const res = await fetch(`${manageHost}/engine/run_tests?${query}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -226,7 +226,7 @@ async function main() {
     return;
   }
 
-  console.log(`Running tests on ${serverHost}\n`);
+  console.log(`Running tests on ${manageHost}\n`);
   const token = loadToken();
   let failed = 0;
 
@@ -242,7 +242,7 @@ async function main() {
       // refusals — so an unparseable 404 is the route itself missing.
       console.log(
         status === 404
-          ? `    ✗ ${serverHost} has no /engine/run_tests — the server predates the test runner`
+          ? `    ✗ ${manageHost} has no /engine/run_tests — the server predates the test runner`
           : `    ✗ HTTP ${status}: ${body.slice(0, 200)}`,
       );
       failed++;

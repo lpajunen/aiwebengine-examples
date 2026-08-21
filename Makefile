@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate test test-list verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate eval test test-list verify
 
 # Host configuration (can be overridden via environment variables)
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
@@ -76,6 +76,19 @@ check-virtual-world:
 # is sent — assets/ modules still come from the server, so deploy those first.
 check-virtual-world-candidate:
 	npm run check-virtual-world-candidate
+
+# Evaluate a snippet inside virtual-world's sandbox (POST /engine/eval), for
+# reading a table or calling one server function without deploying a test.
+# Database writes roll back unless you pass ROLLBACK=false.
+#   make eval SRC='JSON.parse(database.query("vworld_npcs", "{}", 3))'
+#   make eval FILE=snippet.js
+# SRC is single-quoted in the recipe, so double quotes inside it are safe and
+# single quotes are not — use FILE for a snippet that needs them.
+# The snippet sees only what virtual-world.js itself imports — no `import`.
+eval:
+	@node scripts/eval-script.js $(if $(FILE),--file "$(FILE)") \
+	  $(if $(filter false,$(ROLLBACK)),--no-rollback) \
+	  $(if $(URI),--script-uri "$(URI)") $(if $(SRC),'$(SRC)')
 
 # Run every example's test modules on the server (POST /engine/run_tests).
 # Tests the *deployed* copy, so deploy first; needs `make oauth-login`.

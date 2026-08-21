@@ -1,7 +1,8 @@
 # Engine dev-support APIs — proposal
 
-Status: proposal. §1 has since shipped as `POST /engine/check` — see below.
-Everything else is still unimplemented on `MANAGE_HOST`.
+Status: proposal. §1 and §2 have since shipped, as `POST /engine/check` and
+`POST /engine/eval` — see below. Everything else is still unimplemented on
+`MANAGE_HOST`.
 
 Scope: engine-wide additions to the `/engine/...` management API and the
 `aiwebengine-mcp` tool set. The proposals are engine-level, but the motivating
@@ -95,9 +96,27 @@ semantics. In this repo those have each cost a debugging session:
 The `engine` check group is the novel part; `types`/`format`/`lint` are
 convenience parity with the local toolchain.
 
-## 2. `POST /engine/eval` — run a snippet in the script's sandbox
+## 2. `POST /engine/eval` — run a snippet in the script's sandbox — SHIPPED
 
-Addresses (2). Highest round-trip savings of anything here.
+Addresses (2). Implemented and verified working 2026-08-21; `make eval` calls
+it via `scripts/eval-script.js`.
+
+It shipped essentially as proposed, including the console capture and the
+rollback default. Verified: values come back structured with a `valueType`,
+`console` entries carry levels, `rollback=true` really rolls an insert back,
+`timeout_ms` is enforced to the millisecond (`"interrupted"`), a throw gives
+`ok: false` plus a stack at HTTP 200, and it works on virtual-world in ~0.15s
+because it does not run `init()`.
+
+**One limitation worth closing:** the snippet's scope is exactly the
+_entrypoint's_ top-level bindings plus engine globals, and `import` is not
+supported, static or dynamic. Against a deliberately thin entrypoint like
+virtual-world's that hides most of the codebase — `VWORLD_NPC_TABLE` resolves
+because `virtual-world.js` imports it, `VWORLD_PLAYER_POSITION_TABLE` does not.
+Letting a snippet import from the script's own asset modules would make this
+reach the whole server tree instead of one file's import list.
+
+The original proposal follows.
 
 ```
 POST /engine/eval?uri=…&rollback=true&timeout_ms=5000

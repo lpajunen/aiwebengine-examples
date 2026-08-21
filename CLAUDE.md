@@ -76,6 +76,23 @@ make check-virtual-world-candidate   # check the local entrypoint before deployi
 
 The report carries `diagnostics` (each with `severity`, `code`, `message`, `source`), an `init` block with the measured `durationMs` against the engine's `budgetMs`, and `registrations` — every route, stream, and tool the script would register. The `missing-handler` diagnostic is the one that matters most here: virtual-world's thin entrypoint delegates by name string, and this is what catches a delegate that was never defined.
 
+### Evaluating a snippet on the server
+
+```bash
+make eval SRC='JSON.parse(database.query("vworld_npcs", "{}", 3))'
+make eval FILE=snippet.js                # snippet from a file (needs single quotes, etc.)
+make eval SRC='…' ROLLBACK=false         # keep the database writes
+make eval SRC='…' URI=https://example.com/docs
+```
+
+`scripts/eval-script.js` posts a snippet to `POST /engine/eval`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+
+This replaces "write a `*.test.ts`, deploy it, run the suite, read the answer out of an assertion message" for one-off questions — reading a table, calling one server function, checking what a helper returns. Unlike `make check-virtual-world` it works fine on virtual-world, because eval does not run `init()`.
+
+**Scope:** the snippet sees the _entrypoint's_ top-level bindings plus the engine globals, and `import` is not supported (static or dynamic). For virtual-world that means only what `virtual-world.js` itself imports is reachable — `VWORLD_NPC_TABLE` yes, `VWORLD_PLAYER_POSITION_TABLE` no. Use the literal table name for anything the entrypoint does not import.
+
+`SRC` is single-quoted inside the recipe, so double quotes in a snippet are safe and single quotes are not — use `FILE` for those. `scripts/eval-script.js` additionally takes `--file -` (stdin), `--timeout <seconds>` and `--json`.
+
 ### Tests
 
 ```bash

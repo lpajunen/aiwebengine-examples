@@ -205,19 +205,48 @@ function builtInTileClass(classId: string): TileClassRecord | null {
   };
 }
 
+// True when every column this code would write already holds that value in
+// the stored row, so the upsert would be a no-op. Compares as strings because
+// the driver hands integer columns back inconsistently typed, and skips the
+// timestamps, which change on every write by construction. Only the desired
+// row's columns are examined — extra stored columns (id) are not ours to
+// judge. Fail-safe direction: anything unrecognized compares unequal and we
+// write, which is exactly the old behavior.
+function classRowMatchesStored(
+  desired: Record<string, unknown>,
+  stored: Record<string, unknown>,
+): boolean {
+  const keys = Object.keys(desired);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (key === "created_at" || key === "updated_at") continue;
+    if (String(desired[key]) !== String(stored[key])) return false;
+  }
+  return true;
+}
+
 export function bootstrapTileClasses(): void {
   const rows = loadAllTileClassRows();
   const cache: Record<string, TileClassRecord> = {};
+  const storedById: Record<string, any> = {};
   const now = Date.now();
   for (let i = 0; i < rows.length; i++) {
     const record = tileClassFromDbRow(rows[i]);
-    if (record.id) cache[record.id] = record;
+    if (record.id) {
+      cache[record.id] = record;
+      storedById[record.id] = rows[i];
+    }
   }
 
   // A built-in nobody owns is resynced to the code definition, so a changed
   // colour or a new field reaches rows seeded by an older deploy. A row an
   // admin has taken ownership of is theirs — the rule every other class
   // repository uses.
+  //
+  // The resync only writes when the stored row actually differs. It used to
+  // upsert all fourteen built-ins unconditionally on every bootstrap, which
+  // meant fourteen DB round-trips (~250ms) on every init for a table that had
+  // not changed since the last deploy.
   const ids = Object.keys(DEFAULT_TILE_CLASSES);
   let written = 0;
   for (let i = 0; i < ids.length; i++) {
@@ -231,7 +260,13 @@ export function bootstrapTileClasses(): void {
     }
     const record = builtInTileClass(ids[i]);
     if (!record) continue;
-    upsertTileClassRow(tileClassToDbRow(record, now));
+    const desiredRow = tileClassToDbRow(record, now);
+    const storedRow = storedById[record.id];
+    if (storedRow && classRowMatchesStored(desiredRow, storedRow)) {
+      cache[record.id] = record;
+      continue;
+    }
+    upsertTileClassRow(desiredRow);
     cache[record.id] = record;
     written++;
   }

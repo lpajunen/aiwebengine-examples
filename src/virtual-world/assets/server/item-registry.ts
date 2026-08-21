@@ -387,9 +387,64 @@ export function getActionDefinition(actionId: string | null | undefined) {
   return getActionClass(String(actionId || ""));
 }
 
+// KILL SWITCH — set true 2026-08-21 to stop an ongoing outage.
+//
+// vworld_action_classes is wedged on the deployed database: even
+// database.query(table, "{}", 1) hangs, where every other class table answers
+// in ~20ms. getAllActionIds() runs in init()'s FIRST phase, so that hang alone
+// is enough to blow the 10000ms budget and leave the script with no routes
+// registered at all.
+//
+// While this is true, the action repository is built entirely from the
+// built-in ACTION_DEFINITIONS and never touches the table — reads or writes.
+// The cost is that creator-defined action classes are invisible: they are
+// still stored, but nothing loads them, so a custom action will not fire and
+// the class editor will not list it. Built-in actions behave normally.
+//
+// Set back to false once the table answers a plain read again. Do not "fix"
+// this by writing to the table — a blocking write is what wedged the two
+// marker tables the same day.
+const SKIP_ACTION_CLASS_DB = true;
+
+// The action repository as the code defines it, with no database involved.
+function builtInActionClassCache(): Record<string, ActionClassRecord> {
+  const cache: Record<string, ActionClassRecord> = {};
+  const defKeys = Object.keys(ACTION_DEFINITIONS);
+  for (let i = 0; i < defKeys.length; i++) {
+    const def = ACTION_DEFINITIONS[defKeys[i]];
+    const record: ActionClassRecord = Object.assign(
+      { ownerIds: [], labels: {} },
+      def,
+    );
+    if (record.targeting === undefined) {
+      record.targeting = defaultTargetingForTargetKind(record.targetKind);
+    }
+    cache[record.id] = record;
+  }
+  return cache;
+}
+
+// Registration's view of the action list, and its only caller — init() calls
+// this from the register phase, before bootstrapActionClasses() runs.
+//
+// It deliberately does NOT use refreshActionClassCache(). That one loads *and*
+// backfills, so registration paid for a full table read plus the entire
+// backfill pass, and then bootstrapActionClasses() did the identical work
+// again milliseconds later. This is the read-only half; the bootstrap phase
+// owns the seeding and reuses the cache this leaves behind.
+//
+// The empty-cache fallback covers a database with no action rows yet (a
+// first-ever deploy): the enum must still name the built-ins, or the MCP tool
+// registers with no actions at all. Rows appear a few phases later when
+// bootstrapActionClasses() seeds them.
 export function getAllActionIds(): string[] {
-  if (!_actionClassCache) refreshActionClassCache();
-  return Object.keys(_actionClassCache as Record<string, ActionClassRecord>);
+  if (SKIP_ACTION_CLASS_DB) return Object.keys(ACTION_DEFINITIONS);
+  if (!_actionClassCache) reloadActionClassCache();
+  const ids = Object.keys(
+    _actionClassCache as Record<string, ActionClassRecord>,
+  );
+  if (ids.length > 0) return ids;
+  return Object.keys(ACTION_DEFINITIONS);
 }
 
 // Reverse index of action.sourceItemIds — which actions each item type grants
@@ -1680,23 +1735,44 @@ function backfillActionClassDefaults(
 }
 
 export function bootstrapActionClasses(): void {
-  const rows = loadAllActionClassRows();
+  if (SKIP_ACTION_CLASS_DB) {
+    _actionClassCache = builtInActionClassCache();
+    rebuildActionsBySourceItem(_actionClassCache);
+    return;
+  }
+  // Reuse the cache getAllActionIds() loaded during the register phase rather
+  // than reading the table a second time — the two reads are milliseconds
+  // apart in init(), and this table is the largest of the class repositories.
+  // Falls back to a read when nothing has loaded it yet (any caller outside
+  // init()'s ordering).
+  const preloaded = _actionClassCache;
   const cache: Record<string, ActionClassRecord> = {};
   const now = Date.now();
+  let existingCount = 0;
 
-  for (let i = 0; i < rows.length; i++) {
-    const record = actionClassFromDbRow(rows[i]);
-    if (record.id) cache[record.id] = record;
+  if (preloaded) {
+    const preloadedIds = Object.keys(preloaded);
+    for (let i = 0; i < preloadedIds.length; i++) {
+      cache[preloadedIds[i]] = preloaded[preloadedIds[i]];
+    }
+    existingCount = preloadedIds.length;
+  } else {
+    const rows = loadAllActionClassRows();
+    for (let i = 0; i < rows.length; i++) {
+      const record = actionClassFromDbRow(rows[i]);
+      if (record.id) cache[record.id] = record;
+    }
+    existingCount = rows.length;
   }
 
   const { inserted, patched } = backfillActionClassDefaults(cache, now);
-  if (rows.length === 0) {
+  if (existingCount === 0) {
     vwLog("action class repository seeded", { count: inserted });
   } else if (inserted > 0 || patched > 0) {
     vwLog("action class repository backfilled", {
       inserted_count: inserted,
       patched_count: patched,
-      existing_count: rows.length,
+      existing_count: existingCount,
     });
   }
 
@@ -1705,6 +1781,11 @@ export function bootstrapActionClasses(): void {
 }
 
 export function refreshActionClassCache(): void {
+  if (SKIP_ACTION_CLASS_DB) {
+    _actionClassCache = builtInActionClassCache();
+    rebuildActionsBySourceItem(_actionClassCache);
+    return;
+  }
   const rows = loadAllActionClassRows();
   const cache: Record<string, ActionClassRecord> = {};
   const now = Date.now();
@@ -1730,6 +1811,11 @@ export function refreshActionClassCache(): void {
  * source-item index too — it is part of the cache, not a separate thing.
  */
 export function reloadActionClassCache(): void {
+  if (SKIP_ACTION_CLASS_DB) {
+    _actionClassCache = builtInActionClassCache();
+    rebuildActionsBySourceItem(_actionClassCache);
+    return;
+  }
   const rows = loadAllActionClassRows();
   const cache: Record<string, ActionClassRecord> = {};
   for (let i = 0; i < rows.length; i++) {

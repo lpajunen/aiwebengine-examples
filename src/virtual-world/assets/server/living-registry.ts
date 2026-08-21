@@ -588,14 +588,35 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
   };
 }
 
+// See the identical helper in tile-registry.ts for why this compares as
+// strings and skips the timestamps. Deliberately duplicated rather than
+// shared: a common home for it would mean a new import edge between the class
+// repositories, and circular asset-backed imports are a FATAL in this engine.
+function classRowMatchesStored(
+  desired: Record<string, unknown>,
+  stored: Record<string, unknown>,
+): boolean {
+  const keys = Object.keys(desired);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (key === "created_at" || key === "updated_at") continue;
+    if (String(desired[key]) !== String(stored[key])) return false;
+  }
+  return true;
+}
+
 export function bootstrapLivingClasses(): void {
   const rows = loadAllLivingClassRows();
   const cache: Record<string, LivingClassRecord> = {};
+  const storedById: Record<string, any> = {};
   const now = Date.now();
 
   for (let i = 0; i < rows.length; i++) {
     const record = livingClassFromDbRow(rows[i]);
-    if (record.id) cache[record.id] = record;
+    if (record.id) {
+      cache[record.id] = record;
+      storedById[record.id] = rows[i];
+    }
   }
 
   // A built-in whose row nobody owns is resynced to the current code
@@ -622,7 +643,17 @@ export function bootstrapLivingClasses(): void {
       Array.isArray(existing.ownerIds) &&
       existing.ownerIds.length > 0;
     if (isOwned) continue;
-    upsertLivingClassRow(livingClassToDbRow(cls, now));
+    // Resync only when the stored row actually differs. This loop used to
+    // write all fourteen built-ins on every bootstrap — fourteen round-trips
+    // (~250ms) per init against a table that had not changed since the last
+    // deploy.
+    const desiredRow = livingClassToDbRow(cls, now);
+    const storedRow = storedById[classId];
+    if (storedRow && classRowMatchesStored(desiredRow, storedRow)) {
+      cache[classId] = cls;
+      continue;
+    }
+    upsertLivingClassRow(desiredRow);
     cache[classId] = cls;
     if (existing) {
       resynced++;

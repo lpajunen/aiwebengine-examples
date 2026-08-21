@@ -99,7 +99,24 @@ export const VWORLD_EVENT_SEQ_TABLE = "vworld_event_seqs";
 // Marker table recording which schema revision has been fully applied, so
 // init() can skip the ~200 idempotent DDL round-trips in schema-setup.ts on
 // every process start. See ensureWorldDatabaseSchema().
-export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_version";
+//
+// Two earlier names are POISONED on the deployed database and must never be
+// used again: vworld_schema_version and vworld_schema_meta. Both now hang on
+// plain reads, so ensureSchemaVersionTable()'s DDL blocks against them and
+// init() dies with "FATAL Init timeout (10000ms + 5000ms grace)", registering
+// no routes at all.
+//
+// What wedges a marker relation is a marker WRITE that blocks rather than
+// failing fast. vworld_schema_version survived weeks of four instances doing
+// per-init DDL against it while its write failed instantly on integer
+// overflow; it died within minutes of that write being "fixed" to succeed,
+// and vworld_schema_meta died the same way on the same day. So until the
+// write path is understood, this table exists only to be read and DDL'd, and
+// recordSchemaVersion is expected to keep failing fast. That means the guard
+// never holds and the migration list still runs every init — the ~2.1s cost
+// this table was introduced to remove is still being paid. Fixing that needs
+// the blocking-write question answered first, not another rename.
+export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // BUMP THIS whenever any DDL in schema-setup.ts changes — a new table, column,
 // or index. The migration list is skipped entirely while the persisted marker
 // matches this number, so a forgotten bump means the new column is never

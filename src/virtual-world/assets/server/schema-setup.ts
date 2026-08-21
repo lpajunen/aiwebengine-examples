@@ -640,7 +640,30 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
   });
 }
 
+// KILL SWITCH — set true 2026-08-21 to stop an ongoing outage, leave it true
+// until the locks below are cleared server-side.
+//
+// Every init() was dying with "FATAL Init timeout (10000ms + 5000ms grace)"
+// and registering no routes. The cause is self-reinforcing: an init killed
+// part-way through the migration list leaks whatever DDL lock it was holding,
+// so the next init blocks a little earlier and is killed in turn. Renaming the
+// marker table does not help once this starts — the blocked relations are the
+// ordinary game tables, not the marker.
+//
+// The schema is fully applied at VWORLD_SCHEMA_VERSION 13 and has been for
+// weeks, so running the list adds nothing on this database; it is only there
+// for a cold one. Skipping it is what the version marker was supposed to
+// achieve anyway, minus the marker table nobody can write to.
+//
+// Before setting this back to false: clear the stuck locks, confirm a plain
+// read of vworld_schema_version answers (it hangs today), and understand why a
+// marker write blocks rather than failing fast. A cold database needs this
+// false to build its schema at all — the lazy ensureWorldItemSchema() and
+// friends only cover a few tables.
+const SKIP_SCHEMA_MIGRATION_ON_INIT = true;
+
 export function ensureWorldDatabaseSchema(): void {
+  if (SKIP_SCHEMA_MIGRATION_ON_INIT) return;
   if (schemaVersionIsCurrent("world")) return;
   ensureSchemaVersionTable();
   runWorldDatabaseMigration();
@@ -1528,6 +1551,8 @@ export function ensureChatDatabaseSchema(collector?: Array<any>): void {
   // A collector means a caller wants every step reported back, so run the list
   // unconditionally for it; the version gate is only for the init() fast path.
   if (!collector) {
+    // See SKIP_SCHEMA_MIGRATION_ON_INIT above — same outage, same reasoning.
+    if (SKIP_SCHEMA_MIGRATION_ON_INIT) return;
     if (schemaVersionIsCurrent("chat")) return;
     ensureSchemaVersionTable();
     runChatDatabaseMigration(undefined);

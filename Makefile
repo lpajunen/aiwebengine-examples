@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck test test-list verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate test test-list verify
 
 # Host configuration (can be overridden via environment variables)
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
@@ -62,6 +62,20 @@ lint:
 
 typecheck:
 	npm run typecheck
+
+# Ask the server what virtual-world would do if deployed (POST /engine/check).
+# Catches what the local toolchain cannot see: circular asset-backed imports,
+# route handler names the entrypoint never defines, and an init() over budget.
+# Checks the *deployed* copy; needs `make oauth-login`.
+# KNOWN: this currently times out on virtual-world itself — its init() calls the
+# schema migration entry points, which stall the check sandbox. See CLAUDE.md.
+check-virtual-world:
+	npm run check-virtual-world
+
+# Same, but check the local entrypoint before deploying it. Only the entrypoint
+# is sent — assets/ modules still come from the server, so deploy those first.
+check-virtual-world-candidate:
+	npm run check-virtual-world-candidate
 
 # Run every example's test modules on the server (POST /engine/run_tests).
 # Tests the *deployed* copy, so deploy first; needs `make oauth-login`.

@@ -11,6 +11,8 @@
     "upload-import-example": "node scripts/upload-script.js --script-path src/import_example/import_example.ts --script-uri https://example.com/import-example --assets-dir src/import_example/assets",
     "set-script-hosts": "node scripts/set-script-hosts.js --script-uri https://example.com/virtual-world --hosts ${WORLD_HOST:-world.softagen.com}",
     "set-script-hosts-dry-run": "node scripts/set-script-hosts.js --script-uri https://example.com/virtual-world --hosts ${WORLD_HOST:-world.softagen.com} --dry-run",
+    "check-virtual-world": "node scripts/check-script.js",
+    "check-virtual-world-candidate": "node scripts/check-script.js --candidate",
     "test": "node scripts/run-tests.js",
     "test-list": "node scripts/run-tests.js --list",
     "outdated": "npm outdated || echo '✓ Checked for outdated packages'",

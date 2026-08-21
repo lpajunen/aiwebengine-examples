@@ -61,6 +61,21 @@ make set-script-hosts-dry-run       # preview
 
 `MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi/graphql fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 
+### Checking a script on the server
+
+```bash
+make check-virtual-world             # POST /engine/check for the deployed copy
+make check-virtual-world-candidate   # check the local entrypoint before deploying
+```
+
+`scripts/check-script.js` asks the engine what the script would do if deployed: it runs `init()` in a sandbox (database writes rolled back unless you pass `--no-rollback`) and reports diagnostics. It catches what `make format lint typecheck` structurally cannot — circular asset-backed imports (which `tsc` accepts and the engine FATALs on), route handler names the entrypoint never defines, and an `init()` over the engine's startup budget. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+
+`--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — modules under `assets/` still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
+
+**Known limitation — this cannot currently check virtual-world itself.** Its `init()` calls the schema migration entry points (`ensureWorldDatabaseSchema`, `ensureChatDatabaseSchema`) and those stall the check sandbox indefinitely, the same way they blow the test harness's budget. Every other phase of virtual-world's `init()` passes in about a second, and the other deployed scripts check in ~0.2s, so the target and the endpoint are both sound — the migration entry points are the blocker. Until that is fixed server-side, `make check-virtual-world` times out (default 60s, `--timeout` to change).
+
+The report carries `diagnostics` (each with `severity`, `code`, `message`, `source`), an `init` block with the measured `durationMs` against the engine's `budgetMs`, and `registrations` — every route, stream, and tool the script would register. The `missing-handler` diagnostic is the one that matters most here: virtual-world's thin entrypoint delegates by name string, and this is what catches a delegate that was never defined.
+
 ### Tests
 
 ```bash

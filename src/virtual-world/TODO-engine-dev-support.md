@@ -141,8 +141,10 @@ Notes:
 
 ## 3. `POST /engine/assets/batch` — atomic multi-file write — SHIPPED
 
-Addresses (3). Implemented and verified 2026-08-22; `scripts/deploy-assets.js`
-(`make deploy-changed`) now sends every asset in one batch.
+Addresses (3). Implemented and verified 2026-08-22; both uploaders now use it —
+`scripts/deploy-assets.js` (`make deploy-changed`) and `scripts/upload-script.js`
+(`make upload-virtual-world`), so the ~70-re-init full push described above is
+gone: virtual-world's 103 assets go up as one 2.1 MB request and one `init()`.
 
 It shipped as proposed, with `mimetype` added per file, `script` accepted in
 the body as well as the query string, and `written` plus `timestamp` alongside
@@ -155,12 +157,21 @@ rather than merely echoed; identical content comes back `status: "unchanged"`
 with `written: 0`; and `reinit: "never"` reports `init: { ran: false, reason:
 "reinit=never" }`.
 
-`deploy-assets.js` uses that last switch to get a mixed change down to exactly
-one `init()`: when the entrypoint is part of the same push the batch asks for
-`reinit=never` and the trailing `upsert_script` supplies the init, so the new
-modules and the new entrypoint are never initialized apart. That also closes
-the non-atomicity window the per-file loop had, where a scheduler tick could
-observe a half-uploaded tree.
+Both uploaders use that last switch to get down to exactly one `init()`.
+`deploy-assets.js` asks for `reinit=never` when the entrypoint is part of the
+same push and lets the trailing `upsert_script` supply the init, so the new
+modules and the new entrypoint are never initialized apart. `upload-script.js`
+chunks a large tree under a payload cap and marks every chunk but the last
+`reinit=never`, so the init never runs against a tree still missing files.
+Both close the non-atomicity window the per-file loop had, where a scheduler
+tick could observe a half-uploaded tree.
+
+The one ordering constraint: assets carry a foreign key to the script row, so
+a batch against a URI that does not exist yet fails on
+`fk_assets_script_uri`. `upsert_script` has to come first for a new script,
+which is why a full bundle push costs two `init()`s (one from the script
+upsert, one from the batch) rather than one — `upsert_script` has no
+`reinit` switch of its own. Worth adding if §3 gets a follow-up.
 
 **What it does not close:** content is still inline base64 only, so this is
 worth little without §4 — a one-line change to a 900-line module still ships

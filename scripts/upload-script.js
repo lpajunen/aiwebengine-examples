@@ -3,6 +3,15 @@
 require("dotenv").config();
 // Generic script and asset uploader for the server
 // Requires authentication token from schemas/token.json (run `make oauth-login` first)
+//
+// Assets go up through POST /engine/assets/batch rather than one request each:
+// a single-asset write invalidates the script's prepared program, so writing a
+// 100-file tree one file at a time made every cluster instance reinitialize the
+// script 100 times, each from a tree still being uploaded. Large trees are split
+// into chunks that stay under MAX_BATCH_BYTES, and every chunk but the last asks
+// for reinit=never, so the whole tree lands before the one init() that follows.
+// The script itself must be upserted first — assets carry a foreign key to it,
+// so a brand-new URI has nowhere to hang them.
 // Usage:
 //   node scripts/upload-script.js --script-path <path> --script-uri <uri> [options]
 // Options:
@@ -17,10 +26,15 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { minimatch } = require("minimatch");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const serverHost = process.env.SERVER_HOST || "https://softagen.com";
+
+// Cap on the base64 payload of one batch request. Bigger trees are chunked so a
+// single request never has to carry an unbounded body.
+const MAX_BATCH_BYTES = 4 * 1024 * 1024;
 
 /**
  * Parse command-line arguments
@@ -238,55 +252,142 @@ function getMimeType(filename) {
 }
 
 /**
- * Upload an asset file
- * @param {string} token
- * @param {string} assetName - The asset name (e.g., "editor.css" or "docs/guides/scripts.md")
- * @param {string} assetPath - Local file path to read
- * @param {string} scriptUri - The script URI
- * @param {boolean} dryRun
- * @returns {Promise<number>} - Size in bytes
+ * @param {Buffer | string} data
+ * @returns {string}
  */
-async function uploadAsset(token, assetName, assetPath, scriptUri, dryRun) {
-  const content = await fs.promises.readFile(assetPath);
-  const mimetype = getMimeType(assetName);
+function sha256(data) {
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+/**
+ * Split files into batches whose base64 payloads stay under MAX_BATCH_BYTES.
+ * A single file over the cap still gets its own batch — there is nothing
+ * smaller to split it into.
+ * @param {Array<{ name: string, base64: string, bytes: number, hash: string }>} files
+ * @returns {Array<Array<{ name: string, base64: string, bytes: number, hash: string }>>}
+ */
+function chunkBatches(files) {
+  /** @type {Array<Array<{ name: string, base64: string, bytes: number, hash: string }>>} */
+  const chunks = [];
+  /** @type {Array<{ name: string, base64: string, bytes: number, hash: string }>} */
+  let current = [];
+  let size = 0;
+  for (const file of files) {
+    if (current.length > 0 && size + file.base64.length > MAX_BATCH_BYTES) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(file);
+    size += file.base64.length;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Upload every asset via POST /engine/assets/batch. Each batch is one
+ * transaction: a rejected file means nothing in that batch was written.
+ * @param {string} token
+ * @param {Array<{ name: string, path: string }>} assets
+ * @param {string} scriptUri
+ * @param {boolean} dryRun
+ * @returns {Promise<number>} - Total size in bytes
+ */
+async function uploadAssets(token, assets, scriptUri, dryRun) {
+  const files = [];
+  for (const asset of assets) {
+    const content = await fs.promises.readFile(asset.path);
+    files.push({
+      name: asset.name,
+      base64: content.toString("base64"),
+      bytes: content.length,
+      hash: sha256(content),
+    });
+  }
+  const totalBytes = files.reduce((sum, f) => sum + f.bytes, 0);
+  const batches = chunkBatches(files);
 
   if (dryRun) {
-    console.log(
-      `[DRY RUN] Would upload asset ${assetName} (${content.length} bytes, ${mimetype})`,
+    files.forEach((f) =>
+      console.log(
+        `[DRY RUN] Would upload asset ${f.name} (${f.bytes} bytes, ${getMimeType(f.name)})`,
+      ),
     );
-    return content.length;
+    console.log(
+      `[DRY RUN] ${files.length} asset(s) in ${batches.length} batch request(s)`,
+    );
+    return totalBytes;
   }
 
-  console.log(`Uploading asset ${assetName} (${content.length} bytes)...`);
-
-  const base64Content = content.toString("base64");
-  const encodedScriptUri = encodeURIComponent(scriptUri);
-  const response = await fetch(
-    `${manageHost}/engine/assets?script=${encodedScriptUri}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        asset: assetName,
-        mimetype: mimetype,
-        content: base64Content,
-      }),
-    },
+  console.log(
+    `Uploading ${files.length} asset(s) in ${batches.length} batch request(s)...`,
   );
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `Failed to upload asset ${assetName}: ${response.status} ${response.statusText}\n${text}`,
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const last = i === batches.length - 1;
+    const response = await fetch(
+      `${manageHost}/engine/assets/batch?script=${encodeURIComponent(scriptUri)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          files: batch.map((f) => ({
+            name: f.name,
+            mimetype: getMimeType(f.name),
+            content_base64: f.base64,
+            sha256: f.hash,
+          })),
+          // Hold the init() until the last chunk, so it never runs against a
+          // tree that is still missing files.
+          reinit: last ? "after" : "never",
+        }),
+      },
     );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Failed to upload asset batch ${i + 1}/${batches.length} (nothing in it was written): ${response.status} ${response.statusText}\n${text}`,
+      );
+    }
+
+    const result = await response.json();
+    /** @type {Map<string, { sha256?: string }>} */
+    const byName = new Map();
+    for (const r of result.results || []) byName.set(r.name, r);
+    for (const f of batch) {
+      const echoed = byName.get(f.name);
+      if (!echoed) {
+        throw new Error(`Asset ${f.name} missing from batch results`);
+      }
+      if (echoed.sha256 && echoed.sha256 !== f.hash) {
+        throw new Error(
+          `Asset ${f.name} sha256 mismatch (local ${f.hash.slice(0, 12)} != server ${String(echoed.sha256).slice(0, 12)})`,
+        );
+      }
+    }
+    console.log(
+      `✓ Batch ${i + 1}/${batches.length}: ${batch.length} asset(s), ${formatBytes(batch.reduce((sum, f) => sum + f.bytes, 0))} — sha256 verified`,
+    );
+
+    const init = result.init;
+    if (init && init.ran === false) {
+      console.log(`  · no init() (${init.reason || "not run"})`);
+    } else if (init && init.success === false) {
+      throw new Error(`init() failed after upload: ${init.error || "unknown"}`);
+    } else if (init) {
+      console.log(
+        `  · init() ok${init.durationMs != null ? ` (${init.durationMs} ms)` : ""}`,
+      );
+    }
   }
 
-  await response.json();
-  console.log(`✓ Asset ${assetName} uploaded successfully`);
-  return content.length;
+  return totalBytes;
 }
 
 /**
@@ -409,20 +510,18 @@ async function main() {
       if (assetFiles.length === 0) {
         console.log("No assets found to upload");
       } else {
-        for (const relPath of assetFiles) {
-          const assetPath = path.join(assetsDir, relPath);
+        const assets = assetFiles.map((relPath) => ({
           // Normalize path separators to forward slashes for asset names
-          const normalizedPath = relPath.split(path.sep).join("/");
-          const assetName = config.assetPrefix + normalizedPath;
-          totalBytes += await uploadAsset(
-            token,
-            assetName,
-            assetPath,
-            config.scriptUri,
-            config.dryRun,
-          );
-          assetCount++;
-        }
+          name: config.assetPrefix + relPath.split(path.sep).join("/"),
+          path: path.join(assetsDir, relPath),
+        }));
+        totalBytes += await uploadAssets(
+          token,
+          assets,
+          config.scriptUri,
+          config.dryRun,
+        );
+        assetCount = assets.length;
       }
     }
 

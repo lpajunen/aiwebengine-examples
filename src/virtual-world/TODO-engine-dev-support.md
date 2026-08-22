@@ -1,8 +1,8 @@
 # Engine dev-support APIs — proposal
 
-Status: proposal. §1, §2 and §3 have since shipped, as `POST /engine/check`,
-`POST /engine/eval` and `POST /engine/assets/batch` — see below. Everything
-else is still unimplemented on `MANAGE_HOST`.
+Status: proposal. §1, §2, §3 and §4 have since shipped, as `POST /engine/check`,
+`POST /engine/eval`, `POST /engine/assets/batch` and `PATCH /engine/assets` —
+see below. Everything else is still unimplemented on `MANAGE_HOST`.
 
 Scope: engine-wide additions to the `/engine/...` management API and the
 `aiwebengine-mcp` tool set. The proposals are engine-level, but the motivating
@@ -173,11 +173,11 @@ which is why a full bundle push costs two `init()`s (one from the script
 upsert, one from the batch) rather than one — `upsert_script` has no
 `reinit` switch of its own. Worth adding if §3 gets a follow-up.
 
-**What it does not close:** content is still inline base64 only, so this is
-worth little without §4 — a one-line change to a 900-line module still ships
-the whole file. Whether it makes MCP-only deploys practical depends on the
-`aiwebengine-mcp` tool set exposing batch; only the REST endpoint has been
-verified here.
+**What it did not close, and §4 since did:** batch content is inline base64
+only, so a one-line change to a 900-line module still shipped the whole file.
+`PATCH /engine/assets` closes that. Whether it makes MCP-only deploys practical
+still depends on the `aiwebengine-mcp` tool set exposing batch and patch; only
+the REST endpoints have been verified here.
 
 The original proposal follows.
 
@@ -192,9 +192,70 @@ can verify without a read-back round trip. This is what makes MCP-only deploys
 practical; today the batching lives in `scripts/deploy-assets.js` and therefore
 requires a checkout.
 
-## 4. `PATCH /engine/assets` — edit without resending the file
+## 4. `PATCH /engine/assets` — edit without resending the file — SHIPPED
 
-Addresses (4).
+Addresses (4). Implemented and verified 2026-08-22, against
+`server/world-domain.ts` (1392 lines, 49305 bytes) on virtual-world.
+
+It shipped as proposed, plus two things the proposal did not ask for:
+
+- **`base_sha256`**, an optional precondition on the stored content. A
+  mismatch is **409** and writes nothing, so an edit is a change to a known
+  version rather than to whatever happens to be stored — the concurrent-write
+  answer the proposal had none for.
+- **`reinit: "after" | "never"`**, matching the batch switch, so a run of edits
+  across several modules can collapse to one `init()` instead of one per file.
+
+The paired scoped read shipped too: `lines=120-180` (also `120-` and `120`) and
+`grep=<regex>`, which answers with matching line numbers and `match_count`
+instead of the file. Both read forms also return the whole-file `sha256`, which
+is exactly what feeds the next call's `base_sha256`, so the read → edit loop
+closes without a separate round trip.
+
+Verified: a `grep` for `export function` returned 51 numbered matches and
+`total_lines` without transferring the module; a real edit reported
+`replacements: 1` with bytes 49305 → 49317 and `init: { ran: false, reason:
+"reinit=never" }`; the revert restored the file **byte-exact** with
+`init: { ran: true, success: true, durationMs: 652 }`. `replace_all: true`
+counted exactly the 51 sites `grep` had predicted and reverted byte-exact.
+
+The failure modes all reject cleanly and write **nothing** — sha256 confirmed
+unmoved after each:
+
+- an `old_string` that is not present → 400
+- an `old_string` matching 51 times without `replace_all` → 400, naming the
+  count and telling the caller to add surrounding text or pass `replace_all`
+- a stale `base_sha256` → 409, echoing both expected and stored digests
+- a multi-edit batch whose second edit is bogus → 400, and the valid first edit
+  is **not** applied, so `edits` is atomic. The error reads "as the earlier
+  edits left it", so edits apply sequentially, each against the previous one's
+  output — same semantics as a local multi-edit.
+- an identity edit (`old_string == new_string`) → 400 rather than a silent no-op
+
+Why it matters here, measured: across the last 40 commits, 88 asset-file edits
+changed 7685 lines in files totalling 71873 lines — about **11%** of a touched
+file. Seven assets exceed 49 KB (`tree-action-helpers.ts` 88 KB,
+`client-editors.js` 85 KB). Every one of those edits used to ship whole, so
+roughly 89% of each push was retransmitted unchanged bytes.
+
+Note the win lands on the MCP/agent path, not on the `Makefile` loop:
+`make deploy-changed` already sends only changed _files_ in one batched
+transaction, so a local session was never paying the whole-file cost twice.
+§4 is what makes a **server-side** edit loop cost about what a local `Edit`
+costs.
+
+**Unrelated finding, worth a decision.** Asset reads on virtual-world need no
+authentication at all — `GET /engine/assets` returns 200 with no token and with
+a garbage one. That predates §4 and `grep=` leaks nothing a whole-file download
+did not, but it does upgrade anonymous access from "fetch the file" to "search
+the tree", which is a different thing to have pointed at a script that may
+carry embedded credentials.
+
+One rough edge: an out-of-range `lines=99999-100000` answers 200 with empty
+content and `end_line` clamped to `total_lines` (below `start_line`), rather
+than the 400 the spec's "unreadable range" suggests.
+
+The original proposal follows.
 
 ```
 PATCH /engine/assets?script=…&asset=server/move-player.ts
@@ -324,16 +385,25 @@ lease and respawn timing.
 | —    | §2 `POST /engine/eval`         | shipped                         |
 | —    | §1 `POST /engine/check`        | shipped                         |
 | —    | §3 `POST /engine/assets/batch` | shipped                         |
-| 1    | §4 `PATCH /engine/assets`      | editing affordably over MCP     |
-| 2    | §6 log filtering and tail      | debugging ticks and streams     |
-| 3    | §5 versions and snapshots      | working unattended against prod |
-| 4    | §7–§12                         | incremental                     |
+| —    | §4 `PATCH /engine/assets`      | shipped                         |
+| 1    | §6 log filtering and tail      | debugging ticks and streams     |
+| 2    | §5 versions and snapshots      | working unattended against prod |
+| 3    | §7–§12                         | incremental                     |
 
-The three shipped endpoints removed the round trip of deploying code just to
-ask the server a question, and made a multi-file push one atomic init. §4 is
-now the last piece of "edit affordably over MCP": batch made pushing many files
-cheap, but every file in the batch is still a whole-file rewrite. Ranks 2 and 3
-then make working that way safe.
+The four shipped endpoints close "edit affordably over MCP" end to end: `check`
+and `eval` removed the round trip of deploying code just to ask the server a
+question, `batch` made a multi-file push one atomic init, and `patch` made each
+file in that push cost its diff instead of its size. What remains is not
+capability but safety — a session can now edit prod from the server side
+faster than it can see what it did. §5 (versions and snapshots) is the real
+counterweight and arguably now outranks §6: `base_sha256` prevents clobbering a
+write you did not see, but nothing yet lets you undo one you did.
+
+The remaining gap in the shipped set is reach, not affordance. `eval` cannot
+`import` the script's own modules, `check` swaps in candidate content only for
+the entrypoint, and neither `batch` nor `patch` is confirmed to be exposed
+through `aiwebengine-mcp` — so an MCP-only session may still be unable to
+reach any of this.
 
 ## Out of scope — stays local
 

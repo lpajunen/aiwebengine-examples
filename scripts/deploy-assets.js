@@ -8,6 +8,14 @@ require("dotenv").config();
 // It talks to the same REST endpoints the MCP asset tools wrap, using the
 // regular OAuth token from schemas/token.json (run `make oauth-login` first).
 //
+// Assets go up in a single POST /engine/assets/batch: one transaction, one
+// init(). Writing them one at a time invalidates the prepared program per
+// file, so every cluster instance reinitializes the script once per file from
+// a tree that is still being uploaded. When the entrypoint is part of the same
+// change the batch asks for reinit=never and the trailing upsert_script
+// supplies the one init(), so the new modules and the new entrypoint are
+// always initialized together.
+//
 // Usage:
 //   node scripts/deploy-assets.js [options] [file ...]
 //
@@ -20,7 +28,8 @@ require("dotenv").config();
 //   --assets-dir <path>   Assets root           (default src/virtual-world/assets)
 //   --script-path <path>  Entrypoint script     (default src/virtual-world/virtual-world.js)
 //   --dry-run             Print what would deploy, upload nothing
-//   --no-verify           Skip the sha256 read-back check
+//   --no-verify           Skip the sha256 read-back check (the batch write
+//                         still sends a per-file sha256 the server verifies)
 // Env:
 //   MANAGE_HOST (default: https://manage.softagen.com) - engine management API
 
@@ -185,43 +194,17 @@ async function uploadScript(token, scriptUri, absPath) {
 }
 
 /**
- * Upsert one asset (POST /engine/assets) and optionally verify with a GET read-back.
+ * Read one asset back (GET /engine/assets) and compare its bytes to the local
+ * copy. The batch write already had the server verify the sha256 we supplied
+ * against what it received; this additionally proves what it stored.
  * @param {string} token
  * @param {string} scriptUri
  * @param {string} assetName
- * @param {string} absPath
- * @param {boolean} verify
- * @returns {Promise<boolean>} true when uploaded (and verified, if enabled)
+ * @param {string} localHash
+ * @returns {Promise<boolean>}
  */
-async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
-  const bytes = fs.readFileSync(absPath);
-  const localHash = sha256(bytes);
+async function verifyAsset(token, scriptUri, assetName, localHash) {
   const q = `script=${encodeURIComponent(scriptUri)}`;
-
-  const res = await fetch(`${manageHost}/engine/assets?${q}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      asset: assetName,
-      mimetype: mimeFor(assetName),
-      content: bytes.toString("base64"),
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `asset ${assetName} failed: ${res.status} ${res.statusText}\n${await res.text()}`,
-    );
-  }
-  await res.json();
-
-  if (!verify) {
-    console.log(`  ✓ ${assetName} (${bytes.length} B, unverified)`);
-    return true;
-  }
-
   const readRes = await fetch(
     `${manageHost}/engine/assets?${q}&asset=${encodeURIComponent(assetName)}`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -242,8 +225,107 @@ async function uploadAsset(token, scriptUri, assetName, absPath, verify) {
     );
     return false;
   }
-  console.log(`  ✓ ${assetName} (${bytes.length} B, sha256 verified)`);
   return true;
+}
+
+/**
+ * Upsert every asset in one request (POST /engine/assets/batch). The batch is
+ * one transaction: on a rejected file nothing is written at all.
+ * @param {string} token
+ * @param {string} scriptUri
+ * @param {Array<{ abs: string, name: string }>} assets
+ * @param {"after" | "never"} reinit
+ * @param {boolean} verify
+ * @returns {Promise<number>} number of files that failed verification
+ */
+async function uploadAssets(token, scriptUri, assets, reinit, verify) {
+  const local = assets.map((a) => {
+    const bytes = fs.readFileSync(a.abs);
+    return { name: a.name, bytes, hash: sha256(bytes) };
+  });
+
+  const res = await fetch(
+    `${manageHost}/engine/assets/batch?script=${encodeURIComponent(scriptUri)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        files: local.map((f) => ({
+          name: f.name,
+          mimetype: mimeFor(f.name),
+          content_base64: f.bytes.toString("base64"),
+          sha256: f.hash,
+        })),
+        reinit,
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      `asset batch failed (nothing written): ${res.status} ${res.statusText}\n${await res.text()}`,
+    );
+  }
+  const body = await res.json();
+
+  /** @type {Map<string, { sha256?: string, bytes?: number, status?: string }>} */
+  const byName = new Map();
+  for (const r of body.results || []) byName.set(r.name, r);
+
+  let failures = 0;
+  for (const f of local) {
+    const result = byName.get(f.name);
+    if (!result) {
+      console.error(`  ✗ ${f.name} MISSING from batch results`);
+      failures++;
+      continue;
+    }
+    if (result.sha256 && result.sha256 !== f.hash) {
+      console.error(
+        `  ✗ ${f.name} SHA MISMATCH (local ${f.hash.slice(0, 12)} != server ${String(result.sha256).slice(0, 12)})`,
+      );
+      failures++;
+      continue;
+    }
+    const state = result.status === "unchanged" ? "unchanged" : "written";
+    if (!verify) {
+      console.log(`  ✓ ${f.name} (${f.bytes.length} B, ${state})`);
+      continue;
+    }
+    const ok = await verifyAsset(token, scriptUri, f.name, f.hash);
+    if (!ok) failures++;
+    else
+      console.log(
+        `  ✓ ${f.name} (${f.bytes.length} B, ${state}, sha256 verified)`,
+      );
+  }
+
+  reportInit(body.init, `batch of ${local.length} asset(s)`);
+  return failures;
+}
+
+/**
+ * @param {{ ran?: boolean, success?: boolean, durationMs?: number,
+ *   error?: string | null, reason?: string } | undefined} init
+ * @param {string} what
+ * @returns {void}
+ */
+function reportInit(init, what) {
+  if (!init) return;
+  if (init.ran === false) {
+    console.log(`  · no init() after ${what} (${init.reason || "not run"})`);
+    return;
+  }
+  if (init.success === false) {
+    throw new Error(
+      `init() failed after ${what}: ${init.error || "unknown error"}`,
+    );
+  }
+  console.log(
+    `  · init() ok after ${what}${init.durationMs != null ? ` (${init.durationMs} ms)` : ""}`,
+  );
 }
 
 /**
@@ -315,20 +397,26 @@ async function main() {
   }
 
   const token = loadToken();
+  const scriptTarget = targets.find((t) => t.isScript);
+  /** @type {Array<{ abs: string, name: string }>} */
+  const assetTargets = targets
+    .filter((t) => !t.isScript)
+    .map((t) => ({ abs: t.abs, name: /** @type {string} */ (t.name) }));
+
   let failures = 0;
-  for (const t of targets) {
-    if (t.isScript) {
-      await uploadScript(token, config.scriptUri, t.abs);
-    } else {
-      const ok = await uploadAsset(
-        token,
-        config.scriptUri,
-        /** @type {string} */ (t.name),
-        t.abs,
-        config.verify,
-      );
-      if (!ok) failures++;
-    }
+  if (assetTargets.length > 0) {
+    // With an entrypoint in the same change, hold the init() until it lands so
+    // the new modules and the new entrypoint initialize together — one init().
+    failures += await uploadAssets(
+      token,
+      config.scriptUri,
+      assetTargets,
+      scriptTarget ? "never" : "after",
+      config.verify,
+    );
+  }
+  if (scriptTarget) {
+    await uploadScript(token, config.scriptUri, scriptTarget.abs);
   }
 
   console.log("");

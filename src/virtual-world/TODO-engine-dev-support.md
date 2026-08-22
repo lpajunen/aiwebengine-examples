@@ -1,8 +1,8 @@
 # Engine dev-support APIs — proposal
 
-Status: proposal. §1 and §2 have since shipped, as `POST /engine/check` and
-`POST /engine/eval` — see below. Everything else is still unimplemented on
-`MANAGE_HOST`.
+Status: proposal. §1, §2 and §3 have since shipped, as `POST /engine/check`,
+`POST /engine/eval` and `POST /engine/assets/batch` — see below. Everything
+else is still unimplemented on `MANAGE_HOST`.
 
 Scope: engine-wide additions to the `/engine/...` management API and the
 `aiwebengine-mcp` tool set. The proposals are engine-level, but the motivating
@@ -54,16 +54,14 @@ candidate content in the request body, answering the open question below — a
 check can run before the code is deployed. The `checks=` grouping and the
 prettier/lint parity described below did not ship and may not need to.
 
-**Open defect blocking its use here:** the check cannot run against
-virtual-world. Bisecting `init()` phase by phase against the live endpoint puts
-it on the two schema migration entry points — `ensureWorldDatabaseSchema` and
-`ensureChatDatabaseSchema` stall the sandbox indefinitely, while
-`registerVirtualWorldRuntimeImpl` (1.5s), `bootstrapTileClassesImpl` (1.1s),
-the full 35-import module graph (1.3s), and a lone `database.createTable`
-(49ms) all pass. Other deployed scripts check in ~0.2s. This is the same
-limitation already recorded for `*.test.ts` — migration entry points cannot run
-in these sandboxes — so fixing it once would unblock both. Until then the
-target exists but times out on the one script that most needs it.
+**The defect recorded here is resolved.** The check used to time out on
+virtual-world, and bisecting `init()` put it on the two schema migration entry
+points — `ensureWorldDatabaseSchema` and `ensureChatDatabaseSchema` appeared to
+stall the sandbox indefinitely. That diagnosis was wrong: they were blocking on
+wedged database relations, not on a sandbox limitation, and recreating the
+server cleared it. `make check-virtual-world` now answers in well under a
+second (`init()` 542ms of the 10000ms budget, no diagnostics). If it hangs
+again, suspect the database rather than the endpoint.
 
 The original proposal follows.
 
@@ -141,9 +139,36 @@ Notes:
 - Owner-or-administrator only, same authorization as `run_tests`.
 - Console capture is the point as much as the return value.
 
-## 3. `POST /engine/assets/batch` — atomic multi-file write
+## 3. `POST /engine/assets/batch` — atomic multi-file write — SHIPPED
 
-Addresses (3).
+Addresses (3). Implemented and verified 2026-08-22; `scripts/deploy-assets.js`
+(`make deploy-changed`) now sends every asset in one batch.
+
+It shipped as proposed, with `mimetype` added per file, `script` accepted in
+the body as well as the query string, and `written` plus `timestamp` alongside
+the proposed response fields. Verified against virtual-world: a 2-file write
+answers in ~1s with a single `init: { ran: true, success: true, durationMs:
+834 }`; a batch containing one malformed entry returns 400 and writes
+_nothing_ (the valid sibling 404s on read-back, so the transaction claim
+holds); a wrong `sha256` is rejected the same way, so the digest is checked
+rather than merely echoed; identical content comes back `status: "unchanged"`
+with `written: 0`; and `reinit: "never"` reports `init: { ran: false, reason:
+"reinit=never" }`.
+
+`deploy-assets.js` uses that last switch to get a mixed change down to exactly
+one `init()`: when the entrypoint is part of the same push the batch asks for
+`reinit=never` and the trailing `upsert_script` supplies the init, so the new
+modules and the new entrypoint are never initialized apart. That also closes
+the non-atomicity window the per-file loop had, where a scheduler tick could
+observe a half-uploaded tree.
+
+**What it does not close:** content is still inline base64 only, so this is
+worth little without §4 — a one-line change to a 900-line module still ships
+the whole file. Whether it makes MCP-only deploys practical depends on the
+`aiwebengine-mcp` tool set exposing batch; only the REST endpoint has been
+verified here.
+
+The original proposal follows.
 
 ```
 POST /engine/assets/batch?script=…
@@ -283,19 +308,21 @@ lease and respawn timing.
 
 ## Priority
 
-| Rank | Proposal                      | What it unblocks                |
-| ---- | ----------------------------- | ------------------------------- |
-| 1    | §2 `POST /engine/eval`        | inspection without deploying    |
-| 2    | §1 `POST /engine/check`       | the mandatory local step        |
-| 3    | §3 + §4 batch write and patch | editing affordably over MCP     |
-| 4    | §6 log filtering and tail     | debugging ticks and streams     |
-| 5    | §5 versions and snapshots     | working unattended against prod |
-| 6    | §7–§12                        | incremental                     |
+| Rank | Proposal                       | What it unblocks                |
+| ---- | ------------------------------ | ------------------------------- |
+| —    | §2 `POST /engine/eval`         | shipped                         |
+| —    | §1 `POST /engine/check`        | shipped                         |
+| —    | §3 `POST /engine/assets/batch` | shipped                         |
+| 1    | §4 `PATCH /engine/assets`      | editing affordably over MCP     |
+| 2    | §6 log filtering and tail      | debugging ticks and streams     |
+| 3    | §5 versions and snapshots      | working unattended against prod |
+| 4    | §7–§12                         | incremental                     |
 
-The first three ranks remove the mandatory local step, remove the round trip of
-deploying code just to ask the server a question, and make asset editing cheap
-enough to work entirely through MCP. Ranks 4 and 5 then make working that way
-safe.
+The three shipped endpoints removed the round trip of deploying code just to
+ask the server a question, and made a multi-file push one atomic init. §4 is
+now the last piece of "edit affordably over MCP": batch made pushing many files
+cheap, but every file in the batch is still a whole-file rewrite. Ranks 2 and 3
+then make working that way safe.
 
 ## Out of scope — stays local
 

@@ -72,7 +72,7 @@ make check-virtual-world-candidate   # check the local entrypoint before deployi
 
 `--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — modules under `assets/` still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
 
-**Known limitation — this cannot currently check virtual-world itself.** Its `init()` calls the schema migration entry points (`ensureWorldDatabaseSchema`, `ensureChatDatabaseSchema`) and those stall the check sandbox indefinitely, the same way they blow the test harness's budget. Every other phase of virtual-world's `init()` passes in about a second, and the other deployed scripts check in ~0.2s, so the target and the endpoint are both sound — the migration entry points are the blocker. Until that is fixed server-side, `make check-virtual-world` times out (default 60s, `--timeout` to change).
+**This used to time out on virtual-world and no longer does.** The schema migration entry points appeared to stall the check sandbox indefinitely; they were in fact blocking on wedged database relations, which were cleared by recreating the server. A check now answers in well under a second (`init()` ~591ms of the 10000ms budget). If it hangs again, suspect the database rather than the endpoint.
 
 The report carries `diagnostics` (each with `severity`, `code`, `message`, `source`), an `init` block with the measured `durationMs` against the engine's `budgetMs`, and `registrations` — every route, stream, and tool the script would register. The `missing-handler` diagnostic is the one that matters most here: virtual-world's thin entrypoint delegates by name string, and this is what catches a delegate that was never defined.
 
@@ -92,6 +92,25 @@ This replaces "write a `*.test.ts`, deploy it, run the suite, read the answer ou
 **Scope:** the snippet sees the _entrypoint's_ top-level bindings plus the engine globals, and `import` is not supported (static or dynamic). For virtual-world that means only what `virtual-world.js` itself imports is reachable — `VWORLD_NPC_TABLE` yes, `VWORLD_PLAYER_POSITION_TABLE` no. Use the literal table name for anything the entrypoint does not import.
 
 `SRC` is single-quoted inside the recipe, so double quotes in a snippet are safe and single quotes are not — use `FILE` for those. `scripts/eval-script.js` additionally takes `--file -` (stdin), `--timeout <seconds>` and `--json`.
+
+### Recreating the server
+
+The database comes back empty. Almost everything rebuilds itself on the first `init()` after a deploy:
+
+- **Schema** — `init()` compares a persisted marker against `VWORLD_SCHEMA_VERSION` and runs the full migration when it does not match (~250 DDL round trips, ~3s cold, 157ms warm). The marker is written only after the list completes, so an init killed part-way retries on the next start. Bump `VWORLD_SCHEMA_VERSION` in `runtime-config.ts` whenever DDL changes.
+- **Classes** — tile/item/action/living/world classes seed unconditionally in their own init phases.
+- **Start world** — the Birdhaven row is created lazily on the first page load.
+
+**The one manual step: admins.** `vworld_admins` has no route and no MCP tool by design (see `admin-storage.ts`), so a fresh server has no administrators until rows are inserted directly. Owner-scoped permissions still cover classes a user creates; only the built-in classes need admin. Re-add each id with:
+
+```bash
+node scripts/eval-script.js --no-rollback \
+  'database.upsert("vworld_admins", JSON.stringify(["user_id"]), JSON.stringify({user_id: "<uuid>", created_at: Math.floor(Date.now()/1000)}))'
+```
+
+`created_at` must be **seconds**. Integer columns here are 32-bit, so a `Date.now()` millisecond value is rejected with `integer out of range` — and that rejection aborts the surrounding transaction, taking unrelated writes down with it.
+
+Two switches can defeat all of the above; both should normally be `false`. `SKIP_SCHEMA_MIGRATION_ON_INIT` (`schema-setup.ts`) skips both migration lists, which leaves a cold database with no schema at all. `SKIP_ACTION_CLASS_DB` (`item-registry.ts`) hides creator-defined action classes.
 
 ### Tests
 

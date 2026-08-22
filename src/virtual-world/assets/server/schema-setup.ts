@@ -247,7 +247,7 @@ function ensureSchemaVersionTable(): void {
 // True when this scope's migration list has already run to completion at the
 // current version. Fail-open: any doubt (missing marker table, unreadable row,
 // older version) re-runs the idempotent list rather than skipping it.
-function schemaVersionIsCurrent(scope: "world" | "chat"): boolean {
+export function schemaVersionIsCurrent(scope: "world" | "chat"): boolean {
   const rows = queryWorldRows(
     VWORLD_SCHEMA_VERSION_TABLE,
     JSON.stringify({ scope: scope }),
@@ -259,11 +259,15 @@ function schemaVersionIsCurrent(scope: "world" | "chat"): boolean {
   return Number(rows[0].version) === VWORLD_SCHEMA_VERSION;
 }
 
-function recordSchemaVersion(scope: "world" | "chat"): void {
+export function recordSchemaVersion(scope: "world" | "chat"): void {
   const result = upsertWorldRow(VWORLD_SCHEMA_VERSION_TABLE, ["scope"], {
     scope: scope,
     version: VWORLD_SCHEMA_VERSION,
-    applied_at: Date.now(),
+    // Seconds, not Date.now() milliseconds: ~1.79e12 overflows the 32-bit
+    // INTEGER column and the write fails. That is why the marker never went
+    // current for weeks — every start re-ran the whole list and paid ~3s for
+    // it. Same stored-seconds convention as every other *_ts column here.
+    applied_at: Math.floor(Date.now() / 1000),
   });
   if (!result || result.error) {
     // Non-fatal: the next start just pays for the migration list again.
@@ -640,52 +644,46 @@ export function ensureLateWorldDatabaseSchema(collector?: Array<any>): void {
   });
 }
 
-// KILL SWITCH — set true 2026-08-21 to stop an ongoing outage, leave it true
-// until the locks below are cleared server-side.
+// ESCAPE HATCH — normally false. Set true only to stop an outage where the
+// migration itself is what is killing init(); a cold database started this way
+// builds no schema at all, so nothing works and the recovery is manual.
 //
-// Every init() was dying with "FATAL Init timeout (10000ms + 5000ms grace)"
-// and registering no routes. The cause is self-reinforcing: an init killed
-// part-way through the migration list leaks whatever DDL lock it was holding,
-// so the next init blocks a little earlier and is killed in turn. Renaming the
-// marker table does not help once this starts — the blocked relations are the
-// ordinary game tables, not the marker.
-//
-// The schema is fully applied at VWORLD_SCHEMA_VERSION 13 and has been for
-// weeks, so running the list adds nothing on this database; it is only there
-// for a cold one. Skipping it is what the version marker was supposed to
-// achieve anyway, minus the marker table nobody can write to.
-//
-// Before setting this back to false: clear the stuck locks, confirm a plain
-// read of vworld_schema_version answers (it hangs today), and understand why a
-// marker write blocks rather than failing fast. A cold database needs this
-// false to build its schema at all — the lazy ensureWorldItemSchema() and
-// friends only cover a few tables.
-const SKIP_SCHEMA_MIGRATION_ON_INIT = true;
+// History: this was true from 2026-08-21 while three relations were wedged
+// (reads and writes blocked forever rather than erroring), because the
+// migration walked straight into them and blew init()'s budget, leaving the
+// script with NO routes registered. Recreating the server cleared those locks.
+// It went back to false on 2026-08-22 once a cold start was measured end to
+// end, together with the applied_at fix above — without that fix the marker
+// write always failed, so the gate below never went current and every single
+// start re-ran the whole list. That, not the list's existence, is what made
+// this dangerous.
+const SKIP_SCHEMA_MIGRATION_ON_INIT = false;
 
-export function ensureWorldDatabaseSchema(): void {
+export function ensureWorldDatabaseSchema(collector?: Array<any>): void {
+  // A collector means a caller wants every step reported back, so run the list
+  // unconditionally for it, bypassing both the version gate and the escape
+  // hatch. That is a diagnostic/repair path driven from /engine/eval — init()
+  // never passes one. Mirrors ensureChatDatabaseSchema below.
+  if (collector) {
+    runWorldDatabaseMigration(collector);
+    return;
+  }
   if (SKIP_SCHEMA_MIGRATION_ON_INIT) return;
   if (schemaVersionIsCurrent("world")) return;
   ensureSchemaVersionTable();
-  runWorldDatabaseMigration();
+  runWorldDatabaseMigration(undefined);
   recordSchemaVersion("world");
   reportSchemaSetupOutcome("world");
 }
 
-function runWorldDatabaseMigration(): void {
+function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
   const step = function (
     op: string,
     tableName: string,
     run: () => string,
     columnName?: string,
   ) {
-    const result = (() => {
-      try {
-        return parseWorldDbResult(run());
-      } catch (e) {
-        return { error: "threw: " + String(e) };
-      }
-    })();
-    reportSchemaResult("world", op, tableName, result, columnName);
+    runWorldSchemaStep(op, tableName, run, columnName, collector);
   };
 
   step("createTable", VWORLD_PLAYER_HEARTBEAT_TABLE, function () {
@@ -1544,7 +1542,7 @@ function runWorldDatabaseMigration(): void {
     );
   });
 
-  ensureLateWorldDatabaseSchema();
+  ensureLateWorldDatabaseSchema(collector);
 }
 
 export function ensureChatDatabaseSchema(collector?: Array<any>): void {

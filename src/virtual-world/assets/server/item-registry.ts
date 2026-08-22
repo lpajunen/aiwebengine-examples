@@ -387,24 +387,23 @@ export function getActionDefinition(actionId: string | null | undefined) {
   return getActionClass(String(actionId || ""));
 }
 
-// KILL SWITCH — set true 2026-08-21 to stop an ongoing outage.
+// KILL SWITCH — set true 2026-08-21 to stop an ongoing outage, cleared
+// 2026-08-21 once the server was recreated.
 //
-// vworld_action_classes is wedged on the deployed database: even
-// database.query(table, "{}", 1) hangs, where every other class table answers
+// vworld_action_classes had wedged on the old database: even
+// database.query(table, "{}", 1) hung, where every other class table answered
 // in ~20ms. getAllActionIds() runs in init()'s FIRST phase, so that hang alone
-// is enough to blow the 10000ms budget and leave the script with no routes
-// registered at all.
+// was enough to blow the 10000ms budget and leave the script with no routes
+// registered at all. Recreating the server cleared the stuck locks; the table
+// now reads in 3ms and a rolled-back upsert completes in 4ms, so the guard is
+// off and creator-defined action classes load again.
 //
-// While this is true, the action repository is built entirely from the
-// built-in ACTION_DEFINITIONS and never touches the table — reads or writes.
-// The cost is that creator-defined action classes are invisible: they are
-// still stored, but nothing loads them, so a custom action will not fire and
-// the class editor will not list it. Built-in actions behave normally.
-//
-// Set back to false once the table answers a plain read again. Do not "fix"
-// this by writing to the table — a blocking write is what wedged the two
-// marker tables the same day.
-const SKIP_ACTION_CLASS_DB = true;
+// If it is ever set true again: the action repository is built entirely from
+// the built-in ACTION_DEFINITIONS and never touches the table — reads or
+// writes. The cost is that creator-defined action classes go invisible; they
+// are still stored, but nothing loads them, so a custom action will not fire
+// and the class editor will not list it. Built-in actions are unaffected.
+const SKIP_ACTION_CLASS_DB = false;
 
 // The action repository as the code defines it, with no database involved.
 function builtInActionClassCache(): Record<string, ActionClassRecord> {

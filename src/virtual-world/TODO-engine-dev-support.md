@@ -1,8 +1,9 @@
 # Engine dev-support APIs — proposal
 
 Status: proposal. §1, §2, §3 and §4 have since shipped, as `POST /engine/check`,
-`POST /engine/eval`, `POST /engine/assets/batch` and `PATCH /engine/assets` —
-see below. Everything else is still unimplemented on `MANAGE_HOST`.
+`POST /engine/eval`, `POST /engine/assets/batch` and `PATCH /engine/assets`, and
+§6 has shipped with one gap — see below. Everything else is still unimplemented
+on `MANAGE_HOST`.
 
 Scope: engine-wide additions to the `/engine/...` management API and the
 `aiwebengine-mcp` tool set. The proposals are engine-level, but the motivating
@@ -37,8 +38,10 @@ What still pins work to a local machine:
 5. **History and rollback.** Assets have no versions. Git is the only undo and
    it lives locally — uncomfortable given that prod doubles as the test
    environment here.
-6. **Log ergonomics.** `GET /engine/script_logs` accepts only `uri`: no
-   `since`, `level`, `limit`, `contains`, and no stream.
+6. **Log ergonomics.** ~~`GET /engine/script_logs` accepts only `uri`: no
+   `since`, `level`, `limit`, `contains`, and no stream.~~ Fixed — all of those
+   filters plus `request_id`, `kind`, `route`, `after_seq` and an SSE tail now
+   exist. What remains is that HTTP route handlers write no logs at all.
 
 Each proposal below targets one of those six.
 
@@ -289,9 +292,55 @@ changes in this codebase are cross-module (a schema step plus the modules that
 read it), and reverting them one file at a time reintroduces the inconsistent
 state you were escaping.
 
-## 6. Log filtering and an SSE tail
+## 6. Log filtering and an SSE tail — SHIPPED, with one gap
 
-Addresses (6).
+Addresses (6). Verified 2026-08-22 against a throwaway probe script
+(`https://example.com/logprobe`, deployed and deleted for the test).
+
+Both endpoints exist and work as proposed, and the listing shipped with more
+filters than were asked for:
+
+```
+GET /engine/script_logs?uri=…&level=…&since=…&after_seq=N&contains=…
+  &request_id=…&kind=…&route=…&limit=…
+GET /engine/script_logs/stream?…same filters…&after_seq=N&backlog=N   (SSE)
+DELETE /engine/script_logs?uri=…                    (clear one script, or prune all)
+```
+
+`uri` is optional on both — omit it to read or tail every script at once.
+
+Each entry is `{ scriptUri, message, level, timestamp, seq, requestId, kind,
+route }`. The request-id correlation the proposal asked for is real end to end:
+every HTTP response carries an `x-request-id` header, and `request_id=` returns
+exactly the lines that one invocation emitted. `seq` is the cursor — `after_seq`
+reads forward on the listing and resumes the stream without a gap, and the SSE
+`open` event hands you the starting seq.
+
+Verified working: `level` (LOG/WARN/ERROR each isolated correctly), `contains`,
+`since`, `after_seq`, `request_id`, `kind`, `route`, `limit`, `backlog`, the
+live tail (a filtered tail picked up new entries as they were written, not just
+replay), and `DELETE`. The stream polls the database rather than the write path,
+so it sees the whole cluster's committed output.
+
+**The gap: `console.*` from an HTTP route handler is never persisted.** Only the
+invocation kinds that are not HTTP routes make it into the log store. A probe
+whose handler logged three lines and returned 200 wrote nothing; the same script
+logging from `init()` and from a `schedulerService` job wrote everything, with
+`kind: "scheduled"`, `route` set to the job name, and one `requestId` per tick.
+So the machinery is complete and correct — it just is not wired to the
+`httpRoute` path, which makes `kind=httpRoute` and `route=/virtual-world/move`
+return nothing today.
+
+That is the case §6 was written for. Virtual-world's per-world tick runs under
+the request that triggers it, so the tick/lease/SSE debugging this section
+exists to enable is precisely what is still unreachable.
+
+One related rough edge: an uncaught handler error _is_ logged, as `FATAL` with
+the handler name and a stack, but with `kind`, `route` and `requestId` all
+`null` — so a 500 cannot be tied back to the request that caused it, even though
+that request had an `x-request-id`.
+
+The original proposal follows.
 
 ```
 GET /engine/script_logs?uri=…&since=<ts|cursor>&level=error&contains=vwDiag
@@ -386,7 +435,8 @@ lease and respawn timing.
 | —    | §1 `POST /engine/check`        | shipped                         |
 | —    | §3 `POST /engine/assets/batch` | shipped                         |
 | —    | §4 `PATCH /engine/assets`      | shipped                         |
-| 1    | §6 log filtering and tail      | debugging ticks and streams     |
+| —    | §6 log filtering and tail      | shipped (route logs still lost) |
+| 1    | §6 follow-up: log route calls  | debugging ticks and streams     |
 | 2    | §5 versions and snapshots      | working unattended against prod |
 | 3    | §7–§12                         | incremental                     |
 
@@ -396,8 +446,14 @@ question, `batch` made a multi-file push one atomic init, and `patch` made each
 file in that push cost its diff instead of its size. What remains is not
 capability but safety — a session can now edit prod from the server side
 faster than it can see what it did. §5 (versions and snapshots) is the real
-counterweight and arguably now outranks §6: `base_sha256` prevents clobbering a
-write you did not see, but nothing yet lets you undo one you did.
+counterweight: `base_sha256` prevents clobbering a write you did not see, but
+nothing yet lets you undo one you did.
+
+§6 shipped the whole listing-and-tail surface, but it does not yet deliver what
+it was ranked first for. Route handlers persist no console output, so the
+tick/lease/SSE paths — which run under an HTTP request here — remain as
+invisible as before. The remaining work is one wiring change on the engine side,
+not a new endpoint.
 
 The remaining gap in the shipped set is reach, not affordance. `eval` cannot
 `import` the script's own modules, `check` swaps in candidate content only for

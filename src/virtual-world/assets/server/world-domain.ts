@@ -1390,3 +1390,21 @@ export function fromStoredWorldTimestamp(storedTs: unknown): number {
   if (numeric < 1000000000000) return numeric * 1000;
   return numeric;
 }
+
+// Facings are radians in memory, but every `rotation` column is INTEGER — the
+// engine's schema API has no float column type — so they are stored as whole
+// milliradians. Binding the raw float used to be rounded silently by the
+// database layer; inside a transaction it now fails with "integer out of
+// range", and that failure aborts the transaction, so a tick that turns an
+// NPC east loses every write it made.
+export function toStoredRotation(radians: unknown): number {
+  const numeric = Number(radians);
+  if (!isFinite(numeric)) return 0;
+  return Math.round(numeric * 1000);
+}
+
+export function fromStoredRotation(storedRotation: unknown): number {
+  const numeric = Number(storedRotation);
+  if (!isFinite(numeric)) return 0;
+  return numeric / 1000;
+}

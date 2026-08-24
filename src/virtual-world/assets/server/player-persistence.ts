@@ -12,7 +12,9 @@ import {
   upsertWorldRow,
 } from "./world-db.ts";
 import {
+  fromStoredRotation,
   fromStoredWorldTimestamp,
+  toStoredRotation,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 
@@ -74,9 +76,7 @@ export function normalizePlayerPositionRow(
     row: Number(value.row),
     col: Number(value.col),
     seq: Number.isFinite(Number(value.seq)) ? Number(value.seq) : 0,
-    rotation: Number.isFinite(Number(value.rotation))
-      ? Number(value.rotation)
-      : 0,
+    rotation: fromStoredRotation(value.rotation),
     session_id: typeof value.session_id === "string" ? value.session_id : "",
     ts: fromStoredWorldTimestamp(value.updated_ts),
   };
@@ -121,9 +121,7 @@ export function savePlayerPosition(
     row: Number(position.row),
     col: Number(position.col),
     seq: Number.isFinite(Number(position.seq)) ? Number(position.seq) : 0,
-    rotation: Number.isFinite(Number(position.rotation))
-      ? Number(position.rotation)
-      : 0,
+    rotation: toStoredRotation(position.rotation),
     session_id:
       typeof position.session_id === "string" ? position.session_id : "",
     updated_ts: toStoredWorldTimestamp(

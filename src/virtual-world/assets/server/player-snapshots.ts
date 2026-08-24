@@ -9,7 +9,10 @@ import {
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
 } from "./runtime-config.ts";
-import { fromStoredWorldTimestamp } from "./world-domain.ts";
+import {
+  fromStoredRotation,
+  fromStoredWorldTimestamp,
+} from "./world-domain.ts";
 import {
   loadPlayerHeartbeatMap,
   loadPlayerPosition,
@@ -53,9 +56,7 @@ export function loadWorldPlayers(
       row: Number.isFinite(Number(row.row)) ? Number(row.row) : 1,
       col: Number.isFinite(Number(row.col)) ? Number(row.col) : 1,
       seq: Number.isFinite(Number(row.seq)) ? Number(row.seq) : 0,
-      rotation: Number.isFinite(Number(row.rotation))
-        ? Number(row.rotation)
-        : 0,
+      rotation: fromStoredRotation(row.rotation),
       session_id: typeof row.session_id === "string" ? row.session_id : "",
       ts: fromStoredWorldTimestamp(row.updated_ts),
     };

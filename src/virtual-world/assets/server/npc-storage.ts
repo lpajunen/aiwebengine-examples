@@ -14,6 +14,7 @@ import {
 import {
   createEmptyLivingState,
   createLivingSlotsFromDefinitions,
+  fromStoredRotation,
   fromStoredWorldTimestamp,
   isWorldTileWalkable,
   LivingIdentity,
@@ -23,6 +24,7 @@ import {
   resolveNPCDisplayName,
   stripClassOwnedLivingState,
   toPublicLivingSnapshot,
+  toStoredRotation,
   toStoredWorldTimestamp,
 } from "./world-domain.ts";
 import {
@@ -110,9 +112,7 @@ export function loadWorldNPCs(worldId: string): Record<string, any> {
         row: safeRow,
         col: safeCol,
         seq: safeSeq,
-        rotation: Number.isFinite(Number(row.rotation))
-          ? Number(row.rotation)
-          : 0,
+        rotation: fromStoredRotation(row.rotation),
         state: typeof row.state === "string" ? row.state : "idle",
         ts: fromStoredWorldTimestamp(row.ts),
         class_id: living.class_id || classId,
@@ -169,9 +169,7 @@ export function saveWorldNPCs(
         row: safeRow,
         col: safeCol,
         seq: safeSeq,
-        rotation: Number.isFinite(Number(npc.rotation))
-          ? Number(npc.rotation)
-          : 0,
+        rotation: toStoredRotation(npc.rotation),
         state: typeof npc.state === "string" ? npc.state : "idle",
         ts: toStoredWorldTimestamp(
           Number.isFinite(Number(npc.ts)) ? Number(npc.ts) : Date.now(),

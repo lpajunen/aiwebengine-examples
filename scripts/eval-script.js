@@ -34,30 +34,12 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
+const { loadAccessToken } = require("./lib/token.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 
 const DEFAULT_SCRIPT_URI = "https://example.com/virtual-world";
-
-/** @returns {string} */
-function loadToken() {
-  const tokenPath = path.join(repoRoot, "schemas", "token.json");
-  let raw;
-  try {
-    raw = fs.readFileSync(tokenPath, "utf8");
-  } catch (err) {
-    if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
-      throw new Error("Token not found. Run 'make oauth-login' first.");
-    }
-    throw err;
-  }
-  const token = JSON.parse(raw);
-  if (token.expires_at && Date.now() > token.expires_at) {
-    throw new Error("Token has expired. Run 'make oauth-login' again.");
-  }
-  return token.access_token;
-}
 
 /**
  * @typedef {{ level?: string, message?: string, timestampMs?: number }} ConsoleLine
@@ -196,7 +178,7 @@ async function main() {
     );
   }
 
-  const token = loadToken();
+  const token = await loadAccessToken();
   const { report, status, body } = await evaluate(token, scriptUri, {
     source,
     rollback,

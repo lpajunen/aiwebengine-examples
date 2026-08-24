@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate eval test test-list verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login refresh-token token-status upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate eval test test-list verify
 
 # Host configuration (can be overridden via environment variables)
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
@@ -23,6 +23,14 @@ fetch-graphql-schema:
 
 oauth-login:
 	npm run oauth-login
+
+# Renew the saved token without the browser login. The tooling does this
+# for itself when it finds an expired token; these are for checking.
+refresh-token:
+	npm run refresh-token
+
+token-status:
+	npm run token-status
 
 upload-virtual-world:
 	npm run upload-virtual-world

@@ -26,6 +26,7 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
+const { loadAccessToken } = require("./lib/token.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
@@ -48,25 +49,6 @@ function scriptUriFor(projectDir) {
     SCRIPT_URI_OVERRIDES[projectDir] ||
     `https://example.com/${projectDir.replace(/_/g, "-")}`
   );
-}
-
-/** @returns {string} */
-function loadToken() {
-  const tokenPath = path.join(repoRoot, "schemas", "token.json");
-  let raw;
-  try {
-    raw = fs.readFileSync(tokenPath, "utf8");
-  } catch (err) {
-    if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
-      throw new Error("Token not found. Run 'make oauth-login' first.");
-    }
-    throw err;
-  }
-  const token = JSON.parse(raw);
-  if (token.expires_at && Date.now() > token.expires_at) {
-    throw new Error("Token has expired. Run 'make oauth-login' again.");
-  }
-  return token.access_token;
 }
 
 /**
@@ -227,7 +209,7 @@ async function main() {
   }
 
   console.log(`Running tests on ${manageHost}\n`);
-  const token = loadToken();
+  const token = await loadAccessToken();
   let failed = 0;
 
   for (const target of targets) {

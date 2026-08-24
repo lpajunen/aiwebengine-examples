@@ -19,8 +19,8 @@ require("dotenv").config();
 const http = require("http");
 const { URL, URLSearchParams } = require("url");
 const crypto = require("crypto");
-const fs = require("fs");
 const path = require("path");
+const tokenStore = require("./lib/token.js");
 
 const issuer =
   process.env.OAUTH_ISSUER ||
@@ -226,31 +226,32 @@ async function main() {
         }
         const token = await tokenRes.json();
 
-        // Persist token
-        const outDir = path.join(__dirname, "..", "schemas");
-        await fs.promises.mkdir(outDir, { recursive: true });
-        const tokenPath = path.join(outDir, "token.json");
-        const expiresAt = token.expires_in
-          ? Date.now() + token.expires_in * 1000
-          : null;
-        const payload = { ...token, expires_at: expiresAt };
-        await fs.promises.writeFile(
-          tokenPath,
-          JSON.stringify(payload, null, 2),
-          "utf8",
-        );
+        // Persist the token, plus what renewing it later needs: the response
+        // carries a refresh token but not the client_id it must be spent
+        // with, nor where to spend it. Without these, every expiry meant
+        // another interactive login. See scripts/lib/token.js.
+        const savedPath = tokenStore.tokenPath();
+        tokenStore.writeToken({
+          ...token,
+          client_id: clientId,
+          token_endpoint: tokenUrl,
+          issuer: issuer,
+        });
 
         res.statusCode = 200;
         res.setHeader("content-type", "text/html");
         res.end(successPage(5));
 
+        // Deliberately not echoing the access token: it used to be printed as
+        // a ready-to-paste `export`, which put a live credential into terminal
+        // scrollback and any transcript of the session. The tooling reads the
+        // file, so nothing needed it on screen.
         console.log(
-          `Saved token to ${path.relative(process.cwd(), tokenPath)}`,
+          `Saved token to ${path.relative(process.cwd(), savedPath)}`,
         );
-        console.log("Quick use:");
-        console.log(`  export OAUTH_TOKEN="${token.access_token}"`);
-        console.log("Then run:");
-        console.log("  npm run fetch-graphql-schema");
+        console.log(
+          "It renews itself from here on; log in again only if that fails.",
+        );
 
         srv.close();
       } else {

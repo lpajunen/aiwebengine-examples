@@ -2,6 +2,7 @@
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
+const { loadAccessToken } = require("./lib/token.js");
 
 const endpoint =
   process.env.SCHEMA_ENDPOINT || "https://manage.softagen.com/graphql";
@@ -15,21 +16,9 @@ const csrfToken = process.env.CSRF_TOKEN || process.env.XSRF_TOKEN;
 const useGet =
   process.env.GRAPHQL_METHOD === "GET" || process.env.SCHEMA_GET === "1";
 
-// Load token from schemas/token.json if env var not provided
-try {
-  if (!accessToken) {
-    const tokenFile = path.join(__dirname, "..", "schemas", "token.json");
-    if (fs.existsSync(tokenFile)) {
-      const raw = fs.readFileSync(tokenFile, "utf8");
-      const tok = JSON.parse(raw);
-      if (tok && tok.access_token) {
-        accessToken = tok.access_token;
-      }
-    }
-  }
-} catch (e) {
-  // ignore token file errors in runtime
-}
+// The token is loaded inside main(), where renewing it can be awaited. It
+// used to be read here at module load, which also meant an expired token was
+// sent as-is and the request failed for a reason the output never explained.
 
 // Standard GraphQL introspection query (without descriptions) to export schema JSON.
 const introspectionQuery = `
@@ -126,6 +115,16 @@ const introspectionQuery = `
 `;
 
 async function main() {
+  // Best effort: this script also authenticates by cookie, so having no
+  // usable token is not by itself fatal -- the request may still be allowed.
+  if (!accessToken) {
+    try {
+      accessToken = await loadAccessToken({ quiet: true });
+    } catch {
+      // Carry on unauthenticated and let the server decide.
+    }
+  }
+
   /** @type {Record<string, string>} */
   const headers = { accept: "application/json" };
   if (!useGet) {

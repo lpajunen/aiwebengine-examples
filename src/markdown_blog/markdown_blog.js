@@ -885,11 +885,14 @@ function hello() {
 const MARKDOWN_BLOG_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
-  headers: {},
+  headers: /** @type {Headers & Record<string, string>} */ (new Headers()),
   query: {},
   params: {},
   form: {},
   body: "",
+  searchParams: new URLSearchParams(),
+  text: () => "",
+  json: () => ({}),
   files: [],
 });
 
@@ -903,13 +906,13 @@ function init(context) {
   routeRegistry.registerRoute("/blog/admin/delete", "deletePost", "POST");
   routeRegistry.registerRoute("/blog/new", "newPostForm", "GET");
 
-  // Store templates in sharedStorage
+  // Store templates in scriptStorage
   for (const [key, template] of Object.entries(templates)) {
-    sharedStorage.setItem("blog:template:" + key, template);
+    scriptStorage.setItem("blog:template:" + key, template);
   }
 
   // Check if there are already blog posts
-  const existingIndexJson = sharedStorage.getItem("blog:index");
+  const existingIndexJson = scriptStorage.getItem("blog:index");
   if (existingIndexJson) {
     try {
       const existingSlugs = JSON.parse(existingIndexJson);
@@ -1011,12 +1014,12 @@ function fibonacci(n) {
   // Store example posts and initialize index
   const postSlugs = /** @type {string[]} */ ([]);
   for (const slug in examplePosts) {
-    sharedStorage.setItem("blog:" + slug, examplePosts[slug]);
+    scriptStorage.setItem("blog:" + slug, examplePosts[slug]);
     postSlugs.push(slug);
   }
 
   // Store the index of all post slugs
-  sharedStorage.setItem("blog:index", JSON.stringify(postSlugs));
+  scriptStorage.setItem("blog:index", JSON.stringify(postSlugs));
 
   console.log("Blog initialized with example posts");
 }
@@ -1068,7 +1071,7 @@ function listPosts(context) {
 
   try {
     // Get the index of all post slugs
-    const indexJson = sharedStorage.getItem("blog:index");
+    const indexJson = scriptStorage.getItem("blog:index");
     let postSlugs = /** @type {string[]} */ ([]);
 
     if (indexJson) {
@@ -1077,7 +1080,7 @@ function listPosts(context) {
 
     // Get all posts from the index
     postSlugs.forEach((slug) => {
-      const content = sharedStorage.getItem("blog:" + slug);
+      const content = scriptStorage.getItem("blog:" + slug);
       if (content) {
         // Extract title from first header
         const titleMatch = content.match(/^# (.+)$/m);
@@ -1090,7 +1093,7 @@ function listPosts(context) {
   }
 
   // Load template and render
-  const template = sharedStorage.getItem("blog:template:list");
+  const template = scriptStorage.getItem("blog:template:list");
   if (!template) {
     return ResponseBuilder.error(500, "Template not found");
   }
@@ -1115,10 +1118,10 @@ function listPosts(context) {
  */
 function showPost(context, slug) {
   // Load markdown from storage
-  const markdown = sharedStorage.getItem(`blog:${slug}`);
+  const markdown = scriptStorage.getItem(`blog:${slug}`);
 
   if (!markdown) {
-    const template = sharedStorage.getItem("blog:template:notFound");
+    const template = scriptStorage.getItem("blog:template:notFound");
     if (!template) {
       return {
         status: 500,
@@ -1150,7 +1153,7 @@ function showPost(context, slug) {
 
   if (content.startsWith("Error:")) {
     console.error(`Failed to convert blog post ${slug}: ${content}`);
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1175,7 +1178,7 @@ function showPost(context, slug) {
   }
 
   // Load template and render
-  const template = sharedStorage.getItem("blog:template:post");
+  const template = scriptStorage.getItem("blog:template:post");
   if (!template) {
     return {
       status: 500,
@@ -1209,7 +1212,7 @@ function showPost(context, slug) {
 /** @param {HandlerContext} context */
 function newPostForm(context) {
   // Load template and render
-  const template = sharedStorage.getItem("blog:template:newForm");
+  const template = scriptStorage.getItem("blog:template:newForm");
   if (!template) {
     return {
       status: 500,
@@ -1246,10 +1249,10 @@ function newPostForm(context) {
  */
 function editPostForm(context, slug) {
   // Load existing post content
-  const existingContent = sharedStorage.getItem("blog:" + slug);
+  const existingContent = scriptStorage.getItem("blog:" + slug);
 
   if (!existingContent) {
-    const template = sharedStorage.getItem("blog:template:notFound");
+    const template = scriptStorage.getItem("blog:template:notFound");
     if (!template) {
       return {
         status: 500,
@@ -1273,7 +1276,7 @@ function editPostForm(context, slug) {
   }
 
   // Load template and render
-  const template = sharedStorage.getItem("blog:template:editForm");
+  const template = scriptStorage.getItem("blog:template:editForm");
   if (!template) {
     return {
       status: 500,
@@ -1312,7 +1315,7 @@ function createPost(context) {
   const markdown = req.form.content || "";
 
   if (!slug || !markdown) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1338,7 +1341,7 @@ function createPost(context) {
 
   // Validate slug format
   if (!/^[a-z0-9-]+$/.test(slug)) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1364,7 +1367,7 @@ function createPost(context) {
 
   // Validate markdown size (10KB limit for this example)
   if (markdown.length > 10000) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1391,7 +1394,7 @@ function createPost(context) {
   // Test conversion before storing
   const testHtml = convert.markdown_to_html(markdown);
   if (testHtml.startsWith("Error:")) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1416,18 +1419,18 @@ function createPost(context) {
   }
 
   // Store the markdown
-  sharedStorage.setItem("blog:" + slug, markdown);
+  scriptStorage.setItem("blog:" + slug, markdown);
 
   // Update the index
   try {
-    const indexJson = sharedStorage.getItem("blog:index");
+    const indexJson = scriptStorage.getItem("blog:index");
     let postSlugs = /** @type {string[]} */ ([]);
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
     }
     if (!postSlugs.includes(slug)) {
       postSlugs.push(slug);
-      sharedStorage.setItem("blog:index", JSON.stringify(postSlugs));
+      scriptStorage.setItem("blog:index", JSON.stringify(postSlugs));
     }
   } catch (error) {
     console.log("Error updating index: " + error);
@@ -1436,7 +1439,7 @@ function createPost(context) {
   console.log("Blog post created: " + slug);
 
   // Success response
-  const template = sharedStorage.getItem("blog:template:success");
+  const template = scriptStorage.getItem("blog:template:success");
   if (!template) {
     return {
       status: 500,
@@ -1469,7 +1472,7 @@ function updatePost(context) {
   const markdown = req.form.content || "";
 
   if (!originalSlug || !newSlug || !markdown) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1495,7 +1498,7 @@ function updatePost(context) {
 
   // Validate slug format
   if (!/^[a-z0-9-]+$/.test(newSlug)) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1520,9 +1523,9 @@ function updatePost(context) {
   }
 
   // Check if original post exists
-  const existingContent = sharedStorage.getItem("blog:" + originalSlug);
+  const existingContent = scriptStorage.getItem("blog:" + originalSlug);
   if (!existingContent) {
-    const template = sharedStorage.getItem("blog:template:notFound");
+    const template = scriptStorage.getItem("blog:template:notFound");
     if (!template) {
       return {
         status: 500,
@@ -1547,7 +1550,7 @@ function updatePost(context) {
 
   // Validate markdown size (10KB limit for this example)
   if (markdown.length > 10000) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1574,7 +1577,7 @@ function updatePost(context) {
   // Test conversion before storing
   const testHtml = convert.markdown_to_html(markdown);
   if (testHtml.startsWith("Error:")) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1600,7 +1603,7 @@ function updatePost(context) {
 
   try {
     // Get current index
-    const indexJson = sharedStorage.getItem("blog:index");
+    const indexJson = scriptStorage.getItem("blog:index");
     let postSlugs = /** @type {string[]} */ ([]);
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
@@ -1618,19 +1621,19 @@ function updatePost(context) {
       }
 
       // Delete old post
-      sharedStorage.setItem("blog:" + originalSlug, "");
+      scriptStorage.setItem("blog:" + originalSlug, "");
     }
 
     // Store the updated markdown
-    sharedStorage.setItem("blog:" + newSlug, markdown);
+    scriptStorage.setItem("blog:" + newSlug, markdown);
 
     // Update the index
-    sharedStorage.setItem("blog:index", JSON.stringify(postSlugs));
+    scriptStorage.setItem("blog:index", JSON.stringify(postSlugs));
 
     console.log("Blog post updated: " + originalSlug + " -> " + newSlug);
 
     // Success response
-    const template = sharedStorage.getItem("blog:template:success");
+    const template = scriptStorage.getItem("blog:template:success");
     if (!template) {
       return {
         status: 500,
@@ -1654,7 +1657,7 @@ function updatePost(context) {
     };
   } catch (error) {
     console.log("Error updating post: " + error);
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1686,7 +1689,7 @@ function deletePost(context) {
   const slug = req.form.slug || "";
 
   if (!slug) {
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,
@@ -1711,9 +1714,9 @@ function deletePost(context) {
   }
 
   // Check if post exists
-  const existingContent = sharedStorage.getItem("blog:" + slug);
+  const existingContent = scriptStorage.getItem("blog:" + slug);
   if (!existingContent) {
-    const template = sharedStorage.getItem("blog:template:notFound");
+    const template = scriptStorage.getItem("blog:template:notFound");
     if (!template) {
       return {
         status: 500,
@@ -1738,7 +1741,7 @@ function deletePost(context) {
 
   try {
     // Get current index
-    const indexJson = sharedStorage.getItem("blog:index");
+    const indexJson = scriptStorage.getItem("blog:index");
     let postSlugs = [];
     if (indexJson) {
       postSlugs = JSON.parse(indexJson);
@@ -1751,15 +1754,15 @@ function deletePost(context) {
     }
 
     // Delete the post
-    sharedStorage.setItem("blog:" + slug, "");
+    scriptStorage.setItem("blog:" + slug, "");
 
     // Update the index
-    sharedStorage.setItem("blog:index", JSON.stringify(postSlugs));
+    scriptStorage.setItem("blog:index", JSON.stringify(postSlugs));
 
     console.log("Blog post deleted: " + slug);
 
     // Success response
-    const template = sharedStorage.getItem("blog:template:success");
+    const template = scriptStorage.getItem("blog:template:success");
     if (!template) {
       return {
         status: 500,
@@ -1783,7 +1786,7 @@ function deletePost(context) {
     };
   } catch (error) {
     console.log("Error deleting post: " + error);
-    const template = sharedStorage.getItem("blog:template:error");
+    const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
         status: 500,

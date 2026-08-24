@@ -45,7 +45,7 @@ function getJokeHash(joke) {
  */
 function getFeedbackForJoke(joke) {
   const jokeId = getJokeHash(joke);
-  const stored = sharedStorage.getItem(jokeId);
+  const stored = scriptStorage.getItem(jokeId);
   if (stored) {
     return JSON.parse(stored);
   }
@@ -58,7 +58,7 @@ function getFeedbackForJoke(joke) {
  */
 function saveFeedbackForJoke(joke, data) {
   const jokeId = getJokeHash(joke);
-  sharedStorage.setItem(jokeId, JSON.stringify(data));
+  scriptStorage.setItem(jokeId, JSON.stringify(data));
 }
 
 /** @returns {string} */
@@ -123,7 +123,7 @@ function handleFeedback(req) {
       }
 
       const feedbackData = JSON.parse(
-        sharedStorage.getItem(jokeId) || '{"thumbsUp":0,"thumbsDown":0}',
+        scriptStorage.getItem(jokeId) || '{"thumbsUp":0,"thumbsDown":0}',
       );
 
       if (feedbackType === "up") {
@@ -132,7 +132,7 @@ function handleFeedback(req) {
         feedbackData.thumbsDown += 1;
       }
 
-      sharedStorage.setItem(jokeId, JSON.stringify(feedbackData));
+      scriptStorage.setItem(jokeId, JSON.stringify(feedbackData));
       console.log(
         "Feedback recorded for joke " +
           jokeId +

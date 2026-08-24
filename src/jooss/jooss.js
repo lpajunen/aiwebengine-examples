@@ -8,14 +8,14 @@
 // Greek language support added
 
 function incrementCounter() {
-  const currentCount = parseInt(sharedStorage.getItem("callCount") || "0", 10);
+  const currentCount = parseInt(scriptStorage.getItem("callCount") || "0", 10);
   const newCount = currentCount + 1;
-  sharedStorage.setItem("callCount", newCount.toString());
+  scriptStorage.setItem("callCount", newCount.toString());
   return newCount;
 }
 
 function getCallCount() {
-  return parseInt(sharedStorage.getItem("callCount") || "0", 10);
+  return parseInt(scriptStorage.getItem("callCount") || "0", 10);
 }
 
 /** @param {string} currentPage */

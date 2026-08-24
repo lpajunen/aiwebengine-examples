@@ -10,7 +10,7 @@
 /** @returns {Array<Record<string, any>>} */
 function loadChannels() {
   try {
-    const data = sharedStorage.getItem("chat:channels");
+    const data = scriptStorage.getItem("chat:channels");
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error("Error loading channels: " + error);
@@ -21,7 +21,7 @@ function loadChannels() {
 /** @param {Array<Record<string, any>>} channels */
 function saveChannels(channels) {
   try {
-    sharedStorage.setItem("chat:channels", JSON.stringify(channels));
+    scriptStorage.setItem("chat:channels", JSON.stringify(channels));
     return true;
   } catch (error) {
     console.error("Error saving channels: " + error);
@@ -37,7 +37,7 @@ function saveChannels(channels) {
 function loadMessages(channelId, limit) {
   try {
     const key = "chat:messages:" + channelId;
-    const data = sharedStorage.getItem(key);
+    const data = scriptStorage.getItem(key);
     const messages = data ? JSON.parse(data) : [];
 
     // Return last N messages
@@ -67,7 +67,7 @@ function saveMessage(channelId, message) {
     const trimmedMessages =
       messages.length > 1000 ? messages.slice(-1000) : messages;
 
-    sharedStorage.setItem(key, JSON.stringify(trimmedMessages));
+    scriptStorage.setItem(key, JSON.stringify(trimmedMessages));
     return true;
   } catch (error) {
     console.error(
@@ -85,11 +85,14 @@ function getErrorMessage(error) {
 const CHAT_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
-  headers: {},
+  headers: /** @type {Headers & Record<string, string>} */ (new Headers()),
   query: {},
   params: {},
   form: {},
   body: "",
+  searchParams: new URLSearchParams(),
+  text: () => "",
+  json: () => ({}),
   files: [],
 });
 

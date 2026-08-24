@@ -209,11 +209,14 @@ function feedback_form_handler(context) {
 const FEEDBACK_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
-  headers: {},
+  headers: /** @type {Headers & Record<string, string>} */ (new Headers()),
   query: {},
   params: {},
   form: {},
   body: "",
+  searchParams: new URLSearchParams(),
+  text: () => "",
+  json: () => ({}),
   files: [],
 });
 

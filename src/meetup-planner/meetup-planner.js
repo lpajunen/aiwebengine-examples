@@ -10,11 +10,14 @@
 const MEETUP_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
-  headers: {},
+  headers: /** @type {Headers & Record<string, string>} */ (new Headers()),
   query: {},
   params: {},
   form: {},
   body: "",
+  searchParams: new URLSearchParams(),
+  text: () => "",
+  json: () => ({}),
   files: [],
 });
 
@@ -36,7 +39,7 @@ function requireAuthenticatedUser(auth) {
 /** @returns {Array<Record<string, any>>} */
 function loadMeetups() {
   try {
-    const data = sharedStorage.getItem("meetups");
+    const data = scriptStorage.getItem("meetups");
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error("Error loading meetups: " + error);
@@ -47,11 +50,45 @@ function loadMeetups() {
 /** @param {Array<Record<string, any>>} meetups */
 function saveMeetups(meetups) {
   try {
-    sharedStorage.setItem("meetups", JSON.stringify(meetups));
+    scriptStorage.setItem("meetups", JSON.stringify(meetups));
     return true;
   } catch (error) {
     console.error("Error saving meetups: " + error);
     return false;
+  }
+}
+
+/**
+ * The meetup IDs the signed-in user takes part in.
+ *
+ * These live in `personalStorage`, which the engine scopes to the current
+ * user, so the key carries no user id of its own. The shared list of every
+ * meetup is a separate store — see loadMeetups().
+ *
+ * @returns {string[]}
+ */
+function loadMyMeetupIds() {
+  try {
+    const data = personalStorage.getItem("meetups");
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error("Error loading personal meetup IDs: " + error);
+    return [];
+  }
+}
+
+/**
+ * Records a meetup on the signed-in user's personal list. Idempotent.
+ * @param {string} meetupId
+ */
+function addMyMeetupId(meetupId) {
+  try {
+    const meetupIds = loadMyMeetupIds();
+    if (meetupIds.includes(meetupId)) return;
+    meetupIds.push(meetupId);
+    personalStorage.setItem("meetups", JSON.stringify(meetupIds));
+  } catch (error) {
+    console.error("Error storing personal meetup ID: " + error);
   }
 }
 
@@ -174,17 +211,10 @@ function meetup_dashboard_handler(context) {
 
   const user = requireAuthenticatedUser(req.auth);
 
-  // Load user's meetup IDs from sharedStorage (personal data with user prefix)
-  let userMeetupIds = /** @type {string[]} */ ([]);
-  try {
-    const userKey = "personal_" + user.id + "_meetups";
-    const stored = sharedStorage.getItem(userKey);
-    userMeetupIds = stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error("Error loading meetup keys from storage:", error);
-  }
+  // Load the signed-in user's meetup IDs from their personal storage
+  const userMeetupIds = loadMyMeetupIds();
 
-  // Load meetup details from sharedStorage
+  // Load meetup details from the shared store
   const allMeetups = loadMeetups();
   const userMeetups = allMeetups.filter((m) => userMeetupIds.includes(m.id));
 
@@ -434,16 +464,8 @@ function create_meetup_handler(context) {
 
     saveMeetup(meetup);
 
-    // Store meetup key in sharedStorage (using user prefix for personal data)
-    try {
-      const userKey = "personal_" + user.id + "_meetups";
-      const existing = sharedStorage.getItem(userKey);
-      const meetupIds = existing ? JSON.parse(existing) : [];
-      meetupIds.push(meetupId);
-      sharedStorage.setItem(userKey, JSON.stringify(meetupIds));
-    } catch (error) {
-      console.error("Error storing meetup key in storage:", error);
-    }
+    // Record the meetup on the creator's personal list
+    addMyMeetupId(meetupId);
 
     return ResponseBuilder.json({ id: meetupId }, 201);
   } catch (error) {
@@ -486,18 +508,8 @@ function join_meetup_handler(context) {
     };
     saveMeetup(meetup);
 
-    // Store meetup key in sharedStorage (using user prefix for personal data)
-    try {
-      const userKey = "personal_" + user.id + "_meetups";
-      const existing = sharedStorage.getItem(userKey);
-      const meetupIds = existing ? JSON.parse(existing) : [];
-      if (!meetupIds.includes(meetupId)) {
-        meetupIds.push(meetupId);
-        sharedStorage.setItem(userKey, JSON.stringify(meetupIds));
-      }
-    } catch (error) {
-      console.error("Error storing meetup key in storage:", error);
-    }
+    // Record the meetup on the joining user's personal list
+    addMyMeetupId(meetupId);
   }
 
   const member = meetup.members[user.id];

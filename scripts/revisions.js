@@ -21,11 +21,13 @@ require("dotenv").config();
 // Two things the endpoints will not tell you unless asked directly:
 //
 //   * `initOk` is a record of a revision having run, not a verdict on it. A
-//     revision written while the script is pinned never ran: it comes back
-//     `initOk: null`, and has still been seen reported as `lastGood`, whose
-//     init() then threw when it was finally deployed. Do not read `lastGood` as
-//     "safe to deploy" for code that has never been served —
-//     `check-script.js --revision head` is what answers that.
+//     revision written while the script is pinned never ran, and comes back
+//     `initOk: null`; `lastGood` names the newest revision that actually ran
+//     and succeeded, which for a pinned script is usually well behind head. So
+//     `lastGood` is a safe place to fall back to, but it says nothing about
+//     head — `check-script.js --revision head` is what answers whether the
+//     code you just pushed can be promoted. A sandboxed check does not record
+//     a verdict either; only deploying a revision does.
 //   * Pinning does not vet what you pin. Deploying a revision whose init()
 //     throws succeeds, and the script is then broken; `pin last-good` is the
 //     way back, and it takes about a second.
@@ -81,7 +83,9 @@ const DEFAULT_SCRIPT_URI = "https://example.com/virtual-world";
  *     error?: string | null, reason?: string },
  *   from?: number, to?: number, files?: object[], truncated?: boolean,
  *   revertedTo?: number, dryRun?: boolean,
- *   changed?: { written?: number, deleted?: number, root?: boolean },
+ *   changed?: { any?: boolean, entrypoint?: boolean, assetsWritten?: number,
+ *     assetsDeleted?: number, written?: number, deleted?: number,
+ *     root?: boolean },
  *   schema?: { matches?: boolean, warnings?: string[] },
  *   label?: string | null }} EngineResponse
  */
@@ -328,13 +332,16 @@ async function revertScript(token, scriptUri, revision, options) {
 
   const changed = report.changed || {};
   const prefix = report.dryRun ? "would restore" : "restored";
-  // `written`/`deleted` count assets only — the entrypoint is reported
-  // separately as `root`, and saying "0 files written" for a revert that put
-  // the entrypoint back reads like nothing happened.
+  // The counts cover assets; the entrypoint is a flag of its own, so name it
+  // rather than let "0 assets written" stand for a revert that restored it.
+  // `root`/`written`/`deleted` are what servers before the rename answered.
+  const entrypoint = changed.entrypoint ?? changed.root;
+  const written = changed.assetsWritten ?? changed.written ?? 0;
+  const deleted = changed.assetsDeleted ?? changed.deleted ?? 0;
   const parts = [
-    changed.root ? "entrypoint" : null,
-    `${changed.written || 0} asset(s) written`,
-    `${changed.deleted || 0} deleted`,
+    entrypoint ? "entrypoint" : null,
+    `${written} asset(s) written`,
+    `${deleted} deleted`,
   ].filter(Boolean);
   console.log(`  ${prefix} r${report.revertedTo}: ${parts.join(", ")}`);
   if (report.revision) console.log(`  recorded as r${report.revision}`);
@@ -348,8 +355,10 @@ async function revertScript(token, scriptUri, revision, options) {
       console.log(`    ${warning}`);
     }
   }
+  // A dry run writes nothing, so of course init() did not run — the server
+  // still reports a reason for it, and repeating that reads like a finding.
   const init = report.init;
-  if (init && init.ran === false && init.reason) {
+  if (!report.dryRun && init && init.ran === false && init.reason) {
     console.log(`  · init() did not run (${init.reason})`);
   }
 }

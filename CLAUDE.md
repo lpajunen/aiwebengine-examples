@@ -108,11 +108,11 @@ make label REV=42 LABEL=before-npc-rework    # survives retention, deployable by
 make revert REV=last-good DRY=true      # preview; drop DRY= to do it
 ```
 
-`revert` restores the files a revision held **as a new revision** rather than rewriting history, and reports whether the database schema still matches what that code expects. Reverting code does not revert the database, and this repo carries no back-compat migrations for old rows — if a revert lands on the wrong side of a schema change, recreate the database (see "Recreating the server" below).
+`revert` restores the files a revision held **as a new revision** rather than rewriting history, and reports what it touched (`changed.entrypoint`, `changed.assetsWritten`, `changed.assetsDeleted`) plus whether the database schema still matches what that code expects. Reverting code does not revert the database, and this repo carries no back-compat migrations for old rows — if a revert lands on the wrong side of a schema change, recreate the database (see "Recreating the server" below).
 
 Two things are easy to get wrong:
 
-- **`initOk` records that a revision ran, it is not a verdict on one.** A revision written while the script is pinned never ran: it comes back `initOk: null`, and has still been seen sitting at `lastGood` — where a revision whose `init()` threw once it was finally deployed had also landed. `make check-head` is what actually answers "is this safe to promote".
+- **`initOk` records that a revision ran, it is not a verdict on one.** A revision written while a script is pinned never ran and comes back `initOk: null`; `lastGood` names the newest revision that actually ran and succeeded, so for a pinned script it sits well behind head. That makes `lastGood` a sound place to fall back to and no evidence at all about head — `make check-head` is what answers "is this safe to promote". A check runs in a sandbox and records no verdict; only deploying does.
 - **Deploying does not vet what you deploy.** Pinning to a revision whose `init()` throws succeeds, and the script is broken from that moment. `make pin REV=last-good` is the way back and takes about a second.
 
 ### Checking a script on the server

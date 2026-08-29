@@ -11,21 +11,19 @@ require("dotenv").config();
 // those — the first one it happily accepts, and the other two only surface as
 // 404s after a deploy.
 //
-// KNOWN LIMITATION: this cannot currently check virtual-world itself. Its
-// init() calls the schema migration entry points (ensureWorldDatabaseSchema,
-// ensureChatDatabaseSchema) and those stall the check sandbox indefinitely —
-// the same behaviour that makes them untestable from `*.test.ts`. Every other
-// phase of virtual-world's init passes in about a second, and other deployed
-// scripts check in ~0.2s. Until the engine side is fixed, a check of
-// virtual-world will time out; the target is still useful for other scripts
-// and for candidate content that does not run a migration.
-//
 // By default it checks the copy that is *deployed*, the same way
 // `scripts/run-tests.js` does. Pass --candidate to send the local entrypoint
 // instead, to check a change before shipping it. Note that candidate content
 // replaces only the entrypoint: the modules under assets/ still come from the
 // server, so a --candidate run against locally-edited server modules is
 // checking a mixture. Deploy the assets, then check.
+//
+// Pass --revision to check a version that is not being served — `head` after
+// writing to a pinned script, a number, `last-good`, or a label. That is the
+// check to trust before promoting a revision: a revision written while the
+// script was pinned never ran, so the `initOk` the revision list reports for it
+// is not a measurement of anything. With --candidate the local entrypoint is
+// laid over that revision's modules rather than the deployed ones.
 //
 // Usage:
 //   node scripts/check-script.js [options]
@@ -35,6 +33,8 @@ require("dotenv").config();
 //   --script-path <path>  Entrypoint to send with --candidate
 //                         (default src/virtual-world/virtual-world.js)
 //   --candidate           Check the local entrypoint instead of the deployed one
+//   --revision <rev>      Check this version instead of the deployed one:
+//                         a number, `head`, `last-good`, or a label
 //   --no-rollback         Keep the database writes the checked init() makes
 //   --timeout <seconds>   Give up waiting for the server (default 60, 0 = never)
 //   --json                Print the raw report as JSON
@@ -67,7 +67,8 @@ const DEFAULTS = {
 /**
  * @param {string} token
  * @param {string} scriptUri
- * @param {{ rollback: boolean, content?: string, timeoutMs: number }} options
+ * @param {{ rollback: boolean, content?: string, revision?: string,
+ *   timeoutMs: number }} options
  * @returns {Promise<{ report?: CheckReport, status: number, body: string }>}
  */
 async function checkScript(token, scriptUri, options) {
@@ -75,6 +76,7 @@ async function checkScript(token, scriptUri, options) {
     uri: scriptUri,
     rollback: String(options.rollback),
   });
+  if (options.revision) query.set("revision", options.revision);
 
   /** @type {RequestInit} */
   const request = {
@@ -90,6 +92,7 @@ async function checkScript(token, scriptUri, options) {
       uri: scriptUri,
       content: options.content,
       rollback: options.rollback,
+      ...(options.revision ? { revision: options.revision } : {}),
     });
   }
 
@@ -179,6 +182,8 @@ async function main() {
   let scriptUri = DEFAULTS.scriptUri;
   let scriptPath = DEFAULTS.scriptPath;
   let candidate = false;
+  /** @type {string | undefined} */
+  let revision;
   let rollback = true;
   let timeoutMs = 60_000;
   let json = false;
@@ -193,6 +198,9 @@ async function main() {
         break;
       case "--candidate":
         candidate = true;
+        break;
+      case "--revision":
+        revision = args[++i];
         break;
       case "--no-rollback":
         rollback = false;
@@ -217,7 +225,8 @@ async function main() {
     content = fs.readFileSync(path.resolve(repoRoot, scriptPath), "utf8");
   }
 
-  const source = candidate ? `${scriptPath} (candidate)` : "deployed copy";
+  const base = revision ? `revision ${revision}` : "deployed copy";
+  const source = candidate ? `${scriptPath} (candidate over ${base})` : base;
   console.log(
     `Checking ${scriptUri}\n  source: ${source}\n  via: ${manageHost}\n`,
   );
@@ -228,6 +237,7 @@ async function main() {
     result = await checkScript(token, scriptUri, {
       rollback,
       content,
+      revision,
       timeoutMs,
     });
   } catch (err) {

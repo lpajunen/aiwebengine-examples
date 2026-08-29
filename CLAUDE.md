@@ -81,16 +81,54 @@ make set-script-hosts-dry-run       # preview
 
 `MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi/graphql fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 
+### Revisions and what is served
+
+Every write to a script records a revision of the whole script — one batch of assets is one revision, one `edit_asset` is another — and a script has a **head** (its newest revision) and a **serving** revision. By default they are the same: a write advances head, `init()` runs, and the new code answers requests. Pinning separates them.
+
+```bash
+make status                  # serving vs head, and how far apart
+make pin                     # freeze what is being served right now
+make deploy-changed          # push freely — production does not move
+make check-head              # /engine/check against the newest revision
+make test-head               # run the suite against the newest revision
+make promote                 # serve head, staying pinned
+make unpin                   # follow head again
+```
+
+While a script is pinned, writes advance head and **`init()` does not run at all** (the write answers `"init":{"ran":false,"reason":"pinned"}`). That is the loop for changing virtual-world without taking the live world down mid-edit: pin, deploy as many times as the change takes, vet head, promote in one step. Unpinned — the default, and how the repo has always worked — every `make deploy-changed` is immediately live.
+
+`scripts/revisions.js` is the whole surface (`status`, `list`, `diff`, `label`, `revert`, `pin`, `unpin`); the `make` targets are thin wrappers that default to virtual-world and take `URI=` to retarget. A `<revision>` anywhere is a number, `head`, `last-good`, or a label.
+
+```bash
+make revisions                          # history, newest first
+make revisions ASSET=server/npc-storage.ts   # one file's history
+make revision-diff                      # the newest change
+make revision-diff FROM=last-good TO=head
+make label REV=42 LABEL=before-npc-rework    # survives retention, deployable by name
+make revert REV=last-good DRY=true      # preview; drop DRY= to do it
+```
+
+`revert` restores the files a revision held **as a new revision** rather than rewriting history, and reports whether the database schema still matches what that code expects. Reverting code does not revert the database, and this repo carries no back-compat migrations for old rows — if a revert lands on the wrong side of a schema change, recreate the database (see "Recreating the server" below).
+
+Two things are easy to get wrong:
+
+- **`initOk` records that a revision ran, it is not a verdict on one.** A revision written while the script is pinned never ran: it comes back `initOk: null`, and has still been seen sitting at `lastGood` — where a revision whose `init()` threw once it was finally deployed had also landed. `make check-head` is what actually answers "is this safe to promote".
+- **Deploying does not vet what you deploy.** Pinning to a revision whose `init()` throws succeeds, and the script is broken from that moment. `make pin REV=last-good` is the way back and takes about a second.
+
 ### Checking a script on the server
 
 ```bash
 make check-virtual-world             # POST /engine/check for the deployed copy
 make check-virtual-world-candidate   # check the local entrypoint before deploying
+make check-head                      # check the newest revision, served or not
+make check-head REV=last-good        # or any revision / label
 ```
 
 `scripts/check-script.js` asks the engine what the script would do if deployed: it runs `init()` in a sandbox (database writes rolled back unless you pass `--no-rollback`) and reports diagnostics. It catches what `make format lint typecheck` structurally cannot — circular asset-backed imports (which `tsc` accepts and the engine FATALs on), route handler names the entrypoint never defines, and an `init()` over the engine's startup budget. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
 `--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — modules under `assets/` still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
+
+`--revision <rev>` checks a version that is not being served, which is the only trustworthy verdict on a pinned script's head. The endpoint also accepts a `files` map — a whole multi-module change, laid over the deployed tree, with nothing written — which `scripts/check-script.js` does not expose yet; reach for the `check_script` MCP tool for that.
 
 **This used to time out on virtual-world and no longer does.** The schema migration entry points appeared to stall the check sandbox indefinitely; they were in fact blocking on wedged database relations, which were cleared by recreating the server. A check now answers in well under a second (`init()` ~591ms of the 10000ms budget). If it hangs again, suspect the database rather than the endpoint.
 
@@ -137,11 +175,14 @@ Two switches can defeat all of the above; both should normally be `false`. `SKIP
 ```bash
 make test        # run every example's test modules on the server
 make test-list   # show which scripts and test modules would run, call nothing
+make test-head   # run against the newest revision instead of the served one
 ```
 
 A test module is an asset named `*.test.ts` (or .js/.jsx/.tsx) sitting beside the code it covers — see `src/virtual-world/assets/server/world-domain.test.ts`. `scripts/run-tests.js` scans `src/*/assets/` for them, then asks the server to run each owning script's suite via `POST /engine/run_tests`. Nothing runs locally: the engine executes the tests in the same sandbox that serves the script, so they exercise the real engine globals.
 
 It therefore tests the **deployed** copy. Deploy first (`make deploy-changed`) or a green run may be describing an older version of the file. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+
+`--revision <rev>` (`make test-head`, `REV=` to pick another) runs the suite against a revision that is not being served — the second half of vetting a pinned script's head, after `make check-head`.
 
 Script URIs are derived from the directory name (`src/foo_bar` → `https://example.com/foo-bar`); exceptions live in `SCRIPT_URI_OVERRIDES` in `scripts/run-tests.js`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
 
@@ -192,7 +233,7 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 ### Repo layout
 
 - `src/` — one directory per example script; `virtual-world` is the actively developed one, others are static reference examples
-- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `set-script-hosts.js` (publish a script on a given host), `run-tests.js`, `fetch-graphql-schema.js`
+- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `revisions.js` (history, pin/promote/revert), `set-script-hosts.js` (publish a script on a given host), `run-tests.js`, `fetch-graphql-schema.js`
 - `types/`, `apis/`, `schemas/` — fetched/gitignored metadata from the remote server (never hand-edit; regenerate via `make fetch-*`)
 - `schemas/token.json` — OAuth tokens (issued by `MANAGE_HOST`), gitignored, never commit
 

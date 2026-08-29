@@ -13,12 +13,19 @@ require("dotenv").config();
 // first (`make deploy-changed`) or a passing run may be telling you about an
 // older copy of the file.
 //
+// Pass --revision to run a version that is not being served — `head` after
+// writing to a pinned script, a number, `last-good`, or a label. That is how a
+// change is tested while production stays where it is: pin, deploy, run the
+// suite against head, promote only if it is green.
+//
 // Usage:
 //   node scripts/run-tests.js [options]
 //
 // Options:
 //   --script-uri <uri>  Test only this script, instead of every project found
 //   --filter <text>     Run only cases whose name contains this text
+//   --revision <rev>    Run this version instead of the deployed one:
+//                       a number, `head`, `last-good`, or a label
 //   --no-rollback       Keep the database writes the tests make
 //   --list              Print what would run, call nothing
 // Env:
@@ -112,7 +119,7 @@ function discoverProjects() {
 /**
  * @param {string} token
  * @param {string} scriptUri
- * @param {{ filter?: string, rollback: boolean }} options
+ * @param {{ filter?: string, revision?: string, rollback: boolean }} options
  * @returns {Promise<{ report?: TestReport, status: number, body: string }>}
  */
 async function runTests(token, scriptUri, options) {
@@ -121,6 +128,7 @@ async function runTests(token, scriptUri, options) {
     rollback: String(options.rollback),
   });
   if (options.filter) query.set("filter", options.filter);
+  if (options.revision) query.set("revision", options.revision);
 
   const res = await fetch(`${manageHost}/engine/run_tests?${query}`, {
     method: "POST",
@@ -165,6 +173,8 @@ async function main() {
   const args = process.argv.slice(2);
   let onlyUri = null;
   let filter;
+  /** @type {string | undefined} */
+  let revision;
   let rollback = true;
   let list = false;
 
@@ -175,6 +185,9 @@ async function main() {
         break;
       case "--filter":
         filter = args[++i];
+        break;
+      case "--revision":
+        revision = args[++i];
         break;
       case "--no-rollback":
         rollback = false;
@@ -208,7 +221,8 @@ async function main() {
     return;
   }
 
-  console.log(`Running tests on ${manageHost}\n`);
+  const which = revision ? ` (revision ${revision})` : "";
+  console.log(`Running tests on ${manageHost}${which}\n`);
   const token = await loadAccessToken();
   let failed = 0;
 
@@ -216,6 +230,7 @@ async function main() {
     console.log(`  ${target.scriptUri}`);
     const { report, status, body } = await runTests(token, target.scriptUri, {
       filter,
+      revision,
       rollback,
     });
 

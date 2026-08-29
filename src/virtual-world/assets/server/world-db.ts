@@ -10,17 +10,58 @@ export function parseWorldDbResult(raw: string): any | null {
   }
 }
 
+export interface WorldReadOptions {
+  /**
+   * Hold the returned rows until the transaction ends, so a read-modify-write
+   * cannot lose an update to a concurrent one. Only meaningful inside a
+   * transaction — see worldQueryOptionsJson.
+   */
+  forUpdate?: boolean;
+}
+
+/**
+ * Render read options for `database.query`, or null to take its defaults.
+ *
+ * The engine refuses `forUpdate` outside a transaction, because a lock taken
+ * there would be released the moment the query returned. runInWorldTransaction
+ * is deliberately fail-open — when BEGIN fails the body still runs, just
+ * unprotected — so a locked read reached that way is downgraded to an unlocked
+ * one and logged, rather than raising. Turning a lost update into a dead route
+ * would be the worse trade.
+ */
+function worldQueryOptionsJson(
+  tableName: string,
+  options: WorldReadOptions | undefined,
+): string | null {
+  if (!options || !options.forUpdate) return null;
+  if (transactionDepth === 0) {
+    vwLog("forUpdate requested outside a transaction; reading unlocked", {
+      table: tableName,
+    });
+    return null;
+  }
+  return JSON.stringify({ forUpdate: true });
+}
+
 export function queryWorldRows(
   tableName: string,
   filters: string,
   limit: number,
   orderBy: string,
   orderDir: "asc" | "desc",
+  options?: WorldReadOptions,
 ): any[] {
   const normalizedFilters =
     typeof filters === "string" && filters.trim() ? filters : "{}";
   const result = parseWorldDbResult(
-    database.query(tableName, normalizedFilters, limit, orderBy, orderDir),
+    database.query(
+      tableName,
+      normalizedFilters,
+      limit,
+      orderBy,
+      orderDir,
+      worldQueryOptionsJson(tableName, options),
+    ),
   );
   if (!Array.isArray(result)) {
     if (result && result.error) {
@@ -175,8 +216,9 @@ export function deleteWorldRow(tableName: string, id: number): void {
 export function querySingleWorldRow(
   tableName: string,
   filters: string,
+  options?: WorldReadOptions,
 ): any | null {
-  const rows = queryWorldRows(tableName, filters, 1, "id", "desc");
+  const rows = queryWorldRows(tableName, filters, 1, "id", "desc", options);
   return rows.length > 0 ? rows[0] : null;
 }
 

@@ -15,6 +15,7 @@ import { VWORLD_PLAYER_NICK_TABLE } from "./runtime-config.ts";
 import { cleanupTestData, testUserId } from "./test-fixtures.ts";
 import {
   queryWorldRows,
+  querySingleWorldRow,
   runInWorldTransaction,
   upsertWorldRow,
 } from "./world-db.ts";
@@ -131,5 +132,69 @@ describe("running in a transaction", () => {
       writeNick(userId, "after-throw");
     });
     expect(readNick(userId)).toBe("after-throw");
+  });
+});
+
+/**
+ * A plain read takes no lock, so two transactions can read one row, each
+ * compute from what they read, and each commit — leaving only the second
+ * write, with both reporting success. `forUpdate` is what makes a
+ * read-modify-write (allocateEventSeq above all) safe. Real contention needs
+ * two concurrent requests, which this harness cannot stage; what is pinned
+ * here is that the option reaches the engine accepted rather than refused, and
+ * that asking for it where it cannot be honoured degrades instead of throwing.
+ */
+describe("locked reads", () => {
+  test("a locked read inside a transaction returns the row", () => {
+    const userId = newUserId();
+    writeNick(userId, "locked");
+    const row = runInWorldTransaction("test_for_update", function () {
+      return querySingleWorldRow(
+        VWORLD_PLAYER_NICK_TABLE,
+        JSON.stringify({ user_id: userId }),
+        { forUpdate: true },
+      );
+    });
+    expect(row && String(row.nick)).toBe("locked");
+  });
+
+  test("a re-read in the same transaction sees the write between them", () => {
+    const userId = newUserId();
+    writeNick(userId, "first");
+    const nicks = runInWorldTransaction("test_for_update_twice", function () {
+      const before = querySingleWorldRow(
+        VWORLD_PLAYER_NICK_TABLE,
+        JSON.stringify({ user_id: userId }),
+        { forUpdate: true },
+      );
+      writeNick(userId, "second");
+      const after = querySingleWorldRow(
+        VWORLD_PLAYER_NICK_TABLE,
+        JSON.stringify({ user_id: userId }),
+        { forUpdate: true },
+      );
+      return [String(before.nick), String(after.nick)];
+    });
+    expect(nicks).toEqual(["first", "second"]);
+  });
+
+  test("outside a transaction it degrades to an unlocked read, not an error", () => {
+    const userId = newUserId();
+    writeNick(userId, "unlocked");
+    // The engine refuses forUpdate with no transaction open; world-db drops
+    // the option rather than letting the read fail, because
+    // runInWorldTransaction runs its body unwrapped when BEGIN fails.
+    const row = querySingleWorldRow(
+      VWORLD_PLAYER_NICK_TABLE,
+      JSON.stringify({ user_id: userId }),
+      { forUpdate: true },
+    );
+    expect(row && String(row.nick)).toBe("unlocked");
+  });
+
+  test("a read with no options is unaffected", () => {
+    const userId = newUserId();
+    writeNick(userId, "plain");
+    expect(readNick(userId)).toBe("plain");
   });
 });

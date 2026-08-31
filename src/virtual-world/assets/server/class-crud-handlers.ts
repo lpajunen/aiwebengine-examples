@@ -47,6 +47,7 @@ import {
 import { getAllLivingClasses } from "./living-registry.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
 import { validateDialogueSpec } from "./world-domain.ts";
+import { crossOriginRejection } from "./request-guard.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
@@ -80,6 +81,8 @@ export function itemClassesHandler(context: any) {
  * @param {*} context
  */
 export function createItemClassHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -303,6 +306,8 @@ export function actionClassesHandler(context: any) {
  * @param {*} context
  */
 export function createActionClassHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -581,6 +586,8 @@ export function normalizeLivingKind(value: any, fallback: any) {
  * @param {*} context
  */
 export function createLivingClassHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -855,6 +862,8 @@ export function deleteLivingClassHandler(context: any) {
  * @param {*} context
  */
 export function reconcileWorldHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -908,6 +917,8 @@ export function worldClassesHandler(context: any) {
  * @param {*} context
  */
 export function createWorldClassHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -1164,6 +1175,8 @@ export function tileClassesHandler(context: any) {
  * @param {*} context
  */
 export function createTileClassHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }

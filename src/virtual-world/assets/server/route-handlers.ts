@@ -38,6 +38,7 @@ import { loadPlayerInventory, loadWorldItems } from "./item-storage.ts";
 import { movePlayerForUser } from "./move-player.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
+import { crossOriginRejection } from "./request-guard.ts";
 import { getEffectiveNick, updateOnlinePresence } from "./social-state.ts";
 import { sendRecipientScopedStreamEvent } from "./stream-broadcast.ts";
 import { performTreeActionForUser as performTreeActionForUserImpl } from "./tree-action-helpers.ts";
@@ -173,6 +174,8 @@ export function performTreeActionForUserInner(userId: any, body: any): any {
  * @param {*} context
  */
 export function itemActionHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -241,6 +244,8 @@ export function itemActionHandler(context: any) {
  * @param {*} context
  */
 export function craftHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   return ResponseBuilder.json({ error: "error.crafting_removed" }, 410);
 }
 
@@ -262,6 +267,8 @@ export function grantAllItemsForUser(userId: any): any {
  * @param {*} context
  */
 export function setNicknameHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -327,6 +334,8 @@ export function onlinePlayersHandler(context: any) {
  * @param {*} context
  */
 export function chatHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -345,6 +354,8 @@ export function chatHandler(context: any) {
  * @param {*} context
  */
 export function dmHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -378,6 +389,8 @@ export function dmHistoryHandler(context: any) {
  * @param {*} context
  */
 export function cheatItemsHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -391,6 +404,8 @@ export function cheatItemsHandler(context: any) {
  * @param {*} context
  */
 export function moveHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -438,6 +453,8 @@ export function moveHandler(context: any) {
  * @param {*} context
  */
 export function leaveHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -454,6 +471,8 @@ export function leaveHandler(context: any) {
  * @param {*} context
  */
 export function heartbeatHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -470,6 +489,8 @@ export function heartbeatHandler(context: any) {
  * @param {*} context
  */
 export function newWorldHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -481,6 +502,8 @@ export function newWorldHandler(context: any) {
  * @param {*} context
  */
 export function startWorldHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -540,6 +563,8 @@ export function currentWorldHandler(context: any) {
  * @param {*} context
  */
 export function treeActionHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }
@@ -565,6 +590,8 @@ export function treeActionHandler(context: any) {
  * @param {*} context
  */
 export function dialogueHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
   if (!context.request.auth || !context.request.auth.isAuthenticated) {
     return ResponseBuilder.json({ error: "Authentication required" }, 401);
   }

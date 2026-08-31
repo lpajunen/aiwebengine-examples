@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login refresh-token token-status upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate check-head eval test test-list test-head status revisions revision-diff pin unpin promote revert label verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login oauth-relogin refresh-token token-status upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate check-head eval test test-list test-head status revisions revision-diff pin unpin promote revert label verify
 
 # Host configuration (can be overridden via environment variables)
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
@@ -23,6 +23,12 @@ fetch-graphql-schema:
 
 oauth-login:
 	npm run oauth-login
+
+# Register a new OAuth client instead of reusing the cached one. The engine
+# records consent per (user, client), so this is also what makes the consent
+# screen appear again -- use it if the saved client was removed server-side.
+oauth-relogin:
+	npm run oauth-login -- --forget-client
 
 # Renew the saved token without the browser login. The tooling does this
 # for itself when it finds an expired token; these are for checking.

@@ -13,14 +13,18 @@ require("dotenv").config();
 //   OAUTH_ISSUER (default: MANAGE_HOST, i.e. https://manage.softagen.com)
 //   OAUTH_CLIENT_ID (optional; if absent, tries dynamic registration)
 //   OAUTH_SCOPE (default: "openid")
-//   OAUTH_REDIRECT_PORT (default: 53134)
+//   OAUTH_REDIRECT_PORT (default: 53134; 0 means any free port)
 //   OAUTH_REDIRECT_HOST (default: 127.0.0.1)
+// Flags:
+//   --forget-client  re-register instead of reusing the cached client_id,
+//                    which also means approving the consent screen again
 
 const http = require("http");
 const { URL, URLSearchParams } = require("url");
 const crypto = require("crypto");
 const path = require("path");
 const tokenStore = require("./lib/token.js");
+const clientStore = require("./lib/client.js");
 
 const issuer =
   process.env.OAUTH_ISSUER ||
@@ -31,9 +35,27 @@ const metadataUrl = new URL(
   issuer,
 ).toString();
 const redirectHost = process.env.OAUTH_REDIRECT_HOST || "127.0.0.1";
-let redirectPort = parseInt(process.env.OAUTH_REDIRECT_PORT || "0", 10); // Use 0 for dynamic port allocation
+// A fixed port by default, because the registered client is only reusable for
+// the exact redirect URI it was registered with. Asking the OS for any free
+// port would mean a new URI, so a new client, so the consent screen again on
+// every login. Set OAUTH_REDIRECT_PORT=0 to opt back into an ephemeral port.
+const DEFAULT_REDIRECT_PORT = 53134;
+let redirectPort = Number.parseInt(
+  process.env.OAUTH_REDIRECT_PORT || String(DEFAULT_REDIRECT_PORT),
+  10,
+);
+if (
+  !Number.isInteger(redirectPort) ||
+  redirectPort < 0 ||
+  redirectPort > 65535
+) {
+  throw new Error(
+    `OAUTH_REDIRECT_PORT must be a port number, got "${process.env.OAUTH_REDIRECT_PORT}"`,
+  );
+}
 let redirectUri = `http://${redirectHost}:${redirectPort}/callback`;
 const scope = process.env.OAUTH_SCOPE || "openid";
+const forgetClient = process.argv.includes("--forget-client");
 
 /**
  * @param {Buffer | string} input
@@ -170,28 +192,11 @@ async function main() {
     ? new URL(meta.registration_endpoint, issuer).toString()
     : null;
 
+  // Registration is deferred until the callback server has a port — see the
+  // bind below. The engine compares redirect_uri byte for byte (RFC 6749
+  // §3.1.2.3), so the URI registered here has to be the exact string the
+  // authorization request will carry.
   let clientId = process.env.OAUTH_CLIENT_ID;
-  if (!clientId) {
-    if (!registerUrl) {
-      throw new Error(
-        "OAUTH_CLIENT_ID not set and registration_endpoint not available. Provide a client ID.",
-      );
-    }
-    console.log("Registering a dynamic client...");
-    const registration = await dynamicRegisterClient(registerUrl);
-    clientId = registration.client_id;
-    if (!clientId) {
-      throw new Error(
-        `Dynamic registration succeeded but no client_id returned: ${JSON.stringify(registration)}`,
-      );
-    }
-    console.log(`Registered client_id: ${clientId}`);
-  }
-  if (!clientId) {
-    throw new Error(
-      "client_id is undefined; cannot proceed with authorization.",
-    );
-  }
 
   const state = base64url(crypto.randomBytes(16));
   const pkce = createPkce();
@@ -268,12 +273,100 @@ async function main() {
     }
   });
 
-  srv.listen(redirectPort, redirectHost, () => {
+  // Bind before registering: the real port is known only once the socket is
+  // listening, and the client has to be registered for the URI the
+  // authorization request will actually carry. Registering first published
+  // `http://127.0.0.1:0/callback` while the request named the port the OS had
+  // handed out, and the engine rejected the mismatch with "redirect_uri does
+  // not match a URI this client registered".
+  /**
+   * @param {number} port
+   * @returns {Promise<void>}
+   */
+  function bind(port) {
+    return new Promise((resolve, reject) => {
+      srv.once("error", reject);
+      srv.listen(port, redirectHost, () => {
+        srv.removeListener("error", reject);
+        resolve(undefined);
+      });
+    });
+  }
+
+  let portFallback = false;
+  try {
+    await bind(redirectPort);
+  } catch (err) {
+    // Something else holds the preferred port -- often a login from an earlier
+    // run that never exited. Any free port still completes a login; it just
+    // registers a client that the cache cannot reuse next time.
+    if (/** @type {NodeJS.ErrnoException} */ (err).code !== "EADDRINUSE") {
+      throw err;
+    }
+    console.log(
+      `Port ${redirectPort} is in use; falling back to any free port. ` +
+        "This login registers a client that will not be reused, so the consent " +
+        "screen appears again.",
+    );
+    portFallback = true;
+    await bind(0);
+  }
+
+  {
     const addr = srv.address();
     const actualPort =
       addr && typeof addr !== "string" ? addr.port : redirectPort;
     redirectPort = actualPort;
     redirectUri = `http://${redirectHost}:${actualPort}/callback`;
+
+    if (forgetClient && clientStore.forgetClientId(issuer)) {
+      console.log(`Forgot the cached client for ${issuer}.`);
+    }
+
+    // Reuse the client registered for this issuer and this exact callback URI.
+    // The engine records consent per (user, client), so reusing the id is what
+    // makes the consent screen a one-time approval rather than a per-login one.
+    if (!clientId && !forgetClient) {
+      clientId = clientStore.cachedClientId(issuer, redirectUri) || undefined;
+      if (clientId) {
+        const cacheFile = path.relative(
+          process.cwd(),
+          clientStore.clientPath(),
+        );
+        console.log(
+          `Reusing client_id ${clientId} from ${cacheFile} ` +
+            "(delete it, or pass --forget-client, to register a new one)",
+        );
+      }
+    }
+
+    if (!clientId) {
+      if (!registerUrl) {
+        srv.close();
+        throw new Error(
+          "OAUTH_CLIENT_ID not set and registration_endpoint not available. Provide a client ID.",
+        );
+      }
+      console.log(`Registering a dynamic client for ${redirectUri}`);
+      const registration = await dynamicRegisterClient(registerUrl);
+      clientId = registration.client_id;
+      if (!clientId) {
+        srv.close();
+        throw new Error(
+          `Dynamic registration succeeded but no client_id returned: ${JSON.stringify(registration)}`,
+        );
+      }
+      console.log(`Registered client_id: ${clientId}`);
+      // Remembered only when this script registered it: an OAUTH_CLIENT_ID from
+      // the environment is the caller's to manage, not ours to cache. A client
+      // registered against a fallback port is not worth remembering either --
+      // the port was borrowed for this run, so the entry could never match
+      // again, and writing it would discard a good entry over a port that
+      // happened to be busy once.
+      if (!portFallback) {
+        clientStore.rememberClientId(issuer, redirectUri, clientId);
+      }
+    }
 
     // Build auth URL with actual port
     const authParams = new URLSearchParams({
@@ -336,7 +429,7 @@ async function main() {
       clearTimeout(timeoutHandle);
       browserOpened = true;
     });
-  });
+  }
 }
 
 main().catch((e) => {

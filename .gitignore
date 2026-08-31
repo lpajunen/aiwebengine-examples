@@ -8,3 +8,5 @@ node_modules/
 .claude/projects/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+schemas/oauth-client.json

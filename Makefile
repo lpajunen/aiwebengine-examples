@@ -1,4 +1,4 @@
-.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login oauth-relogin refresh-token token-status upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate check-head eval test test-list test-head status revisions revision-diff pin unpin promote revert label verify
+.PHONY: all fetch-types fetch-openapi fetch-graphql-schema oauth-login oauth-relogin refresh-token token-status upload-virtual-world upload-virtual-world-dry-run deploy-changed deploy-changed-dry-run set-script-hosts set-script-hosts-dry-run set-git-credentials git-credentials forget-git-credentials git-pull git-push install outdated format format-check lint typecheck check-virtual-world check-virtual-world-candidate check-head eval test test-list test-head status revisions revision-diff pin unpin promote revert label verify
 
 # Host configuration (can be overridden via environment variables)
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
@@ -58,6 +58,62 @@ set-script-hosts:
 
 set-script-hosts-dry-run:
 	npm run set-script-hosts-dry-run
+
+# Git credentials for the engine's /engine/git/* API (scripts/git-credentials.js).
+# `set` stores a personal access token for a git host so that a pull can read a
+# repository the public internet cannot. The token is prompted for -- it is
+# never echoed and stays out of shell history -- and the engine checks it
+# against the host before storing it, so a mistyped or revoked token is refused
+# here. It is encrypted at rest and never returned again, by any endpoint.
+#
+#   make set-git-credentials                 # prompt, github.com
+#   make set-git-credentials HOST=gitlab.com
+#   echo $$TOKEN | make set-git-credentials STDIN=true   # scripted, no prompt
+set-git-credentials:
+	@node scripts/git-credentials.js set $(if $(HOST),--host "$(HOST)") \
+	  $(if $(filter true,$(STDIN)),--token-stdin) \
+	  $(if $(TOKEN_ENV),--token-env "$(TOKEN_ENV)")
+
+# What is stored -- host, account, when it was added and last used. Never a token.
+git-credentials:
+	@node scripts/git-credentials.js list
+
+# Forget the credential for a host (HOST=, default github.com).
+forget-git-credentials:
+	@node scripts/git-credentials.js delete $(if $(HOST),--host "$(HOST)")
+
+# Pull a GitHub repository into the engine as scripts (POST /engine/git/pull).
+# The layout is the contract: a directory holding main.ts/.js/.tsx/.jsx is a
+# script, everything beside it is that script's assets. The URI the scripts
+# land under comes from PREFIX (default: the repository name), never from the
+# repository -- so does ownership, which is always the caller.
+#
+#   make git-pull REPO=owner/repo
+#   make git-pull REPO=owner/repo BRANCH=main PREFIX=examples
+#   make git-pull REPO=owner/repo DRY=true      # show the request, call nothing
+#   make git-pull REPO=owner/repo FORCE=true    # re-apply an unmoved repo
+git-pull:
+	@node scripts/git-sync.js pull --repo "$(REPO)" \
+	  $(if $(BRANCH),--branch "$(BRANCH)") $(if $(PREFIX),--prefix "$(PREFIX)") \
+	  $(if $(filter true,$(FORCE)),--force) $(if $(filter true,$(DRY)),--dry-run)
+
+# Publish a script's files to GitHub as one commit (POST /engine/git/push).
+# This writes to somebody's repository, so it needs a stored credential
+# (`make set-git-credentials`) and refuses when both sides have moved since the
+# last sync -- the engine reports the divergence rather than merging it.
+# SCRIPT= defaults to virtual-world; REPO= is optional once a script has been
+# pulled, since it remembers where it came from. DRY=true prints the request.
+#
+#   make git-push REPO=owner/repo MSG="Fix the cart total"
+#   make git-push SCRIPT=https://example.com/blog REPO=owner/repo DRY=true
+#   make git-push REPO=owner/repo FORCE=true    # engine-side divergence only;
+#                                               # GitHub still refuses a
+#                                               # non-fast-forward update
+git-push:
+	@node scripts/git-sync.js push $(if $(SCRIPT),--script "$(SCRIPT)") \
+	  $(if $(REPO),--repo "$(REPO)") $(if $(BRANCH),--branch "$(BRANCH)") \
+	  $(if $(MSG),--message "$(MSG)") \
+	  $(if $(filter true,$(FORCE)),--force) $(if $(filter true,$(DRY)),--dry-run)
 
 install:
 	npm run install

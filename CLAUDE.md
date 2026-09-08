@@ -61,6 +61,56 @@ Renewing needs the `client_id` that the login registered, which
 Log in again only when the refresh token itself is rejected; the scripts say so
 explicitly when that happens.
 
+### Git credentials
+
+The engine's git API (`/engine/git/*`) pulls a GitHub repository in as scripts.
+Reading anything the public internet cannot see needs a personal access token
+stored per user and host:
+
+```bash
+make set-git-credentials                 # prompts for the token, github.com
+make set-git-credentials HOST=gitlab.com
+make git-credentials                     # host, account, added/last used
+make forget-git-credentials HOST=...     # drop one host's token
+```
+
+`scripts/git-credentials.js` wraps `POST/GET/DELETE $MANAGE_HOST/engine/git/credentials`.
+The token is prompted for without echo so it stays out of shell history and the
+process list; `STDIN=true` (read from stdin) and `TOKEN_ENV=NAME` are there for
+scripted use. The engine verifies the token against the host before storing it,
+so a mistyped or revoked one is refused while it can still be fixed, encrypts it
+at rest, and never returns it again — `make git-credentials` shows metadata only.
+
+### Pulling and pushing scripts
+
+```bash
+make git-pull REPO=owner/repo                      # repo -> engine, as scripts
+make git-pull REPO=owner/repo BRANCH=main PREFIX=examples
+make git-push REPO=owner/repo MSG="Fix the cart total"   # script -> repo, one commit
+make git-push SCRIPT=https://example.com/blog REPO=owner/repo
+```
+
+`scripts/git-sync.js` wraps `POST $MANAGE_HOST/engine/git/pull` and
+`POST $MANAGE_HOST/engine/git/push`. Both take `DRY=true` (print the request,
+call nothing), `BRANCH=`, and `FORCE=`; `make git-push` defaults `SCRIPT=` to
+virtual-world and takes `MSG=` for the commit message.
+
+The repository layout is the whole contract — there is no manifest. A directory
+holding `main.ts` (or `.js`/`.tsx`/`.jsx`) is one script and everything beside
+it is that script's assets at the same relative path; a repo with `main.ts` at
+its root is itself one script. The two things a manifest would carry, the local
+URI and the ownership, are deliberately left out so they cannot travel between
+installs: the URI comes from `PREFIX=` (default: the repository name) and the
+owner is always the caller. A push writes the same layout back, preserving files
+the script does not own and everything `.aiwebengineignore` excludes.
+
+`FORCE=` means opposite things in the two directions. On a pull it re-applies a
+repository that has not moved (normally a no-op). On a push it overrides the
+engine's own divergence check — the endpoint refuses when both sides have moved
+rather than merging — and GitHub still refuses a non-fast-forward update, so it
+cannot overwrite work the engine has not seen. A push also needs a stored
+credential; without one it is a 403.
+
 ### Deployment
 
 ```bash

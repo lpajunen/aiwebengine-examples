@@ -277,30 +277,43 @@ async function pull(token, config) {
   }
 
   for (const script of scripts) {
-    const name = script.uri || script.script || "(unnamed script)";
-    const written = countOf(script.assetsWritten ?? script.written);
-    const deleted = countOf(script.assetsDeleted ?? script.deleted);
     const parts = [];
-    if (script.status) parts.push(script.status);
-    if (written !== null) parts.push(`${written} written`);
-    if (deleted !== null) parts.push(`${deleted} deleted`);
-    // A pull runs init() afterwards, and a script that pulled cleanly but
-    // failed to start is the interesting case here, not a success.
-    if (script.init && script.init.ran === false) {
-      parts.push(
-        `init did not run${script.init.reason ? `: ${script.init.reason}` : ""}`,
-      );
-    } else if (script.init && script.init.ok === false) {
-      parts.push(
-        `init FAILED${script.init.error ? `: ${script.init.error}` : ""}`,
-      );
-    } else if (script.init && script.init.ok === true) {
-      parts.push("init ok");
+    if (script.action && script.changed) parts.push(script.action);
+    if (script.written) parts.push(`${script.written} written`);
+    if (script.deleted) parts.push(`${script.deleted} deleted`);
+    if (!script.changed && script.unchanged) {
+      parts.push(`${script.unchanged} unchanged`);
     }
-    console.log(`  ${name}${parts.length ? ` - ${parts.join(", ")}` : ""}`);
+    // A pull runs init() afterwards. It is skipped when the pull wrote
+    // nothing, which is the normal answer for a repository that has not moved
+    // and not something to report as a failure.
+    const init = script.init;
+    if (init && init.ran === false && script.changed) {
+      parts.push(`init did not run${init.reason ? `: ${init.reason}` : ""}`);
+    } else if (init && init.ran !== false) {
+      const ok = init.success !== false && init.ok !== false;
+      const ms = init.durationMs != null ? ` in ${init.durationMs}ms` : "";
+      parts.push(
+        ok
+          ? `init ok${ms}`
+          : `init FAILED${init.error ? `: ${init.error}` : ""}`,
+      );
+    }
+    console.log(
+      `  ${script.script || script.uri || "(unnamed script)"}${parts.length ? ` - ${parts.join(", ")}` : ""}`,
+    );
   }
+
   console.log("");
-  console.log(`✓ Pulled ${scripts.length} script(s) from ${config.repo}`);
+  const commit = result.parsed.commit
+    ? ` at ${String(result.parsed.commit).slice(0, 12)}`
+    : "";
+  const branch = result.parsed.branch ? `#${result.parsed.branch}` : "";
+  const moved = scripts.filter((script) => script.changed).length;
+  console.log(
+    `✓ ${scripts.length} script(s) from ${config.repo}${branch}${commit}` +
+      ` — ${moved} changed, ${scripts.length - moved} already current`,
+  );
 }
 
 /**

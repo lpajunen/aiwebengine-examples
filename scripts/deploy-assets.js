@@ -39,15 +39,20 @@ const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const { loadAccessToken } = require("./lib/token.js");
 const { loadIgnorePatterns, makeIgnoreFilter } = require("./lib/ignore.js");
+const {
+  defaultScriptDir,
+  defaultScriptPath,
+  defaultScriptUri,
+} = require("./lib/repo-config.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 const isIgnored = makeIgnoreFilter(loadIgnorePatterns());
 
 const DEFAULTS = {
-  scriptUri: "https://example.com/virtual-world",
-  assetsDir: "virtual-world",
-  scriptPath: "virtual-world/main.js",
+  scriptUri: defaultScriptUri(),
+  assetsDir: defaultScriptDir(),
+  scriptPath: defaultScriptPath(),
 };
 
 /**

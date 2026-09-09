@@ -39,7 +39,11 @@ const { loadAccessToken } = require("./lib/token.js");
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 
-const DEFAULT_SCRIPT_URI = "https://example.com/virtual-world";
+const { defaultScriptUri } = require("./lib/repo-config.js");
+
+// Which script `make eval` talks to when none is named: repository-specific,
+// so it lives in aiwebengine.config.json rather than in this shared file.
+const DEFAULT_SCRIPT_URI = defaultScriptUri();
 
 /**
  * @typedef {{ level?: string, message?: string, timestampMs?: number }} ConsoleLine

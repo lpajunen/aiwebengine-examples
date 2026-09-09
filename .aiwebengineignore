@@ -8,6 +8,7 @@
 # Everything below is repository furniture or tooling, plus the notes that live
 # beside virtual-world's code and are not assets of it.
 
+/aiwebengine.config.json
 /AGENTS.md
 /apis
 /CLAUDE.md

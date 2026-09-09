@@ -49,9 +49,35 @@ make format lint typecheck
 - `lint` — markdownlint on `**/*.md`
 - `typecheck` — runs both `tsc -p tsconfig.json` (TS/TSX files) and `tsc -p jsconfig.json` (checked JS files); there is no test suite
 
-`npm run verify` (`format-check` + `lint` + `typecheck`, no writes) is the CI-safe variant used to check without mutating files.
+`make verify` (`format-check` + `lint` + `typecheck`, no writes) is the CI-safe variant used to check without mutating files.
 
 To typecheck/lint a single file, invoke the underlying tools directly, e.g. `./node_modules/.bin/tsc -p tsconfig.json --noEmit` (project-wide only — `tsc` config here doesn't support single-file checking) or `./node_modules/.bin/prettier --check path/to/file.ts`.
+
+### Shared tooling
+
+`scripts/` and the two TypeScript configs are shared verbatim with
+`../aiwebengine-dev`; **this repository is the source of truth**, so fixes are
+made here and pulled over there with `make sync-tooling`.
+
+```bash
+make check-tooling   # diff the consumer against the source; fails on drift
+make sync-tooling    # take the source version (no-op here)
+```
+
+That only works if nothing repository-specific sits in the shared files:
+
+- Per-script defaults live in `aiwebengine.config.json` — `defaultScript.uri`,
+  `.path` and `.dir` are what `make status`, `make eval`, `make deploy-changed`
+  and `make check-head` target when nothing is named, `scriptUriOverrides` is
+  the exception list `run-tests.js` consults, and `uriOrigin` is what a
+  directory name is turned into a URI against.
+- Generic make targets live in `scripts/tooling.mk`, which the `Makefile`
+  includes; the `Makefile` itself holds only this repository's upload targets
+  and host bindings.
+- `package.json` carries the local toolchain (`format`, `lint`, `typecheck`,
+  `verify`, `outdated`) and nothing else. Engine operations are make targets
+  that call `node scripts/...` directly, so there is one interface rather than
+  a make target wrapping an npm script wrapping a node call.
 
 ### Fetching remote metadata (gitignored, regenerate as needed)
 
@@ -140,7 +166,7 @@ make upload-virtual-world           # deploys virtual-world.js + assets/ via htt
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
-`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri https://example.com/virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `npm run upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
+`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri https://example.com/virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `make upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
 
 The deployed virtual-world is served from `https://world.softagen.com/virtual-world`; the other examples from `https://softagen.com/<name>`.
 

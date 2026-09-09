@@ -38,6 +38,7 @@ const { loadAccessToken } = require("./lib/token.js");
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 const { loadIgnorePatterns, makeIgnoreFilter } = require("./lib/ignore.js");
+const { scriptUriOverrides, uriOrigin } = require("./lib/repo-config.js");
 const isIgnored = makeIgnoreFilter(loadIgnorePatterns());
 
 // A script is a top-level directory holding a `main.*` entrypoint -- the same
@@ -45,10 +46,9 @@ const isIgnored = makeIgnoreFilter(loadIgnorePatterns());
 // root is repository furniture, and `.aiwebengineignore` names it.
 const ENTRYPOINT = /^main\.(ts|js|jsx|tsx)$/;
 
-// Script URIs that do not follow the directory convention below.
-const SCRIPT_URI_OVERRIDES = {
-  import_example: "https://example.com/import-example",
-};
+// Script URIs that do not follow the directory convention below. Which ones
+// deviate is repository-specific, so the list lives in aiwebengine.config.json.
+const SCRIPT_URI_OVERRIDES = scriptUriOverrides();
 
 /**
  * The URI a project directory is deployed under. Directories use snake_case or
@@ -60,7 +60,7 @@ const SCRIPT_URI_OVERRIDES = {
 function scriptUriFor(projectDir) {
   return (
     SCRIPT_URI_OVERRIDES[projectDir] ||
-    `https://example.com/${projectDir.replace(/_/g, "-")}`
+    `${uriOrigin()}/${projectDir.replace(/_/g, "-")}`
   );
 }
 

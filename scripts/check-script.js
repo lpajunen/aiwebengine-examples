@@ -44,13 +44,14 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const { loadAccessToken } = require("./lib/token.js");
+const { defaultScriptPath, defaultScriptUri } = require("./lib/repo-config.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
 
 const DEFAULTS = {
-  scriptUri: "https://example.com/virtual-world",
-  scriptPath: "virtual-world/main.js",
+  scriptUri: defaultScriptUri(),
+  scriptPath: defaultScriptPath(),
 };
 
 /**

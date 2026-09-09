@@ -62,8 +62,8 @@ We welcome all kinds of contributions:
 3. Test your changes:
 
    ```bash
-   npm run fetch-types
-   npm run fetch-graphql-schema
+   make fetch-types
+   make fetch-graphql-schema
    # Test any affected functionality
    ```
 

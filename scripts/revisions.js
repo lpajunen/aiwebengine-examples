@@ -66,7 +66,9 @@ const { loadAccessToken } = require("./lib/token.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 
-const DEFAULT_SCRIPT_URI = "https://example.com/virtual-world";
+const { defaultScriptUri } = require("./lib/repo-config.js");
+
+const DEFAULT_SCRIPT_URI = defaultScriptUri();
 
 /**
  * @typedef {{ revision: number, parent: number | null, origin?: string,

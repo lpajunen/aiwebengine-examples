@@ -1,3 +1,13 @@
+# What is not part of a script.
+#
+# The engine reads this when pushing a script to a repository: what it excludes
+# is left untouched there. The local tooling (scripts/lib/ignore.js) reads the
+# same file when it collects a script's assets, so an upload and a push agree
+# on what belongs to the script.
+#
+# Everything below is repository furniture or tooling, plus the notes that live
+# beside virtual-world's code and are not assets of it.
+
 /AGENTS.md
 /apis
 /CLAUDE.md
@@ -12,6 +22,10 @@
 /schemas
 /scripts
 /SECURITY.md
-/src
 /tsconfig.json
 /types
+
+# virtual-world's working notes sit next to its code; they are not assets.
+/virtual-world/*.md
+
+.DS_Store

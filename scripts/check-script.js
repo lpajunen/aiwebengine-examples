@@ -31,7 +31,7 @@ require("dotenv").config();
 // Options:
 //   --script-uri <uri>    Script to check   (default https://example.com/virtual-world)
 //   --script-path <path>  Entrypoint to send with --candidate
-//                         (default src/virtual-world/virtual-world.js)
+//                         (default virtual-world/main.js)
 //   --candidate           Check the local entrypoint instead of the deployed one
 //   --revision <rev>      Check this version instead of the deployed one:
 //                         a number, `head`, `last-good`, or a label
@@ -50,7 +50,7 @@ const repoRoot = path.join(__dirname, "..");
 
 const DEFAULTS = {
   scriptUri: "https://example.com/virtual-world",
-  scriptPath: "src/virtual-world/virtual-world.js",
+  scriptPath: "virtual-world/main.js",
 };
 
 /**

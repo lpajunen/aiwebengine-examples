@@ -12,7 +12,29 @@ Three hosts are involved, and they are not interchangeable:
 - **`SERVER_HOST`** (default `https://softagen.com`) — the engine's default host for deployed solutions; where the example scripts' registered routes are served.
 - **`WORLD_HOST`** (default `world.softagen.com`) — the hostname the `virtual-world` example is published on, bound with `make set-script-hosts`.
 
-The primary development focus is **`src/virtual-world/`**, a multiplayer world/game example. Other directories under `src/` (`blog`, `feedback`, `chat_app`, `hello`, `mcp_tools_demo`, etc.) are small standalone single-file examples. Keep changes scoped to the relevant example directory unless explicitly asked to work across them.
+The primary development focus is **`virtual-world/`**, a multiplayer world/game example. The other script directories (`blog`, `feedback`, `chat_app`, `hello`, `mcp_tools_demo`, etc.) are small standalone single-file examples. Keep changes scoped to the relevant example directory unless explicitly asked to work across them.
+
+### Repository layout is the deployment contract
+
+Every script is a **top-level directory holding `main.*`** (`.ts`, `.js`, `.tsx`
+or `.jsx`); everything else under that directory is one of its assets, at the
+same relative path. `virtual-world/server/world-db.ts` is deployed as the asset
+`server/world-db.ts`, and `virtual-world/main.js` is the entrypoint rather than
+an asset.
+
+This is not a local convention — it is the layout the engine's `/engine/git/*`
+API reads and writes (see "Pulling and pushing scripts"), which is why there is
+no `src/` directory and no manifest anywhere. The two things a manifest would
+carry, the URI a script is served at and who owns it, deliberately do not live
+in the repository: the URI comes from the deploy command (or `PREFIX=` on a
+pull) and the owner is whoever pulls.
+
+`.aiwebengineignore` at the repository root says what is _not_ part of a
+script: the tooling directories, and virtual-world's working notes, which sit
+beside its code but are not assets of it. The engine reads it when pushing, and
+`scripts/lib/ignore.js` reads it locally so an upload and a push agree on what
+belongs to a script. Adding a `.md` note to a script directory without listing
+it there deploys it as an asset.
 
 ## Commands
 
@@ -118,7 +140,7 @@ make upload-virtual-world           # deploys virtual-world.js + assets/ via htt
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
-`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path src/virtual-world/virtual-world.js --script-uri https://example.com/virtual-world --assets-dir src/virtual-world/assets`. There's a parallel `npm run upload-import-example` for `src/import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
+`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri https://example.com/virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `npm run upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
 
 The deployed virtual-world is served from `https://world.softagen.com/virtual-world`; the other examples from `https://softagen.com/<name>`.
 
@@ -228,13 +250,13 @@ make test-list   # show which scripts and test modules would run, call nothing
 make test-head   # run against the newest revision instead of the served one
 ```
 
-A test module is an asset named `*.test.ts` (or .js/.jsx/.tsx) sitting beside the code it covers — see `src/virtual-world/assets/server/world-domain.test.ts`. `scripts/run-tests.js` scans `src/*/assets/` for them, then asks the server to run each owning script's suite via `POST /engine/run_tests`. Nothing runs locally: the engine executes the tests in the same sandbox that serves the script, so they exercise the real engine globals.
+A test module is an asset named `*.test.ts` (or .js/.jsx/.tsx) sitting beside the code it covers — see `virtual-world/server/world-domain.test.ts`. `scripts/run-tests.js` scans every script directory (a top-level directory holding `main.*`) for them, then asks the server to run each owning script's suite via `POST /engine/run_tests`. Nothing runs locally: the engine executes the tests in the same sandbox that serves the script, so they exercise the real engine globals.
 
 It therefore tests the **deployed** copy. Deploy first (`make deploy-changed`) or a green run may be describing an older version of the file. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
 `--revision <rev>` (`make test-head`, `REV=` to pick another) runs the suite against a revision that is not being served — the second half of vetting a pinned script's head, after `make check-head`.
 
-Script URIs are derived from the directory name (`src/foo_bar` → `https://example.com/foo-bar`); exceptions live in `SCRIPT_URI_OVERRIDES` in `scripts/run-tests.js`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
+Script URIs are derived from the directory name (`foo_bar/` → `https://example.com/foo-bar`); exceptions live in `SCRIPT_URI_OVERRIDES` in `scripts/run-tests.js`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
 
 ## Architecture
 
@@ -242,18 +264,23 @@ Script URIs are derived from the directory name (`src/foo_bar` → `https://exam
 
 Every deployed script is a single JS/TS entrypoint that must export `init()`. `init()` registers routes/resolvers/streams against globals declared in `types/aiwebengine.d.ts` (`routeRegistry`, `graphQLRegistry`, `ResponseBuilder`, etc. — fetch this file locally with `make fetch-types` before working on type-checked code; it's gitignored). Handlers receive a `HandlerContext` with `context.request` (path, method, headers, query, params, form, body, files, auth).
 
-### Virtual World: server/ vs assets/server/ split
+### Virtual World: entrypoint and server modules
 
-`src/virtual-world/virtual-world.js` is the single deployed entrypoint, kept deliberately thin (~600 lines): imports, `init()`, and one-line named delegate functions for every route/tool/stream handler — the aiwebengine runtime resolves handlers by name string in the entrypoint's scope, so those names must stay defined there even though the bodies live in server modules. It imports server-side modules from `./server/*.ts`, but **those files are one-line re-export shims**:
+`virtual-world/main.js` is the single deployed entrypoint, kept deliberately
+thin (~600 lines): imports, `init()`, and one-line named delegate functions for
+every route/tool/stream handler — the aiwebengine runtime resolves handlers by
+name string in the entrypoint's scope, so those names must stay defined there
+even though the bodies live in server modules. It imports them from
+`./server/*.ts`, which is both where they live locally and the asset path they
+are deployed under.
 
-```ts
-// src/virtual-world/server/chat-storage.ts
-export * from "../assets/server/chat-storage.ts";
-```
+(Until the repository moved to the engine's git layout, `server/*.ts` was 54
+one-line re-export shims pointing at the real modules under `assets/server/`,
+because only files under `assets/` were deployed. Flattening `assets/` into the
+script directory made the shims meaningless and they are gone; edit
+`server/<name>.ts` directly.)
 
-The actual implementation lives in `src/virtual-world/assets/server/*.ts` (same filenames, real content). `src/virtual-world/assets/` is uploaded as the assets directory alongside the script (`--assets-dir src/virtual-world/assets`), so the real modules must physically live under `assets/` to be deployed — the `server/` shims exist purely so `virtual-world.js`'s relative imports resolve locally/for typechecking. **When editing virtual-world server logic, edit the file under `assets/server/`, not the shim under `server/`.** Keep both directories' filenames in sync when adding a new module (add the real file under `assets/server/`, add a matching one-line re-export shim under `server/`).
-
-Server modules under `assets/server/`, by feature — go straight to the right file instead of grepping:
+Server modules under `server/`, by feature — go straight to the right file instead of grepping:
 
 - Wiring: `runtime-registration.ts` (all route/asset/stream/tool registration), `runtime-config.ts` (DB table names, tick/lease timing, stream path — shared constants imported everywhere), `diagnostics.ts` (`vwLog`/`vwDiag`, inventory/item summaries), `route-handlers.ts` (game HTTP route handlers, page handler, SSE stream customizer), `class-crud-handlers.ts` (creator class CRUD HTTP handlers), `tool-handlers.ts` (MCP `virtualWorld*` tool handlers), `http-handler-helpers.ts` (per-route handler logic: nickname, chat/DM, presence, heartbeat; auth + creator-stone/owner-or-admin permission checks), `admin-storage.ts` (DB-only `vworld_admins` lookup — no route/tool, by design; the override authority behind the owner-scoped class permissions), `page-bootstrap.ts` (game page HTML + initial page state, script-tag load order), `schema-setup.ts` (DB schema creation/migration)
 - Worlds: `world-domain.ts` (dimensions, tile constants/rules), `world-map.ts` (terrain generation, applying world mods to maps), `world-bootstrap.ts` (create/lookup worlds, world types, effective map, portal destinations), `world-switch.ts` (moving players between worlds), `world-mod-storage.ts` (persisted trees/houses/tile mods), `world-db.ts` (low-level DB row helpers, transactions), `world-class-storage.ts` (world class records + cache — size, base generation preset, spawn manifests), `world-events.ts` (world event definitions)
@@ -265,7 +292,7 @@ Server modules under `assets/server/`, by feature — go straight to the right f
 
 Server modules import each other directly (no dependency injection) — table names and timing constants come from `runtime-config.ts`, logging from `diagnostics.ts`. Don't add deps-object parameters; import the sibling module instead.
 
-`src/virtual-world/assets/public/` is browser-side JS served as static assets:
+`virtual-world/public/` is browser-side JS served as static assets:
 
 - `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in the client `.js` files.
 - All public `.js` files are plain global scripts (no modules) with JSDoc types, referencing the globals file. They share one global scope; load order is the script-tag order in `page-bootstrap.ts`, and each file also needs a `safeRegisterAssetRoute` entry in `runtime-registration.ts`.
@@ -277,13 +304,15 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 ### Type checking split
 
 - `tsconfig.json` covers `.ts`/`.tsx`/`.jsx` files (strict is not set; `checkJs: false`).
-- `jsconfig.json` covers `.js` files under `src/` with `checkJs: true` and `strict: true` — plain JS example scripts are still fully type-checked via JSDoc annotations, so add `@param`/`@returns` JSDoc when writing new `.js` example scripts.
+- `jsconfig.json` covers `.js` files in the script directories with `checkJs: true` and `strict: true` — plain JS example scripts are still fully type-checked via JSDoc annotations, so add `@param`/`@returns` JSDoc when writing new `.js` example scripts.
+- Both `include` the script directories by glob (`*/**/*.js`) and `exclude` `node_modules` and `scripts`, since a top-level directory no longer distinguishes a script from the tooling beside it. **`scripts/` is in neither program and is not type-checked.**
 - Both include `types/**/*.d.ts`, so `make fetch-types` must be run before typecheck will resolve `HandlerContext`, `ResponseBuilder`, etc.
 
 ### Repo layout
 
-- `src/` — one directory per example script; `virtual-world` is the actively developed one, others are static reference examples
-- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `revisions.js` (history, pin/promote/revert), `set-script-hosts.js` (publish a script on a given host), `run-tests.js`, `fetch-graphql-schema.js`
+- one top-level directory per script, each holding `main.*` plus its assets; `virtual-world` is the actively developed one, the others are static reference examples
+- `.aiwebengineignore` — what is not part of any script (tooling, metadata, virtual-world's notes)
+- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `revisions.js` (history, pin/promote/revert), `set-script-hosts.js` (publish a script on a given host), `git-credentials.js` + `git-sync.js` (the engine's git API), `run-tests.js`, `fetch-graphql-schema.js`; `lib/` holds the shared token, client and ignore-file helpers
 - `types/`, `apis/`, `schemas/` — fetched/gitignored metadata from the remote server (never hand-edit; regenerate via `make fetch-*`)
 - `schemas/token.json` — OAuth tokens (issued by `MANAGE_HOST`), gitignored, never commit
 

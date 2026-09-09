@@ -4,10 +4,15 @@ This folder contains working example JavaScript scripts for aiwebengine.
 
 ## Quick Start
 
-Deploy scripts using the deployer tool:
+Every script is a top-level directory holding `main.*`; everything else under it is
+deployed as one of that script's assets, at the same relative path. That is the layout
+the engine's git API reads and writes, so a repository laid out this way can be pulled
+into any engine.
+
+Deploy one with the upload script:
 
 ```bash
-cargo run --bin deployer --uri "https://example.com/blog" --file "src/blog.js"
+node scripts/upload-script.js --script-path blog/main.js --script-uri "https://example.com/blog"
 ```
 
 Or upload via the built-in editor at [https://manage.softagen.com/editor](https://manage.softagen.com/editor)

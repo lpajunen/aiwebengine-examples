@@ -27,9 +27,14 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { minimatch } = require("minimatch");
 const { loadAccessToken } = require("./lib/token.js");
+const {
+  IGNORE_FILE,
+  loadIgnorePatterns,
+  makeIgnoreFilter,
+} = require("./lib/ignore.js");
 
+const repoRoot = path.join(__dirname, "..");
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const serverHost = process.env.SERVER_HOST || "https://softagen.com";
 
@@ -82,44 +87,21 @@ function parseArgs() {
 }
 
 /**
- * Load ignore patterns from .uploadignore file
- * @returns {Promise<string[]>}
- */
-async function loadIgnorePatterns() {
-  const ignorePath = path.join(__dirname, "..", ".uploadignore");
-  try {
-    const ignoreContent = await fs.promises.readFile(ignorePath, "utf8");
-    return ignoreContent
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"));
-  } catch (err) {
-    const error = /** @type {NodeJS.ErrnoException} */ (err);
-    if (error.code === "ENOENT") {
-      return []; // No ignore file, return empty array
-    }
-    throw err;
-  }
-}
-
-/**
- * Check if a file should be ignored based on patterns
- * @param {string} relativePath - Path relative to assets directory
- * @param {string[]} patterns - Glob patterns
- * @returns {boolean}
- */
-function shouldIgnore(relativePath, patterns) {
-  return patterns.some((pattern) => minimatch(relativePath, pattern));
-}
-
-/**
- * Recursively scan directory for asset files
+ * Recursively scan directory for asset files.
+ *
+ * The assets root is the script's own directory now, so two things under it
+ * are not assets: the `main.*` entrypoint, which is the script itself, and
+ * whatever `.aiwebengineignore` excludes -- the same file the engine reads
+ * when it pushes a script to a repository, so that an upload and a push agree
+ * on what belongs to the script.
+ *
  * @param {string} dir - Directory to scan
  * @param {string} baseDir - Base directory for calculating relative paths
- * @param {string[]} ignorePatterns - Patterns to ignore
+ * @param {(repoRelativePath: string) => boolean} isIgnored
+ * @param {string|null} entrypoint - Absolute path of the script entrypoint
  * @returns {Promise<string[]>} - Array of relative file paths
  */
-async function scanDirectory(dir, baseDir, ignorePatterns) {
+async function scanDirectory(dir, baseDir, isIgnored, entrypoint) {
   const entries = await fs.promises.readdir(dir, { withFileTypes: true });
   const files = [];
 
@@ -127,12 +109,16 @@ async function scanDirectory(dir, baseDir, ignorePatterns) {
     const fullPath = path.join(dir, entry.name);
     const relativePath = path.relative(baseDir, fullPath);
 
-    if (shouldIgnore(relativePath, ignorePatterns)) {
-      continue;
-    }
+    if (fullPath === entrypoint) continue;
+    if (isIgnored(path.relative(repoRoot, fullPath))) continue;
 
     if (entry.isDirectory()) {
-      const subFiles = await scanDirectory(fullPath, baseDir, ignorePatterns);
+      const subFiles = await scanDirectory(
+        fullPath,
+        baseDir,
+        isIgnored,
+        entrypoint,
+      );
       files.push(...subFiles);
     } else if (entry.isFile()) {
       files.push(relativePath);
@@ -468,17 +454,18 @@ async function main() {
 
     // Upload assets (if directory specified)
     if (assetsDir) {
-      const ignorePatterns = await loadIgnorePatterns();
+      const ignorePatterns = loadIgnorePatterns();
       if (ignorePatterns.length > 0 && !config.dryRun) {
         console.log(
-          `Loaded ${ignorePatterns.length} ignore pattern(s) from .uploadignore`,
+          `Loaded ${ignorePatterns.length} ignore pattern(s) from ${IGNORE_FILE}`,
         );
       }
 
       const assetFiles = await scanDirectory(
         assetsDir,
         assetsDir,
-        ignorePatterns,
+        makeIgnoreFilter(ignorePatterns),
+        scriptPath,
       );
 
       if (assetFiles.length === 0) {

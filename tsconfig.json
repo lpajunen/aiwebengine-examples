@@ -15,11 +15,11 @@
     "types": []
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "src/**/*.jsx",
-    "src/**/*.d.ts",
+    "*/**/*.ts",
+    "*/**/*.tsx",
+    "*/**/*.jsx",
+    "*/**/*.d.ts",
     "types/**/*.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "scripts"]
 }

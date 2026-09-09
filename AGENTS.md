@@ -4,9 +4,9 @@
 
 This repository contains example scripts for aiwebengine. The primary development focus is the **Virtual World** example.
 
-Primary code area: `src/virtual-world/`
+Primary code area: `virtual-world/`
 
-Other directories under `src/` are standalone examples. Keep changes scoped to the relevant example unless explicitly asked to work across them.
+The other script directories are standalone examples. Keep changes scoped to the relevant example unless explicitly asked to work across them.
 
 ## Validation After Changes
 
@@ -24,7 +24,7 @@ This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` fo
 make upload-virtual-world
 ```
 
-Deploys `src/virtual-world/virtual-world.js` and assets from `src/virtual-world/assets/` through the
+Deploys `virtual-world/main.js` and every other file under `virtual-world/` as its assets, through the
 management API at `https://manage.softagen.com/` (`MANAGE_HOST`). The deployed game is served from
 `https://world.softagen.com/virtual-world` (`WORLD_HOST`); other examples are served from
 `https://softagen.com/` (`SERVER_HOST`), the engine's default host.
@@ -48,7 +48,8 @@ Alternatively, use `aiwebengine-mcp` server tools for deployment and log retriev
 
 ## Repo Structure
 
-- `src/` — example scripts, each in its own directory
+- one top-level directory per script: `main.*` is the entrypoint, everything else under it is an asset at the same relative path
+- `.aiwebengineignore` — what is not part of any script (tooling, metadata, virtual-world's notes)
 - `scripts/` — tooling: OAuth login, upload, GraphQL schema fetch
 - `types/` — fetched aiwebengine type definitions (gitignored; run `make fetch-types`)
 - `apis/` — fetched OpenAPI spec (gitignored; run `make fetch-openapi`)
@@ -57,7 +58,7 @@ Alternatively, use `aiwebengine-mcp` server tools for deployment and log retriev
 
 ## Virtual World Conventions
 
-- `src/virtual-world/virtual-world.js` is the entrypoint, deployed as a single script.
-- `src/virtual-world/server/` contains TypeScript server-side modules.
-- `src/virtual-world/assets/public/virtual-world-browser-globals.d.ts` defines browser-global types; keep in sync with runtime usage.
+- `virtual-world/main.js` is the entrypoint, deployed as a single script.
+- `virtual-world/server/` contains TypeScript server-side modules, deployed as assets under `server/`.
+- `virtual-world/public/virtual-world-browser-globals.d.ts` defines browser-global types; keep in sync with runtime usage.
 - JSX uses `h`/`Fragment` (configured in `tsconfig.json`).

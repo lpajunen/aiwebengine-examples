@@ -23,10 +23,10 @@ require("dotenv").config();
 //              If omitted, defaults to `git diff --name-only HEAD` filtered to
 //              files under --assets-dir or equal to --script-path.
 //
-// Options (defaults target src/virtual-world):
+// Options (defaults target virtual-world):
 //   --script-uri <uri>    Script URI            (default https://example.com/virtual-world)
-//   --assets-dir <path>   Assets root           (default src/virtual-world/assets)
-//   --script-path <path>  Entrypoint script     (default src/virtual-world/virtual-world.js)
+//   --assets-dir <path>   Assets root           (default virtual-world)
+//   --script-path <path>  Entrypoint script     (default virtual-world/main.js)
 //   --dry-run             Print what would deploy, upload nothing
 //   --no-verify           Skip the sha256 read-back check (the batch write
 //                         still sends a per-file sha256 the server verifies)
@@ -38,14 +38,16 @@ const path = require("path");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const { loadAccessToken } = require("./lib/token.js");
+const { loadIgnorePatterns, makeIgnoreFilter } = require("./lib/ignore.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
+const isIgnored = makeIgnoreFilter(loadIgnorePatterns());
 
 const DEFAULTS = {
   scriptUri: "https://example.com/virtual-world",
-  assetsDir: "src/virtual-world/assets",
-  scriptPath: "src/virtual-world/virtual-world.js",
+  assetsDir: "virtual-world",
+  scriptPath: "virtual-world/main.js",
 };
 
 /**
@@ -318,6 +320,10 @@ function reportInit(init, what) {
  */
 function classify(absPath, absAssetsDir, absScriptPath) {
   if (absPath === absScriptPath) return { kind: "script" };
+  // The assets root is the script's own directory, so the notes and tooling
+  // that live beside its code have to be filtered out the same way an upload
+  // or an engine-side push filters them.
+  if (isIgnored(path.relative(repoRoot, absPath))) return { kind: "skip" };
   const rel = path.relative(absAssetsDir, absPath);
   if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
     return { kind: "asset", name: rel.split(path.sep).join("/") };
@@ -348,7 +354,7 @@ async function main() {
     const c = classify(abs, absAssetsDir, absScriptPath);
     if (c.kind === "skip") {
       skipped.push(
-        `${path.relative(repoRoot, abs)} (outside assets dir / not the entrypoint)`,
+        `${path.relative(repoRoot, abs)} (ignored, outside the script dir, or not the entrypoint)`,
       );
     } else if (c.kind === "script") {
       targets.push({ abs, isScript: true });

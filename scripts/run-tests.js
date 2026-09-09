@@ -5,7 +5,7 @@ require("dotenv").config();
 //
 // Tests are assets named `*.test.ts` (or .js/.jsx/.tsx) living beside the code
 // they cover, so this finds them the same way the engine does — by scanning the
-// assets directories — and asks the server to run each owning script's suite
+// script directories — and asks the server to run each owning script's suite
 // (POST /engine/run_tests). Nothing executes locally: the engine runs the code
 // in the same sandbox that serves it.
 //
@@ -37,7 +37,13 @@ const { loadAccessToken } = require("./lib/token.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
 const repoRoot = path.join(__dirname, "..");
-const srcDir = path.join(repoRoot, "src");
+const { loadIgnorePatterns, makeIgnoreFilter } = require("./lib/ignore.js");
+const isIgnored = makeIgnoreFilter(loadIgnorePatterns());
+
+// A script is a top-level directory holding a `main.*` entrypoint -- the same
+// rule the engine's git pull uses to read a repository. Everything else at the
+// root is repository furniture, and `.aiwebengineignore` names it.
+const ENTRYPOINT = /^main\.(ts|js|jsx|tsx)$/;
 
 // Script URIs that do not follow the directory convention below.
 const SCRIPT_URI_OVERRIDES = {
@@ -59,10 +65,11 @@ function scriptUriFor(projectDir) {
 }
 
 /**
- * @param {string} dir
+ * @param {string} dir absolute path of the script directory
+ * @param {string} project the directory name, for ignore matching
  * @returns {string[]} paths of test modules below `dir`, relative to it
  */
-function findTestModules(dir) {
+function findTestModules(dir, project) {
   /** @type {string[]} */
   const found = [];
   /** @param {string} current @param {string} prefix */
@@ -76,6 +83,7 @@ function findTestModules(dir) {
     for (const entry of entries) {
       const abs = path.join(current, entry.name);
       const logical = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (isIgnored(`${project}/${logical}`)) continue;
       if (entry.isDirectory()) {
         walk(abs, logical);
       } else if (/\.test\.(ts|js|jsx|tsx)$/.test(entry.name)) {
@@ -91,19 +99,30 @@ function findTestModules(dir) {
  * Every project whose assets carry at least one test module.
  * @returns {{ project: string, scriptUri: string, modules: string[] }[]}
  */
+function isScriptDir(name) {
+  if (isIgnored(name)) return false;
+  try {
+    return fs
+      .readdirSync(path.join(repoRoot, name))
+      .some((file) => ENTRYPOINT.test(file));
+  } catch {
+    return false;
+  }
+}
+
 function discoverProjects() {
   let dirs;
   try {
-    dirs = fs.readdirSync(srcDir, { withFileTypes: true });
+    dirs = fs.readdirSync(repoRoot, { withFileTypes: true });
   } catch {
     return [];
   }
   return dirs
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && isScriptDir(entry.name))
     .map((entry) => ({
       project: entry.name,
       scriptUri: scriptUriFor(entry.name),
-      modules: findTestModules(path.join(srcDir, entry.name, "assets")),
+      modules: findTestModules(path.join(repoRoot, entry.name), entry.name),
     }))
     .filter((candidate) => candidate.modules.length > 0);
 }
@@ -207,7 +226,7 @@ async function main() {
 
   if (targets.length === 0) {
     console.log(
-      "No test modules found. Tests are assets named '*.test.ts' under src/<project>/assets/.",
+      "No test modules found. Tests are assets named '*.test.ts' beside the code they cover, in a script directory.",
     );
     return;
   }

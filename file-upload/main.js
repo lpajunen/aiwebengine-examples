@@ -12,6 +12,9 @@
  * Maximum file size: 10MB (configurable via max_upload_size_bytes)
  */
 
+/** How much of a decoded text file to echo back as a preview. */
+const PREVIEW_LIMIT = 200;
+
 /**
  * @param {HandlerContext} context
  * @returns {HttpResponse}
@@ -40,13 +43,16 @@ function handleUpload(context) {
 
   // Process uploaded files
   const filesInfo = request.files.map((file) => {
-    // Decode base64 data if needed (for text files)
+    // Decode the base64 payload for text files. `convert.atob` is the engine's
+    // base64 decoder — there is no global atob() and no Buffer in the sandbox.
     let preview = null;
     if (file.contentType && file.contentType.startsWith("text/")) {
       try {
-        // Note: In JavaScript, you would use atob() or Buffer to decode base64
-        // For this example, we'll just show the metadata
-        preview = `${file.size} bytes of text`;
+        const text = convert.atob(file.data);
+        preview =
+          text.length > PREVIEW_LIMIT
+            ? text.slice(0, PREVIEW_LIMIT) + "…"
+            : text;
       } catch (e) {
         preview = "Unable to preview";
       }
@@ -59,7 +65,7 @@ function handleUpload(context) {
       size: file.size,
       preview: preview,
       // In a real application, you might:
-      // - Save the decoded data to storage using storeAsset()
+      // - Save the decoded data with assetStorage.upsertAsset()
       // - Process image files
       // - Validate file types
       // - Scan for malware

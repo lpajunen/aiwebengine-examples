@@ -1,9 +1,18 @@
 import { vwLog } from "./diagnostics.ts";
 
+/**
+ * The parsed answer of a `database.*` call, or null when there was nothing to
+ * parse.
+ *
+ * These calls return a `DatabaseAnswer` — a String object carrying `.json()`
+ * — so the parse goes through that when it is offered and falls back to
+ * `JSON.parse` for a plain string, which is what a test's stub hands over.
+ */
 export function parseWorldDbResult(raw: string): any | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const answer = raw as unknown as Partial<DatabaseResult>;
+    return typeof answer.json === "function" ? answer.json() : JSON.parse(raw);
   } catch (e) {
     vwLog("world db parse failed", { error: String(e) });
     return null;

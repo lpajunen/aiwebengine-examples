@@ -4,6 +4,24 @@
 // This demonstrates and tests the transaction support
 
 /**
+ * What a `database.*` call answers with, once parsed. `error` is present only
+ * when the call failed.
+ *
+ * These calls return a result object now, so `.json()` replaces the
+ * `JSON.parse(...)` this example used to wrap them in. Each script is its own
+ * global scope on the engine but they share one type-check program here, so
+ * the name carries this script's prefix.
+ *
+ * @typedef {{ error?: string }} TxTestsDbAnswer
+ */
+
+/**
+ * What the savepoint calls answer with: the name the engine gave the
+ * savepoint, which `rollbackToSavepoint` and `releaseSavepoint` take back.
+ *
+ * @typedef {{ error?: string, savepoint: string }} TxTestsSavepointAnswer
+ */
+/**
  * Register the transaction test routes on script initialization.
  */
 function init() {
@@ -35,7 +53,9 @@ function testCommit(context) {
   console.log("TEST: Transaction commit");
 
   // Begin transaction
-  const beginResult = JSON.parse(database.beginTransaction(5000));
+  const beginResult = /** @type {TxTestsDbAnswer} */ (
+    database.beginTransaction(5000).json()
+  );
   console.log("Begin result:", JSON.stringify(beginResult));
 
   if (beginResult.error) {
@@ -72,7 +92,9 @@ function testRollback(context) {
   console.log("TEST: Transaction rollback");
 
   // Begin transaction
-  const beginResult = JSON.parse(database.beginTransaction(5000));
+  const beginResult = /** @type {TxTestsDbAnswer} */ (
+    database.beginTransaction(5000).json()
+  );
   console.log("Begin result:", JSON.stringify(beginResult));
 
   if (beginResult.error) {
@@ -102,7 +124,9 @@ function testSavepoint(context) {
   console.log("TEST: Savepoint rollback");
 
   // Begin transaction
-  const beginResult = JSON.parse(database.beginTransaction(10000));
+  const beginResult = /** @type {TxTestsDbAnswer} */ (
+    database.beginTransaction(10000).json()
+  );
   if (beginResult.error) {
     return {
       status: 500,
@@ -117,7 +141,9 @@ function testSavepoint(context) {
   console.log("Transaction started");
 
   // Create a savepoint
-  const sp1 = JSON.parse(database.createSavepoint("test_sp1"));
+  const sp1 = /** @type {TxTestsSavepointAnswer} */ (
+    database.createSavepoint("test_sp1").json()
+  );
   console.log("Savepoint created:", JSON.stringify(sp1));
 
   if (sp1.error) {
@@ -152,7 +178,9 @@ function testSavepoint(context) {
   }
 
   // Commit the transaction
-  const commitResult = JSON.parse(database.commitTransaction());
+  const commitResult = /** @type {TxTestsDbAnswer} */ (
+    database.commitTransaction().json()
+  );
   console.log("Commit result:", JSON.stringify(commitResult));
 
   if (commitResult.error) {
@@ -186,7 +214,9 @@ function testTimeout(context) {
   console.log("TEST: Transaction timeout");
 
   // Begin transaction with very short timeout (100ms)
-  const beginResult = JSON.parse(database.beginTransaction(100));
+  const beginResult = /** @type {TxTestsDbAnswer} */ (
+    database.beginTransaction(100).json()
+  );
   if (beginResult.error) {
     return {
       status: 500,
@@ -211,7 +241,9 @@ function testTimeout(context) {
   }
 
   // Try to commit - should fail with timeout error
-  const commitResult = JSON.parse(database.commitTransaction());
+  const commitResult = /** @type {TxTestsDbAnswer} */ (
+    database.commitTransaction().json()
+  );
   console.log("Commit after timeout result:", JSON.stringify(commitResult));
 
   if (commitResult.error && commitResult.error.includes("timeout")) {
@@ -246,7 +278,9 @@ function testNested(context) {
   console.log("TEST: Nested transactions");
 
   // Begin outer transaction
-  const beginResult = JSON.parse(database.beginTransaction(10000));
+  const beginResult = /** @type {TxTestsDbAnswer} */ (
+    database.beginTransaction(10000).json()
+  );
   if (beginResult.error) {
     return {
       status: 500,
@@ -261,7 +295,9 @@ function testNested(context) {
   console.log("Outer transaction started");
 
   // Create first savepoint
-  const sp1 = JSON.parse(database.createSavepoint());
+  const sp1 = /** @type {TxTestsSavepointAnswer} */ (
+    database.createSavepoint().json()
+  );
   console.log("Savepoint 1:", JSON.stringify(sp1));
 
   if (sp1.error) {
@@ -279,7 +315,9 @@ function testNested(context) {
   console.log("Work at savepoint level 1");
 
   // Create second savepoint (nested)
-  const sp2 = JSON.parse(database.createSavepoint());
+  const sp2 = /** @type {TxTestsSavepointAnswer} */ (
+    database.createSavepoint().json()
+  );
   console.log("Savepoint 2:", JSON.stringify(sp2));
 
   if (sp2.error) {
@@ -297,7 +335,9 @@ function testNested(context) {
   console.log("Work at savepoint level 2");
 
   // Rollback inner savepoint
-  const rollback2 = JSON.parse(database.rollbackToSavepoint(sp2.savepoint));
+  const rollback2 = /** @type {TxTestsDbAnswer} */ (
+    database.rollbackToSavepoint(sp2.savepoint).json()
+  );
   console.log("Rollback sp2:", JSON.stringify(rollback2));
 
   if (rollback2.error) {
@@ -312,7 +352,9 @@ function testNested(context) {
   }
 
   // Release first savepoint
-  const release1 = JSON.parse(database.releaseSavepoint(sp1.savepoint));
+  const release1 = /** @type {TxTestsDbAnswer} */ (
+    database.releaseSavepoint(sp1.savepoint).json()
+  );
   console.log("Release sp1:", JSON.stringify(release1));
 
   if (release1.error) {
@@ -327,7 +369,9 @@ function testNested(context) {
   }
 
   // Commit entire transaction
-  const commit = JSON.parse(database.commitTransaction());
+  const commit = /** @type {TxTestsDbAnswer} */ (
+    database.commitTransaction().json()
+  );
   console.log("Commit:", JSON.stringify(commit));
 
   if (commit.error) {

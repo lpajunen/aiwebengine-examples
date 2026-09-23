@@ -41,16 +41,13 @@ function fetchExample(context) {
   console.log("Fetching data from: " + url);
 
   try {
-    const responseJson = /** @type {string} */ (
-      /** @type {unknown} */ (fetch(url))
-    );
-    const response = JSON.parse(responseJson);
+    const response = fetch(url);
 
     if (response.ok) {
       console.log("Fetch successful! Status: " + response.status);
       return ResponseBuilder.json({
         message: "Fetch successful",
-        data: JSON.parse(response.body),
+        data: response.json(),
       });
     } else {
       return ResponseBuilder.error(response.status, "Request failed");
@@ -75,24 +72,24 @@ function fetchWithSecret(context) {
   }
 
   try {
-    // Use {{identifier}} syntax to inject the API key
+    // Use {{secret:NAME}} syntax to inject the API key. A bare {{NAME}} is
+    // not substituted — it would be sent to the far end as literal text.
     const options = {
       method: "GET",
       headers: {
-        "X-API-Key": "{{example_api_key}}",
+        "X-API-Key": "{{secret:example_api_key}}",
         "User-Agent": "aiwebengine/fetch-example",
       },
     };
 
     // This would work with a real API that requires authentication
     // For demo purposes, we'll use httpbin
-    const responseJson = /** @type {string} */ (
-      /** @type {unknown} */ (fetch("https://httpbin.org/headers", options))
-    );
-    const response = JSON.parse(responseJson);
+    const response = fetch("https://httpbin.org/headers", options);
 
     if (response.ok) {
-      const data = JSON.parse(response.body);
+      const data = /** @type {{ headers: Record<string, string> }} */ (
+        response.json()
+      );
       return ResponseBuilder.json({
         message: "Request with secret successful",
         headers: data.headers,
@@ -139,13 +136,10 @@ function fetchPost(context) {
       body: JSON.stringify(requestData),
     };
 
-    const responseJson = /** @type {string} */ (
-      /** @type {unknown} */ (fetch("https://httpbin.org/post", options))
-    );
-    const response = JSON.parse(responseJson);
+    const response = fetch("https://httpbin.org/post", options);
 
     if (response.ok) {
-      const data = JSON.parse(response.body);
+      const data = /** @type {{ json: unknown }} */ (response.json());
       return ResponseBuilder.json({
         message: "POST successful",
         sentData: requestData,

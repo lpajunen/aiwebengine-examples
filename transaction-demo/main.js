@@ -4,6 +4,24 @@
 // This script shows how to use database transactions in aiwebengine
 
 /**
+ * What a `database.*` call answers with, once parsed. `error` is present only
+ * when the call failed.
+ *
+ * These calls return a result object now, so `.json()` replaces the
+ * `JSON.parse(...)` this example used to wrap them in. Each script is its own
+ * global scope on the engine but they share one type-check program here, so
+ * the name carries this script's prefix.
+ *
+ * @typedef {{ error?: string }} TxDemoDbAnswer
+ */
+
+/**
+ * What the savepoint calls answer with: the name the engine gave the
+ * savepoint, which `rollbackToSavepoint` and `releaseSavepoint` take back.
+ *
+ * @typedef {{ error?: string, savepoint: string }} TxDemoSavepointAnswer
+ */
+/**
  * Register the demo HTTP routes on script initialization.
  */
 function init() {
@@ -32,7 +50,9 @@ function handleTransfer(context) {
   const { fromAccount, toAccount, amount } = body;
 
   // Start transaction with 5 second timeout
-  const beginResult = JSON.parse(database.beginTransaction(5000));
+  const beginResult = /** @type {TxDemoDbAnswer} */ (
+    database.beginTransaction(5000).json()
+  );
   if (beginResult.error) {
     return {
       status: 500,
@@ -108,7 +128,9 @@ function handleBatch(context) {
     const item = items[i];
 
     // Create savepoint for this item
-    const spResult = JSON.parse(database.createSavepoint());
+    const spResult = /** @type {TxDemoSavepointAnswer} */ (
+      database.createSavepoint().json()
+    );
     if (spResult.error) {
       results.push({
         item: item.id || i,
@@ -150,7 +172,9 @@ function handleBatch(context) {
   }
 
   // Commit all successful items
-  const commitResult = JSON.parse(database.commitTransaction());
+  const commitResult = /** @type {TxDemoDbAnswer} */ (
+    database.commitTransaction().json()
+  );
   if (commitResult.error) {
     return {
       status: 500,
@@ -197,7 +221,9 @@ function handleNested(context) {
     // database.insert("audit_log", { action: "started", timestamp: Date.now() });
 
     // Create savepoint before risky operation
-    const sp1 = JSON.parse(database.createSavepoint("checkpoint_1"));
+    const sp1 = /** @type {TxDemoSavepointAnswer} */ (
+      database.createSavepoint("checkpoint_1").json()
+    );
     console.log("Created savepoint:", sp1.savepoint);
 
     try {
@@ -211,7 +237,9 @@ function handleNested(context) {
       // database.insert("data", { value: body.value });
 
       // Create another savepoint for even riskier operation
-      const sp2 = JSON.parse(database.createSavepoint("checkpoint_2"));
+      const sp2 = /** @type {TxDemoSavepointAnswer} */ (
+        database.createSavepoint("checkpoint_2").json()
+      );
       console.log("Created nested savepoint:", sp2.savepoint);
 
       try {
@@ -253,7 +281,9 @@ function handleNested(context) {
     // database.insert("audit_log", { action: "completed", timestamp: Date.now() });
 
     // Explicitly commit
-    const commitResult = JSON.parse(database.commitTransaction());
+    const commitResult = /** @type {TxDemoDbAnswer} */ (
+      database.commitTransaction().json()
+    );
     if (commitResult.error) {
       throw new Error("Failed to commit: " + commitResult.error);
     }

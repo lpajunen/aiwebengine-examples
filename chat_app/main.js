@@ -1,7 +1,7 @@
 /// <reference path="../types/aiwebengine.d.ts" />
 
 // Real-Time Chat Application
-// Demonstrates GraphQL subscriptions with filtered messaging, persistent storage, and authentication
+// Demonstrates filtered SSE stream messaging, persistent storage, and authentication
 
 // ============================================
 // Storage Layer - Helper Functions
@@ -82,6 +82,10 @@ function getErrorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Where the chat UI's EventSource connects, and what sendStreamMessageFiltered
+// pushes messages to.
+const CHAT_STREAM_PATH = "/chat/events";
+
 const CHAT_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
@@ -97,103 +101,134 @@ const CHAT_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
 });
 
 // ============================================
-// GraphQL Query Resolvers
+// Request Helpers
 // ============================================
 
-/** @param {HandlerContext} context */
-function channelsResolver(context) {
-  const req = context.request || CHAT_EMPTY_REQUEST;
-  const args = context.args || {};
-  try {
-    const auth = req.auth;
-    // Require authentication
-    if (!auth || !auth.isAuthenticated) {
-      throw new Error("Authentication required");
-    }
+/**
+ * @param {HttpRequest} req
+ * @returns {{id: string | null, name: string, email: string | null}}
+ */
+function requireChatUser(req) {
+  const auth = req.auth;
+  if (!auth || !auth.isAuthenticated) {
+    throw new Error("Authentication required");
+  }
+  return {
+    id: auth.userId,
+    name: auth.userName || auth.userEmail || "unknown",
+    email: auth.userEmail,
+  };
+}
 
-    const channels = loadChannels();
-    return channels;
+/**
+ * @param {HttpRequest} req
+ * @returns {Record<string, any> | null} the parsed object, or null when the
+ *   body is not a JSON object
+ */
+function readJsonBody(req) {
+  if (!req.body) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(req.body);
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch (error) {
-    console.error("Error in channelsResolver: " + error);
-    throw new Error("Failed to load channels: " + getErrorMessage(error));
+    return null;
+  }
+}
+
+// ============================================
+// HTTP Handlers - JSON API
+// ============================================
+
+/**
+ * Every API route answers JSON, errors included, so the browser can read the
+ * message off the response body whatever the status is.
+ *
+ * @param {number} status
+ * @param {string} message
+ */
+function chatError(status, message) {
+  return ResponseBuilder.json({ error: message }, status);
+}
+
+/** @param {HandlerContext} context */
+function channelsHandler(context) {
+  const req = context.request || CHAT_EMPTY_REQUEST;
+  try {
+    requireChatUser(req);
+    return ResponseBuilder.json({ channels: loadChannels() });
+  } catch (error) {
+    console.error("Error in channelsHandler: " + error);
+    return chatError(401, getErrorMessage(error));
   }
 }
 
 /** @param {HandlerContext} context */
-function messagesResolver(context) {
+function messagesHandler(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
-  const args = context.args || {};
   try {
-    const auth = req.auth;
-    // Require authentication
-    if (!auth || !auth.isAuthenticated) {
-      throw new Error("Authentication required");
-    }
+    requireChatUser(req);
+  } catch (error) {
+    return chatError(401, getErrorMessage(error));
+  }
 
-    const channelId = args.channelId;
-    const limit = args.limit || 50;
+  try {
+    const query = req.query || {};
+    const channelId = query.channelId;
+    const limit = query.limit ? parseInt(String(query.limit), 10) : 50;
 
     if (!channelId) {
-      throw new Error("channelId is required");
+      return chatError(400, "channelId is required");
     }
 
-    const messages = loadMessages(channelId, limit);
-    return messages;
+    return ResponseBuilder.json({
+      messages: loadMessages(String(channelId), limit),
+    });
   } catch (error) {
-    console.error("Error in messagesResolver: " + error);
-    throw new Error("Failed to load messages: " + getErrorMessage(error));
+    console.error("Error in messagesHandler: " + error);
+    return chatError(500, "Failed to load messages: " + getErrorMessage(error));
   }
 }
 
 /** @param {HandlerContext} context */
-function currentUserResolver(context) {
+function currentUserHandler(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
-  const args = context.args || {};
   try {
-    const auth = req.auth;
-    if (!auth || !auth.isAuthenticated) {
-      throw new Error("Authentication required");
-    }
-    return {
-      id: auth.userId,
-      name: auth.userName || auth.userEmail,
-      email: auth.userEmail,
-    };
+    const user = requireChatUser(req);
+    return ResponseBuilder.json({ user: user });
   } catch (error) {
-    console.error("Error in currentUserResolver: " + error);
-    throw new Error("Authentication required: " + getErrorMessage(error));
+    console.error("Error in currentUserHandler: " + error);
+    return chatError(401, getErrorMessage(error));
   }
 }
 
-// ============================================
-// GraphQL Mutation Resolvers
-// ============================================
-
 /** @param {HandlerContext} context */
-function createChannelResolver(context) {
+function createChannelHandler(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
-  const args = context.args || {};
+  /** @type {{id: string | null, name: string, email: string | null}} */
+  let user;
   try {
-    const auth = req.auth;
-    // Require authentication
-    if (!auth || !auth.isAuthenticated) {
-      throw new Error("Authentication required");
+    user = requireChatUser(req);
+  } catch (error) {
+    return chatError(401, getErrorMessage(error));
+  }
+
+  try {
+    const body = readJsonBody(req);
+    if (!body) {
+      return chatError(400, "Request body must be a JSON object");
     }
-    const user = {
-      id: auth.userId,
-      name: auth.userName,
-      email: auth.userEmail,
-    };
 
-    const name = args.name;
-    const isPrivate = args.isPrivate || false;
+    const name = body.name ? String(body.name) : "";
+    const isPrivate = body.isPrivate === true;
 
-    if (!name || name.trim().length === 0) {
-      throw new Error("Channel name is required");
+    if (name.trim().length === 0) {
+      return chatError(400, "Channel name is required");
     }
 
     if (name.length > 50) {
-      throw new Error("Channel name must be 50 characters or less");
+      return chatError(400, "Channel name must be 50 characters or less");
     }
 
     const channels = loadChannels();
@@ -204,7 +239,7 @@ function createChannelResolver(context) {
     });
 
     if (existing) {
-      throw new Error("Channel with this name already exists");
+      return chatError(409, "Channel with this name already exists");
     }
 
     // Create new channel
@@ -214,53 +249,55 @@ function createChannelResolver(context) {
       id: channelId,
       name: name,
       isPrivate: isPrivate,
-      createdBy: user.name || user.email,
+      createdBy: user.name,
       createdAt: new Date().toISOString(),
     };
 
     channels.push(newChannel);
     saveChannels(channels);
 
-    console.log(
-      "Channel created: " + name + " by " + (user.name || user.email),
-    );
+    console.log("Channel created: " + name + " by " + user.name);
 
-    return newChannel;
+    return ResponseBuilder.json({ channel: newChannel }, 201);
   } catch (error) {
-    console.error("Error in createChannelResolver: " + error);
-    throw new Error("Failed to create channel: " + getErrorMessage(error));
+    console.error("Error in createChannelHandler: " + error);
+    return chatError(
+      500,
+      "Failed to create channel: " + getErrorMessage(error),
+    );
   }
 }
 
 /** @param {HandlerContext} context */
-function sendMessageResolver(context) {
+function sendMessageHandler(context) {
   const req = context.request || CHAT_EMPTY_REQUEST;
-  const args = context.args || {};
+  /** @type {{id: string | null, name: string, email: string | null}} */
+  let user;
   try {
-    const auth = req.auth;
-    // Require authentication
-    if (!auth || !auth.isAuthenticated) {
-      throw new Error("Authentication required");
-    }
-    const user = {
-      id: auth.userId,
-      name: auth.userName,
-      email: auth.userEmail,
-    };
+    user = requireChatUser(req);
+  } catch (error) {
+    return chatError(401, getErrorMessage(error));
+  }
 
-    const channelId = args.channelId;
-    const text = args.text;
+  try {
+    const body = readJsonBody(req);
+    if (!body) {
+      return chatError(400, "Request body must be a JSON object");
+    }
+
+    const channelId = body.channelId ? String(body.channelId) : "";
+    const text = body.text ? String(body.text) : "";
 
     if (!channelId) {
-      throw new Error("channelId is required");
+      return chatError(400, "channelId is required");
     }
 
-    if (!text || text.trim().length === 0) {
-      throw new Error("Message text is required");
+    if (text.trim().length === 0) {
+      return chatError(400, "Message text is required");
     }
 
     if (text.length > 2000) {
-      throw new Error("Message must be 2000 characters or less");
+      return chatError(400, "Message must be 2000 characters or less");
     }
 
     // Verify channel exists
@@ -270,13 +307,13 @@ function sendMessageResolver(context) {
     });
 
     if (!channel) {
-      throw new Error("Channel not found");
+      return chatError(404, "Channel not found");
     }
 
     // Create message
     const message = {
       id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-      sender: user.name || user.email,
+      sender: user.name,
       text: text,
       timestamp: new Date().toISOString(),
       type: "user_message",
@@ -285,83 +322,61 @@ function sendMessageResolver(context) {
     // Save to storage
     saveMessage(channelId, message);
 
-    // Broadcast to subscribers of this channel
-    // Send the message object directly (not as JSON string)
-    // The GraphQL subscription will wrap it in the response format
-    const broadcastData = JSON.stringify(message);
-    const filterCriteria = JSON.stringify({ channelId: channelId });
-
-    graphQLRegistry.sendSubscriptionMessageFiltered(
-      "chatUpdates",
-      broadcastData,
-      filterCriteria,
+    // Push to the stream connections that subscribed to this channel. The
+    // filter is matched against the metadata chatStreamCustomizer returned
+    // when each connection opened.
+    routeRegistry.sendStreamMessageFiltered(
+      CHAT_STREAM_PATH,
+      message,
+      JSON.stringify({ channelId: channelId }),
     );
 
     console.log(
       "Message sent to channel " + channelId + " by " + message.sender,
     );
 
-    return message;
+    return ResponseBuilder.json({ message: message }, 201);
   } catch (error) {
-    console.error("Error in sendMessageResolver: " + error);
-    throw new Error("Failed to send message: " + getErrorMessage(error));
+    console.error("Error in sendMessageHandler: " + error);
+    return chatError(500, "Failed to send message: " + getErrorMessage(error));
   }
 }
 
 // ============================================
-// GraphQL Subscription Resolver
+// SSE Stream - Per-Channel Connection Filter
 // ============================================
 
-/** @param {HandlerContext} context */
-function chatUpdatesResolver(context) {
+/**
+ * Connection customizer for CHAT_STREAM_PATH. What it returns becomes the
+ * connection's metadata, which sendStreamMessageFiltered matches against, so a
+ * connection that opened with ?channelId=foo only receives foo's messages.
+ * Returning an empty object leaves a connection that no filtered send matches.
+ *
+ * @param {HandlerContext} context
+ */
+function chatStreamCustomizer(context) {
   try {
     const req = context.request || CHAT_EMPTY_REQUEST;
-    const args = context.args || {};
     const queryParams = req.query || {};
-    const channelId = args.channelId || queryParams.channelId;
+    const channelId = queryParams.channelId;
 
     if (!channelId) {
-      // Silent return - this is likely a schema introspection call or connection setup
-      // Only log if there are other query params (indicating it might be an error)
-      if (Object.keys(queryParams).length > 0) {
-        console.error(
-          "channelId not found in req.query:",
-          JSON.stringify(queryParams),
-        );
-      }
+      console.error("chatStreamCustomizer: no channelId in the query string");
       return {};
     }
 
-    // Check authentication manually
     const auth = req.auth;
     if (!auth || !auth.isAuthenticated) {
-      console.error("Authentication check failed for channel subscription");
-      throw new Error("Authentication required");
+      console.error("Authentication check failed for channel stream");
+      return {};
     }
 
-    const user = {
-      id: auth.userId,
-      name: auth.userName,
-      email: auth.userEmail,
-    };
+    const userLabel = auth.userName || auth.userEmail || "unknown";
+    console.log("User " + userLabel + " subscribed to channel: " + channelId);
 
-    console.log(
-      "User " +
-        (user.name || user.email) +
-        " subscribed to channel: " +
-        channelId,
-    );
-
-    // Return an object with string values for filtering
-    // This will be converted to HashMap<String, String> and stored as connection metadata
-    // sendSubscriptionMessageFiltered will match against these key-value pairs
-    var filterCriteria = /** @type {{channelId?: string}} */ ({});
-    filterCriteria.channelId = String(channelId);
-    return filterCriteria;
+    return { channelId: String(channelId) };
   } catch (error) {
-    console.error("Error in chatUpdatesResolver: " + error);
-    // Don't throw error - just return empty filter criteria
-    // This allows the subscription to continue but won't receive filtered messages
+    console.error("Error in chatStreamCustomizer: " + error);
     return {};
   }
 }
@@ -647,19 +662,11 @@ function chatInterfaceHandler(context) {
         // Load channels on startup
         async function loadChannels() {
             try {
-                const response = await fetch('/graphql', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    query:
-                      "query { channels { id name isPrivate createdBy createdAt } }",
-                  }),
-                });
-                
+                const response = await fetch('/chat/api/channels');
                 const result = await response.json();
-                
-                if (result.data && result.data.channels) {
-                    channels = result.data.channels;
+
+                if (response.ok && result.channels) {
+                    channels = result.channels;
                     renderChannels();
                     
                     // Auto-select system channel
@@ -715,21 +722,11 @@ function chatInterfaceHandler(context) {
         
         async function loadMessages(channelId) {
             try {
-                const response = await fetch('/graphql', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    query:
-                      "query($channelId: String!, $limit: Int) { messages(channelId: $channelId, limit: $limit) { id sender text timestamp type } }",
-                    variables: { channelId: channelId, limit: 50 },
-                  }),
-                });
-                
+                const response = await fetch('/chat/api/messages?channelId=' + encodeURIComponent(channelId) + '&limit=50');
                 const result = await response.json();
-                
-                if (result.data && result.data.messages) {
-                    const messages = result.data.messages;
-                    renderMessages(messages);
+
+                if (response.ok && result.messages) {
+                    renderMessages(result.messages);
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
@@ -774,14 +771,10 @@ function chatInterfaceHandler(context) {
             // Create abort controller for this subscription (for compatibility)
             currentSubscriptionController = new AbortController();
 
-            // Subscribe via GraphQL SSE endpoint using EventSource
-            const subscriptionQuery = {
-              query:
-                "subscription ($channelId: String!) { chatUpdates(channelId: $channelId) { id sender text timestamp type } }",
-              variables: { channelId },
-            };
-
-            const eventSource = new EventSource('/graphql/sse?query=' + encodeURIComponent(subscriptionQuery.query) + '&variables=' + encodeURIComponent(JSON.stringify(subscriptionQuery.variables)));
+            // Subscribe to the script's SSE stream. The channelId query
+            // parameter is what chatStreamCustomizer turns into this
+            // connection's filter, so only this channel's messages arrive.
+            const eventSource = new EventSource('/chat/events?channelId=' + encodeURIComponent(channelId));
 
             eventSource.onopen = function(event) {
                 updateStatus('Connected to ' + currentChannel.name);
@@ -790,27 +783,13 @@ function chatInterfaceHandler(context) {
 
             eventSource.onmessage = function(event) {
                 try {
-                    const data = JSON.parse(event.data);
+                    const message = JSON.parse(event.data);
 
-                    // Handle GraphQL response format
-                    if (data.data && data.data.chatUpdates) {
-                        // chatUpdates might be a JSON string or an object
-                        let message = data.data.chatUpdates;
-
-                        // If it's a string, parse it
-                        if (typeof message === 'string') {
-                            message = JSON.parse(message);
-                        }
-
-                        // Only add message if it has content (not empty object)
-                        if (message && message.id) {
-                            addMessage(message);
-                        }
-                    } else if (data.errors && data.errors.length > 0) {
-                        console.error('GraphQL subscription error:', JSON.stringify(data.errors, null, 2));
-                    } else if (data.data) {
-                        // Subscription connected successfully (initial response may have null data)
-                        console.log('Subscription response:', data);
+                    // Stream messages carry the message object as sent by
+                    // sendStreamMessageFiltered; ignore keep-alives and
+                    // anything without a message id.
+                    if (message && message.id) {
+                        addMessage(message);
                     }
                 } catch (error) {
                     console.error('Error parsing SSE message:', error, 'Data:', event.data);
@@ -867,20 +846,16 @@ function chatInterfaceHandler(context) {
             if (!text || !currentChannel) return;
             
             try {
-                const response = await fetch('/graphql', {
+                const response = await fetch('/chat/api/messages', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    query:
-                      "mutation($channelId: String!, $text: String!) { sendMessage(channelId: $channelId, text: $text) { id sender text timestamp type } }",
-                    variables: { channelId: currentChannel.id, text: text },
-                  }),
+                  body: JSON.stringify({ channelId: currentChannel.id, text: text }),
                 });
-                
+
                 const result = await response.json();
-                
-                if (result.errors) {
-                    alert('Error sending message: ' + result.errors[0].message);
+
+                if (!response.ok) {
+                    alert('Error sending message: ' + (result.error || response.status));
                 } else {
                     input.value = '';
                 }
@@ -895,27 +870,22 @@ function chatInterfaceHandler(context) {
             if (!name) return;
             
             try {
-                const response = await fetch('/graphql', {
+                const response = await fetch('/chat/api/channels', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    query:
-                      "mutation($name: String!, $isPrivate: Boolean) { createChannel(name: $name, isPrivate: $isPrivate) { id name isPrivate createdBy createdAt } }",
-                    variables: { name: name, isPrivate: false },
-                  }),
+                  body: JSON.stringify({ name: name, isPrivate: false }),
                 });
-                
+
                 const result = await response.json();
-                
-                if (result.errors) {
-                    alert('Error creating channel: ' + result.errors[0].message);
+
+                if (!response.ok) {
+                    alert('Error creating channel: ' + (result.error || response.status));
                 } else {
                     // Reload channels
                     await loadChannels();
-                    
+
                     // Select the new channel
-                    const newChannel = result.data.createChannel;
-                    selectChannel(newChannel.id);
+                    selectChannel(result.channel.id);
                 }
             } catch (error) {
                 console.error('Error creating channel:', error);
@@ -982,49 +952,61 @@ function init(context) {
       console.log("System channel created");
     }
 
-    // Register GraphQL queries (all external - used by chat UI)
-    graphQLRegistry.registerQuery(
-      "channels",
-      "type Channel { id: String!, name: String!, isPrivate: Boolean!, createdBy: String!, createdAt: String! } type Query { channels: [Channel!]! }",
-      "channelsResolver",
-      "external",
+    // JSON API used by the chat UI (authentication required on every route)
+    routeRegistry.registerRoute(
+      "/chat/api/channels",
+      "channelsHandler",
+      "GET",
+      {
+        tags: ["Chat"],
+        summary: "List channels",
+      },
     );
 
-    graphQLRegistry.registerQuery(
-      "messages",
-      "type Message { id: String!, sender: String!, text: String!, timestamp: String!, type: String! } type Query { messages(channelId: String!, limit: Int): [Message!]! }",
-      "messagesResolver",
-      "external",
+    routeRegistry.registerRoute(
+      "/chat/api/channels",
+      "createChannelHandler",
+      "POST",
+      {
+        tags: ["Chat"],
+        summary: "Create a channel",
+      },
     );
 
-    graphQLRegistry.registerQuery(
-      "currentUser",
-      "type User { id: String!, name: String!, email: String! } type Query { currentUser: User! }",
-      "currentUserResolver",
-      "external",
+    routeRegistry.registerRoute(
+      "/chat/api/messages",
+      "messagesHandler",
+      "GET",
+      {
+        tags: ["Chat"],
+        summary: "Read a channel's message history",
+      },
     );
 
-    // Register GraphQL mutations (all external - used by chat UI)
-    graphQLRegistry.registerMutation(
-      "createChannel",
-      "type Mutation { createChannel(name: String!, isPrivate: Boolean): Channel! }",
-      "createChannelResolver",
-      "external",
+    routeRegistry.registerRoute(
+      "/chat/api/messages",
+      "sendMessageHandler",
+      "POST",
+      {
+        tags: ["Chat"],
+        summary: "Post a message to a channel",
+      },
     );
 
-    graphQLRegistry.registerMutation(
-      "sendMessage",
-      "type Mutation { sendMessage(channelId: String!, text: String!): Message! }",
-      "sendMessageResolver",
-      "external",
-    );
+    routeRegistry.registerRoute("/chat/api/me", "currentUserHandler", "GET", {
+      tags: ["Chat"],
+      summary: "The authenticated user",
+    });
 
-    // Register GraphQL subscription with explicit channelId argument (external - used by chat UI)
-    graphQLRegistry.registerSubscription(
-      "chatUpdates",
-      "type Subscription { chatUpdates(channelId: String!): Message }",
-      "chatUpdatesResolver",
-      "external",
+    // Real-time updates: one SSE stream, filtered per channel by the
+    // customizer's connection metadata
+    routeRegistry.registerStreamRoute(
+      CHAT_STREAM_PATH,
+      "chatStreamCustomizer",
+      {
+        tags: ["Chat"],
+        summary: "Live messages for one channel (?channelId=...)",
+      },
     );
 
     // Register HTTP route for chat interface

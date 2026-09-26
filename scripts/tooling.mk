@@ -14,7 +14,7 @@
 # so this file works in any repository that has scripts/ and node, regardless
 # of what its npm scripts are named.
 
-.PHONY: sync-tooling check-tooling fetch-types fetch-openapi fetch-graphql-schema \
+.PHONY: sync-tooling check-tooling fetch-types fetch-openapi \
         oauth-login oauth-relogin refresh-token token-status \
         set-git-credentials git-credentials forget-git-credentials git-pull git-push \
         deploy-changed deploy-changed-dry-run check-head eval test test-list test-head \
@@ -81,10 +81,6 @@ fetch-types:
 fetch-openapi:
 	@mkdir -p apis && curl -sS $(MANAGE_HOST)/engine/openapi.json \
 	  -o apis/openapi.json && echo '✓ OpenAPI description downloaded to apis/openapi.json'
-
-fetch-graphql-schema:
-	@mkdir -p schemas && node scripts/fetch-graphql-schema.js \
-	  && echo '✓ GraphQL schema downloaded to schemas/schema.json'
 
 # --- Authentication --------------------------------------------------------
 

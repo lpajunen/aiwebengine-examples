@@ -8,7 +8,7 @@ description: Deploy virtual-world via manage.softagen.com and verify it on world
 The engine serves three hosts, and they are not interchangeable:
 
 - `https://manage.softagen.com` — the management API: everything under
-  `/engine/...`, plus `/mcp`, `/graphql` and OAuth. Deploys, log reads and
+  `/engine/...`, plus `/mcp` and OAuth. Deploys, log reads and
   test runs go here. `/engine/*` **404s on softagen.com**.
 - `https://world.softagen.com` — where the virtual-world game is published;
   verify the deployed game here.

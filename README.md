@@ -24,8 +24,8 @@ Or use MCP to upload scripts directly to your aiwebengine instance.
 The engine serves three hosts:
 
 - `https://manage.softagen.com` — management surface: the engine HTTP API (`/engine/...`),
-  the MCP endpoint (`/mcp`), the authenticated GraphQL endpoint and OAuth. All deploys,
-  type/OpenAPI fetches and test runs go here (`MANAGE_HOST`).
+  the MCP endpoint (`/mcp`) and OAuth. All deploys, type/OpenAPI fetches and test
+  runs go here (`MANAGE_HOST`).
 - `https://softagen.com` — the engine's default host for deployed solutions, where these
   examples' routes are served (`SERVER_HOST`).
 - `https://world.softagen.com` — where the `virtual-world` example is published
@@ -35,9 +35,7 @@ The engine serves three hosts:
 
 - **blog.js** - Sample blog with modern styling
 - **feedback.js** - Interactive feedback form with GET/POST handling
-- **graphql_subscription_demo.js** - GraphQL subscription example using Server-Sent Events (SSE)
-- **graphql_ws_demo.js** - GraphQL subscription example using WebSocket (graphql-transport-ws protocol)
-- **script_updates_demo.js** - Script update demonstration
+- **chat_app.js** - Real-time chat over a JSON API plus a per-channel SSE stream
 - **file-upload.js** - Handling multipart file uploads (base64 data with metadata)
 - **github_mcp_issues.js** - Using McpClient to fetch GitHub issues via GitHub's MCP server
 - **transaction-demo.js** - Atomic database operations with transaction support

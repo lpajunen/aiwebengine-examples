@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Scope
 
-This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server and export an `init()` function that registers HTTP routes, GraphQL resolvers, or streams. There is no local server to run — scripts execute remotely after upload.
+This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server and export an `init()` function that registers HTTP routes, SSE streams, or MCP tools. There is no local server to run — scripts execute remotely after upload.
 
 Three hosts are involved, and they are not interchangeable:
 
-- **`MANAGE_HOST`** (default `https://manage.softagen.com`) — the management surface: the engine HTTP API under `/engine/...` (upload, assets, logs, tests), the MCP endpoint `/mcp`, the authenticated `/graphql` endpoint, and OAuth discovery. Every tooling script in `scripts/` talks to this host. `/engine/*` **404s on softagen.com**.
+- **`MANAGE_HOST`** (default `https://manage.softagen.com`) — the management surface: the engine HTTP API under `/engine/...` (upload, assets, logs, tests), the MCP endpoint `/mcp`, and OAuth discovery. Every tooling script in `scripts/` talks to this host. `/engine/*` **404s on softagen.com**.
 - **`SERVER_HOST`** (default `https://softagen.com`) — the engine's default host for deployed solutions; where the example scripts' registered routes are served.
 - **`WORLD_HOST`** (default `world.softagen.com`) — the hostname the `virtual-world` example is published on, bound with `make set-script-hosts`.
 
@@ -82,10 +82,9 @@ That only works if nothing repository-specific sits in the shared files:
 ### Fetching remote metadata (gitignored, regenerate as needed)
 
 ```bash
-make fetch-types           # types/aiwebengine.d.ts
-make fetch-openapi         # apis/openapi.json
-make fetch-graphql-schema  # schemas/schema.json
-make all                   # all of the above + format
+make fetch-types    # types/aiwebengine.d.ts
+make fetch-openapi  # apis/openapi.json
+make all            # both of the above + format
 ```
 
 ### Authentication
@@ -177,7 +176,7 @@ make set-script-hosts-dry-run       # preview
 
 `scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/script_hosts?uri=…&hosts=…` (administrators only; `GET` reads the current binding, `DELETE` clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
 
-`MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi/graphql fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
+`MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 
 ### Revisions and what is served
 
@@ -288,7 +287,7 @@ Script URIs are derived from the directory name (`foo_bar/` → `https://example
 
 ### Script model
 
-Every deployed script is a single JS/TS entrypoint that must export `init()`. `init()` registers routes/resolvers/streams against globals declared in `types/aiwebengine.d.ts` (`routeRegistry`, `graphQLRegistry`, `ResponseBuilder`, etc. — fetch this file locally with `make fetch-types` before working on type-checked code; it's gitignored). Handlers receive a `HandlerContext` with `context.request` (path, method, headers, query, params, form, body, files, auth).
+Every deployed script is a single JS/TS entrypoint that must export `init()`. `init()` registers routes/streams/tools against globals declared in `types/aiwebengine.d.ts` (`routeRegistry`, `mcpRegistry`, `ResponseBuilder`, etc. — fetch this file locally with `make fetch-types` before working on type-checked code; it's gitignored). Handlers receive a `HandlerContext` with `context.request` (path, method, headers, query, params, form, body, files, auth).
 
 ### Virtual World: entrypoint and server modules
 
@@ -338,8 +337,8 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 
 - one top-level directory per script, each holding `main.*` plus its assets; `virtual-world` is the actively developed one, the others are static reference examples
 - `.aiwebengineignore` — what is not part of any script (tooling, metadata, virtual-world's notes)
-- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `revisions.js` (history, pin/promote/revert), `set-script-hosts.js` (publish a script on a given host), `git-credentials.js` + `git-sync.js` (the engine's git API), `run-tests.js`, `fetch-graphql-schema.js`; `lib/` holds the shared token, client and ignore-file helpers
-- `types/`, `apis/`, `schemas/` — fetched/gitignored metadata from the remote server (never hand-edit; regenerate via `make fetch-*`)
+- `scripts/` — tooling: `oauth_pkce_token.js` (OAuth login), `upload-script.js` (deploy), `deploy-assets.js` (per-file deploy), `revisions.js` (history, pin/promote/revert), `set-script-hosts.js` (publish a script on a given host), `git-credentials.js` + `git-sync.js` (the engine's git API), `run-tests.js`; `lib/` holds the shared token, client and ignore-file helpers
+- `types/`, `apis/` — fetched/gitignored metadata from the remote server (never hand-edit; regenerate via `make fetch-*`)
 - `schemas/token.json` — OAuth tokens (issued by `MANAGE_HOST`), gitignored, never commit
 
 ## Security

@@ -9,8 +9,8 @@
         set-script-hosts set-script-hosts-dry-run \
         check-virtual-world check-virtual-world-candidate
 
-# Fetch types, OpenAPI and the GraphQL schema, then format.
-all: fetch-types fetch-openapi fetch-graphql-schema format
+# Fetch types and the OpenAPI description, then format.
+all: fetch-types fetch-openapi format
 
 include scripts/tooling.mk
 

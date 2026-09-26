@@ -46,29 +46,31 @@ function init(context) {
     "create_rest_endpoint", // Handler function name
   );
 
-  // Prompt 2: Add GraphQL Query
+  // Prompt 2: Add SSE Stream Endpoint
   mcpRegistry.registerPrompt(
-    "add_graphql_query",
-    "Generate a GraphQL query with schema definition and resolver function. This creates a new GraphQL query that can be accessed via the /graphql endpoint with proper type definitions and data fetching logic.",
+    "add_stream_endpoint",
+    "Generate a Server-Sent Events stream endpoint with a connection customizer and a broadcast helper. This creates a new SSE stream that clients subscribe to with EventSource and that the script pushes events to.",
     JSON.stringify([
       {
-        name: "queryName",
-        description: "The GraphQL query name (e.g., 'getUser', 'listProducts')",
-        required: true,
-      },
-      {
-        name: "returnType",
+        name: "streamPath",
         description:
-          "The return type description (e.g., 'User object with id, name, email')",
+          "The stream URL path (e.g., '/events/notifications', '/events/chat')",
         required: true,
       },
       {
-        name: "arguments",
-        description: "Query arguments (e.g., 'id: String!, limit: Int')",
+        name: "eventName",
+        description:
+          "The event name carried in each message (e.g., 'notification', 'message')",
+        required: true,
+      },
+      {
+        name: "filterField",
+        description:
+          "Optional connection filter field read from the query string (e.g., 'channelId')",
         required: false,
       },
     ]),
-    "add_graphql_query", // Handler function name
+    "add_stream_endpoint", // Handler function name
   );
 
   console.log("MCP prompts demo script initialized successfully");
@@ -189,22 +191,39 @@ console.log("Registered ${method} ${path}");
   };
 }
 
-// Handler for add_graphql_query prompt
+// Handler for add_stream_endpoint prompt
 /** @param {PromptHandlerContext} context */
-function add_graphql_query(context) {
+function add_stream_endpoint(context) {
   // Check if we're in completion mode
   if (context.mode === "completion") {
     const completingArgument = context.completingArgument;
     const partialValue = context.partialValue || "";
 
-    if (completingArgument === "queryName") {
+    if (completingArgument === "streamPath") {
       const suggestions = [
-        "getUser",
-        "listUsers",
-        "getProduct",
-        "listProducts",
-        "getOrder",
-        "listOrders",
+        "/events/notifications",
+        "/events/chat",
+        "/events/alerts",
+        "/events/presence",
+        "/events/updates",
+      ];
+      const filtered = suggestions.filter((s) =>
+        s.toLowerCase().includes(partialValue.toLowerCase()),
+      );
+      return {
+        values: filtered,
+        total: filtered.length,
+        hasMore: false,
+      };
+    }
+
+    if (completingArgument === "eventName") {
+      const suggestions = [
+        "notification",
+        "message",
+        "alert",
+        "presence",
+        "update",
       ];
       const filtered = suggestions.filter((s) =>
         s.toLowerCase().startsWith(partialValue.toLowerCase()),
@@ -216,16 +235,8 @@ function add_graphql_query(context) {
       };
     }
 
-    if (completingArgument === "returnType") {
-      const suggestions = [
-        "String",
-        "Int",
-        "Boolean",
-        "User",
-        "Product",
-        "[User]",
-        "[Product]",
-      ];
+    if (completingArgument === "filterField") {
+      const suggestions = ["channelId", "userId", "roomId", "topic"];
       const filtered = suggestions.filter((s) =>
         s.toLowerCase().startsWith(partialValue.toLowerCase()),
       );
@@ -246,40 +257,72 @@ function add_graphql_query(context) {
 
   // Prompt mode - generate the actual code
   const args = context.arguments || {};
-  const queryName = args.queryName || "myQuery";
-  const returnType = args.returnType || "String";
-  const queryArgs = args.arguments || "";
+  const streamPath = args.streamPath || "/events/updates";
+  const eventName = args.eventName || "update";
+  const filterField = args.filterField || "";
 
-  const argsStr = queryArgs ? `(${queryArgs})` : "";
+  const suffix = eventName.charAt(0).toUpperCase() + eventName.slice(1);
+  const customizerName = `${eventName}StreamCustomizer`;
 
-  const code = `
-// GraphQL query: ${queryName}
-const ${queryName}Schema = \`
-  type Query {
-    ${queryName}${argsStr}: ${returnType}
+  const customizer = filterField
+    ? `
+// Connection customizer: the returned object becomes the connection's
+// metadata, which sendStreamMessageFiltered matches against.
+function ${customizerName}(context) {
+  const req = context.request;
+  const ${filterField} = (req.query || {}).${filterField};
+
+  if (!${filterField}) {
+    return {};
   }
-\`;
 
-function ${queryName}Resolver(args, context) {
-  console.log("GraphQL query ${queryName} called with:", args);
-  
-  // TODO: Implement query logic
-  
-  return {
-    success: true,
-    data: null
-  };
+  return { ${filterField}: String(${filterField}) };
 }
+`.trim()
+    : "";
 
-// Register the query
-graphQLRegistry.registerQuery(
-  "${queryName}",
-  ${queryName}Schema,
-  "${queryName}Resolver",
-  "external",
-);
-console.log("Registered GraphQL query: ${queryName}");
-  `.trim();
+  const broadcast = filterField
+    ? `
+// Push an event to the connections that asked for this ${filterField}
+function broadcast${suffix}(${filterField}, payload) {
+  return routeRegistry.sendStreamMessageFiltered(
+    "${streamPath}",
+    { event: "${eventName}", ...payload },
+    JSON.stringify({ ${filterField}: String(${filterField}) }),
+  );
+}
+`.trim()
+    : `
+// Push an event to every connection on the stream
+function broadcast${suffix}(payload) {
+  return routeRegistry.sendStreamMessage("${streamPath}", {
+    event: "${eventName}",
+    ...payload,
+  });
+}
+`.trim();
+
+  const registration = filterField
+    ? `routeRegistry.registerStreamRoute("${streamPath}", "${customizerName}");`
+    : `routeRegistry.registerStreamRoute("${streamPath}");`;
+
+  const eventSourceArg = filterField
+    ? `"${streamPath}?${filterField}=" + ${filterField}`
+    : `"${streamPath}"`;
+
+  const code = [
+    `// SSE stream: ${streamPath}`,
+    customizer,
+    broadcast,
+    `// Register the stream (from init())
+${registration}
+console.log("Registered stream ${streamPath}");`,
+    `// Browser side:
+// const es = new EventSource(${eventSourceArg});
+// es.onmessage = (e) => console.log(JSON.parse(e.data));`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   return {
     messages: [
@@ -287,7 +330,7 @@ console.log("Registered GraphQL query: ${queryName}");
         role: "user",
         content: {
           type: "text",
-          text: `Create GraphQL query ${queryName} that returns ${returnType}`,
+          text: `Create an SSE stream at ${streamPath} that broadcasts ${eventName} events`,
         },
       },
       {

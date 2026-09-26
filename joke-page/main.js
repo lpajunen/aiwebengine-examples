@@ -3,7 +3,7 @@
 // Joke page
 // Handles HTTP requests and returns a random joke as an HTML page
 // Includes feedback system with thumbs up/down voting per individual joke and persistent storage
-// Also provides GraphQL query endpoint for fetching jokes
+// Also provides a JSON endpoint for fetching a random joke
 
 const jokes = [
   "Why don't scientists trust atoms? Because they make up everything!",
@@ -172,26 +172,31 @@ function handleFeedback(req) {
   }
 }
 
-/**
- * @param {Record<string, unknown>} args
- * @returns {{success: boolean, joke: string | null, thumbsUp?: number, thumbsDown?: number, error?: string}}
- */
-function resolveGetJoke(args) {
+/** @param {HttpRequest} req */
+function serveRandomJokeJson(req) {
   try {
     const joke = getRandomJoke();
     const feedback = getFeedbackForJoke(joke);
     return {
-      success: true,
-      joke: joke,
-      thumbsUp: feedback.thumbsUp,
-      thumbsDown: feedback.thumbsDown,
+      status: 200,
+      body: JSON.stringify({
+        success: true,
+        joke: joke,
+        thumbsUp: feedback.thumbsUp,
+        thumbsDown: feedback.thumbsDown,
+      }),
+      contentType: "application/json",
     };
   } catch (error) {
-    console.log("Error in resolveGetJoke: " + error);
+    console.log("Error in serveRandomJokeJson: " + error);
     return {
-      success: false,
-      joke: null,
-      error: "Failed to retrieve joke",
+      status: 500,
+      body: JSON.stringify({
+        success: false,
+        joke: null,
+        error: "Failed to retrieve joke",
+      }),
+      contentType: "application/json",
     };
   }
 }
@@ -200,10 +205,9 @@ function init() {
   console.log("Initializing joke page script");
   routeRegistry.registerRoute("/joke", "serveJoke", "GET");
   routeRegistry.registerRoute("/joke/feedback", "handleFeedback", "POST");
-  graphQLRegistry.registerQuery(
-    "getJoke",
-    "type Query { getJoke: JokeResult! } type JokeResult { success: Boolean! joke: String! thumbsUp: Int! thumbsDown: Int! error: String }",
-    "resolveGetJoke",
-    "external",
-  );
+  routeRegistry.registerRoute("/joke/random", "serveRandomJokeJson", "GET", {
+    summary: "Random joke as JSON",
+    description:
+      "Returns a random joke together with its current thumbs up/down counts.",
+  });
 }

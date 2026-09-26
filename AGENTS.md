@@ -50,10 +50,9 @@ Alternatively, use `aiwebengine-mcp` server tools for deployment and log retriev
 
 - one top-level directory per script: `main.*` is the entrypoint, everything else under it is an asset at the same relative path
 - `.aiwebengineignore` — what is not part of any script (tooling, metadata, virtual-world's notes)
-- `scripts/` — tooling: OAuth login, upload, GraphQL schema fetch
+- `scripts/` — tooling: OAuth login, upload, deploy, revisions, git sync, tests
 - `types/` — fetched aiwebengine type definitions (gitignored; run `make fetch-types`)
 - `apis/` — fetched OpenAPI spec (gitignored; run `make fetch-openapi`)
-- `schemas/` — fetched GraphQL schema (gitignored; run `make fetch-graphql-schema`)
 - `schemas/token.json` — OAuth tokens (gitignored, never commit)
 
 ## Virtual World Conventions

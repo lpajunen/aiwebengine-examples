@@ -186,7 +186,7 @@ routeRegistry.registerRoute('/hello', 'hello_handler', 'GET');
             <h2>Advanced Features</h2>
             <p>aiwebengine supports complex server-side applications with features like:</p>
             <ul>
-                <li><strong>GraphQL Integration:</strong> Built-in GraphQL support for modern API development</li>
+                <li><strong>MCP Integration:</strong> Expose tools and prompts to AI agents over the Model Context Protocol</li>
                 <li><strong>Form Handling:</strong> Automatic parsing of form data and file uploads</li>
                 <li><strong>Logging:</strong> Comprehensive logging system for debugging and monitoring</li>
                 <li><strong>Asset Management:</strong> Serve static files and manage web assets</li>

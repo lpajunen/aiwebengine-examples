@@ -63,7 +63,6 @@ We welcome all kinds of contributions:
 
    ```bash
    make fetch-types
-   make fetch-graphql-schema
    # Test any affected functionality
    ```
 

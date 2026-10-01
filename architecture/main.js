@@ -26,6 +26,9 @@ function serveArchitecture(context) {
 
 function init() {
   console.log("Initializing architecture script");
-  routeRegistry.registerRoute("/architecture.svg", "serveArchitecture", "GET");
+  routeRegistry.registerRoute("/architecture.svg", {
+    handler: "serveArchitecture",
+    method: "GET",
+  });
   console.log("Architecture SVG endpoint registered at /architecture.svg");
 }

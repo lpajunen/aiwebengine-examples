@@ -180,7 +180,7 @@ function hello_handler(context) {
     return ResponseBuilder.text("Hello, aiwebengine!");
 }
 
-routeRegistry.registerRoute('/hello', 'hello_handler', 'GET');
+routeRegistry.registerRoute('/hello', { handler: 'hello_handler', method: 'GET' });
             </div>
 
             <h2>Advanced Features</h2>
@@ -210,7 +210,10 @@ function init() {
   console.log(`Initializing blog.js script at ${new Date().toISOString()}`);
 
   // Register the blog endpoint
-  routeRegistry.registerRoute("/blog", "blog_handler", "GET");
+  routeRegistry.registerRoute("/blog", {
+    handler: "blog_handler",
+    method: "GET",
+  });
 
   console.log("Blog script initialized successfully");
 }

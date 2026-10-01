@@ -8,9 +8,18 @@
  */
 function init() {
   console.log("Initializing fetch_example.js");
-  routeRegistry.registerRoute("/fetch/example", "fetchExample", "GET");
-  routeRegistry.registerRoute("/fetch/with-secret", "fetchWithSecret", "GET");
-  routeRegistry.registerRoute("/fetch/post", "fetchPost", "POST");
+  routeRegistry.registerRoute("/fetch/example", {
+    handler: "fetchExample",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/fetch/with-secret", {
+    handler: "fetchWithSecret",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/fetch/post", {
+    handler: "fetchPost",
+    method: "POST",
+  });
 }
 
 const FETCH_EXAMPLE_EMPTY_REQUEST = /** @type {HttpRequest} */ ({

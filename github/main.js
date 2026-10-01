@@ -99,7 +99,10 @@ function githubHandler(context) {
  * Initialize the script - register the /github route
  */
 function init() {
-  routeRegistry.registerRoute("/github", "githubHandler", "GET");
+  routeRegistry.registerRoute("/github", {
+    handler: "githubHandler",
+    method: "GET",
+  });
   console.log("GitHub MCP script initialized - registered /github route");
   console.log(
     "Is Github token available: " + secretStorage.exists("github_token"),

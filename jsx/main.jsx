@@ -48,5 +48,5 @@ function jsxHandler(context) {
 }
 
 function init() {
-  routeRegistry.registerRoute("/jsx", "jsxHandler", "GET");
+  routeRegistry.registerRoute("/jsx", { handler: "jsxHandler", method: "GET" });
 }

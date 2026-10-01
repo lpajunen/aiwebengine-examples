@@ -45,6 +45,6 @@ function init() {
     console.error("Failed to add name column:", nameResult.error);
   }
 
-  routeRegistry.registerRoute("/dbtest", "handler", "GET");
+  routeRegistry.registerRoute("/dbtest", { handler: "handler", method: "GET" });
   console.log("dbtest.js endpoints registered");
 }

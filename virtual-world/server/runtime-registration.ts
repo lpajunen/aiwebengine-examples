@@ -17,7 +17,11 @@ function safeRegisterRoute(
     if (!routeOpts.tags) {
       routeOpts.tags = [VIRTUAL_WORLD_API_TAG];
     }
-    routeRegistry.registerRoute(path, handler, method, routeOpts);
+    routeRegistry.registerRoute(path, {
+      handler: handler,
+      method: method,
+      ...routeOpts,
+    });
   } catch (e) {
     vwLog("route registration skipped", {
       path: path,
@@ -32,7 +36,9 @@ function safeRegisterStreamRoute(
   customizationFunction?: string,
 ): void {
   try {
-    routeRegistry.registerStreamRoute(path, customizationFunction, {
+    routeRegistry.registerRoute(path, {
+      stream: true,
+      authorize: customizationFunction,
       tags: [VIRTUAL_WORLD_API_TAG],
     });
   } catch (e) {
@@ -62,7 +68,8 @@ function safeRegisterTool(
 
 function safeRegisterAssetRoute(path: string, assetPath: string): void {
   try {
-    routeRegistry.registerAssetRoute(path, assetPath, {
+    routeRegistry.registerRoute(path, {
+      file: assetPath,
       tags: [VIRTUAL_WORLD_API_TAG],
     });
   } catch (e) {

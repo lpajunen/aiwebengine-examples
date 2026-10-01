@@ -42,5 +42,8 @@ function typescriptHandler(context: HandlerContext): HttpResponse {
 }
 
 function init() {
-  routeRegistry.registerRoute("/typescript", "typescriptHandler", "GET");
+  routeRegistry.registerRoute("/typescript", {
+    handler: "typescriptHandler",
+    method: "GET",
+  });
 }

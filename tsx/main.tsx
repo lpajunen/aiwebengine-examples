@@ -90,5 +90,5 @@ function tsxHandler(context: HandlerContext): HttpResponse {
 }
 
 function init(): void {
-  routeRegistry.registerRoute("/tsx", "tsxHandler", "GET");
+  routeRegistry.registerRoute("/tsx", { handler: "tsxHandler", method: "GET" });
 }

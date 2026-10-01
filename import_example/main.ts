@@ -8,6 +8,11 @@ function handleImportedRequest(context: HandlerContext) {
 
 function init(context?: HandlerContext) {
   console.info(buildMessage("init"));
-  routeRegistry.registerRoute("/import-demo", "handleImportedRequest", "GET");
-  routeRegistry.registerAssetRoute("/import-demo-page", "public/demo.html");
+  routeRegistry.registerRoute("/import-demo", {
+    handler: "handleImportedRequest",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/import-demo-page", {
+    file: "public/demo.html",
+  });
 }

@@ -103,5 +103,8 @@ function handleUpload(context) {
  * Register the route on script initialization.
  */
 function init() {
-  routeRegistry.registerRoute("/upload", "handleUpload", "POST");
+  routeRegistry.registerRoute("/upload", {
+    handler: "handleUpload",
+    method: "POST",
+  });
 }

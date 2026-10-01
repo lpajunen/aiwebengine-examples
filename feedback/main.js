@@ -366,8 +366,14 @@ function init() {
   console.log(`Initializing feedback.js script at ${new Date().toISOString()}`);
 
   // Register both GET (form) and POST (submission) handlers
-  routeRegistry.registerRoute("/feedback", "feedback_form_handler", "GET");
-  routeRegistry.registerRoute("/feedback", "feedback_submit_handler", "POST");
+  routeRegistry.registerRoute("/feedback", {
+    handler: "feedback_form_handler",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/feedback", {
+    handler: "feedback_submit_handler",
+    method: "POST",
+  });
 
   console.log("Feedback script initialized successfully");
 }

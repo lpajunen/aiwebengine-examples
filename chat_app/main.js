@@ -325,11 +325,9 @@ function sendMessageHandler(context) {
     // Push to the stream connections that subscribed to this channel. The
     // filter is matched against the metadata chatStreamCustomizer returned
     // when each connection opened.
-    routeRegistry.sendStreamMessageFiltered(
-      CHAT_STREAM_PATH,
-      message,
-      JSON.stringify({ channelId: channelId }),
-    );
+    routeRegistry.sendStreamMessageFiltered(CHAT_STREAM_PATH, message, {
+      channelId: channelId,
+    });
 
     console.log(
       "Message sent to channel " + channelId + " by " + message.sender,
@@ -953,64 +951,55 @@ function init(context) {
     }
 
     // JSON API used by the chat UI (authentication required on every route)
-    routeRegistry.registerRoute(
-      "/chat/api/channels",
-      "channelsHandler",
-      "GET",
-      {
-        tags: ["Chat"],
-        summary: "List channels",
-      },
-    );
+    routeRegistry.registerRoute("/chat/api/channels", {
+      handler: "channelsHandler",
+      method: "GET",
+      tags: ["Chat"],
+      summary: "List channels",
+    });
 
-    routeRegistry.registerRoute(
-      "/chat/api/channels",
-      "createChannelHandler",
-      "POST",
-      {
-        tags: ["Chat"],
-        summary: "Create a channel",
-      },
-    );
+    routeRegistry.registerRoute("/chat/api/channels", {
+      handler: "createChannelHandler",
+      method: "POST",
+      tags: ["Chat"],
+      summary: "Create a channel",
+    });
 
-    routeRegistry.registerRoute(
-      "/chat/api/messages",
-      "messagesHandler",
-      "GET",
-      {
-        tags: ["Chat"],
-        summary: "Read a channel's message history",
-      },
-    );
+    routeRegistry.registerRoute("/chat/api/messages", {
+      handler: "messagesHandler",
+      method: "GET",
+      tags: ["Chat"],
+      summary: "Read a channel's message history",
+    });
 
-    routeRegistry.registerRoute(
-      "/chat/api/messages",
-      "sendMessageHandler",
-      "POST",
-      {
-        tags: ["Chat"],
-        summary: "Post a message to a channel",
-      },
-    );
+    routeRegistry.registerRoute("/chat/api/messages", {
+      handler: "sendMessageHandler",
+      method: "POST",
+      tags: ["Chat"],
+      summary: "Post a message to a channel",
+    });
 
-    routeRegistry.registerRoute("/chat/api/me", "currentUserHandler", "GET", {
+    routeRegistry.registerRoute("/chat/api/me", {
+      handler: "currentUserHandler",
+      method: "GET",
       tags: ["Chat"],
       summary: "The authenticated user",
     });
 
     // Real-time updates: one SSE stream, filtered per channel by the
     // customizer's connection metadata
-    routeRegistry.registerStreamRoute(
-      CHAT_STREAM_PATH,
-      "chatStreamCustomizer",
-      {
-        tags: ["Chat"],
-        summary: "Live messages for one channel (?channelId=...)",
-      },
-    );
+    routeRegistry.registerRoute(CHAT_STREAM_PATH, {
+      stream: true,
+      authorize: "chatStreamCustomizer",
+      tags: ["Chat"],
+      summary: "Live messages for one channel (?channelId=...)",
+    });
 
     // Register HTTP route for chat interface
-    routeRegistry.registerRoute("/chat", "chatInterfaceHandler", "GET");
+    routeRegistry.registerRoute("/chat", {
+      handler: "chatInterfaceHandler",
+      method: "GET",
+    });
 
     console.log("Chat application initialized successfully");
     console.log("Access the chat at /chat (authentication required)");

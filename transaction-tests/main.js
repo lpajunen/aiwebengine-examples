@@ -25,23 +25,26 @@
  * Register the transaction test routes on script initialization.
  */
 function init() {
-  routeRegistry.registerRoute("/test/transaction-commit", "testCommit", "GET");
-  routeRegistry.registerRoute(
-    "/test/transaction-rollback",
-    "testRollback",
-    "GET",
-  );
-  routeRegistry.registerRoute(
-    "/test/transaction-savepoint",
-    "testSavepoint",
-    "GET",
-  );
-  routeRegistry.registerRoute(
-    "/test/transaction-timeout",
-    "testTimeout",
-    "GET",
-  );
-  routeRegistry.registerRoute("/test/transaction-nested", "testNested", "GET");
+  routeRegistry.registerRoute("/test/transaction-commit", {
+    handler: "testCommit",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/test/transaction-rollback", {
+    handler: "testRollback",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/test/transaction-savepoint", {
+    handler: "testSavepoint",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/test/transaction-timeout", {
+    handler: "testTimeout",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/test/transaction-nested", {
+    handler: "testNested",
+    method: "GET",
+  });
 }
 
 /**

@@ -17,5 +17,8 @@ function helloHandler(context) {
 
 function init() {
   // Autocomplete for routeRegistry methods
-  routeRegistry.registerRoute("/hello", "helloHandler", "GET");
+  routeRegistry.registerRoute("/hello", {
+    handler: "helloHandler",
+    method: "GET",
+  });
 }

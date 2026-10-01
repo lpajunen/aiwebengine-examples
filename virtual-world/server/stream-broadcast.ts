@@ -33,26 +33,18 @@ export function sendVirtualWorldStreamEvent(
     }
     const message = JSON.stringify(envelope);
     const hasFilter = !!filter && Object.keys(filter).length > 0;
-    const result = hasFilter
-      ? routeRegistry.sendStreamMessageFiltered(
-          VIRTUAL_WORLD_EVENTS_STREAM_PATH,
-          message,
-          JSON.stringify(filter),
-          "overlap",
-        )
-      : routeRegistry.sendStreamMessage(
-          VIRTUAL_WORLD_EVENTS_STREAM_PATH,
-          message,
-        );
-    if (
-      typeof result === "string" &&
-      (result.indexOf("Error:") === 0 || result.indexOf("Failed") === 0)
-    ) {
-      vwLog("stream broadcast returned error", {
-        type: String(type),
-        filter: JSON.stringify(filter || {}),
-        result: result,
-      });
+    if (hasFilter) {
+      routeRegistry.sendStreamMessageFiltered(
+        VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+        message,
+        filter,
+        "overlap",
+      );
+    } else {
+      routeRegistry.sendStreamMessage(
+        VIRTUAL_WORLD_EVENTS_STREAM_PATH,
+        message,
+      );
     }
   } catch (e) {
     vwLog("stream broadcast failed", {

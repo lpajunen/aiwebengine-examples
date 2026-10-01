@@ -167,7 +167,7 @@ function handle${resourceName}${method}(context) {
 }
 
 // Register the endpoint
-routeRegistry.registerRoute("${path}", "handle${resourceName}${method}", "${method}");
+routeRegistry.registerRoute("${path}", { handler: "handle${resourceName}${method}", method: "${method}" });
 console.log("Registered ${method} ${path}");
   `.trim();
 
@@ -288,7 +288,7 @@ function broadcast${suffix}(${filterField}, payload) {
   return routeRegistry.sendStreamMessageFiltered(
     "${streamPath}",
     { event: "${eventName}", ...payload },
-    JSON.stringify({ ${filterField}: String(${filterField}) }),
+    { ${filterField}: String(${filterField}) },
   );
 }
 `.trim()
@@ -303,8 +303,8 @@ function broadcast${suffix}(payload) {
 `.trim();
 
   const registration = filterField
-    ? `routeRegistry.registerStreamRoute("${streamPath}", "${customizerName}");`
-    : `routeRegistry.registerStreamRoute("${streamPath}");`;
+    ? `routeRegistry.registerRoute("${streamPath}", { stream: true, authorize: "${customizerName}" });`
+    : `routeRegistry.registerRoute("${streamPath}", { stream: true });`;
 
   const eventSourceArg = filterField
     ? `"${streamPath}?${filterField}=" + ${filterField}`

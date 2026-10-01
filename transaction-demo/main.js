@@ -25,17 +25,18 @@
  * Register the demo HTTP routes on script initialization.
  */
 function init() {
-  routeRegistry.registerRoute(
-    "/transaction-demo/transfer",
-    "handleTransfer",
-    "POST",
-  );
-  routeRegistry.registerRoute("/transaction-demo/batch", "handleBatch", "POST");
-  routeRegistry.registerRoute(
-    "/transaction-demo/nested",
-    "handleNested",
-    "POST",
-  );
+  routeRegistry.registerRoute("/transaction-demo/transfer", {
+    handler: "handleTransfer",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/transaction-demo/batch", {
+    handler: "handleBatch",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/transaction-demo/nested", {
+    handler: "handleNested",
+    method: "POST",
+  });
 }
 
 /**

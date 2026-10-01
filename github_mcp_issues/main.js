@@ -199,8 +199,8 @@ function listRepositoryIssues(owner, repo, state = "open") {
  * Export functions for use in other scripts or as HTTP handlers
  */
 // Uncomment to register as HTTP endpoint:
-// routeRegistry.registerRoute('/github-mcp-demo', 'demonstrateGitHubMcp', 'GET');
-// routeRegistry.registerRoute('/github-issues/:owner/:repo', 'listRepositoryIssues', 'GET');
+// routeRegistry.registerRoute('/github-mcp-demo', { handler: 'demonstrateGitHubMcp', method: 'GET' });
+// routeRegistry.registerRoute('/github-issues/:owner/:repo', { handler: 'listRepositoryIssues', method: 'GET' });
 
 // For testing, run the demo
 // demonstrateGitHubMcp();

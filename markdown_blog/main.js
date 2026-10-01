@@ -899,12 +899,30 @@ const MARKDOWN_BLOG_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
 /** @param {HandlerContext} context */
 function init(context) {
   // Register routes for the blog
-  routeRegistry.registerRoute("/blog", "blogRouter", "GET");
-  routeRegistry.registerRoute("/blog/*", "blogRouter", "GET");
-  routeRegistry.registerRoute("/blog/admin/create", "createPost", "POST");
-  routeRegistry.registerRoute("/blog/admin/update", "updatePost", "POST");
-  routeRegistry.registerRoute("/blog/admin/delete", "deletePost", "POST");
-  routeRegistry.registerRoute("/blog/new", "newPostForm", "GET");
+  routeRegistry.registerRoute("/blog", {
+    handler: "blogRouter",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/blog/*", {
+    handler: "blogRouter",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/blog/admin/create", {
+    handler: "createPost",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/blog/admin/update", {
+    handler: "updatePost",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/blog/admin/delete", {
+    handler: "deletePost",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/blog/new", {
+    handler: "newPostForm",
+    method: "GET",
+  });
 
   // Store templates in scriptStorage
   for (const [key, template] of Object.entries(templates)) {

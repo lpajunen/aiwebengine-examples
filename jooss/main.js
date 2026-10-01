@@ -199,13 +199,34 @@ function greekGreeting(req) {
 
 function init() {
   console.log("Initializing jooss.js at " + new Date().toISOString());
-  routeRegistry.registerRoute("/jooss", "handler", "GET");
-  routeRegistry.registerRoute("/jooss/finnish", "finnishGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/swedish", "swedishGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/german", "germanGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/italian", "italianGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/spanish", "spanishGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/polish", "polishGreeting", "GET");
-  routeRegistry.registerRoute("/jooss/greek", "greekGreeting", "GET");
+  routeRegistry.registerRoute("/jooss", { handler: "handler", method: "GET" });
+  routeRegistry.registerRoute("/jooss/finnish", {
+    handler: "finnishGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/swedish", {
+    handler: "swedishGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/german", {
+    handler: "germanGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/italian", {
+    handler: "italianGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/spanish", {
+    handler: "spanishGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/polish", {
+    handler: "polishGreeting",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/jooss/greek", {
+    handler: "greekGreeting",
+    method: "GET",
+  });
   console.log("jooss.js endpoints registered");
 }

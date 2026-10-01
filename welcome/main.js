@@ -20,5 +20,5 @@ function servePage(context) {
 
 function init() {
   console.log("Initializing welcome page");
-  routeRegistry.registerRoute("/", "servePage", "GET");
+  routeRegistry.registerRoute("/", { handler: "servePage", method: "GET" });
 }

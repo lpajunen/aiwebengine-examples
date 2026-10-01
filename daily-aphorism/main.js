@@ -153,5 +153,8 @@ function getDailyAphorism(context) {
 
 function init() {
   console.log("Initializing daily aphorism page");
-  routeRegistry.registerRoute("/aphorism", "getDailyAphorism", "GET");
+  routeRegistry.registerRoute("/aphorism", {
+    handler: "getDailyAphorism",
+    method: "GET",
+  });
 }

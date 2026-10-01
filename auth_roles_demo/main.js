@@ -162,7 +162,16 @@ function adminOnly(context) {
 }
 
 function init() {
-  routeRegistry.registerRoute("/auth/demo", "handleRequest", "GET");
-  routeRegistry.registerRoute("/auth/editor", "editorOnly", "GET");
-  routeRegistry.registerRoute("/auth/admin", "adminOnly", "GET");
+  routeRegistry.registerRoute("/auth/demo", {
+    handler: "handleRequest",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/auth/editor", {
+    handler: "editorOnly",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/auth/admin", {
+    handler: "adminOnly",
+    method: "GET",
+  });
 }

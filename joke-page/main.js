@@ -203,9 +203,14 @@ function serveRandomJokeJson(req) {
 
 function init() {
   console.log("Initializing joke page script");
-  routeRegistry.registerRoute("/joke", "serveJoke", "GET");
-  routeRegistry.registerRoute("/joke/feedback", "handleFeedback", "POST");
-  routeRegistry.registerRoute("/joke/random", "serveRandomJokeJson", "GET", {
+  routeRegistry.registerRoute("/joke", { handler: "serveJoke", method: "GET" });
+  routeRegistry.registerRoute("/joke/feedback", {
+    handler: "handleFeedback",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/joke/random", {
+    handler: "serveRandomJokeJson",
+    method: "GET",
     summary: "Random joke as JSON",
     description:
       "Returns a random joke together with its current thumbs up/down counts.",

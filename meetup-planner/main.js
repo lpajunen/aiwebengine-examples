@@ -782,23 +782,26 @@ function init() {
   console.log("Initializing meetup-planner.js at " + new Date().toISOString());
 
   // Register HTTP routes
-  routeRegistry.registerRoute("/meetup", "meetup_handler", "GET");
-  routeRegistry.registerRoute(
-    "/meetup/dashboard",
-    "meetup_dashboard_handler",
-    "GET",
-  );
-  routeRegistry.registerRoute(
-    "/meetup/create",
-    "create_meetup_handler",
-    "POST",
-  );
-  routeRegistry.registerRoute("/meetup/join/:id", "join_meetup_handler", "GET");
-  routeRegistry.registerRoute(
-    "/meetup/:id/response",
-    "update_response_handler",
-    "POST",
-  );
+  routeRegistry.registerRoute("/meetup", {
+    handler: "meetup_handler",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/meetup/dashboard", {
+    handler: "meetup_dashboard_handler",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/meetup/create", {
+    handler: "create_meetup_handler",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/meetup/join/:id", {
+    handler: "join_meetup_handler",
+    method: "GET",
+  });
+  routeRegistry.registerRoute("/meetup/:id/response", {
+    handler: "update_response_handler",
+    method: "POST",
+  });
 
   console.log("Meetup planner initialized successfully");
   console.log("Routes registered:");

@@ -296,5 +296,8 @@ function getBingoPage(context) {
 }
 
 function init() {
-  routeRegistry.registerRoute("/bingo", "getBingoPage", "GET");
+  routeRegistry.registerRoute("/bingo", {
+    handler: "getBingoPage",
+    method: "GET",
+  });
 }

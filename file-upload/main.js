@@ -65,7 +65,7 @@ function handleUpload(context) {
       size: file.size,
       preview: preview,
       // In a real application, you might:
-      // - Save the decoded data with assetStorage.upsertAsset()
+      // - Save it with files.write(path, base64, { encoding: "base64" })
       // - Process image files
       // - Validate file types
       // - Scan for malware

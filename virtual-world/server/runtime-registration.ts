@@ -52,11 +52,15 @@ function safeRegisterStreamRoute(
 function safeRegisterTool(
   name: string,
   description: string,
-  schema: string,
+  schema: string | Record<string, unknown>,
   handlerName: string,
 ): void {
   try {
-    mcpRegistry.registerTool(name, description, schema, handlerName);
+    mcpRegistry.registerTool(name, {
+      description: description,
+      inputSchema: typeof schema === "string" ? JSON.parse(schema) : schema,
+      handler: handlerName,
+    });
   } catch (e) {
     vwLog("mcp tool registration skipped", {
       name: name,
@@ -82,11 +86,11 @@ function safeRegisterAssetRoute(path: string, assetPath: string): void {
 
 export function registerVirtualWorldRuntime(): void {
   const virtualWorldActionIds = getAllActionIds();
-  const virtualWorldStateSchema = JSON.stringify({
+  const virtualWorldStateSchema = {
     type: "object",
     properties: {},
-  });
-  const virtualWorldMoveSchema = JSON.stringify({
+  };
+  const virtualWorldMoveSchema = {
     type: "object",
     properties: {
       direction: {
@@ -111,8 +115,8 @@ export function registerVirtualWorldRuntime(): void {
       },
     },
     required: ["direction"],
-  });
-  const virtualWorldManageItemsSchema = JSON.stringify({
+  };
+  const virtualWorldManageItemsSchema = {
     type: "object",
     properties: {
       action: {
@@ -160,8 +164,8 @@ export function registerVirtualWorldRuntime(): void {
           "Index within the container's contents array to take, for container_get",
       },
     },
-  });
-  const virtualWorldActSchema = JSON.stringify({
+  };
+  const virtualWorldActSchema = {
     type: "object",
     properties: {
       action: {
@@ -214,7 +218,7 @@ export function registerVirtualWorldRuntime(): void {
       },
     },
     required: ["action"],
-  });
+  };
 
   safeRegisterRoute("/virtual-world/items", "itemsHandler", "GET");
   safeRegisterRoute("/virtual-world/item-action", "itemActionHandler", "POST");
@@ -246,7 +250,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldActToolHandler",
   );
 
-  const virtualWorldSetNicknameSchema = JSON.stringify({
+  const virtualWorldSetNicknameSchema = {
     type: "object",
     properties: {
       nick: {
@@ -255,7 +259,7 @@ export function registerVirtualWorldRuntime(): void {
       },
     },
     required: ["nick"],
-  });
+  };
   safeRegisterTool(
     "virtualWorldSetNickname",
     "Set the authenticated player's nickname",
@@ -263,7 +267,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldSetNicknameToolHandler",
   );
 
-  const virtualWorldManageItemClassesSchema = JSON.stringify({
+  const virtualWorldManageItemClassesSchema = {
     type: "object",
     properties: {
       action: {
@@ -335,7 +339,7 @@ export function registerVirtualWorldRuntime(): void {
           "Default per-instance state for newly spawned or crafted items",
       },
     },
-  });
+  };
   safeRegisterTool(
     "virtualWorldManageItemClasses",
     "List, get, create, update, or delete item class definitions in the virtual world",
@@ -343,7 +347,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageItemClassesToolHandler",
   );
 
-  const virtualWorldManageActionClassesSchema = JSON.stringify({
+  const virtualWorldManageActionClassesSchema = {
     type: "object",
     properties: {
       action: {
@@ -676,7 +680,7 @@ export function registerVirtualWorldRuntime(): void {
           "Optional delay in milliseconds between the action starting and its effects/produces resolving. Costs and fatigue are charged at the start; execution.startToastMessage is shown then, and execution.toastMessage is shown when it finishes.",
       },
     },
-  });
+  };
   safeRegisterTool(
     "virtualWorldManageActionClasses",
     "List, get, create, update, or delete action class definitions in the virtual world",
@@ -684,7 +688,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageActionClassesToolHandler",
   );
 
-  const virtualWorldManageLivingClassesSchema = JSON.stringify({
+  const virtualWorldManageLivingClassesSchema = {
     type: "object",
     properties: {
       action: {
@@ -835,7 +839,7 @@ export function registerVirtualWorldRuntime(): void {
           "Whether this living may fight or be fought at all; false makes it untouchable and harmless (the built-in player_ghost). Defaults to true.",
       },
     },
-  });
+  };
   safeRegisterTool(
     "virtualWorldManageLivingClasses",
     "List, get, create, update, or delete living class definitions in the virtual world",
@@ -843,7 +847,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageLivingClassesToolHandler",
   );
 
-  const virtualWorldManageTileClassesSchema = JSON.stringify({
+  const virtualWorldManageTileClassesSchema = {
     type: "object",
     properties: {
       action: {
@@ -900,7 +904,7 @@ export function registerVirtualWorldRuntime(): void {
         description: "Per-locale display names",
       },
     },
-  });
+  };
   safeRegisterTool(
     "virtualWorldManageTileClasses",
     "List, get, create, update, or delete tile class definitions — the vocabulary worlds are made of",
@@ -908,7 +912,7 @@ export function registerVirtualWorldRuntime(): void {
     "virtualWorldManageTileClassesToolHandler",
   );
 
-  const virtualWorldManageWorldClassesSchema = JSON.stringify({
+  const virtualWorldManageWorldClassesSchema = {
     type: "object",
     properties: {
       action: {
@@ -1056,7 +1060,7 @@ export function registerVirtualWorldRuntime(): void {
         },
       },
     },
-  });
+  };
   safeRegisterTool(
     "virtualWorldManageWorldClasses",
     "List, get, create, update, or delete world class definitions (world type, size) in the virtual world",

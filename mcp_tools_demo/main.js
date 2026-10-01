@@ -114,7 +114,7 @@ function init(context) {
   console.log("Initializing MCP tools demo at " + new Date().toISOString());
 
   // Register MCP tool: getCurrentTime
-  const currentTimeSchema = JSON.stringify({
+  const currentTimeSchema = {
     type: "object",
     properties: {
       timezone: {
@@ -124,17 +124,16 @@ function init(context) {
         default: "UTC",
       },
     },
+  };
+
+  mcpRegistry.registerTool("getCurrentTime", {
+    description: "Get the current date and time in a specified timezone",
+    inputSchema: currentTimeSchema,
+    handler: "getCurrentTimeHandler",
   });
 
-  mcpRegistry.registerTool(
-    "getCurrentTime",
-    "Get the current date and time in a specified timezone",
-    currentTimeSchema,
-    "getCurrentTimeHandler",
-  );
-
   // Register MCP tool: calculate
-  const calculateSchema = JSON.stringify({
+  const calculateSchema = {
     type: "object",
     properties: {
       operation: {
@@ -152,17 +151,16 @@ function init(context) {
       },
     },
     required: ["operation", "a", "b"],
+  };
+
+  mcpRegistry.registerTool("calculate", {
+    description: "Perform basic mathematical calculations",
+    inputSchema: calculateSchema,
+    handler: "calculateHandler",
   });
 
-  mcpRegistry.registerTool(
-    "calculate",
-    "Perform basic mathematical calculations",
-    calculateSchema,
-    "calculateHandler",
-  );
-
   // Register MCP tool: getWeather
-  const weatherSchema = JSON.stringify({
+  const weatherSchema = {
     type: "object",
     properties: {
       location: {
@@ -171,17 +169,17 @@ function init(context) {
       },
     },
     required: ["location"],
+  };
+
+  mcpRegistry.registerTool("getWeather", {
+    description:
+      "Get current weather information for a location (simulated data)",
+    inputSchema: weatherSchema,
+    handler: "getWeatherHandler",
   });
 
-  mcpRegistry.registerTool(
-    "getWeather",
-    "Get current weather information for a location (simulated data)",
-    weatherSchema,
-    "getWeatherHandler",
-  );
-
   // Register MCP tool: generateId
-  const generateIdSchema = JSON.stringify({
+  const generateIdSchema = {
     type: "object",
     properties: {
       prefix: {
@@ -197,14 +195,13 @@ function init(context) {
         maximum: 32,
       },
     },
-  });
+  };
 
-  mcpRegistry.registerTool(
-    "generateId",
-    "Generate a random unique identifier with optional prefix",
-    generateIdSchema,
-    "generateIdHandler",
-  );
+  mcpRegistry.registerTool("generateId", {
+    description: "Generate a random unique identifier with optional prefix",
+    inputSchema: generateIdSchema,
+    handler: "generateIdHandler",
+  });
 
   console.log("MCP tools demo script initialized successfully");
   console.log(

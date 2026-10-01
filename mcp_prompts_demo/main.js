@@ -18,10 +18,10 @@ function init(context) {
   console.log("Initializing MCP prompts demo at " + new Date().toISOString());
 
   // Prompt 1: Create REST API Endpoint
-  mcpRegistry.registerPrompt(
-    "create_rest_endpoint",
-    "Generate a complete REST API endpoint with handler function and route registration. This creates a new HTTP endpoint that can handle GET/POST/PUT/DELETE requests with proper error handling and JSON responses.",
-    JSON.stringify([
+  mcpRegistry.registerPrompt("create_rest_endpoint", {
+    description:
+      "Generate a complete REST API endpoint with handler function and route registration. This creates a new HTTP endpoint that can handle GET/POST/PUT/DELETE requests with proper error handling and JSON responses.",
+    arguments: [
       {
         name: "resourceName",
         description: "The resource name (e.g., 'users', 'products', 'orders')",
@@ -42,15 +42,15 @@ function init(context) {
         description: "Brief description of what this endpoint does",
         required: false,
       },
-    ]),
-    "create_rest_endpoint", // Handler function name
-  );
+    ],
+    handler: "create_rest_endpoint",
+  });
 
   // Prompt 2: Add SSE Stream Endpoint
-  mcpRegistry.registerPrompt(
-    "add_stream_endpoint",
-    "Generate a Server-Sent Events stream endpoint with a connection customizer and a broadcast helper. This creates a new SSE stream that clients subscribe to with EventSource and that the script pushes events to.",
-    JSON.stringify([
+  mcpRegistry.registerPrompt("add_stream_endpoint", {
+    description:
+      "Generate a Server-Sent Events stream endpoint with a connection customizer and a broadcast helper. This creates a new SSE stream that clients subscribe to with EventSource and that the script pushes events to.",
+    arguments: [
       {
         name: "streamPath",
         description:
@@ -69,9 +69,9 @@ function init(context) {
           "Optional connection filter field read from the query string (e.g., 'channelId')",
         required: false,
       },
-    ]),
-    "add_stream_endpoint", // Handler function name
-  );
+    ],
+    handler: "add_stream_endpoint",
+  });
 
   console.log("MCP prompts demo script initialized successfully");
   console.log("Registered 2 MCP prompts for common development tasks");

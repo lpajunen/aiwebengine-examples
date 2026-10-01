@@ -54,7 +54,7 @@ describe("re-applying a step", () => {
       "createTable",
       VWORLD_PLAYER_NICK_TABLE,
       function () {
-        return database.createTable(VWORLD_PLAYER_NICK_TABLE);
+        return database.ensureTable(VWORLD_PLAYER_NICK_TABLE, { columns: [] });
       },
       undefined,
       steps,
@@ -71,7 +71,9 @@ describe("re-applying a step", () => {
       "addTextColumn",
       VWORLD_PLAYER_NICK_TABLE,
       function () {
-        return database.addTextColumn(VWORLD_PLAYER_NICK_TABLE, "nick", false);
+        return database.ensureTable(VWORLD_PLAYER_NICK_TABLE, {
+          columns: [{ name: "nick", type: "text", nullable: false }],
+        });
       },
       "nick",
       steps,
@@ -93,7 +95,9 @@ describe("re-applying a step", () => {
       "createTable",
       VWORLD_SCHEMA_VERSION_TABLE,
       function () {
-        return database.createTable(VWORLD_SCHEMA_VERSION_TABLE);
+        return database.ensureTable(VWORLD_SCHEMA_VERSION_TABLE, {
+          columns: [],
+        });
       },
       undefined,
       [],
@@ -106,7 +110,9 @@ describe("re-applying a step", () => {
       "createTable",
       VWORLD_SCHEMA_VERSION_TABLE,
       function () {
-        return database.createTable(VWORLD_SCHEMA_VERSION_TABLE);
+        return database.ensureTable(VWORLD_SCHEMA_VERSION_TABLE, {
+          columns: [],
+        });
       },
       undefined,
       first,
@@ -115,7 +121,9 @@ describe("re-applying a step", () => {
       "createTable",
       VWORLD_SCHEMA_VERSION_TABLE,
       function () {
-        return database.createTable(VWORLD_SCHEMA_VERSION_TABLE);
+        return database.ensureTable(VWORLD_SCHEMA_VERSION_TABLE, {
+          columns: [],
+        });
       },
       undefined,
       second,

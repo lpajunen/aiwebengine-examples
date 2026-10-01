@@ -20,7 +20,7 @@ require("dotenv").config();
 //
 // Usage:
 //   node scripts/eval-script.js [options] [snippet]
-//   make eval SRC='JSON.parse(database.query("vworld_npcs", "{}", 3))'
+//   make eval SRC='database.query("vworld_npcs", { limit: 3 })'
 //   make eval FILE=snippet.js
 //
 // Options:

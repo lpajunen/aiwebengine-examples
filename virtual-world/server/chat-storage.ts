@@ -6,6 +6,12 @@ import {
   DM_MAX,
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
+import {
+  deleteWorldRow,
+  insertWorldRow,
+  queryWorldRows,
+  upsertWorldRow,
+} from "./world-db.ts";
 
 // Who a world-chat line came from. Everything a player types is "player";
 // "npc" is what an action's configured line becomes when it is spoken by the
@@ -34,16 +40,6 @@ function normalizeChatSenderKind(raw: unknown): ChatSenderKind {
   return String(raw || "") === "npc" ? "npc" : "player";
 }
 
-function parseChatDbResult(raw: string | null | undefined): any {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    vwLog("chat db parse failed", { error: String(e) });
-    return null;
-  }
-}
-
 function toStoredChatTimestamp(tsMs: number): number {
   const numeric = Number(tsMs || 0);
   if (!Number.isFinite(numeric) || numeric <= 0)
@@ -66,34 +62,12 @@ function queryChatRows(
   orderBy: string,
   orderDir: "asc" | "desc",
 ): any[] {
-  const result = parseChatDbResult(
-    database.query(tableName, filters, limit, orderBy, orderDir),
-  );
-  if (!Array.isArray(result)) {
-    if (result && result.error) {
-      vwLog("chat db query failed", {
-        table: tableName,
-        filters: filters || "",
-        error: String(result.error),
-      });
-    }
-    return [];
-  }
-  return result;
+  return queryWorldRows(tableName, filters, limit, orderBy, orderDir);
 }
 
-function insertChatRow(tableName: string, data: unknown): any {
-  const result = parseChatDbResult(
-    database.insert(tableName, JSON.stringify(data)),
-  );
-  if (result && result.error) {
-    vwLog("chat db insert failed", {
-      table: tableName,
-      error: String(result.error),
-    });
-    return null;
-  }
-  return result;
+function insertChatRow(tableName: string, data: Record<string, any>): any {
+  const result = insertWorldRow(tableName, data);
+  return result && result.error ? null : result;
 }
 
 function upsertDMIndexEntry(
@@ -101,23 +75,11 @@ function upsertDMIndexEntry(
   otherUserId: string,
   ts: number,
 ): void {
-  const result = parseChatDbResult(
-    database.upsert(
-      VWORLD_DM_INDEX_TABLE,
-      JSON.stringify(["user_id", "other_user_id"]),
-      JSON.stringify({
-        user_id: userId,
-        other_user_id: otherUserId,
-        last_ts: toStoredChatTimestamp(ts),
-      }),
-    ),
-  );
-  if (result && result.error) {
-    vwLog("chat db upsert failed", {
-      table: VWORLD_DM_INDEX_TABLE,
-      error: String(result.error),
-    });
-  }
+  upsertWorldRow(VWORLD_DM_INDEX_TABLE, ["user_id", "other_user_id"], {
+    user_id: userId,
+    other_user_id: otherUserId,
+    last_ts: toStoredChatTimestamp(ts),
+  });
 }
 
 function pruneChatRows(
@@ -130,16 +92,7 @@ function pruneChatRows(
   if (rows.length <= maxCount) return;
   for (let i = maxCount; i < rows.length; i++) {
     if (!Number.isFinite(Number(rows[i] && rows[i].id))) continue;
-    const result = parseChatDbResult(
-      database.delete(tableName, Number(rows[i].id)),
-    );
-    if (result && result.error) {
-      vwLog("chat db prune delete failed", {
-        table: tableName,
-        id: Number(rows[i].id),
-        error: String(result.error),
-      });
-    }
+    deleteWorldRow(tableName, Number(rows[i].id));
   }
 }
 

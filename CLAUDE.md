@@ -234,7 +234,7 @@ The report carries `diagnostics` (each with `severity`, `code`, `message`, `sour
 ### Evaluating a snippet on the server
 
 ```bash
-make eval SRC='JSON.parse(database.query("vworld_npcs", "{}", 3))'
+make eval SRC='database.query("vworld_npcs", { limit: 3 })'
 make eval FILE=snippet.js                # snippet from a file (needs single quotes, etc.)
 make eval SRC='…' ROLLBACK=false         # keep the database writes
 make eval SRC='…' URI=https://example.com/docs
@@ -260,7 +260,7 @@ The database comes back empty. Almost everything rebuilds itself on the first `i
 
 ```bash
 node scripts/eval-script.js --no-rollback \
-  'database.upsert("vworld_admins", JSON.stringify(["user_id"]), JSON.stringify({user_id: "<uuid>", created_at: Math.floor(Date.now()/1000)}))'
+  'database.upsert("vworld_admins", ["user_id"], {user_id: "<uuid>", created_at: Math.floor(Date.now()/1000)})'
 ```
 
 `created_at` must be **seconds**. Integer columns here are 32-bit, so a `Date.now()` millisecond value is rejected with `integer out of range` — and that rejection aborts the surrounding transaction, taking unrelated writes down with it.

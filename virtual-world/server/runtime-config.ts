@@ -74,7 +74,11 @@ export const VWORLD_WORLD_ITEM_META_TABLE = "vworld_world_item_meta";
 export const VWORLD_NPC_TABLE = "vworld_npcs";
 export const VWORLD_NPC_ACTIVE_WORLD_TABLE = "vworld_npc_active_worlds";
 export const VWORLD_NPC_TICK_TABLE = "vworld_npc_tick_meta";
-export const VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_leases";
+// The lease is an ordinary table now (see world-db.ts tryTakeLease); the one
+// `database.createLeaseTable` made had no id column, so it is dropped rather
+// than reused.
+export const VWORLD_NPC_TICK_LEASE_TABLE = "vworld_npc_tick_lease";
+export const VWORLD_NPC_TICK_LEASE_TABLE_LEGACY = "vworld_npc_tick_leases";
 export const VWORLD_ITEM_CLASS_TABLE = "vworld_item_classes";
 export const VWORLD_ACTION_CLASS_TABLE = "vworld_action_classes";
 export const VWORLD_PENDING_ACTION_TABLE = "vworld_pending_actions";
@@ -134,7 +138,7 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v11: world chat text_key, so an authored line localizes per reader.
 // v12: npc home_row/home_col, the post a leashed living returns to.
 // v13: living class dialogue_json, what it says when talked to.
-export const VWORLD_SCHEMA_VERSION = 13;
+export const VWORLD_SCHEMA_VERSION = 14;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

@@ -391,7 +391,7 @@ export function getActionDefinition(actionId: string | null | undefined) {
 // 2026-08-21 once the server was recreated.
 //
 // vworld_action_classes had wedged on the old database: even
-// database.query(table, "{}", 1) hung, where every other class table answered
+// database.query(table, { limit: 1 }) hung, where every other class table answered
 // in ~20ms. getAllActionIds() runs in init()'s FIRST phase, so that hang alone
 // was enough to blow the 10000ms budget and leave the script with no routes
 // registered at all. Recreating the server cleared the stuck locks; the table

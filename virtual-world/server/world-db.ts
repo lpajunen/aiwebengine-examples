@@ -1,121 +1,128 @@
 import { vwLog } from "./diagnostics.ts";
 
 /**
- * The parsed answer of a `database.*` call, or null when there was nothing to
- * parse.
+ * A `database.*` answer as a value, or null when there was nothing.
  *
- * These calls return a `DatabaseAnswer` — a String object carrying `.json()`
- * — so the parse goes through that when it is offered and falls back to
- * `JSON.parse` for a plain string, which is what a test's stub hands over.
+ * The calls answer with values now; a string is still parsed, because a
+ * test's stub may hand one over.
  */
-export function parseWorldDbResult(raw: string): any | null {
-  if (!raw) return null;
+export function parseWorldDbResult(raw: unknown): any | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") return raw;
   try {
-    const answer = raw as unknown as Partial<DatabaseResult>;
-    return typeof answer.json === "function" ? answer.json() : JSON.parse(raw);
+    return JSON.parse(raw);
   } catch (e) {
     vwLog("world db parse failed", { error: String(e) });
     return null;
   }
 }
 
+/** A filter as callers write it: an object, or the JSON text of one. */
+export type WorldFilter = string | Record<string, unknown>;
+
+function filterObject(filters: WorldFilter): Record<string, unknown> {
+  if (typeof filters !== "string") return filters || {};
+  if (!filters.trim()) return {};
+  try {
+    const parsed = JSON.parse(filters);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    vwLog("world db filter unreadable", { filters: filters });
+    return {};
+  }
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 export interface WorldReadOptions {
   /**
    * Hold the returned rows until the transaction ends, so a read-modify-write
    * cannot lose an update to a concurrent one. Only meaningful inside a
-   * transaction — see worldQueryOptionsJson.
+   * transaction — see wantsLock.
    */
   forUpdate?: boolean;
 }
 
 /**
- * Render read options for `database.query`, or null to take its defaults.
+ * Whether to ask for a locked read.
  *
  * The engine refuses `forUpdate` outside a transaction, because a lock taken
  * there would be released the moment the query returned. runInWorldTransaction
- * is deliberately fail-open — when BEGIN fails the body still runs, just
- * unprotected — so a locked read reached that way is downgraded to an unlocked
- * one and logged, rather than raising. Turning a lost update into a dead route
- * would be the worse trade.
+ * is deliberately fail-open — when the transaction cannot start the body still
+ * runs, just unprotected — so a locked read reached that way is downgraded to
+ * an unlocked one and logged, rather than raising. Turning a lost update into
+ * a dead route would be the worse trade.
  */
-function worldQueryOptionsJson(
+function wantsLock(
   tableName: string,
   options: WorldReadOptions | undefined,
-): string | null {
-  if (!options || !options.forUpdate) return null;
+): boolean {
+  if (!options || !options.forUpdate) return false;
   if (transactionDepth === 0) {
     vwLog("forUpdate requested outside a transaction; reading unlocked", {
       table: tableName,
     });
-    return null;
+    return false;
   }
-  return JSON.stringify({ forUpdate: true });
+  return true;
 }
 
 export function queryWorldRows(
   tableName: string,
-  filters: string,
+  filters: WorldFilter,
   limit: number,
   orderBy: string,
   orderDir: "asc" | "desc",
   options?: WorldReadOptions,
 ): any[] {
-  const normalizedFilters =
-    typeof filters === "string" && filters.trim() ? filters : "{}";
-  const result = parseWorldDbResult(
-    database.query(
-      tableName,
-      normalizedFilters,
-      limit,
-      orderBy,
-      orderDir,
-      worldQueryOptionsJson(tableName, options),
-    ),
-  );
-  if (!Array.isArray(result)) {
-    if (result && result.error) {
-      vwLog("world db query failed", {
-        table: tableName,
-        filters: normalizedFilters,
-        error: String(result.error),
-      });
-    }
+  const where = filterObject(filters);
+  try {
+    return database.query(tableName, {
+      where: where,
+      limit: limit,
+      orderBy: orderBy,
+      order: orderDir,
+      forUpdate: wantsLock(tableName, options),
+    });
+  } catch (e) {
+    vwLog("world db query failed", {
+      table: tableName,
+      filters: JSON.stringify(where),
+      error: errorText(e),
+    });
     return [];
   }
-  return result;
 }
 
-export function insertWorldRow(tableName: string, data: unknown): any | null {
-  const result = parseWorldDbResult(
-    database.insert(tableName, JSON.stringify(data)),
-  );
-  if (result && result.error) {
-    vwLog("world db insert failed", {
-      table: tableName,
-      error: String(result.error),
-    });
-    return { error: String(result.error) };
+export function insertWorldRow(
+  tableName: string,
+  data: Record<string, any>,
+): any | null {
+  try {
+    return database.insert(tableName, data);
+  } catch (e) {
+    vwLog("world db insert failed", { table: tableName, error: errorText(e) });
+    return { error: errorText(e) };
   }
-  return result;
 }
 
 export function updateWorldRow(
   tableName: string,
   id: number,
-  data: unknown,
+  data: Record<string, any>,
 ): any | null {
-  const result = parseWorldDbResult(
-    database.update(tableName, id, JSON.stringify(data)),
-  );
-  if (result && result.error) {
+  try {
+    return database.update(tableName, id, data);
+  } catch (e) {
     vwLog("world db update failed", {
       table: tableName,
       id: id,
-      error: String(result.error),
+      error: errorText(e),
     });
-    return { error: String(result.error) };
+    return { error: errorText(e) };
   }
-  return result;
 }
 
 /**
@@ -125,179 +132,183 @@ export function updateWorldRow(
  */
 export function deleteWorldRowsWhere(
   tableName: string,
-  filters: string,
+  filters: WorldFilter,
 ): number {
-  const result = parseWorldDbResult(database.deleteWhere(tableName, filters));
-  if (result && result.error) {
+  try {
+    const result = database.deleteWhere(tableName, filterObject(filters));
+    return Number.isFinite(Number(result.deleted)) ? Number(result.deleted) : 0;
+  } catch (e) {
     vwLog("world db deleteWhere failed", {
       table: tableName,
-      error: String(result.error),
+      error: errorText(e),
     });
     return 0;
   }
-  return result && Number.isFinite(Number(result.deleted))
-    ? Number(result.deleted)
-    : 0;
 }
 
-// Depth of the transaction this execution has open. The engine's transactions
-// do not nest: a second `beginTransaction` starts nothing new, a `rollback`
-// from inside discards *everything* the transaction has done — including work
-// from before the inner begin — and the outer commit then reports "No active
-// transaction to commit". So only the outermost call may touch the API, and
-// every inner call joins the transaction that is already open. Pinned by
-// world-db.test.ts.
+// Depth of the world transaction this execution has open, so a locked read
+// knows whether it may ask for a lock. Nested calls are savepoints inside the
+// outer one, so an exception rolls back the inner work and propagates to the
+// outermost call, which rolls back the rest. Pinned by world-db.test.ts.
 let transactionDepth = 0;
 
 /**
- * Run fn inside a database transaction, joining the caller's transaction when
- * one is already open. Fail-open: if the transaction cannot be started the
- * work still runs unwrapped — atomicity is lost but the game keeps working.
- * On exception the transaction is rolled back and the error rethrown; a
- * commit failure is logged (the runtime has already discarded the writes and
- * clients heal via resync).
+ * Run fn inside a database transaction — a savepoint when one is already
+ * open. Fail-open: if the transaction cannot be started the work still runs
+ * unwrapped — atomicity is lost but the game keeps working. On exception the
+ * transaction is rolled back and the error rethrown.
  */
 export function runInWorldTransaction<T>(label: string, fn: () => T): T {
-  if (transactionDepth > 0) {
-    // Already inside one: run as part of it. An exception propagates to the
-    // outermost call, which owns the rollback.
-    return fn();
-  }
-  let began = false;
+  let started = false;
   try {
-    const beginResult = parseWorldDbResult(database.beginTransaction(5000));
-    began = !!(beginResult && beginResult.success);
-    if (!began) {
-      vwLog("transaction begin failed; running unwrapped", {
-        label: label,
-        error: String(
-          beginResult && beginResult.error ? beginResult.error : "unknown",
-        ),
-      });
-    }
+    return database.transaction(
+      () => {
+        started = true;
+        transactionDepth++;
+        try {
+          return fn();
+        } finally {
+          transactionDepth--;
+        }
+      },
+      { timeoutMs: 5000 },
+    );
   } catch (e) {
-    vwLog("transaction begin threw; running unwrapped", {
+    if (started) throw e;
+    vwLog("transaction could not start; running unwrapped", {
       label: label,
-      error: String(e),
+      error: errorText(e),
     });
-  }
-  if (began) transactionDepth++;
-  try {
-    const result = fn();
-    if (began) {
-      transactionDepth--;
-      const commitResult = parseWorldDbResult(database.commitTransaction());
-      if (commitResult && commitResult.error) {
-        vwLog("transaction commit failed", {
-          label: label,
-          error: String(commitResult.error),
-        });
-      }
-    }
-    return result;
-  } catch (e) {
-    if (began) {
-      transactionDepth--;
-      try {
-        database.rollbackTransaction();
-      } catch (rollbackError) {
-        vwLog("transaction rollback failed", {
-          label: label,
-          error: String(rollbackError),
-        });
-      }
-    }
-    throw e;
+    return fn();
   }
 }
 
 export function deleteWorldRow(tableName: string, id: number): void {
-  const result = parseWorldDbResult(database.delete(tableName, id));
-  if (result && result.error) {
+  try {
+    database.delete(tableName, id);
+  } catch (e) {
     vwLog("world db delete failed", {
       table: tableName,
       id: id,
-      error: String(result.error),
+      error: errorText(e),
     });
   }
 }
 
 export function querySingleWorldRow(
   tableName: string,
-  filters: string,
+  filters: WorldFilter,
   options?: WorldReadOptions,
 ): any | null {
   const rows = queryWorldRows(tableName, filters, 1, "id", "desc", options);
   return rows.length > 0 ? rows[0] : null;
 }
 
+/**
+ * Insert or update by key. Falls back to read-then-write when the upsert is
+ * refused — on a table whose unique index is missing, say — so the write
+ * still lands.
+ */
 export function upsertWorldRow(
   tableName: string,
   keyColumns: string[],
-  data: unknown,
+  data: Record<string, any>,
 ): any | null {
-  const result = parseWorldDbResult(
-    database.upsert(
-      tableName,
-      JSON.stringify(keyColumns),
-      JSON.stringify(data),
-    ),
-  );
-  if (!result || result.error) {
+  let initialError = "";
+  try {
+    return database.upsert(tableName, keyColumns, data);
+  } catch (e) {
+    initialError = errorText(e);
     vwLog("world db upsert failed", {
       table: tableName,
       keys: keyColumns.join(","),
-      error: String(result && result.error ? result.error : "unknown"),
+      error: initialError,
     });
+  }
 
-    const source =
-      data && typeof data === "object"
-        ? (data as Record<string, unknown>)
-        : null;
-    const keyFilters: Record<string, unknown> = {};
-    for (let i = 0; i < keyColumns.length; i++) {
-      const key = keyColumns[i];
-      if (!source || !Object.prototype.hasOwnProperty.call(source, key)) {
-        return { error: "missing upsert key column: " + key };
-      }
-      keyFilters[key] = source[key];
+  const keyFilters: Record<string, unknown> = {};
+  for (let i = 0; i < keyColumns.length; i++) {
+    const key = keyColumns[i];
+    if (!data || !Object.prototype.hasOwnProperty.call(data, key)) {
+      return { error: "missing upsert key column: " + key };
     }
+    keyFilters[key] = data[key];
+  }
 
-    const initialError = String(
-      result && result.error ? result.error : "unknown",
-    );
-    const existingRow = querySingleWorldRow(
+  const existingRow = querySingleWorldRow(tableName, keyFilters);
+  if (existingRow && Number.isFinite(Number(existingRow.id))) {
+    const updateResult = updateWorldRow(
       tableName,
-      JSON.stringify(keyFilters),
+      Number(existingRow.id),
+      data,
     );
-    if (existingRow && Number.isFinite(Number(existingRow.id))) {
-      const updateResult = updateWorldRow(
-        tableName,
-        Number(existingRow.id),
-        data,
-      );
-      if (updateResult && !updateResult.error) return updateResult;
-      return {
-        error:
-          "upsert failed; update fallback failed: " +
-          String(
-            updateResult && updateResult.error
-              ? updateResult.error
-              : initialError,
-          ),
-      };
-    }
-    const insertResult = insertWorldRow(tableName, data);
-    if (insertResult && !insertResult.error) return insertResult;
+    if (updateResult && !updateResult.error) return updateResult;
     return {
       error:
-        "upsert failed; insert fallback failed: " +
+        "upsert failed; update fallback failed: " +
         String(
-          insertResult && insertResult.error
-            ? insertResult.error
+          updateResult && updateResult.error
+            ? updateResult.error
             : initialError,
         ),
     };
   }
-  return result;
+  const insertResult = insertWorldRow(tableName, data);
+  if (insertResult && !insertResult.error) return insertResult;
+  return {
+    error:
+      "upsert failed; insert fallback failed: " +
+      String(
+        insertResult && insertResult.error ? insertResult.error : initialError,
+      ),
+  };
+}
+
+/**
+ * Take or extend a lease: a row per `leaseId` saying who holds it and until
+ * when. Taken when there is no row, when it has expired, or when it is already
+ * ours. Inside a transaction with the row read `forUpdate`, so two instances
+ * cannot both see it free; the unique index on `lease_id` makes a racing first
+ * insert fail rather than both callers believing they won.
+ *
+ * What the engine's `acquireLease` did, before `database` lost it: the
+ * operation is small enough to be the script's.
+ */
+export function tryTakeLease(
+  tableName: string,
+  leaseId: string,
+  owner: string,
+  ttlMs: number,
+): boolean {
+  try {
+    return database.transaction(
+      () => {
+        const now = Date.now();
+        const [row] = database.query(tableName, {
+          where: { lease_id: leaseId },
+          limit: 1,
+          forUpdate: true,
+        });
+        if (!row) {
+          database.insert(tableName, {
+            lease_id: leaseId,
+            owner: owner,
+            expires_at_ms: now + ttlMs,
+          });
+          return true;
+        }
+        if (row.owner !== owner && Number(row.expires_at_ms) > now)
+          return false;
+        database.update(tableName, row.id, {
+          owner: owner,
+          expires_at_ms: now + ttlMs,
+        });
+        return true;
+      },
+      { timeoutMs: 2000 },
+    );
+  } catch (e) {
+    vwLog("lease could not be taken", { lease: leaseId, error: errorText(e) });
+    return false;
+  }
 }

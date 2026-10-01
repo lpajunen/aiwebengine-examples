@@ -2,13 +2,12 @@
  * Tests for the world database helpers, and in particular for how
  * `runInWorldTransaction` nests.
  *
- * The engine's transactions are flat: a second `beginTransaction` starts
- * nothing new, and a `rollbackTransaction` from inside discards everything the
- * transaction has done — including writes made before that inner begin. Nearly
- * every tick and handler wraps its work in a transaction and then emits an
- * event (which allocates a sequence number of its own), so an inner helper
- * that rolled back on its own could silently destroy the caller's writes. The
- * cases below are what stops that from coming back.
+ * A nested `database.transaction` is a savepoint, so an inner failure undoes
+ * only the inner work. Nearly every tick and handler wraps its work in a
+ * transaction and then emits an event (which allocates a sequence number of
+ * its own), so an inner helper that rolled back the whole transaction would
+ * silently destroy the caller's writes. The cases below are what stops that
+ * from coming back.
  */
 
 import { VWORLD_PLAYER_NICK_TABLE } from "./runtime-config.ts";

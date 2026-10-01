@@ -49,6 +49,7 @@ import {
   deleteWorldRowsWhere,
   parseWorldDbResult,
   runInWorldTransaction,
+  tryTakeLease,
 } from "./world-db.ts";
 import { getInventoryTreeActions } from "./world-domain.ts";
 import { loadWorldTrees, saveWorldTrees } from "./world-mod-storage.ts";
@@ -212,22 +213,12 @@ export function tickWorldNPCs(
 }
 
 export function tryAcquireNPCTickLease(worldId: string): boolean {
-  const result = parseWorldDbResult(
-    database.acquireLease(
-      VWORLD_NPC_TICK_LEASE_TABLE,
-      "npc_tick:" + String(worldId),
-      npcTickOwnerId,
-      NPC_TICK_LEASE_MS,
-    ),
+  return tryTakeLease(
+    VWORLD_NPC_TICK_LEASE_TABLE,
+    "npc_tick:" + String(worldId),
+    npcTickOwnerId,
+    NPC_TICK_LEASE_MS,
   );
-  if (!result || result.error) {
-    vwLog("npc tick lease acquisition failed", {
-      world_id: worldId,
-      error: String(result && result.error ? result.error : "unknown"),
-    });
-    return false;
-  }
-  return !!(result.acquired && result.owner === npcTickOwnerId);
 }
 
 export function tryTickWorldNPCs(worldId: string, now: number): boolean {

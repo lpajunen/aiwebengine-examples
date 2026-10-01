@@ -1,412 +1,180 @@
 /// <reference path="../types/aiwebengine.d.ts" />
 
-// Test script for transaction functionality
-// This demonstrates and tests the transaction support
+// Checks for database.transaction(fn), one route each. Every route answers
+// `{ test, passed, detail }` with 200 when the check held and 500 when not.
 
-/**
- * What a `database.*` call answers with, once parsed. `error` is present only
- * when the call failed.
- *
- * These calls return a result object now, so `.json()` replaces the
- * `JSON.parse(...)` this example used to wrap them in. Each script is its own
- * global scope on the engine but they share one type-check program here, so
- * the name carries this script's prefix.
- *
- * @typedef {{ error?: string }} TxTestsDbAnswer
- */
-
-/**
- * What the savepoint calls answer with: the name the engine gave the
- * savepoint, which `rollbackToSavepoint` and `releaseSavepoint` take back.
- *
- * @typedef {{ error?: string, savepoint: string }} TxTestsSavepointAnswer
- */
-/**
- * Register the transaction test routes on script initialization.
- */
 function init() {
-  routeRegistry.registerRoute("/test/transaction-commit", {
-    handler: "testCommit",
-    method: "GET",
+  database.ensureTable("txtest_rows", {
+    columns: [{ name: "label", type: "text" }],
   });
-  routeRegistry.registerRoute("/test/transaction-rollback", {
-    handler: "testRollback",
-    method: "GET",
-  });
-  routeRegistry.registerRoute("/test/transaction-savepoint", {
-    handler: "testSavepoint",
-    method: "GET",
-  });
-  routeRegistry.registerRoute("/test/transaction-timeout", {
-    handler: "testTimeout",
-    method: "GET",
-  });
-  routeRegistry.registerRoute("/test/transaction-nested", {
-    handler: "testNested",
-    method: "GET",
-  });
+
+  for (const [path, handler] of [
+    ["/test/transaction-commit", "testCommit"],
+    ["/test/transaction-rollback", "testRollback"],
+    ["/test/transaction-savepoint", "testSavepoint"],
+    ["/test/transaction-timeout", "testTimeout"],
+    ["/test/transaction-nested", "testNested"],
+  ]) {
+    routeRegistry.registerRoute(path, { handler, method: "GET" });
+  }
 }
 
 /**
- * Test 1: Basic commit - handler completes normally
- * @param {HandlerContext} context
+ * @param {string} test
+ * @param {boolean} passed
+ * @param {unknown} detail
  * @returns {HttpResponse}
+ */
+function verdict(test, passed, detail) {
+  return {
+    status: passed ? 200 : 500,
+    body: JSON.stringify({ test, passed, detail }),
+    contentType: "application/json",
+  };
+}
+
+/**
+ * A label unique to this request, so concurrent runs do not see each other.
+ * @param {string} prefix
+ */
+function freshLabel(prefix) {
+  return prefix + "-" + Date.now() + "-" + Math.floor(Math.random() * 1e6);
+}
+
+/** @param {string} label */
+function stored(label) {
+  return database.query("txtest_rows", { where: { label } }).length;
+}
+
+/**
+ * The body's writes are kept when it returns, and its value is the answer.
+ * @param {HandlerContext} context
  */
 function testCommit(context) {
-  console.log("TEST: Transaction commit");
-
-  // Begin transaction
-  const beginResult = /** @type {TxTestsDbAnswer} */ (
-    database.beginTransaction(5000).json()
-  );
-  console.log("Begin result:", JSON.stringify(beginResult));
-
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testCommit",
-        passed: false,
-        error: beginResult.error,
-      }),
-    };
-  }
-
-  // Perform some operations (would be database operations in real usage)
-  console.log("Performing operations within transaction...");
-
-  // Normal return should auto-commit
-  return {
-    status: 200,
-    body: JSON.stringify({
-      test: "testCommit",
-      passed: true,
-      message: "Transaction should auto-commit on normal return",
-    }),
-  };
+  const label = freshLabel("commit");
+  const answer = database.transaction(() => {
+    database.insert("txtest_rows", { label });
+    return "returned";
+  });
+  return verdict("testCommit", answer === "returned" && stored(label) === 1, {
+    answer,
+    rows: stored(label),
+  });
 }
 
 /**
- * Test 2: Rollback - handler throws exception
+ * The body's writes are undone when it throws, and the error reaches the
+ * caller.
  * @param {HandlerContext} context
- * @returns {HttpResponse}
  */
 function testRollback(context) {
-  console.log("TEST: Transaction rollback");
-
-  // Begin transaction
-  const beginResult = /** @type {TxTestsDbAnswer} */ (
-    database.beginTransaction(5000).json()
-  );
-  console.log("Begin result:", JSON.stringify(beginResult));
-
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testRollback",
-        passed: false,
-        error: beginResult.error,
-      }),
-    };
+  const label = freshLabel("rollback");
+  let thrown = null;
+  try {
+    database.transaction(() => {
+      database.insert("txtest_rows", { label });
+      throw new Error("deliberate");
+    });
+  } catch (error) {
+    thrown = /** @type {Error} */ (error).message;
   }
-
-  // Perform some operations
-  console.log("Performing operations within transaction...");
-
-  // Throw error to trigger auto-rollback
-  throw new Error("Intentional error to test rollback");
+  return verdict(
+    "testRollback",
+    thrown === "deliberate" && stored(label) === 0,
+    { thrown, rows: stored(label) },
+  );
 }
 
 /**
- * Test 3: Savepoint - create and rollback to savepoint
+ * A nested transaction is a savepoint: its failure undoes its own write and
+ * leaves the outer one's.
  * @param {HandlerContext} context
- * @returns {HttpResponse}
  */
 function testSavepoint(context) {
-  console.log("TEST: Savepoint rollback");
-
-  // Begin transaction
-  const beginResult = /** @type {TxTestsDbAnswer} */ (
-    database.beginTransaction(10000).json()
-  );
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testSavepoint",
-        passed: false,
-        error: beginResult.error,
-      }),
-    };
-  }
-
-  console.log("Transaction started");
-
-  // Create a savepoint
-  const sp1 = /** @type {TxTestsSavepointAnswer} */ (
-    database.createSavepoint("test_sp1").json()
-  );
-  console.log("Savepoint created:", JSON.stringify(sp1));
-
-  if (sp1.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testSavepoint",
-        passed: false,
-        error: "Failed to create savepoint: " + sp1.error,
-      }),
-    };
-  }
-
-  // Do some work
-  console.log("Work after savepoint...");
-
-  // Rollback to savepoint
-  const rollbackResult = JSON.parse(
-    database.rollbackToSavepoint(sp1.savepoint),
-  );
-  console.log("Rollback to savepoint result:", JSON.stringify(rollbackResult));
-
-  if (rollbackResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testSavepoint",
-        passed: false,
-        error: "Failed to rollback to savepoint: " + rollbackResult.error,
-      }),
-    };
-  }
-
-  // Commit the transaction
-  const commitResult = /** @type {TxTestsDbAnswer} */ (
-    database.commitTransaction().json()
-  );
-  console.log("Commit result:", JSON.stringify(commitResult));
-
-  if (commitResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testSavepoint",
-        passed: false,
-        error: "Failed to commit: " + commitResult.error,
-      }),
-    };
-  }
-
-  return {
-    status: 200,
-    body: JSON.stringify({
-      test: "testSavepoint",
-      passed: true,
-      message: "Successfully created savepoint, rolled back, and committed",
-      savepoint: sp1.savepoint,
-    }),
-  };
+  const outer = freshLabel("outer");
+  const inner = freshLabel("inner");
+  database.transaction(() => {
+    database.insert("txtest_rows", { label: outer });
+    try {
+      database.transaction(() => {
+        database.insert("txtest_rows", { label: inner });
+        throw new Error("inner only");
+      });
+    } catch (error) {
+      // the outer transaction carries on
+    }
+  });
+  return verdict("testSavepoint", stored(outer) === 1 && stored(inner) === 0, {
+    outer: stored(outer),
+    inner: stored(inner),
+  });
 }
 
 /**
- * Test 4: Transaction timeout
+ * A transaction that outlives its budget is refused rather than committed.
  * @param {HandlerContext} context
- * @returns {HttpResponse}
  */
 function testTimeout(context) {
-  console.log("TEST: Transaction timeout");
-
-  // Begin transaction with very short timeout (100ms)
-  const beginResult = /** @type {TxTestsDbAnswer} */ (
-    database.beginTransaction(100).json()
+  const label = freshLabel("timeout");
+  let thrown = null;
+  try {
+    database.transaction(
+      () => {
+        const start = Date.now();
+        while (Date.now() - start < 200) {
+          // outlast the 100ms budget
+        }
+        database.insert("txtest_rows", { label });
+      },
+      { timeoutMs: 100 },
+    );
+  } catch (error) {
+    thrown = /** @type {Error} */ (error).message;
+  }
+  return verdict(
+    "testTimeout",
+    thrown !== null && /timeout|timed out/i.test(thrown) && stored(label) === 0,
+    { thrown, rows: stored(label) },
   );
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testTimeout",
-        passed: false,
-        error: beginResult.error,
-      }),
-    };
-  }
-
-  console.log("Transaction started with 100ms timeout");
-
-  // Wait longer than timeout (simulate slow operation)
-  // JavaScript doesn't have sleep, so we'll just try to commit after a delay simulation
-  // In practice, the timeout will be checked on the next transaction operation
-
-  // Busy wait to simulate delay (not ideal but works for testing)
-  const start = Date.now();
-  while (Date.now() - start < 200) {
-    // Busy loop
-  }
-
-  // Try to commit - should fail with timeout error
-  const commitResult = /** @type {TxTestsDbAnswer} */ (
-    database.commitTransaction().json()
-  );
-  console.log("Commit after timeout result:", JSON.stringify(commitResult));
-
-  if (commitResult.error && commitResult.error.includes("timeout")) {
-    return {
-      status: 200,
-      body: JSON.stringify({
-        test: "testTimeout",
-        passed: true,
-        message: "Transaction correctly timed out",
-        error: commitResult.error,
-      }),
-    };
-  } else {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testTimeout",
-        passed: false,
-        message: "Transaction should have timed out but didn't",
-        commitResult: commitResult,
-      }),
-    };
-  }
 }
 
 /**
- * Test 5: Nested transactions with multiple savepoints
+ * Two levels down and back: what each level keeps.
  * @param {HandlerContext} context
- * @returns {HttpResponse}
  */
 function testNested(context) {
-  console.log("TEST: Nested transactions");
-
-  // Begin outer transaction
-  const beginResult = /** @type {TxTestsDbAnswer} */ (
-    database.beginTransaction(10000).json()
-  );
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: beginResult.error,
-      }),
-    };
-  }
-
-  console.log("Outer transaction started");
-
-  // Create first savepoint
-  const sp1 = /** @type {TxTestsSavepointAnswer} */ (
-    database.createSavepoint().json()
-  );
-  console.log("Savepoint 1:", JSON.stringify(sp1));
-
-  if (sp1.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: "Savepoint 1 failed: " + sp1.error,
-      }),
-    };
-  }
-
-  // Do some work at level 1
-  console.log("Work at savepoint level 1");
-
-  // Create second savepoint (nested)
-  const sp2 = /** @type {TxTestsSavepointAnswer} */ (
-    database.createSavepoint().json()
-  );
-  console.log("Savepoint 2:", JSON.stringify(sp2));
-
-  if (sp2.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: "Savepoint 2 failed: " + sp2.error,
-      }),
-    };
-  }
-
-  // Do some work at level 2
-  console.log("Work at savepoint level 2");
-
-  // Rollback inner savepoint
-  const rollback2 = /** @type {TxTestsDbAnswer} */ (
-    database.rollbackToSavepoint(sp2.savepoint).json()
-  );
-  console.log("Rollback sp2:", JSON.stringify(rollback2));
-
-  if (rollback2.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: "Rollback sp2 failed: " + rollback2.error,
-      }),
-    };
-  }
-
-  // Release first savepoint
-  const release1 = /** @type {TxTestsDbAnswer} */ (
-    database.releaseSavepoint(sp1.savepoint).json()
-  );
-  console.log("Release sp1:", JSON.stringify(release1));
-
-  if (release1.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: "Release sp1 failed: " + release1.error,
-      }),
-    };
-  }
-
-  // Commit entire transaction
-  const commit = /** @type {TxTestsDbAnswer} */ (
-    database.commitTransaction().json()
-  );
-  console.log("Commit:", JSON.stringify(commit));
-
-  if (commit.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        test: "testNested",
-        passed: false,
-        error: "Commit failed: " + commit.error,
-      }),
-    };
-  }
-
-  return {
-    status: 200,
-    body: JSON.stringify({
-      test: "testNested",
-      passed: true,
-      message: "Nested transactions with savepoints worked correctly",
-      savepoints: [sp1.savepoint, sp2.savepoint],
-    }),
+  const labels = {
+    outer: freshLabel("l0"),
+    kept: freshLabel("l1-kept"),
+    lost: freshLabel("l1-lost"),
+    deep: freshLabel("l2"),
   };
+  database.transaction(() => {
+    database.insert("txtest_rows", { label: labels.outer });
+    database.transaction(() => {
+      database.insert("txtest_rows", { label: labels.kept });
+      database.transaction(() => {
+        database.insert("txtest_rows", { label: labels.deep });
+      });
+    });
+    try {
+      database.transaction(() => {
+        database.insert("txtest_rows", { label: labels.lost });
+        throw new Error("this level only");
+      });
+    } catch (error) {
+      // as above
+    }
+  });
+  const counts = Object.fromEntries(
+    Object.entries(labels).map(([key, label]) => [key, stored(label)]),
+  );
+  return verdict(
+    "testNested",
+    counts.outer === 1 &&
+      counts.kept === 1 &&
+      counts.deep === 1 &&
+      counts.lost === 0,
+    counts,
+  );
 }
-
-console.log("Transaction test handlers registered");
-console.log("Test URLs:");
-console.log(
-  "  GET /test/transaction-commit - Test auto-commit on normal return",
-);
-console.log(
-  "  GET /test/transaction-rollback - Test auto-rollback on exception",
-);
-console.log("  GET /test/transaction-savepoint - Test savepoint operations");
-console.log("  GET /test/transaction-timeout - Test transaction timeout");
-console.log("  GET /test/transaction-nested - Test nested savepoints");

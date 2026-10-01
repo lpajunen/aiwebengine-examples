@@ -1,30 +1,28 @@
 /// <reference path="../types/aiwebengine.d.ts" />
 
-// Example: Transaction support demonstration
-// This script shows how to use database transactions in aiwebengine
+// Example: database transactions.
+//
+// `database.transaction(fn)` commits what `fn` did when it returns and rolls
+// it back when it throws. Inside another transaction it is a savepoint, so an
+// inner failure undoes only the inner work. A read whose value decides a later
+// write takes `forUpdate`, or two concurrent callers can both act on what
+// they read.
 
-/**
- * What a `database.*` call answers with, once parsed. `error` is present only
- * when the call failed.
- *
- * These calls return a result object now, so `.json()` replaces the
- * `JSON.parse(...)` this example used to wrap them in. Each script is its own
- * global scope on the engine but they share one type-check program here, so
- * the name carries this script's prefix.
- *
- * @typedef {{ error?: string }} TxDemoDbAnswer
- */
-
-/**
- * What the savepoint calls answer with: the name the engine gave the
- * savepoint, which `rollbackToSavepoint` and `releaseSavepoint` take back.
- *
- * @typedef {{ error?: string, savepoint: string }} TxDemoSavepointAnswer
- */
-/**
- * Register the demo HTTP routes on script initialization.
- */
 function init() {
+  database.ensureTable("txdemo_accounts", {
+    columns: [
+      { name: "owner", type: "text" },
+      { name: "balance", type: "integer", nullable: false, default: "0" },
+    ],
+    uniqueIndexes: [["owner"]],
+  });
+  database.ensureTable("txdemo_items", {
+    columns: [
+      { name: "item_id", type: "text" },
+      { name: "quantity", type: "integer" },
+    ],
+  });
+
   routeRegistry.registerRoute("/transaction-demo/transfer", {
     handler: "handleTransfer",
     method: "POST",
@@ -40,299 +38,123 @@ function init() {
 }
 
 /**
- * Example 1: Basic transaction for fund transfer
+ * Example 1: a transfer. Both balances change, or neither does.
  *
- * This demonstrates automatic commit on success and rollback on error
+ * The two reads are `forUpdate`: without it, two transfers out of one account
+ * could each read the same balance, each decide there is enough, and each
+ * commit.
  * @param {HandlerContext} context
  * @returns {HttpResponse}
  */
 function handleTransfer(context) {
-  const body = JSON.parse(context.request?.body || "{}");
-  const { fromAccount, toAccount, amount } = body;
-
-  // Start transaction with 5 second timeout
-  const beginResult = /** @type {TxDemoDbAnswer} */ (
-    database.beginTransaction(5000).json()
-  );
-  if (beginResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({ error: "Failed to start transaction" }),
-    };
-  }
-
-  console.log(
-    `Starting transfer: $${amount} from ${fromAccount} to ${toAccount}`,
+  const { fromAccount, toAccount, amount } = JSON.parse(
+    context.request?.body || "{}",
   );
 
   try {
-    // Simulate database operations
-    // In real usage, these would be actual database queries
+    const balances = database.transaction(
+      () => {
+        const [source] = database.query("txdemo_accounts", {
+          where: { owner: fromAccount },
+          forUpdate: true,
+        });
+        const [target] = database.query("txdemo_accounts", {
+          where: { owner: toAccount },
+          forUpdate: true,
+        });
+        if (!source || !target) throw new Error("no such account");
+        if (source.balance < amount) throw new Error("insufficient funds");
 
-    // Check source account balance
-    const sourceBalance = 1000; // Mock value
-    if (sourceBalance < amount) {
-      throw new Error("Insufficient funds");
-    }
-
-    // Deduct from source
-    console.log(`Deducting $${amount} from account ${fromAccount}`);
-    // database.query("UPDATE accounts SET balance = balance - $1 WHERE id = $2", [amount, fromAccount]);
-
-    // Add to destination
-    console.log(`Adding $${amount} to account ${toAccount}`);
-    // database.query("UPDATE accounts SET balance = balance + $1 WHERE id = $2", [amount, toAccount]);
-
-    // Transaction will auto-commit on successful return
-    return {
-      status: 200,
-      body: JSON.stringify({
-        success: true,
-        message: "Transfer completed",
-        amount: amount,
-        from: fromAccount,
-        to: toAccount,
-      }),
-    };
+        const from = database.update("txdemo_accounts", source.id, {
+          balance: source.balance - amount,
+        });
+        const to = database.update("txdemo_accounts", target.id, {
+          balance: target.balance + amount,
+        });
+        return { from: from.balance, to: to.balance };
+      },
+      { timeoutMs: 5000 },
+    );
+    return ResponseBuilder.json({ success: true, balances });
   } catch (error) {
-    // Transaction will auto-rollback on exception
-    console.error("Transfer failed:", /** @type {Error} */ (error).message);
-    throw error; // Re-throw to trigger auto-rollback
+    // Thrown inside the transaction, so nothing it wrote was kept.
+    return ResponseBuilder.error(400, /** @type {Error} */ (error).message);
   }
 }
 
 /**
- * Example 2: Batch processing with savepoints
+ * Example 2: a batch where one bad item does not cost the others.
  *
- * This demonstrates processing multiple items where individual failures
- * don't abort the entire batch
+ * Each item is its own nested transaction — a savepoint inside the batch's —
+ * so an item that fails is undone on its own and the batch commits the rest.
  * @param {HandlerContext} context
  * @returns {HttpResponse}
  */
 function handleBatch(context) {
-  const body = JSON.parse(context.request?.body || "{}");
-  const { items } = body;
-
+  const { items } = JSON.parse(context.request?.body || "{}");
   if (!Array.isArray(items)) {
-    return {
-      status: 400,
-      body: JSON.stringify({ error: "items must be an array" }),
-    };
+    return ResponseBuilder.error(400, "items must be an array");
   }
 
-  // Start outer transaction
-  database.beginTransaction(30000); // 30 second timeout
-
-  const results = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-
-    // Create savepoint for this item
-    const spResult = /** @type {TxDemoSavepointAnswer} */ (
-      database.createSavepoint().json()
-    );
-    if (spResult.error) {
-      results.push({
-        item: item.id || i,
-        status: "error",
-        error: "Failed to create savepoint",
-      });
-      continue;
-    }
-
-    const savepoint = spResult.savepoint;
-    console.log(`Processing item ${item.id || i} with savepoint ${savepoint}`);
-
-    try {
-      // Process the item (mock operation)
-      if (item.shouldFail) {
-        throw new Error("Simulated failure");
-      }
-
-      // Simulate successful processing
-      console.log(`Item ${item.id || i} processed successfully`);
-      results.push({
-        item: item.id || i,
-        status: "success",
-      });
-
-      // Savepoint automatically released on next iteration or commit
-    } catch (error) {
-      // Rollback just this item
-      const err = /** @type {Error} */ (error);
-      console.log(`Rolling back item ${item.id || i}: ${err.message}`);
-      database.rollbackToSavepoint(savepoint);
-
-      results.push({
-        item: item.id || i,
-        status: "failed",
-        error: err.message,
-      });
-    }
-  }
-
-  // Commit all successful items
-  const commitResult = /** @type {TxDemoDbAnswer} */ (
-    database.commitTransaction().json()
-  );
-  if (commitResult.error) {
-    return {
-      status: 500,
-      body: JSON.stringify({
-        error: "Failed to commit transaction",
-        results: results,
+  const results = database.transaction(
+    () =>
+      items.map((item, i) => {
+        try {
+          database.transaction(() => {
+            if (!(item.quantity > 0))
+              throw new Error("quantity must be positive");
+            database.insert("txdemo_items", {
+              item_id: String(item.id ?? i),
+              quantity: item.quantity,
+            });
+          });
+          return { item: item.id ?? i, status: "stored" };
+        } catch (error) {
+          return {
+            item: item.id ?? i,
+            status: "skipped",
+            error: /** @type {Error} */ (error).message,
+          };
+        }
       }),
-    };
-  }
+    { timeoutMs: 30000 },
+  );
 
-  const successCount = results.filter((r) => r.status === "success").length;
-  const failCount = results.filter((r) => r.status === "failed").length;
-
-  return {
-    status: 200,
-    body: JSON.stringify({
-      success: true,
-      processed: items.length,
-      successful: successCount,
-      failed: failCount,
-      results: results,
-    }),
-  };
+  return ResponseBuilder.json({ results });
 }
 
 /**
- * Example 3: Nested transactions with explicit control
+ * Example 3: nesting, step by step.
  *
- * This demonstrates manual transaction management with multiple
- * savepoint levels
+ * The outer write survives the inner failure, and the second inner
+ * transaction commits with the outer one.
  * @param {HandlerContext} context
  * @returns {HttpResponse}
  */
 function handleNested(context) {
-  const body = JSON.parse(context.request?.body || "{}");
-
-  // Start outer transaction
-  database.beginTransaction(10000);
-  console.log("Outer transaction started");
-
-  try {
-    // First level of work
-    console.log("Performing first-level operations...");
-    // database.insert("audit_log", { action: "started", timestamp: Date.now() });
-
-    // Create savepoint before risky operation
-    const sp1 = /** @type {TxDemoSavepointAnswer} */ (
-      database.createSavepoint("checkpoint_1").json()
-    );
-    console.log("Created savepoint:", sp1.savepoint);
+  /** @type {string[]} */
+  const log = [];
+  database.transaction(() => {
+    database.insert("txdemo_items", { item_id: "outer", quantity: 1 });
+    log.push("outer: wrote 'outer'");
 
     try {
-      // Risky operation
-      console.log("Performing risky operation...");
-
-      if (body.simulateError) {
-        throw new Error("Simulated error in risky operation");
-      }
-
-      // database.insert("data", { value: body.value });
-
-      // Create another savepoint for even riskier operation
-      const sp2 = /** @type {TxDemoSavepointAnswer} */ (
-        database.createSavepoint("checkpoint_2").json()
-      );
-      console.log("Created nested savepoint:", sp2.savepoint);
-
-      try {
-        // Very risky operation
-        if (body.simulateNestedError) {
-          throw new Error("Simulated error in nested operation");
-        }
-
-        console.log("Both operations succeeded");
-
-        // Release inner savepoint explicitly
-        database.releaseSavepoint(sp2.savepoint);
-      } catch (nestedError) {
-        // Rollback just the innermost operation
-        console.log(
-          "Rolling back nested operation:",
-          /** @type {Error} */ (nestedError).message,
-        );
-        database.rollbackToSavepoint(sp2.savepoint);
-      }
-
-      // Release outer savepoint
-      database.releaseSavepoint(sp1.savepoint);
+      database.transaction(() => {
+        database.insert("txdemo_items", { item_id: "inner-a", quantity: 1 });
+        throw new Error("inner-a changed its mind");
+      });
     } catch (error) {
-      // Rollback to first savepoint
-      console.log(
-        "Rolling back to first checkpoint:",
-        /** @type {Error} */ (error).message,
-      );
-      database.rollbackToSavepoint(sp1.savepoint);
-
-      // Continue with fallback logic
-      console.log("Executing fallback logic...");
-      // database.insert("audit_log", { action: "fallback", timestamp: Date.now() });
+      log.push("inner-a: rolled back, outer unaffected");
     }
 
-    // Final operations
-    console.log("Performing final operations...");
-    // database.insert("audit_log", { action: "completed", timestamp: Date.now() });
+    database.transaction(() => {
+      database.insert("txdemo_items", { item_id: "inner-b", quantity: 1 });
+    });
+    log.push("inner-b: kept, commits with outer");
+  });
 
-    // Explicitly commit
-    const commitResult = /** @type {TxDemoDbAnswer} */ (
-      database.commitTransaction().json()
-    );
-    if (commitResult.error) {
-      throw new Error("Failed to commit: " + commitResult.error);
-    }
-
-    console.log("Transaction committed successfully");
-
-    return {
-      status: 200,
-      body: JSON.stringify({
-        success: true,
-        message: "Nested transaction completed",
-      }),
-    };
-  } catch (error) {
-    // Auto-rollback on exception
-    const err = /** @type {Error} */ (error);
-    console.error("Transaction failed:", err.message);
-    return {
-      status: 500,
-      body: JSON.stringify({
-        error: "Transaction failed: " + err.message,
-      }),
-    };
-  }
+  const stored = database
+    .query("txdemo_items", { where: { quantity: 1 } })
+    .map((row) => row.item_id);
+  return ResponseBuilder.json({ log, stored });
 }
-
-// Test data examples:
-//
-// Basic transfer:
-// POST /transaction-demo/transfer
-// { "fromAccount": "A123", "toAccount": "B456", "amount": 100 }
-//
-// Batch processing (all succeed):
-// POST /transaction-demo/batch
-// { "items": [{ "id": 1 }, { "id": 2 }, { "id": 3 }] }
-//
-// Batch processing (mixed results):
-// POST /transaction-demo/batch
-// { "items": [{ "id": 1 }, { "id": 2, "shouldFail": true }, { "id": 3 }] }
-//
-// Nested transactions (success):
-// POST /transaction-demo/nested
-// { "value": "test" }
-//
-// Nested transactions (outer error):
-// POST /transaction-demo/nested
-// { "simulateError": true }
-//
-// Nested transactions (inner error):
-// POST /transaction-demo/nested
-// { "simulateNestedError": true }

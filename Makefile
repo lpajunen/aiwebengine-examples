@@ -21,23 +21,23 @@ export WORLD_HOST ?= world.softagen.com
 # virtual-world/ as its assets, minus what .aiwebengineignore excludes.
 upload-virtual-world:
 	@node scripts/upload-script.js --script-path virtual-world/main.js \
-	  --script-uri https://example.com/virtual-world --assets-dir virtual-world
+	  --script-uri virtual-world --assets-dir virtual-world
 
 upload-virtual-world-dry-run:
 	@node scripts/upload-script.js --script-path virtual-world/main.js \
-	  --script-uri https://example.com/virtual-world --assets-dir virtual-world --dry-run
+	  --script-uri virtual-world --assets-dir virtual-world --dry-run
 
 upload-import-example:
 	@node scripts/upload-script.js --script-path import_example/main.ts \
-	  --script-uri https://example.com/import-example --assets-dir import_example
+	  --script-uri import-example --assets-dir import_example
 
 # Publish virtual-world on WORLD_HOST (run once after deploying it; admin only)
 set-script-hosts:
-	@node scripts/set-script-hosts.js --script-uri https://example.com/virtual-world \
+	@node scripts/set-script-hosts.js --script-uri virtual-world \
 	  --hosts $(WORLD_HOST)
 
 set-script-hosts-dry-run:
-	@node scripts/set-script-hosts.js --script-uri https://example.com/virtual-world \
+	@node scripts/set-script-hosts.js --script-uri virtual-world \
 	  --hosts $(WORLD_HOST) --dry-run
 
 # Ask the server what virtual-world would do if deployed (POST /engine/check_script).

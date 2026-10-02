@@ -29,7 +29,7 @@ require("dotenv").config();
 //   node scripts/check-script.js [options]
 //
 // Options:
-//   --script-uri <uri>    Script to check   (default https://example.com/virtual-world)
+//   --script-uri <uri>    Script to check   (default virtual-world)
 //   --script-path <path>  Entrypoint to send with --candidate
 //                         (default virtual-world/main.js)
 //   --candidate           Check the local entrypoint instead of the deployed one

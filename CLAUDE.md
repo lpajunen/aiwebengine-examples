@@ -66,11 +66,12 @@ make sync-tooling    # take the source version (no-op here)
 
 That only works if nothing repository-specific sits in the shared files:
 
-- Per-script defaults live in `aiwebengine.config.json` — `defaultScript.uri`,
-  `.path` and `.dir` are what `make status`, `make eval`, `make deploy-changed`
-  and `make check-head` target when nothing is named, `scriptUriOverrides` is
-  the exception list `run-tests.js` consults, and `uriOrigin` is what a
-  directory name is turned into a URI against.
+- Per-script defaults live in `aiwebengine.config.json` — `defaultScript.uri`
+  (a script's name, a slug such as `virtual-world`), `.path` and `.dir` are what
+  `make status`, `make eval`, `make deploy-changed` and `make check-head`
+  target when nothing is named, and `scriptNames` is the exception list
+  (directory → name) `run-tests.js` consults; a directory not listed is named
+  after itself, lower-cased with `-` for anything that is not a letter or digit.
 - Generic make targets live in `scripts/tooling.mk`, which the `Makefile`
   includes; the `Makefile` itself holds only this repository's upload targets
   and host bindings.
@@ -134,7 +135,7 @@ at rest, and never returns it again — `make git-credentials` shows metadata on
 make git-pull REPO=owner/repo                      # repo -> engine, as scripts
 make git-pull REPO=owner/repo BRANCH=main PREFIX=examples
 make git-push REPO=owner/repo MSG="Fix the cart total"   # script -> repo, one commit
-make git-push SCRIPT=https://example.com/blog REPO=owner/repo
+make git-push SCRIPT=blog REPO=owner/repo
 ```
 
 `scripts/git-sync.js` wraps `POST $MANAGE_HOST/engine/pull_from_git` and
@@ -165,7 +166,7 @@ make upload-virtual-world           # deploys virtual-world.js + assets/ via htt
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
-`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri https://example.com/virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `make upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
+`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `make upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
 
 The deployed virtual-world is served from `https://world.softagen.com/virtual-world`; the other examples from `https://softagen.com/<name>`.
 
@@ -237,7 +238,7 @@ The report carries `diagnostics` (each with `severity`, `code`, `message`, `sour
 make eval SRC='database.query("vworld_npcs", { limit: 3 })'
 make eval FILE=snippet.js                # snippet from a file (needs single quotes, etc.)
 make eval SRC='…' ROLLBACK=false         # keep the database writes
-make eval SRC='…' URI=https://example.com/docs
+make eval SRC='…' URI=docs
 ```
 
 `scripts/eval-script.js` posts a snippet to `POST /engine/eval_script`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
@@ -281,7 +282,7 @@ It therefore tests the **deployed** copy. Deploy first (`make deploy-changed`) o
 
 `--revision <rev>` (`make test-head`, `REV=` to pick another) runs the suite against a revision that is not being served — the second half of vetting a pinned script's head, after `make check-head`.
 
-Script URIs are derived from the directory name (`foo_bar/` → `https://example.com/foo-bar`); exceptions live in `SCRIPT_URI_OVERRIDES` in `scripts/run-tests.js`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
+Script names are derived from the directory name (`foo_bar/` → `foo-bar`); exceptions live in `scriptNames` in `aiwebengine.config.json`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
 
 ## Architecture
 

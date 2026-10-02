@@ -25,7 +25,8 @@ require("dotenv").config();
 // Pull options:
 //   --repo <owner/repo>  Repository to read, or any GitHub URL naming it (required)
 //   --branch <branch>    Branch to read (default: the repository's default branch)
-//   --prefix <prefix>    URI prefix the scripts land under (default: the repo name)
+//   --prefix <prefix>    Name prefix: a script directory `shop` lands as `<prefix>-shop`
+//                        (default: none, so it lands as `shop`)
 //   --force              Re-apply even when the repository has not moved
 // Push options:
 //   --script <uri>       Script to publish (default: virtual-world)
@@ -42,9 +43,10 @@ require("dotenv").config();
 //   MANAGE_HOST (default: https://manage.softagen.com) - engine management API
 
 const { loadAccessToken } = require("./lib/token.js");
+const { defaultScriptUri } = require("./lib/repo-config.js");
 
 const manageHost = process.env.MANAGE_HOST || "https://manage.softagen.com";
-const DEFAULT_SCRIPT_URI = "https://example.com/virtual-world";
+const DEFAULT_SCRIPT_URI = defaultScriptUri();
 
 /**
  * @typedef {{
@@ -142,7 +144,7 @@ function usage() {
   console.error("  --repo <owner/repo>  Repository (required for pull)");
   console.error("  --branch <branch>    Branch to read or write");
   console.error(
-    "  --prefix <prefix>    pull: URI prefix the scripts land under",
+    "  --prefix <prefix>    pull: name prefix (`<prefix>-<directory>`), default none",
   );
   console.error(
     `  --script <uri>       push: script to publish (default: ${DEFAULT_SCRIPT_URI})`,

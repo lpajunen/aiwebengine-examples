@@ -107,7 +107,7 @@ Runs the equivalent of `make format lint typecheck` over a script's deployed
 asset tree, using the engine's own module resolution.
 
 ```
-POST /engine/check?uri=https://example.com/virtual-world
+POST /engine/check?uri=virtual-world
   &checks=types,format,lint,engine     (default: all)
 → 200 {
     success: false,

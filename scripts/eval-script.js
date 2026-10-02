@@ -24,7 +24,7 @@ require("dotenv").config();
 //   make eval FILE=snippet.js
 //
 // Options:
-//   --script-uri <uri>   Sandbox to evaluate in (default https://example.com/virtual-world)
+//   --script-uri <uri>   Sandbox to evaluate in (default virtual-world)
 //   --file <path>        Read the snippet from a file, or '-' for stdin
 //   --no-rollback        Keep the database writes the snippet makes
 //   --timeout <seconds>  Evaluation budget (default 30; the engine clamps it)

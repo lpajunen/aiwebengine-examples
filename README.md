@@ -12,7 +12,7 @@ into any engine.
 Deploy one with the upload script:
 
 ```bash
-node scripts/upload-script.js --script-path blog/main.js --script-uri "https://example.com/blog"
+node scripts/upload-script.js --script-path blog/main.js --script-uri "blog"
 ```
 
 Or upload via the built-in editor at [https://manage.softagen.com/editor](https://manage.softagen.com/editor)

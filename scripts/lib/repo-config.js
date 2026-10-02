@@ -26,8 +26,7 @@ const CONFIG_FILE = "aiwebengine.config.json";
  * }} DefaultScript
  * @typedef {{
  *   defaultScript?: DefaultScript,
- *   scriptUriOverrides?: Record<string, string>,
- *   uriOrigin?: string,
+ *   scriptNames?: Record<string, string>,
  * }} RepoConfig
  */
 
@@ -64,17 +63,23 @@ function defaultScriptDir() {
   return repoConfig().defaultScript?.dir || "";
 }
 
-/**
- * The origin script URIs are built from when derived from a directory name.
- * @returns {string}
- */
-function uriOrigin() {
-  return repoConfig().uriOrigin || "https://example.com";
+/** @returns {Record<string, string>} directory name -> script name */
+function scriptNameOverrides() {
+  return repoConfig().scriptNames || {};
 }
 
-/** @returns {Record<string, string>} directory name -> script URI */
-function scriptUriOverrides() {
-  return repoConfig().scriptUriOverrides || {};
+/**
+ * The name a project directory is deployed under: a slug, with no origin and
+ * no extension. Directories use snake_case or kebab-case and names are
+ * kebab-case; anything that deviates belongs in `scriptNames` in the config.
+ * @param {string} projectDir
+ * @returns {string}
+ */
+function scriptNameFor(projectDir) {
+  return (
+    scriptNameOverrides()[projectDir] ||
+    projectDir.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+  );
 }
 
 /**
@@ -99,6 +104,5 @@ module.exports = {
   defaultScriptUri,
   repoConfig,
   requireDefaultScriptUri,
-  scriptUriOverrides,
-  uriOrigin,
+  scriptNameFor,
 };

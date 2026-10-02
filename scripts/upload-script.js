@@ -16,7 +16,7 @@ require("dotenv").config();
 //   node scripts/upload-script.js --script-path <path> --script-uri <uri> [options]
 // Options:
 //   --script-path <path>    Path to the script file to upload (required)
-//   --script-uri <uri>      URI for the script (e.g., https://example.com/editor) (required)
+//   --script-uri <uri>      URI for the script (e.g., editor) (required)
 //   --assets-dir <path>     Path to assets directory (optional)
 //   --asset-prefix <prefix> Prefix to add to asset names (e.g., "docs/") (optional)
 //   --dry-run               Show what would be uploaded without actually uploading (optional)

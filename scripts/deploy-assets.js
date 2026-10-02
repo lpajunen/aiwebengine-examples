@@ -24,7 +24,7 @@ require("dotenv").config();
 //              files under --assets-dir or equal to --script-path.
 //
 // Options (defaults target virtual-world):
-//   --script-uri <uri>    Script URI            (default https://example.com/virtual-world)
+//   --script-uri <uri>    Script URI            (default virtual-world)
 //   --assets-dir <path>   Assets root           (default virtual-world)
 //   --script-path <path>  Entrypoint script     (default virtual-world/main.js)
 //   --dry-run             Print what would deploy, upload nothing

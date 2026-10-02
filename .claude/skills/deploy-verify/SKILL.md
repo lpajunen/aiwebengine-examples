@@ -57,7 +57,7 @@ TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('schemas/toke
 
   ```bash
   curl -s -H "Authorization: Bearer $TOKEN" \
-    "https://manage.softagen.com/engine/read_logs?uri=https://example.com/virtual-world"
+    "https://manage.softagen.com/engine/read_logs?uri=virtual-world"
   ```
 
   Look for FATAL/ERROR entries with timestamps (ms since epoch) _after_ the

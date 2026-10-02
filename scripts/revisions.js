@@ -46,7 +46,7 @@ require("dotenv").config();
 //   unpin                     Follow head again
 //
 // Options:
-//   --script-uri <uri>  Script to act on (default https://example.com/virtual-world)
+//   --script-uri <uri>  Script to act on (default virtual-world)
 //   --asset <path>      list: only revisions in which this file changed
 //   --limit <n>         list: keep at most this many (default 20)
 //   --files             list: include each revision's file manifest

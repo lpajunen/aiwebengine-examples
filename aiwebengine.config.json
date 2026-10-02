@@ -1,11 +1,8 @@
 {
-  "uriOrigin": "https://example.com",
   "defaultScript": {
-    "uri": "https://example.com/virtual-world",
+    "uri": "virtual-world",
     "path": "virtual-world/main.js",
     "dir": "virtual-world"
   },
-  "scriptUriOverrides": {
-    "import_example": "https://example.com/import-example"
-  }
+  "scriptNames": {}
 }

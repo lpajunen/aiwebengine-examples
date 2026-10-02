@@ -6,38 +6,6 @@
  */
 
 /**
- * GitHub MCP Client wrapper class for easier interaction
- */
-class GitHubMcpClient {
-  /**
-   * @param {string} serverUrl
-   * @param {string} secretIdentifier
-   */
-  constructor(serverUrl, secretIdentifier) {
-    const clientDataJson = McpClient.constructor(serverUrl, secretIdentifier);
-    this._clientData = JSON.parse(clientDataJson);
-  }
-
-  listTools() {
-    const toolsJson = McpClient._listTools(JSON.stringify(this._clientData));
-    return JSON.parse(toolsJson);
-  }
-
-  /**
-   * @param {string} toolName
-   * @param {Record<string, unknown>} args
-   */
-  callTool(toolName, args) {
-    const resultJson = McpClient._callTool(
-      JSON.stringify(this._clientData),
-      toolName,
-      JSON.stringify(args),
-    );
-    return JSON.parse(resultJson);
-  }
-}
-
-/**
  * Handler for /github route - fetches all issues from aiwebengine-examples
  * @param {HandlerContext} context
  * @returns {HttpResponse}
@@ -46,7 +14,7 @@ function githubHandler(context) {
   try {
     // Initialize GitHub MCP client
     // Using GitHub Copilot's MCP server
-    const client = new GitHubMcpClient(
+    const client = new McpClient(
       "https://api.githubcopilot.com/mcp/",
       "github_token",
     );
@@ -57,19 +25,15 @@ function githubHandler(context) {
     const owner = query.owner || "lpajunen";
     const repo = query.repo || "aiwebengine-examples";
 
-    // Call the list_issues tool
-    const result = client.callTool("list_issues", {
-      owner: owner,
-      repo: repo,
-    });
-
-    // Check for errors
-    if (result.error) {
+    // Call the list_issues tool; a JSON-RPC error throws
+    let result;
+    try {
+      result = client.callTool("list_issues", { owner, repo });
+    } catch (error) {
       return ResponseBuilder.json(
         {
           error: "Failed to fetch issues",
-          details: result.error,
-          message: result.details || "Unknown error occurred",
+          message: /** @type {Error} */ (error).message,
         },
         400,
       );

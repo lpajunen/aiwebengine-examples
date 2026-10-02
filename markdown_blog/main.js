@@ -882,6 +882,37 @@ function hello() {
 </html>`,
 };
 
+/**
+ * A template rendered, or null when it did not render — logged here once, so
+ * callers only decide what to show instead.
+ * @param {string} template
+ * @param {Record<string, unknown>} data
+ * @returns {string | null}
+ */
+function renderTemplate(template, data) {
+  try {
+    return convert.render_handlebars_template(template, data);
+  } catch (error) {
+    console.error(
+      `Template rendering failed: ${/** @type {Error} */ (error).message}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Markdown as HTML, or the reason it could not be converted.
+ * @param {string} markdown
+ * @returns {{ html: string, error?: undefined } | { html?: undefined, error: string }}
+ */
+function markdownToHtml(markdown) {
+  try {
+    return { html: convert.markdown_to_html(markdown) };
+  } catch (error) {
+    return { error: /** @type {Error} */ (error).message };
+  }
+}
+
 const MARKDOWN_BLOG_EMPTY_REQUEST = /** @type {HttpRequest} */ ({
   path: "",
   method: "GET",
@@ -1117,13 +1148,9 @@ function listPosts(context) {
   }
 
   const data = { posts: posts };
-  const html = convert.render_handlebars_template(
-    template,
-    JSON.stringify(data),
-  );
+  const html = renderTemplate(template, data);
 
-  if (html.startsWith("Error:")) {
-    console.error(`Template rendering failed: ${html}`);
+  if (html === null) {
     return ResponseBuilder.error(500, "Template error");
   }
 
@@ -1151,13 +1178,10 @@ function showPost(context, slug) {
       message: "Blog post not found",
       details: `The post "${slug}" does not exist.`,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 404,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1167,10 +1191,10 @@ function showPost(context, slug) {
   const title = titleMatch ? titleMatch[1] : slug;
 
   // Convert markdown to HTML
-  const content = convert.markdown_to_html(markdown);
+  const converted = markdownToHtml(markdown);
 
-  if (content.startsWith("Error:")) {
-    console.error(`Failed to convert blog post ${slug}: ${content}`);
+  if (converted.error !== undefined) {
+    console.error(`Failed to convert blog post ${slug}: ${converted.error}`);
     const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
@@ -1182,15 +1206,12 @@ function showPost(context, slug) {
     const data = {
       title: "Render Error",
       message: "Error rendering blog post",
-      details: content,
+      details: converted.error,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 500,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1205,14 +1226,10 @@ function showPost(context, slug) {
     };
   }
 
-  const data = { slug, title, content };
-  const html = convert.render_handlebars_template(
-    template,
-    JSON.stringify(data),
-  );
+  const data = { slug, title, content: converted.html };
+  const html = renderTemplate(template, data);
 
-  if (html.startsWith("Error:")) {
-    console.error(`Template rendering failed: ${html}`);
+  if (html === null) {
     return {
       status: 500,
       body: "Template error",
@@ -1239,14 +1256,11 @@ function newPostForm(context) {
     };
   }
 
+  /** @type {Record<string, unknown>} */
   const data = {};
-  const html = convert.render_handlebars_template(
-    template,
-    JSON.stringify(data),
-  );
+  const html = renderTemplate(template, data);
 
-  if (html.startsWith("Error:")) {
-    console.error(`Template rendering failed: ${html}`);
+  if (html === null) {
     return {
       status: 500,
       body: "Template error",
@@ -1282,13 +1296,10 @@ function editPostForm(context, slug) {
       message: "Blog post not found",
       details: `The post "${slug}" does not exist.`,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 404,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1304,13 +1315,9 @@ function editPostForm(context, slug) {
   }
 
   const data = { slug, content: existingContent };
-  const html = convert.render_handlebars_template(
-    template,
-    JSON.stringify(data),
-  );
+  const html = renderTemplate(template, data);
 
-  if (html.startsWith("Error:")) {
-    console.error(`Template rendering failed: ${html}`);
+  if (html === null) {
     return {
       status: 500,
       body: "Template error",
@@ -1346,13 +1353,10 @@ function createPost(context) {
       message: "Missing required fields",
       details: "Both slug and content are required.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1372,13 +1376,10 @@ function createPost(context) {
       message: "Invalid slug format",
       details: "Only lowercase letters, numbers, and hyphens allowed.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1398,20 +1399,17 @@ function createPost(context) {
       message: "Blog post too long",
       details: "Maximum size is 10KB.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
 
   // Test conversion before storing
-  const testHtml = convert.markdown_to_html(markdown);
-  if (testHtml.startsWith("Error:")) {
+  const testHtml = markdownToHtml(markdown);
+  if (testHtml.error !== undefined) {
     const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
@@ -1423,15 +1421,12 @@ function createPost(context) {
     const data = {
       title: "Validation Error",
       message: "Invalid markdown",
-      details: testHtml,
+      details: testHtml.error,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1470,13 +1465,10 @@ function createPost(context) {
     message: "Blog post created successfully!",
     redirectUrl: "/blog",
   };
-  const html = convert.render_handlebars_template(
-    template,
-    JSON.stringify(data),
-  );
+  const html = renderTemplate(template, data);
   return {
     status: 201,
-    body: html.startsWith("Error:") ? "Template error" : html,
+    body: html === null ? "Template error" : html,
     contentType: "text/html; charset=UTF-8",
   };
 }
@@ -1503,13 +1495,10 @@ function updatePost(context) {
       message: "Missing required fields",
       details: "Original slug, new slug, and content are required.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1529,13 +1518,10 @@ function updatePost(context) {
       message: "Invalid slug format",
       details: "Only lowercase letters, numbers, and hyphens allowed.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1555,13 +1541,10 @@ function updatePost(context) {
       message: "Original post not found",
       details: `The post "${originalSlug}" does not exist.`,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 404,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1581,20 +1564,17 @@ function updatePost(context) {
       message: "Blog post too long",
       details: "Maximum size is 10KB.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
 
   // Test conversion before storing
-  const testHtml = convert.markdown_to_html(markdown);
-  if (testHtml.startsWith("Error:")) {
+  const testHtml = markdownToHtml(markdown);
+  if (testHtml.error !== undefined) {
     const template = scriptStorage.getItem("blog:template:error");
     if (!template) {
       return {
@@ -1606,15 +1586,12 @@ function updatePost(context) {
     const data = {
       title: "Validation Error",
       message: "Invalid markdown",
-      details: testHtml,
+      details: testHtml.error,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1664,13 +1641,10 @@ function updatePost(context) {
       message: "Blog post updated successfully!",
       redirectUrl: "/blog/" + newSlug,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 200,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   } catch (error) {
@@ -1688,13 +1662,10 @@ function updatePost(context) {
       message: "Error updating post",
       details: error,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 500,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1720,13 +1691,10 @@ function deletePost(context) {
       message: "Missing slug",
       details: "Slug is required for deletion.",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 400,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1746,13 +1714,10 @@ function deletePost(context) {
       message: "Post not found",
       details: `The post "${slug}" does not exist.`,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 404,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }
@@ -1793,13 +1758,10 @@ function deletePost(context) {
       message: "Blog post deleted successfully!",
       redirectUrl: "/blog",
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 200,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   } catch (error) {
@@ -1817,13 +1779,10 @@ function deletePost(context) {
       message: "Error deleting post",
       details: error,
     };
-    const html = convert.render_handlebars_template(
-      template,
-      JSON.stringify(data),
-    );
+    const html = renderTemplate(template, data);
     return {
       status: 500,
-      body: html.startsWith("Error:") ? "Template error" : html,
+      body: html === null ? "Template error" : html,
       contentType: "text/html; charset=UTF-8",
     };
   }

@@ -13,56 +13,9 @@
  *
  * Usage:
  * - This script can be used as a reference for implementing MCP client functionality
- * - The McpClient class is available globally in privileged scripts
+ * - McpClient is a global class: listTools() and callTool() answer in values
+ *   and throw on a JSON-RPC error (the error carries its `code`)
  */
-
-/**
- * McpClient wrapper class for easier JavaScript usage
- */
-class GitHubMcpDemoClient {
-  /**
-   * @param {string} serverUrl
-   * @param {string} secretIdentifier
-   */
-  constructor(serverUrl, secretIdentifier) {
-    // Call the native constructor which returns JSON string
-    const clientDataJson = McpClient.constructor(serverUrl, secretIdentifier);
-    this._clientData = JSON.parse(clientDataJson);
-  }
-
-  /**
-   * List all available tools from the MCP server
-   * @returns {any[]} Array of tool objects with name, description, and inputSchema
-   */
-  listTools() {
-    const clientDataJson = JSON.stringify(this._clientData);
-    const toolsJson = McpClient._listTools(clientDataJson);
-    return JSON.parse(toolsJson);
-  }
-
-  /**
-   * Call a tool on the MCP server
-   * @param {string} toolName - Name of the tool to call
-   * @param {object} args - Tool arguments
-   * @returns {any} Tool result or error object
-   */
-  callTool(toolName, args) {
-    const clientDataJson = JSON.stringify(this._clientData);
-    const argsJson = JSON.stringify(args);
-    const resultJson = McpClient._callTool(clientDataJson, toolName, argsJson);
-    const result = JSON.parse(resultJson);
-
-    // Check for JSON-RPC errors
-    if (result.error) {
-      console.error(
-        `MCP Tool Error [${result.error.code}]: ${result.error.message}`,
-      );
-      return result;
-    }
-
-    return result;
-  }
-}
 
 /**
  * Main function to demonstrate GitHub MCP integration
@@ -73,7 +26,7 @@ function demonstrateGitHubMcp() {
 
     // 1. Create MCP client connected to GitHub's MCP server
     console.log("1. Connecting to GitHub MCP server...");
-    const client = new GitHubMcpDemoClient(
+    const client = new McpClient(
       "https://api.githubcopilot.com/mcp/",
       "github_token",
     );
@@ -95,23 +48,19 @@ function demonstrateGitHubMcp() {
 
     // 3. Fetch a specific issue from GitHub MCP Server repository
     console.log("\n3. Fetching issue #1 from github/github-mcp-server...");
-    const issueResult = client.callTool("issue_read:get", {
-      owner: "github",
-      repo: "github-mcp-server",
-      issue_number: 1,
-    });
-
-    // Check for errors
-    if (issueResult.error) {
-      console.log(`   ✗ Error: ${issueResult.error.message}`);
-      return {
-        success: false,
-        error: issueResult.error.message,
-      };
+    let issue;
+    try {
+      issue = client.callTool("issue_read:get", {
+        owner: "github",
+        repo: "github-mcp-server",
+        issue_number: 1,
+      });
+    } catch (error) {
+      const message = /** @type {Error} */ (error).message;
+      console.log(`   ✗ Error: ${message}`);
+      return { success: false, error: message };
     }
 
-    // Display issue details
-    const issue = issueResult;
     console.log("   ✓ Issue fetched successfully\n");
     console.log("   Issue Details:");
     console.log(`   - Title: ${issue.title || "N/A"}`);
@@ -159,7 +108,7 @@ function demonstrateGitHubMcp() {
  */
 function listRepositoryIssues(owner, repo, state = "open") {
   try {
-    const client = new GitHubMcpDemoClient(
+    const client = new McpClient(
       "https://api.githubcopilot.com/mcp/",
       "github_token",
     );
@@ -173,11 +122,6 @@ function listRepositoryIssues(owner, repo, state = "open") {
       repo: repo,
       state: state,
     });
-
-    if (result.error) {
-      console.error(`Error: ${result.error.message}`);
-      return [];
-    }
 
     /** @type {any[]} */
     const issues = result.issues || [];

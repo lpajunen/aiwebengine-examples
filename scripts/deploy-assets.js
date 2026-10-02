@@ -12,7 +12,7 @@ require("dotenv").config();
 // init(). Writing them one at a time invalidates the prepared program per
 // file, so every cluster instance reinitializes the script once per file from
 // a tree that is still being uploaded. When the entrypoint is part of the same
-// change the batch asks for reinit=never and the trailing upsert_script
+// change the batch asks for reinit=never and the trailing write_file
 // supplies the one init(), so the new modules and the new entrypoint are
 // always initialized together.
 //

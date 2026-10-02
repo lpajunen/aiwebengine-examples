@@ -84,7 +84,7 @@ async function setHosts(token, scriptUri, hosts, dryRun) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      uri: scriptUri,
+      script: scriptUri,
       hosts: (hosts || "")
         .split(",")
         .map((h) => h.trim())

@@ -142,7 +142,7 @@ async function runTests(token, scriptUri, options) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      uri: scriptUri,
+      script: scriptUri,
       rollback: options.rollback,
       ...(options.filter ? { filter: options.filter } : {}),
       ...(options.revision ? { revision: options.revision } : {}),

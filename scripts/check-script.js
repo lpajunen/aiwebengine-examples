@@ -81,7 +81,7 @@ async function checkScript(token, scriptUri, options) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      uri: scriptUri,
+      script: scriptUri,
       rollback: options.rollback,
       ...(options.content !== undefined ? { content: options.content } : {}),
       ...(options.revision ? { revision: options.revision } : {}),
@@ -239,7 +239,7 @@ async function main() {
     if (/** @type {Error} */ (err).name === "TimeoutError") {
       console.error(
         `✗ no answer in ${timeoutMs / 1000}s. Raise --timeout, or check ` +
-          `'GET ${manageHost}/engine/read_logs?uri=...' to see whether ` +
+          `'GET ${manageHost}/engine/read_logs?script=...' to see whether ` +
           `init() ran at all.`,
       );
       process.exit(1);

@@ -66,7 +66,7 @@ async function evaluate(token, scriptUri, options) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      uri: scriptUri,
+      script: scriptUri,
       source: options.source,
       rollback: options.rollback,
       timeoutMs: options.timeoutMs,

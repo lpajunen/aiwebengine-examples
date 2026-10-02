@@ -175,7 +175,7 @@ make set-script-hosts               # bind virtual-world to WORLD_HOST (admin on
 make set-script-hosts-dry-run       # preview
 ```
 
-`scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/set_script_hosts` with `{uri, hosts: [...]}` (administrators only; `get_script_hosts` reads the current binding, an empty list clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
+`scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/set_script_hosts` with `{script, hosts: [...]}` (administrators only; `get_script_hosts` reads the current binding, an empty list clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
 
 `MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 

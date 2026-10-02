@@ -359,7 +359,7 @@ async function uploadAssets(token, assets, scriptUri, dryRun) {
 async function publishedHost(token, scriptUri) {
   const fallback = new URL(serverHost).host;
   try {
-    const params = new URLSearchParams({ uri: scriptUri });
+    const params = new URLSearchParams({ script: scriptUri });
     const response = await fetch(
       `${manageHost}/engine/get_script_hosts?${params.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } },

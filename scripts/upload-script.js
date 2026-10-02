@@ -4,7 +4,7 @@ require("dotenv").config();
 // Generic script and asset uploader for the server
 // Requires authentication token from schemas/token.json (run `make oauth-login` first)
 //
-// Assets go up through POST /engine/assets/batch rather than one request each:
+// Assets go up through POST /engine/write_files rather than one request each:
 // a single-asset write invalidates the script's prepared program, so writing a
 // 100-file tree one file at a time made every cluster instance reinitialize the
 // script 100 times, each from a tree still being uploaded. Large trees are split
@@ -152,18 +152,19 @@ async function uploadScript(token, scriptPath, scriptUri, dryRun) {
     `Uploading script ${scriptName} (${scriptContent.length} bytes)...`,
   );
 
-  const body = new URLSearchParams({
-    uri: scriptUri,
-    content: scriptContent,
-  }).toString();
-
-  const response = await fetch(`${manageHost}/engine/upsert_script`, {
+  // The entrypoint is a file of the script's tree and is written under its own
+  // name, which is how its language is stated (main.ts, main.js, ...).
+  const response = await fetch(`${manageHost}/engine/write_file`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: body,
+    body: JSON.stringify({
+      script: scriptUri,
+      path: scriptName,
+      text: scriptContent,
+    }),
   });
 
   if (!response.ok) {
@@ -246,7 +247,7 @@ function chunkBatches(files) {
 }
 
 /**
- * Upload every asset via POST /engine/assets/batch. Each batch is one
+ * Upload every asset via POST /engine/write_files. Each batch is one
  * transaction: a rejected file means nothing in that batch was written.
  * @param {string} token
  * @param {Array<{ name: string, path: string }>} assets
@@ -287,27 +288,25 @@ async function uploadAssets(token, assets, scriptUri, dryRun) {
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
     const last = i === batches.length - 1;
-    const response = await fetch(
-      `${manageHost}/engine/assets/batch?script=${encodeURIComponent(scriptUri)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          files: batch.map((f) => ({
-            name: f.name,
-            mimetype: getMimeType(f.name),
-            content_base64: f.base64,
-            sha256: f.hash,
-          })),
-          // Hold the init() until the last chunk, so it never runs against a
-          // tree that is still missing files.
-          reinit: last ? "after" : "never",
-        }),
+    const response = await fetch(`${manageHost}/engine/write_files`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-    );
+      body: JSON.stringify({
+        script: scriptUri,
+        files: batch.map((f) => ({
+          name: f.name,
+          mimetype: getMimeType(f.name),
+          content_base64: f.base64,
+          sha256: f.hash,
+        })),
+        // Hold the init() until the last chunk, so it never runs against a
+        // tree that is still missing files.
+        reinit: last ? "after" : "never",
+      }),
+    });
 
     if (!response.ok) {
       const text = await response.text();
@@ -362,7 +361,7 @@ async function publishedHost(token, scriptUri) {
   try {
     const params = new URLSearchParams({ uri: scriptUri });
     const response = await fetch(
-      `${manageHost}/engine/script_hosts?${params.toString()}`,
+      `${manageHost}/engine/get_script_hosts?${params.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!response.ok) return fallback;

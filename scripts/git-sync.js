@@ -2,7 +2,7 @@
 /// <reference types="node" />
 require("dotenv").config();
 // Move scripts between this engine and a GitHub repository
-// (POST /engine/git/pull and POST /engine/git/push).
+// (pull_from_git and push_to_git).
 //
 // Neither direction is described by a manifest in the repository. The layout
 // is the contract: a script is a directory holding main.ts (or .js/.tsx/.jsx),
@@ -243,7 +243,7 @@ async function pull(token, config) {
   if (config.force) body.force = true;
 
   if (config.dryRun) {
-    console.log(`[DRY RUN] POST ${manageHost}/engine/git/pull`);
+    console.log(`[DRY RUN] POST ${manageHost}/engine/pull_from_git`);
     console.log(JSON.stringify(body, null, 2));
     return;
   }
@@ -251,7 +251,12 @@ async function pull(token, config) {
   console.log(
     `Pulling ${config.repo}${config.branch ? `#${config.branch}` : ""} into ${manageHost}...`,
   );
-  const result = await post(token, "/engine/git/pull", body, config.timeoutMs);
+  const result = await post(
+    token,
+    "/engine/pull_from_git",
+    body,
+    config.timeoutMs,
+  );
 
   if (result.status !== 200) {
     fail(result, {
@@ -332,7 +337,7 @@ async function push(token, config) {
   if (config.force) body.force = true;
 
   if (config.dryRun) {
-    console.log(`[DRY RUN] POST ${manageHost}/engine/git/push`);
+    console.log(`[DRY RUN] POST ${manageHost}/engine/push_to_git`);
     console.log(JSON.stringify(body, null, 2));
     return;
   }
@@ -340,7 +345,12 @@ async function push(token, config) {
   console.log(
     `Publishing ${script} to ${config.repo || "the repository it was pulled from"}...`,
   );
-  const result = await post(token, "/engine/git/push", body, config.timeoutMs);
+  const result = await post(
+    token,
+    "/engine/push_to_git",
+    body,
+    config.timeoutMs,
+  );
 
   if (result.status !== 200) {
     fail(result, {

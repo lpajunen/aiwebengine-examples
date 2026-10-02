@@ -8,7 +8,7 @@ require("dotenv").config();
 // It talks to the same REST endpoints the MCP asset tools wrap, using the
 // regular OAuth token from schemas/token.json (run `make oauth-login` first).
 //
-// Assets go up in a single POST /engine/assets/batch: one transaction, one
+// Assets go up in a single POST /engine/write_files: one transaction, one
 // init(). Writing them one at a time invalidates the prepared program per
 // file, so every cluster instance reinitializes the script once per file from
 // a tree that is still being uploaded. When the entrypoint is part of the same
@@ -156,7 +156,7 @@ function sha256(data) {
 }
 
 /**
- * Upsert the entrypoint script (POST /engine/upsert_script).
+ * Upsert the entrypoint script (POST /engine/write_file).
  * @param {string} token
  * @param {string} scriptUri
  * @param {string} absPath
@@ -164,17 +164,23 @@ function sha256(data) {
  */
 async function uploadScript(token, scriptUri, absPath) {
   const content = fs.readFileSync(absPath, "utf8");
-  const res = await fetch(`${manageHost}/engine/upsert_script`, {
+  const res = await fetch(`${manageHost}/engine/write_file`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: new URLSearchParams({ uri: scriptUri, content }).toString(),
+    // The entrypoint is written under its own name: that is what states its
+    // language.
+    body: JSON.stringify({
+      script: scriptUri,
+      path: path.basename(absPath),
+      text: content,
+    }),
   });
   if (!res.ok) {
     throw new Error(
-      `upsert_script failed: ${res.status} ${res.statusText}\n${await res.text()}`,
+      `write_file failed: ${res.status} ${res.statusText}\n${await res.text()}`,
     );
   }
   console.log(
@@ -183,7 +189,7 @@ async function uploadScript(token, scriptUri, absPath) {
 }
 
 /**
- * Read one asset back (GET /engine/assets) and compare its bytes to the local
+ * Read one asset back (GET /engine/read_file) and compare its bytes to the local
  * copy. The batch write already had the server verify the sha256 we supplied
  * against what it received; this additionally proves what it stored.
  * @param {string} token
@@ -195,7 +201,7 @@ async function uploadScript(token, scriptUri, absPath) {
 async function verifyAsset(token, scriptUri, assetName, localHash) {
   const q = `script=${encodeURIComponent(scriptUri)}`;
   const readRes = await fetch(
-    `${manageHost}/engine/assets?${q}&asset=${encodeURIComponent(assetName)}`,
+    `${manageHost}/engine/read_file?${q}&path=${encodeURIComponent(assetName)}`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!readRes.ok) {
@@ -204,10 +210,16 @@ async function verifyAsset(token, scriptUri, assetName, localHash) {
     );
   }
   const body = await readRes.json();
-  if (typeof body.content !== "string") {
-    throw new Error(`read-back of ${assetName} returned no content field`);
+  // Text comes back as `content`, anything else as `content_base64`.
+  let remoteBytes;
+  if (typeof body.content_base64 === "string") {
+    remoteBytes = Buffer.from(body.content_base64, "base64");
+  } else if (typeof body.content === "string") {
+    remoteBytes = Buffer.from(body.content, "utf8");
+  } else {
+    throw new Error(`read-back of ${assetName} returned no content`);
   }
-  const remoteHash = sha256(Buffer.from(body.content, "base64"));
+  const remoteHash = sha256(remoteBytes);
   if (remoteHash !== localHash) {
     console.error(
       `  ✗ ${assetName} VERIFY MISMATCH (local ${localHash.slice(0, 12)} != remote ${remoteHash.slice(0, 12)})`,
@@ -218,7 +230,7 @@ async function verifyAsset(token, scriptUri, assetName, localHash) {
 }
 
 /**
- * Upsert every asset in one request (POST /engine/assets/batch). The batch is
+ * Upsert every asset in one request (POST /engine/write_files). The batch is
  * one transaction: on a rejected file nothing is written at all.
  * @param {string} token
  * @param {string} scriptUri
@@ -233,25 +245,23 @@ async function uploadAssets(token, scriptUri, assets, reinit, verify) {
     return { name: a.name, bytes, hash: sha256(bytes) };
   });
 
-  const res = await fetch(
-    `${manageHost}/engine/assets/batch?script=${encodeURIComponent(scriptUri)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        files: local.map((f) => ({
-          name: f.name,
-          mimetype: mimeFor(f.name),
-          content_base64: f.bytes.toString("base64"),
-          sha256: f.hash,
-        })),
-        reinit,
-      }),
+  const res = await fetch(`${manageHost}/engine/write_files`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-  );
+    body: JSON.stringify({
+      script: scriptUri,
+      files: local.map((f) => ({
+        name: f.name,
+        mimetype: mimeFor(f.name),
+        content_base64: f.bytes.toString("base64"),
+        sha256: f.hash,
+      })),
+      reinit,
+    }),
+  });
   if (!res.ok) {
     throw new Error(
       `asset batch failed (nothing written): ${res.status} ${res.statusText}\n${await res.text()}`,

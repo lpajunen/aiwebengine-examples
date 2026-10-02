@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /// <reference types="node" />
 require("dotenv").config();
-// Evaluates a snippet inside a deployed script's sandbox (POST /engine/eval)
+// Evaluates a snippet inside a deployed script's sandbox (POST /engine/eval_script)
 // and prints what it returned, what it logged, and how long it took.
 //
 // This is the "ask the server a question" tool: reading a table, calling one
@@ -59,15 +59,7 @@ const DEFAULT_SCRIPT_URI = defaultScriptUri();
  * @returns {Promise<{ report?: EvalReport, status: number, body: string }>}
  */
 async function evaluate(token, scriptUri, options) {
-  const query = new URLSearchParams({
-    uri: scriptUri,
-    rollback: String(options.rollback),
-  });
-  if (options.timeoutMs > 0) {
-    query.set("timeout_ms", String(options.timeoutMs));
-  }
-
-  const res = await fetch(`${manageHost}/engine/eval?${query}`, {
+  const res = await fetch(`${manageHost}/engine/eval_script`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -197,7 +189,7 @@ async function main() {
   if (!report) {
     console.error(
       status === 404
-        ? `✗ ${manageHost} has no /engine/eval — the server predates it`
+        ? `✗ ${manageHost} has no /engine/eval_script — the server predates it`
         : `✗ HTTP ${status}: ${body.slice(0, 200)}`,
     );
     process.exit(1);

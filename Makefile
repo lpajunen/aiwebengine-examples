@@ -40,7 +40,7 @@ set-script-hosts-dry-run:
 	@node scripts/set-script-hosts.js --script-uri https://example.com/virtual-world \
 	  --hosts $(WORLD_HOST) --dry-run
 
-# Ask the server what virtual-world would do if deployed (POST /engine/check).
+# Ask the server what virtual-world would do if deployed (POST /engine/check_script).
 # Catches what the local toolchain cannot see: circular asset-backed imports,
 # route handler names the entrypoint never defines, and an init() over budget.
 # Checks the *deployed* copy; needs `make oauth-login`.

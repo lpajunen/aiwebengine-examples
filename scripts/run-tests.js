@@ -142,16 +142,18 @@ function discoverProjects() {
  * @returns {Promise<{ report?: TestReport, status: number, body: string }>}
  */
 async function runTests(token, scriptUri, options) {
-  const query = new URLSearchParams({
-    uri: scriptUri,
-    rollback: String(options.rollback),
-  });
-  if (options.filter) query.set("filter", options.filter);
-  if (options.revision) query.set("revision", options.revision);
-
-  const res = await fetch(`${manageHost}/engine/run_tests?${query}`, {
+  const res = await fetch(`${manageHost}/engine/run_tests`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      uri: scriptUri,
+      rollback: options.rollback,
+      ...(options.filter ? { filter: options.filter } : {}),
+      ...(options.revision ? { revision: options.revision } : {}),
+    }),
   });
   const body = await res.text();
   try {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /// <reference types="node" />
 require("dotenv").config();
-// Manage the caller's git host credentials (POST/GET/DELETE
-// /engine/git/credentials), which is what /engine/git/pull spends when it
+// Manage the caller's git host credentials (set_git_credential,
+// list_git_credentials, delete_git_credential), which is what pull_from_git spends when it
 // reads a repository the caller can see but the public internet cannot.
 //
 // The engine encrypts the token at rest and never gives it back -- neither
@@ -213,20 +213,19 @@ async function resolveToken(config) {
 
 /**
  * @param {string} token
- * @param {string} method
- * @param {string} query
+ * @param {string} operation
  * @param {unknown} [body]
  * @returns {Promise<{status: number, statusText: string, text: string, parsed: any}>}
  */
-async function call(token, method, query, body) {
+async function call(token, operation, body) {
   /** @type {Record<string, string>} */
   const headers = { Authorization: `Bearer ${token}` };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  headers["Content-Type"] = "application/json";
 
-  const response = await fetch(`${manageHost}/engine/git/credentials${query}`, {
-    method,
+  const response = await fetch(`${manageHost}/engine/${operation}`, {
+    method: "POST",
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: JSON.stringify(body ?? {}),
   });
 
   const text = await response.text();
@@ -267,7 +266,7 @@ async function setCredential(token, config) {
   if (!secret) throw new Error("No token given; nothing was sent");
 
   console.log(`Storing a token for ${config.host} via ${manageHost}...`);
-  const result = await call(token, "POST", "", {
+  const result = await call(token, "set_git_credential", {
     token: secret,
     host: config.host,
   });
@@ -298,7 +297,7 @@ async function setCredential(token, config) {
  * @returns {Promise<void>}
  */
 async function listCredentials(token, config) {
-  const result = await call(token, "GET", "");
+  const result = await call(token, "list_git_credentials");
   if (result.status !== 200) fail(result, { 403: "access denied" });
 
   if (config.json) {
@@ -336,8 +335,9 @@ async function listCredentials(token, config) {
  * @returns {Promise<void>}
  */
 async function deleteCredential(token, config) {
-  const query = `?${new URLSearchParams({ host: config.host }).toString()}`;
-  const result = await call(token, "DELETE", query);
+  const result = await call(token, "delete_git_credential", {
+    host: config.host,
+  });
   if (result.status !== 200) fail(result, { 403: "access denied" });
 
   if (config.json) {

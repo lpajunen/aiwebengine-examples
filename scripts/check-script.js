@@ -2,7 +2,7 @@
 /// <reference types="node" />
 require("dotenv").config();
 // Asks the server what a script would do if it were deployed
-// (POST /engine/check), and reports the diagnostics it comes back with.
+// (POST /engine/check_script), and reports the diagnostics it comes back with.
 //
 // The engine runs the script's init() in a sandbox, so this catches what local
 // tooling structurally cannot: circular asset-backed imports, handler names a
@@ -73,35 +73,26 @@ const DEFAULTS = {
  * @returns {Promise<{ report?: CheckReport, status: number, body: string }>}
  */
 async function checkScript(token, scriptUri, options) {
-  const query = new URLSearchParams({
-    uri: scriptUri,
-    rollback: String(options.rollback),
-  });
-  if (options.revision) query.set("revision", options.revision);
-
   /** @type {RequestInit} */
   const request = {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  };
-  if (options.content !== undefined) {
-    request.headers = {
-      ...request.headers,
+    headers: {
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-    };
-    request.body = JSON.stringify({
+    },
+    body: JSON.stringify({
       uri: scriptUri,
-      content: options.content,
       rollback: options.rollback,
+      ...(options.content !== undefined ? { content: options.content } : {}),
       ...(options.revision ? { revision: options.revision } : {}),
-    });
-  }
+    }),
+  };
 
   if (options.timeoutMs > 0) {
     request.signal = AbortSignal.timeout(options.timeoutMs);
   }
 
-  const res = await fetch(`${manageHost}/engine/check?${query}`, request);
+  const res = await fetch(`${manageHost}/engine/check_script`, request);
   const body = await res.text();
   try {
     return { report: JSON.parse(body), status: res.status, body };
@@ -248,7 +239,7 @@ async function main() {
     if (/** @type {Error} */ (err).name === "TimeoutError") {
       console.error(
         `✗ no answer in ${timeoutMs / 1000}s. Raise --timeout, or check ` +
-          `'GET ${manageHost}/engine/script_logs?uri=...' to see whether ` +
+          `'GET ${manageHost}/engine/read_logs?uri=...' to see whether ` +
           `init() ran at all.`,
       );
       process.exit(1);
@@ -266,7 +257,7 @@ async function main() {
     // so an unparseable 404 is the route itself missing.
     console.error(
       status === 404
-        ? `✗ ${manageHost} has no /engine/check — the server predates the checker`
+        ? `✗ ${manageHost} has no /engine/check_script — the server predates the checker`
         : `✗ HTTP ${status}: ${body.slice(0, 200)}`,
     );
     process.exit(1);

@@ -77,16 +77,20 @@ async function setHosts(token, scriptUri, hosts, dryRun) {
 
   console.log(`Binding ${scriptUri} to ${target}...`);
 
-  const params = new URLSearchParams({ uri: scriptUri, hosts });
-  const response = await fetch(
-    `${manageHost}/engine/script_hosts?${params.toString()}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  const response = await fetch(`${manageHost}/engine/set_script_hosts`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      uri: scriptUri,
+      hosts: (hosts || "")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean),
+    }),
+  });
 
   const text = await response.text();
 
@@ -143,7 +147,7 @@ async function main() {
 
     const dryRunPrefix = config.dryRun ? "[DRY RUN] " : "";
     console.log(
-      `${dryRunPrefix}Setting script hosts via ${manageHost}/engine/script_hosts...`,
+      `${dryRunPrefix}Setting script hosts via ${manageHost}/engine/set_script_hosts...`,
     );
     console.log("");
 

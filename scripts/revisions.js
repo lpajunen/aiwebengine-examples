@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /// <reference types="node" />
 require("dotenv").config();
-// Reads and moves a script's revisions (GET/POST /engine/revisions*, and
-// GET/POST/DELETE /engine/deploy).
+// Reads and moves a script's revisions (list_revisions, diff_revisions,
+// revert_script, label_revision, and deploy_script / get_deployment).
 //
 // Every write to a script records a revision of the whole thing, so this is the
-// history a caller editing through /engine/assets has instead of a checkout —
+// history a caller editing through the engine's file operations has instead of a checkout —
 // and, more usefully, it is how writing and deploying became two acts. A pinned
 // script keeps answering requests from the revision it is pinned to while
 // writes advance `head` behind it: the engine does not even run init() for
@@ -94,16 +94,18 @@ const DEFAULT_SCRIPT_URI = defaultScriptUri();
 
 /**
  * @param {string} token
- * @param {string} method
- * @param {string} path
- * @param {Record<string, string>} params
+ * @param {string} operation
+ * @param {Record<string, unknown>} args
  * @returns {Promise<{ payload?: EngineResponse, status: number, body: string }>}
  */
-async function call(token, method, path, params) {
-  const query = new URLSearchParams(params);
-  const res = await fetch(`${manageHost}${path}?${query}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
+async function call(token, operation, args) {
+  const res = await fetch(`${manageHost}/engine/${operation}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(args),
   });
   const body = await res.text();
   try {
@@ -182,10 +184,10 @@ function describeRevision(revision, report) {
  * @returns {Promise<EngineResponse>}
  */
 async function printStatus(token, scriptUri, json) {
-  const result = await call(token, "GET", "/engine/deploy", {
+  const result = await call(token, "get_deployment", {
     script: scriptUri,
   });
-  const report = unwrap(result, "/engine/deploy");
+  const report = unwrap(result, "deploy_script");
   if (json) {
     console.log(result.body);
     return report;
@@ -218,13 +220,13 @@ async function printStatus(token, scriptUri, json) {
  * @param {{ asset?: string, limit: number, files: boolean, json: boolean }} options
  */
 async function listRevisions(token, scriptUri, options) {
-  /** @type {Record<string, string>} */
-  const params = { script: scriptUri, limit: String(options.limit) };
+  /** @type {Record<string, unknown>} */
+  const params = { script: scriptUri, limit: options.limit };
   if (options.asset) params.asset = options.asset;
-  if (options.files) params.files = "true";
+  if (options.files) params.files = true;
 
-  const result = await call(token, "GET", "/engine/revisions", params);
-  const report = unwrap(result, "/engine/revisions");
+  const result = await call(token, "list_revisions", params);
+  const report = unwrap(result, "list_revisions");
   if (options.json) {
     console.log(result.body);
     return;
@@ -251,7 +253,7 @@ async function listRevisions(token, scriptUri, options) {
 
   // The deployment is a separate call, but "which one is being served" is the
   // thing you came to this list to find out, so pay for it.
-  const deployment = await call(token, "GET", "/engine/deploy", {
+  const deployment = await call(token, "get_deployment", {
     script: scriptUri,
   });
   if (deployment.payload) report.serving = deployment.payload.serving;
@@ -280,14 +282,14 @@ async function listRevisions(token, scriptUri, options) {
  * @param {{ from?: string, to?: string, context?: number, json: boolean }} options
  */
 async function diffRevisions(token, scriptUri, options) {
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, unknown>} */
   const params = { script: scriptUri };
   if (options.from) params.from = options.from;
   if (options.to) params.to = options.to;
-  if (options.context !== undefined) params.context = String(options.context);
+  if (options.context !== undefined) params.context = options.context;
 
-  const result = await call(token, "GET", "/engine/revisions/diff", params);
-  const report = unwrap(result, "/engine/revisions/diff");
+  const result = await call(token, "diff_revisions", params);
+  const report = unwrap(result, "diff_revisions");
   if (options.json) {
     console.log(result.body);
     return;
@@ -319,14 +321,14 @@ async function diffRevisions(token, scriptUri, options) {
  * @param {{ dryRun: boolean, force: boolean, reinit?: string, json: boolean }} options
  */
 async function revertScript(token, scriptUri, revision, options) {
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, unknown>} */
   const params = { script: scriptUri, revision };
-  if (options.dryRun) params.dry_run = "true";
-  if (options.force) params.force = "true";
+  if (options.dryRun) params.dryRun = true;
+  if (options.force) params.force = true;
   if (options.reinit) params.reinit = options.reinit;
 
-  const result = await call(token, "POST", "/engine/revisions/revert", params);
-  const report = unwrap(result, "/engine/revisions/revert");
+  const result = await call(token, "revert_script", params);
+  const report = unwrap(result, "revert_script");
   if (options.json) {
     console.log(result.body);
     return;
@@ -377,10 +379,10 @@ async function pin(token, scriptUri, revision, json) {
   // first, and looking it up is exactly what the deploy endpoint is for.
   let target = revision;
   if (!target) {
-    const current = await call(token, "GET", "/engine/deploy", {
+    const current = await call(token, "get_deployment", {
       script: scriptUri,
     });
-    const status = unwrap(current, "/engine/deploy");
+    const status = unwrap(current, "get_deployment");
     if (status.pinned) {
       console.log(`  already pinned to r${status.serving}`);
       return;
@@ -388,11 +390,11 @@ async function pin(token, scriptUri, revision, json) {
     target = String(status.serving);
   }
 
-  const result = await call(token, "POST", "/engine/deploy", {
+  const result = await call(token, "deploy_script", {
     script: scriptUri,
     revision: target,
   });
-  const report = unwrap(result, "/engine/deploy");
+  const report = unwrap(result, "deploy_script");
   if (json) {
     console.log(result.body);
     return;
@@ -418,10 +420,11 @@ async function pin(token, scriptUri, revision, json) {
  * @param {boolean} json
  */
 async function unpin(token, scriptUri, json) {
-  const result = await call(token, "DELETE", "/engine/deploy", {
+  const result = await call(token, "deploy_script", {
     script: scriptUri,
+    follow: true,
   });
-  const report = unwrap(result, "/engine/deploy");
+  const report = unwrap(result, "deploy_script");
   if (json) {
     console.log(result.body);
     return;
@@ -442,13 +445,13 @@ async function unpin(token, scriptUri, json) {
  * @param {boolean} json
  */
 async function labelRevision(token, scriptUri, revision, label, json) {
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, unknown>} */
   const params = { script: scriptUri, revision };
   // An empty label clears one, which is what omitting the argument means here.
   params.label = label || "";
 
-  const result = await call(token, "POST", "/engine/revisions/label", params);
-  const report = unwrap(result, "/engine/revisions/label");
+  const result = await call(token, "label_revision", params);
+  const report = unwrap(result, "label_revision");
   if (json) {
     console.log(result.body);
     return;

@@ -3,7 +3,7 @@
  *
  * Run them against a deployed engine with:
  *
- *   curl -X POST "$SERVER_HOST/engine/run_tests?uri=virtual-world"
+ *   curl -X POST "$SERVER_HOST/engine/run_tests" -d '{"uri":"virtual-world"}'
  *
  * The engine finds this file because it is an asset named `*.test.ts`; the file
  * sits next to the module it covers rather than in a separate tests folder,

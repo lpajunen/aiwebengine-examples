@@ -22,7 +22,7 @@ same relative path. `virtual-world/server/world-db.ts` is deployed as the asset
 `server/world-db.ts`, and `virtual-world/main.js` is the entrypoint rather than
 an asset.
 
-This is not a local convention — it is the layout the engine's `/engine/git/*`
+This is not a local convention — it is the layout the engine's the engine's git operations (`pull_from_git`, `push_to_git`, …)
 API reads and writes (see "Pulling and pushing scripts"), which is why there is
 no `src/` directory and no manifest anywhere. The two things a manifest would
 carry, the URI a script is served at and who owns it, deliberately do not live
@@ -110,7 +110,7 @@ explicitly when that happens.
 
 ### Git credentials
 
-The engine's git API (`/engine/git/*`) pulls a GitHub repository in as scripts.
+The engine's git API (the engine's git operations (`pull_from_git`, `push_to_git`, …)) pulls a GitHub repository in as scripts.
 Reading anything the public internet cannot see needs a personal access token
 stored per user and host:
 
@@ -121,7 +121,7 @@ make git-credentials                     # host, account, added/last used
 make forget-git-credentials HOST=...     # drop one host's token
 ```
 
-`scripts/git-credentials.js` wraps `POST/GET/DELETE $MANAGE_HOST/engine/git/credentials`.
+`scripts/git-credentials.js` wraps `POST $MANAGE_HOST/engine/{set,list,delete}_git_credential(s)`.
 The token is prompted for without echo so it stays out of shell history and the
 process list; `STDIN=true` (read from stdin) and `TOKEN_ENV=NAME` are there for
 scripted use. The engine verifies the token against the host before storing it,
@@ -137,8 +137,8 @@ make git-push REPO=owner/repo MSG="Fix the cart total"   # script -> repo, one c
 make git-push SCRIPT=https://example.com/blog REPO=owner/repo
 ```
 
-`scripts/git-sync.js` wraps `POST $MANAGE_HOST/engine/git/pull` and
-`POST $MANAGE_HOST/engine/git/push`. Both take `DRY=true` (print the request,
+`scripts/git-sync.js` wraps `POST $MANAGE_HOST/engine/pull_from_git` and
+`POST $MANAGE_HOST/engine/push_to_git`. Both take `DRY=true` (print the request,
 call nothing), `BRANCH=`, and `FORCE=`; `make git-push` defaults `SCRIPT=` to
 virtual-world and takes `MSG=` for the commit message.
 
@@ -174,7 +174,7 @@ make set-script-hosts               # bind virtual-world to WORLD_HOST (admin on
 make set-script-hosts-dry-run       # preview
 ```
 
-`scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/script_hosts?uri=…&hosts=…` (administrators only; `GET` reads the current binding, `DELETE` clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
+`scripts/set-script-hosts.js` calls `POST $MANAGE_HOST/engine/set_script_hosts` with `{uri, hosts: [...]}` (administrators only; `get_script_hosts` reads the current binding, an empty list clears it back to the default host). `--hosts` takes a comma-separated host list, `*` for every configured host, or empty for the engine's default host; it defaults to `SERVER_HOST`'s hostname, and the `make` target passes `WORLD_HOST`.
 
 `MANAGE_HOST` overrides where the tooling sends its `/engine/...` calls (types/openapi fetch, uploads, per-file deploys, test runs); `SERVER_HOST` and `WORLD_HOST` only affect where the docs/tooling say a deployed script is served.
 
@@ -186,7 +186,7 @@ Every write to a script records a revision of the whole script — one batch of 
 make status                  # serving vs head, and how far apart
 make pin                     # freeze what is being served right now
 make deploy-changed          # push freely — production does not move
-make check-head              # /engine/check against the newest revision
+make check-head              # /engine/check_script against the newest revision
 make test-head               # run the suite against the newest revision
 make promote                 # serve head, staying pinned
 make unpin                   # follow head again
@@ -215,7 +215,7 @@ Two things are easy to get wrong:
 ### Checking a script on the server
 
 ```bash
-make check-virtual-world             # POST /engine/check for the deployed copy
+make check-virtual-world             # POST /engine/check_script for the deployed copy
 make check-virtual-world-candidate   # check the local entrypoint before deploying
 make check-head                      # check the newest revision, served or not
 make check-head REV=last-good        # or any revision / label
@@ -240,7 +240,7 @@ make eval SRC='…' ROLLBACK=false         # keep the database writes
 make eval SRC='…' URI=https://example.com/docs
 ```
 
-`scripts/eval-script.js` posts a snippet to `POST /engine/eval`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+`scripts/eval-script.js` posts a snippet to `POST /engine/eval_script`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
 This replaces "write a `*.test.ts`, deploy it, run the suite, read the answer out of an assertion message" for one-off questions — reading a table, calling one server function, checking what a helper returns. Unlike `make check-virtual-world` it works fine on virtual-world, because eval does not run `init()`.
 

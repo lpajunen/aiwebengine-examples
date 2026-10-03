@@ -12,12 +12,12 @@ function getCurrentTimeHandler(context) {
   const now = new Date();
   const timeString = now.toLocaleString("en-US", { timeZone: timezone });
 
-  return JSON.stringify({
+  return {
     timestamp: now.toISOString(),
     timezone: timezone,
     formatted: timeString,
     unix: Math.floor(now.getTime() / 1000),
-  });
+  };
 }
 
 // MCP tool handler for calculating simple math operations
@@ -29,9 +29,9 @@ function calculateHandler(context) {
   const b = parseFloat(args.b);
 
   if (isNaN(a) || isNaN(b)) {
-    return JSON.stringify({
+    return {
       error: "Invalid numbers provided",
-    });
+    };
   }
 
   let result;
@@ -47,24 +47,24 @@ function calculateHandler(context) {
       break;
     case "divide":
       if (b === 0) {
-        return JSON.stringify({
+        return {
           error: "Cannot divide by zero",
-        });
+        };
       }
       result = a / b;
       break;
     default:
-      return JSON.stringify({
+      return {
         error: "Unknown operation: " + operation,
-      });
+      };
   }
 
-  return JSON.stringify({
+  return {
     operation: operation,
     a: a,
     b: b,
     result: result,
-  });
+  };
 }
 
 // MCP tool handler for fetching weather information (simulated)
@@ -79,13 +79,13 @@ function getWeatherHandler(context) {
     conditions[Math.floor(Math.random() * conditions.length)];
   const temperature = Math.floor(Math.random() * 30) + 10; // 10-40°C
 
-  return JSON.stringify({
+  return {
     location: location,
     condition: randomCondition,
     temperature: temperature,
     unit: "celsius",
     timestamp: new Date().toISOString(),
-  });
+  };
 }
 
 // MCP tool handler for generating a random ID
@@ -102,10 +102,10 @@ function generateIdHandler(context) {
     randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
   }
 
-  return JSON.stringify({
+  return {
     id: prefix + "-" + randomPart,
     timestamp: Date.now(),
-  });
+  };
 }
 
 // Initialization function - called when script is loaded or updated

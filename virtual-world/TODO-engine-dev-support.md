@@ -504,7 +504,7 @@ The genuinely hard one, since `assets/public/*.js` runs in a browser.
 - **Cheap version:** static check that every global referenced in a
   `public/*.js` file is defined by an earlier script tag in the load order
   declared in `page-bootstrap.ts`, and that each file has a matching
-  `safeRegisterAssetRoute` entry in `runtime-registration.ts`. That catches the
+  `registerFileRoute` entry in `runtime-registration.ts`. That catches the
   two failure modes this split has actually produced.
 - **Expensive version:** headless page load reporting console errors and failed
   asset fetches.

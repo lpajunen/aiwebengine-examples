@@ -76,18 +76,18 @@ import {
 } from "./world-class-storage.ts";
 import { buildInventorySelectors } from "./world-domain.ts";
 
-export function virtualWorldGetStateToolHandler(context: any): string {
+export function virtualWorldGetStateToolHandler(context: any): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
-  return JSON.stringify(getCurrentWorldStateForUser(userId));
+  return getCurrentWorldStateForUser(userId);
 }
 
-export function virtualWorldMoveToolHandler(context: any): string {
+export function virtualWorldMoveToolHandler(context: any): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
 
   const args = context.args || {};
@@ -98,10 +98,10 @@ export function virtualWorldMoveToolHandler(context: any): string {
     direction !== "east" &&
     direction !== "west"
   ) {
-    return JSON.stringify({
+    return {
       ok: false,
       error: "direction must be one of north, south, east, or west",
-    });
+    };
   }
 
   const worldId = getOrCreatePlayerWorld(userId);
@@ -123,20 +123,20 @@ export function virtualWorldMoveToolHandler(context: any): string {
   });
   result.payload.status = result.status;
   result.payload.direction = direction;
-  return JSON.stringify(result.payload);
+  return result.payload;
 }
 
-export function virtualWorldManageItemsToolHandler(context: any): string {
+export function virtualWorldManageItemsToolHandler(context: any): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
 
   const args = context.args || {};
   const action = String(args.action || "list");
   if (action === "list") {
     const state = getCurrentWorldStateForUser(userId);
-    return JSON.stringify({
+    return {
       ok: true,
       world_id: state.world_id,
       player: state.player,
@@ -145,7 +145,7 @@ export function virtualWorldManageItemsToolHandler(context: any): string {
       inventory_slot_ids: state.inventory_slot_ids,
       inventory_selectors: state.inventory_selectors,
       available_actions: state.available_actions,
-    });
+    };
   }
 
   const result = handleItemActionForUser(userId, {
@@ -163,13 +163,13 @@ export function virtualWorldManageItemsToolHandler(context: any): string {
     result.payload.inventory_slot_ids = selectors.inventory_slot_ids;
     result.payload.inventory_selectors = selectors.inventory_selectors;
   }
-  return JSON.stringify(result.payload);
+  return result.payload;
 }
 
-export function virtualWorldActToolHandler(context: any): string {
+export function virtualWorldActToolHandler(context: any): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
 
   const args = context.args || {};
@@ -197,20 +197,20 @@ export function virtualWorldActToolHandler(context: any): string {
     result.payload.inventory_slot_ids = selectors.inventory_slot_ids;
     result.payload.inventory_selectors = selectors.inventory_selectors;
   }
-  return JSON.stringify(result.payload);
+  return result.payload;
 }
 
-export function virtualWorldSetNicknameToolHandler(context: any): string {
+export function virtualWorldSetNicknameToolHandler(context: any): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
 
   const args = context.args || {};
   const nick = args.nick;
 
   if (!nick || String(nick).trim() === "") {
-    return JSON.stringify({ status: 400, error: "Nickname cannot be empty" });
+    return { status: 400, error: "Nickname cannot be empty" };
   }
 
   const sanitized = String(nick).trim().slice(0, 24);
@@ -237,7 +237,7 @@ export function virtualWorldSetNicknameToolHandler(context: any): string {
         },
       );
     }
-    return JSON.stringify({
+    return {
       status: 200,
       ok: true,
       inventory: cheatResult.inventory,
@@ -245,13 +245,13 @@ export function virtualWorldSetNicknameToolHandler(context: any): string {
       inventory_selectors: selectors.inventory_selectors,
       items: cheatResult.items,
       message: "Item cheat activated: +" + cheatResult.granted_count + " items",
-    });
+    };
   }
 
   try {
     savePlayerNick(userId, sanitized);
   } catch (e) {
-    return JSON.stringify({ status: 500, error: "Failed to save nickname" });
+    return { status: 500, error: "Failed to save nickname" };
   }
 
   try {
@@ -263,16 +263,18 @@ export function virtualWorldSetNicknameToolHandler(context: any): string {
     // ignore presence update errors
   }
 
-  return JSON.stringify({ status: 200, ok: true, nick: sanitized });
+  return { status: 200, ok: true, nick: sanitized };
 }
 
-export function virtualWorldManageItemClassesToolHandler(context: any): string {
+export function virtualWorldManageItemClassesToolHandler(
+  context: any,
+): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
   if (!userHasCreatorStone(userId)) {
-    return JSON.stringify({ ok: false, error: "Editing rights required" });
+    return { ok: false, error: "Editing rights required" };
   }
 
   const args = context.args || {};
@@ -280,30 +282,28 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
 
   if (action === "list") {
     refreshItemClassCache();
-    return JSON.stringify({ ok: true, item_classes: getAllItemClasses() });
+    return { ok: true, item_classes: getAllItemClasses() };
   }
 
   if (action === "get") {
     refreshItemClassCache();
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const cls = getItemClassWithRefresh(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "Item class not found" });
-    return JSON.stringify({ ok: true, item_class: cls });
+    if (!cls) return { ok: false, error: "Item class not found" };
+    return { ok: true, item_class: cls };
   }
 
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     refreshItemClassCache();
     let existing: ReturnType<typeof getItemClassWithRefresh> = null;
     if (action === "update") {
       existing = getItemClassWithRefresh(id);
-      if (!existing)
-        return JSON.stringify({ ok: false, error: "Item class not found" });
+      if (!existing) return { ok: false, error: "Item class not found" };
       if (!canManageClass(userId, existing.ownerIds)) {
-        return JSON.stringify({ ok: false, error: "Not class owner" });
+        return { ok: false, error: "Not class owner" };
       }
     }
     const record = {
@@ -353,42 +353,42 @@ export function virtualWorldManageItemClassesToolHandler(context: any): string {
     };
     const writeResult = upsertItemClass(record);
     if (!writeResult || !writeResult.ok) {
-      return JSON.stringify({
+      return {
         ok: false,
         error:
           "Item class upsert failed" +
           (writeResult && writeResult.error
             ? ": " + String(writeResult.error)
             : ""),
-      });
+      };
     }
     refreshItemClassCache();
-    return JSON.stringify({ ok: true, item_class: record });
+    return { ok: true, item_class: record };
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const existing = getItemClassWithRefresh(id);
     if (existing && !canManageClass(userId, existing.ownerIds)) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     deleteItemClass(id);
-    return JSON.stringify({ ok: true, deleted_id: id });
+    return { ok: true, deleted_id: id };
   }
 
-  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+  return { ok: false, error: "Unknown action: " + action };
 }
 
 export function virtualWorldManageActionClassesToolHandler(
   context: any,
-): string {
+): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
   if (!userHasCreatorStone(userId)) {
-    return JSON.stringify({ ok: false, error: "Editing rights required" });
+    return { ok: false, error: "Editing rights required" };
   }
 
   const args = context.args || {};
@@ -396,33 +396,31 @@ export function virtualWorldManageActionClassesToolHandler(
 
   if (action === "list") {
     refreshActionClassCache();
-    return JSON.stringify({
+    return {
       ok: true,
       action_classes: getAllActionClasses(),
-    });
+    };
   }
 
   if (action === "get") {
     refreshActionClassCache();
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const cls = getActionClassWithRefresh(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "Action class not found" });
-    return JSON.stringify({ ok: true, action_class: cls });
+    if (!cls) return { ok: false, error: "Action class not found" };
+    return { ok: true, action_class: cls };
   }
 
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     refreshActionClassCache();
     let existing: ReturnType<typeof getActionClassWithRefresh> = null;
     if (action === "update") {
       existing = getActionClassWithRefresh(id);
-      if (!existing)
-        return JSON.stringify({ ok: false, error: "Action class not found" });
+      if (!existing) return { ok: false, error: "Action class not found" };
       if (!canManageClass(userId, existing.ownerIds)) {
-        return JSON.stringify({ ok: false, error: "Not class owner" });
+        return { ok: false, error: "Not class owner" };
       }
     }
     const record = {
@@ -476,42 +474,42 @@ export function virtualWorldManageActionClassesToolHandler(
     };
     const writeResult = upsertActionClass(record);
     if (!writeResult || !writeResult.ok) {
-      return JSON.stringify({
+      return {
         ok: false,
         error:
           "Action class upsert failed" +
           (writeResult && writeResult.error
             ? ": " + String(writeResult.error)
             : ""),
-      });
+      };
     }
     refreshActionClassCache();
-    return JSON.stringify({ ok: true, action_class: record });
+    return { ok: true, action_class: record };
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const existing = getActionClassWithRefresh(id);
     if (existing && !canManageClass(userId, existing.ownerIds)) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     deleteActionClass(id);
-    return JSON.stringify({ ok: true, deleted_id: id });
+    return { ok: true, deleted_id: id };
   }
 
-  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+  return { ok: false, error: "Unknown action: " + action };
 }
 
 export function virtualWorldManageLivingClassesToolHandler(
   context: any,
-): string {
+): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
   if (!userHasCreatorStone(userId)) {
-    return JSON.stringify({ ok: false, error: "Editing rights required" });
+    return { ok: false, error: "Editing rights required" };
   }
 
   const args = context.args || {};
@@ -519,33 +517,31 @@ export function virtualWorldManageLivingClassesToolHandler(
 
   if (action === "list") {
     refreshLivingClassCache();
-    return JSON.stringify({
+    return {
       ok: true,
       living_classes: getAllLivingClasses(),
-    });
+    };
   }
 
   if (action === "get") {
     refreshLivingClassCache();
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const cls = getLivingClassWithRefresh(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "Living class not found" });
-    return JSON.stringify({ ok: true, living_class: cls });
+    if (!cls) return { ok: false, error: "Living class not found" };
+    return { ok: true, living_class: cls };
   }
 
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     refreshLivingClassCache();
     let existing: ReturnType<typeof getLivingClassWithRefresh> = null;
     if (action === "update") {
       existing = getLivingClassWithRefresh(id);
-      if (!existing)
-        return JSON.stringify({ ok: false, error: "Living class not found" });
+      if (!existing) return { ok: false, error: "Living class not found" };
       if (!canManageClass(userId, existing.ownerIds)) {
-        return JSON.stringify({ ok: false, error: "Not class owner" });
+        return { ok: false, error: "Not class owner" };
       }
     }
     const record = {
@@ -661,42 +657,42 @@ export function virtualWorldManageLivingClassesToolHandler(
     };
     const writeResult = upsertLivingClass(record);
     if (!writeResult || !writeResult.ok) {
-      return JSON.stringify({
+      return {
         ok: false,
         error:
           "Living class upsert failed" +
           (writeResult && writeResult.error
             ? ": " + String(writeResult.error)
             : ""),
-      });
+      };
     }
     refreshLivingClassCache();
-    return JSON.stringify({ ok: true, living_class: record });
+    return { ok: true, living_class: record };
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const existing = getLivingClassWithRefresh(id);
     if (existing && !canManageClass(userId, existing.ownerIds)) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     deleteLivingClass(id);
-    return JSON.stringify({ ok: true, deleted_id: id });
+    return { ok: true, deleted_id: id };
   }
 
-  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+  return { ok: false, error: "Unknown action: " + action };
 }
 
 export function virtualWorldManageWorldClassesToolHandler(
   context: any,
-): string {
+): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
   if (!userHasCreatorStone(userId)) {
-    return JSON.stringify({ ok: false, error: "Editing rights required" });
+    return { ok: false, error: "Editing rights required" };
   }
 
   const args = context.args || {};
@@ -704,33 +700,32 @@ export function virtualWorldManageWorldClassesToolHandler(
 
   if (action === "list") {
     refreshWorldClassCache();
-    return JSON.stringify({
+    return {
       ok: true,
       world_classes: getAllWorldClasses(),
-    });
+    };
   }
 
   if (action === "get") {
     refreshWorldClassCache();
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     const cls = getWorldClassWithRefresh(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "World class not found" });
-    return JSON.stringify({ ok: true, world_class: cls });
+    if (!cls) return { ok: false, error: "World class not found" };
+    return { ok: true, world_class: cls };
   }
 
   if (action === "create" || action === "update") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     refreshWorldClassCache();
     const existing = getWorldClassWithRefresh(id);
     if (action === "update") {
       if (!existing) {
-        return JSON.stringify({ ok: false, error: "World class not found" });
+        return { ok: false, error: "World class not found" };
       }
       if (!canManageClass(userId, existing.ownerIds)) {
-        return JSON.stringify({ ok: false, error: "Not class owner" });
+        return { ok: false, error: "Not class owner" };
       }
     }
     const record = normalizeWorldClassRecord({
@@ -786,93 +781,93 @@ export function virtualWorldManageWorldClassesToolHandler(
       { rows: record.rows, cols: record.cols },
     );
     if (placementErrors.length > 0) {
-      return JSON.stringify({
+      return {
         ok: false,
         error: "Invalid placements",
         placement_errors: placementErrors,
-      });
+      };
     }
     const writeResult = upsertWorldClass(record);
     if (!writeResult || !writeResult.ok) {
-      return JSON.stringify({
+      return {
         ok: false,
         error:
           "World class upsert failed" +
           (writeResult && writeResult.error
             ? ": " + String(writeResult.error)
             : ""),
-      });
+      };
     }
-    return JSON.stringify({ ok: true, world_class: record });
+    return { ok: true, world_class: record };
   }
 
   if (action === "delete") {
     const id = String(args.id || "").trim();
-    if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+    if (!id) return { ok: false, error: "Missing id" };
     if (isBuiltinWorldClassId(id)) {
-      return JSON.stringify({
+      return {
         ok: false,
         error: "Built-in world classes cannot be deleted",
-      });
+      };
     }
     const existingForDelete = getWorldClassWithRefresh(id);
     if (
       existingForDelete &&
       !canManageClass(userId, existingForDelete.ownerIds)
     ) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     deleteWorldClass(id);
-    return JSON.stringify({ ok: true, deleted_id: id });
+    return { ok: true, deleted_id: id };
   }
 
-  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+  return { ok: false, error: "Unknown action: " + action };
 }
 
-export function virtualWorldManageTileClassesToolHandler(context: any): string {
+export function virtualWorldManageTileClassesToolHandler(
+  context: any,
+): unknown {
   const userId = getAuthenticatedUserId(context);
   if (!userId) {
-    return JSON.stringify({ ok: false, error: "Authentication required" });
+    return { ok: false, error: "Authentication required" };
   }
   if (!userHasCreatorStone(userId)) {
-    return JSON.stringify({ ok: false, error: "Editing rights required" });
+    return { ok: false, error: "Editing rights required" };
   }
   const args = context.args || {};
   const action = String(args.action || "list");
   refreshTileClassCache();
 
   if (action === "list") {
-    return JSON.stringify({ ok: true, tile_classes: getAllTileClasses() });
+    return { ok: true, tile_classes: getAllTileClasses() };
   }
 
   const id = String(args.id || "").trim();
-  if (!id) return JSON.stringify({ ok: false, error: "Missing id" });
+  if (!id) return { ok: false, error: "Missing id" };
 
   if (action === "get") {
     const cls = getTileClass(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "Tile class not found" });
-    return JSON.stringify({ ok: true, tile_class: cls });
+    if (!cls) return { ok: false, error: "Tile class not found" };
+    return { ok: true, tile_class: cls };
   }
 
   if (action === "delete") {
     const cls = getTileClass(id);
-    if (!cls)
-      return JSON.stringify({ ok: false, error: "Tile class not found" });
+    if (!cls) return { ok: false, error: "Tile class not found" };
     if (!canManageClass(userId, cls.ownerIds)) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     deleteTileClass(id);
-    return JSON.stringify({ ok: true, deleted_id: id });
+    return { ok: true, deleted_id: id };
   }
 
   if (action === "create" || action === "update") {
     const existing = action === "update" ? getTileClass(id) : null;
     if (action === "update" && !existing) {
-      return JSON.stringify({ ok: false, error: "Tile class not found" });
+      return { ok: false, error: "Tile class not found" };
     }
     if (existing && !canManageClass(userId, existing.ownerIds)) {
-      return JSON.stringify({ ok: false, error: "Not class owner" });
+      return { ok: false, error: "Not class owner" };
     }
     let visual = existing ? existing.visual : undefined;
     if (args.visual !== undefined) {
@@ -916,17 +911,17 @@ export function virtualWorldManageTileClassesToolHandler(context: any): string {
     };
     const writeResult = upsertTileClass(record);
     if (!writeResult || !writeResult.ok) {
-      return JSON.stringify({
+      return {
         ok: false,
         error:
           "Tile class upsert failed" +
           (writeResult && writeResult.error
             ? ": " + String(writeResult.error)
             : ""),
-      });
+      };
     }
-    return JSON.stringify({ ok: true, tile_class: record });
+    return { ok: true, tile_class: record };
   }
 
-  return JSON.stringify({ ok: false, error: "Unknown action: " + action });
+  return { ok: false, error: "Unknown action: " + action };
 }

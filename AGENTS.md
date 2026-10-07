@@ -44,7 +44,7 @@ Publishing virtual-world on `world.softagen.com` is a one-time binding (administ
 make set-script-hosts        # or make set-script-hosts-dry-run to preview
 ```
 
-Alternatively, use `aiwebengine-mcp` server tools for deployment and log retrieval when available.
+Alternatively, use the engine's MCP tools at `https://manage.softagen.com/mcp` (`write_files`, `read_logs`, `run_tests`, ...) when that server is connected.
 
 ## Repo Structure
 

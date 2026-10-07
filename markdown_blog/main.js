@@ -11,7 +11,7 @@ const templates = {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Blog</title>
-  <link rel="stylesheet" href="/engine.css">
+  <link rel="stylesheet" href="/engine/engine.css">
   <style>
     .container { max-width: 800px; margin: 2rem auto; padding: 2rem; }
     .blog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
@@ -82,7 +82,7 @@ const templates = {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Blog - {{title}}</title>
-  <link rel="stylesheet" href="/engine.css">
+  <link rel="stylesheet" href="/engine/engine.css">
   <style>
     .blog-container {
       max-width: 800px;
@@ -187,7 +187,7 @@ const templates = {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Create New Blog Post</title>
-  <link rel="stylesheet" href="/engine.css">
+  <link rel="stylesheet" href="/engine/engine.css">
   <style>
     .container {
       max-width: 900px;
@@ -510,7 +510,7 @@ function hello() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Edit Blog Post</title>
-  <link rel="stylesheet" href="/engine.css">
+  <link rel="stylesheet" href="/engine/engine.css">
   <style>
     .container {
       max-width: 900px;

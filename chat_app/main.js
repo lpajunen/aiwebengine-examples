@@ -404,7 +404,7 @@ function chatInterfaceHandler(context) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Chat</title>
-    <link rel="stylesheet" href="/engine.css">
+    <link rel="stylesheet" href="/engine/engine.css">
     <style>
         body {
             margin: 0;

@@ -144,8 +144,9 @@ fixtures. Observability is still `vwLog` lines only.
 
 Writing them turned up two real defects, both now fixed and pinned:
 `allocateEventSeq` rolled back on failure while running inside a caller's
-transaction, which discarded the caller's writes (the engine has no
-savepoints, so an inner rollback discards the whole transaction);
+transaction, which discarded the caller's writes (its own rollback was not
+a savepoint, so it discarded the whole transaction; `database.transaction`
+nested inside another is one);
 `runInWorldTransaction` now tracks depth and inner calls join the open
 transaction instead of opening or ending one. And
 `resolveApproachTargetTile` turned an absent body into tile (0, 0) via
@@ -358,10 +359,10 @@ primitives. Roughly in order of leverage:
    and pagination beyond `limit`, so hot queries like `loadWorldPlayers`
    scale past small worlds.
 8. **Test harness gaps** — the `*.test.ts` runner covers pure code and
-   DB-backed scenarios well (item 10). Missing, roughly in order of what
-   would buy the most: a run-scoped rollback that survives the script
-   committing its own transactions (today the first commit ends the run's
-   rollback and everything after it is written for real), async cases (so
+   DB-backed scenarios well (item 10), and a run's rollback holds even when
+   the code under test commits its own `database.transaction` (it is a
+   savepoint inside the run). Missing, roughly in order of what would buy
+   the most: async cases (so
    SSE delivery and scheduled ticks can be asserted at all), per-case
    rather than per-run isolation, a way to drive two concurrent callers so
    lease and seq races can be tested, an output channel from a case (today

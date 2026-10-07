@@ -83,10 +83,10 @@ authenticating via `/mcp`. The curl-based workflow above needs no MCP setup.
 
 ## If things break
 
-- Broken deploy: revert the working tree to the last good state
-  (`git stash`, or `git checkout <last-good-commit> -- <files>`) and deploy
-  again with `make upload-virtual-world` to restore the server, then debug
-  locally at leisure.
+- Broken deploy: serve the last revision whose `init()` succeeded with
+  `make pin REV=last-good` (about a second), or put its files back as a new
+  revision with `make revert REV=last-good`. Then debug locally at leisure, and
+  `make unpin` once a fixed deploy is in.
 - Server completely crashed or hung (`/health` not responding, uploads
   hanging): **stop and tell the user** — they restart the server manually.
   Do not retry in a loop.

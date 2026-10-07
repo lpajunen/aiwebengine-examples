@@ -176,7 +176,7 @@ waiting on lease and respawn timing.
 ## Recurring operational friction (not code bugs)
 
 - **Init-timeout self-heal on every deploy** — routes 404/flap for a bit
-  before warming (aiwebengine's 5s init limit); slows verification. Each new
+  before warming (the engine's `init()` budget); slows verification. Each new
   DB column (`targeting_json`, `valid_when_json`, `default_items_json`) adds
   to it.
 - **Frequent bearer-token expiry** and intermittent `/play` cookie-auth made

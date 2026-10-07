@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Scope
 
-This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server and export an `init()` function that registers HTTP routes, SSE streams, or MCP tools. There is no local server to run — scripts execute remotely after upload.
+This repository contains example scripts for **aiwebengine**, a JS/TS scripting platform where scripts are uploaded to a remote server and define an `init()` function — which the engine calls — that registers HTTP routes, SSE streams, or MCP tools. There is no local server to run — scripts execute remotely after upload.
 
 Three hosts are involved, and they are not interchangeable:
 
@@ -22,8 +22,8 @@ same relative path. `virtual-world/server/world-db.ts` is deployed as the asset
 `server/world-db.ts`, and `virtual-world/main.js` is the entrypoint rather than
 an asset.
 
-This is not a local convention — it is the layout the engine's the engine's git operations (`pull_from_git`, `push_to_git`, …)
-API reads and writes (see "Pulling and pushing scripts"), which is why there is
+This is not a local convention — it is the layout the engine's git operations (`pull_from_git`, `push_to_git`, …)
+read and write (see "Pulling and pushing scripts"), which is why there is
 no `src/` directory and no manifest anywhere. The two things a manifest would
 carry, the URI a script is served at and who owns it, deliberately do not live
 in the repository: the URI comes from the deploy command (or `PREFIX=` on a
@@ -110,7 +110,7 @@ explicitly when that happens.
 
 ### Git credentials
 
-The engine's git API (the engine's git operations (`pull_from_git`, `push_to_git`, …)) pulls a GitHub repository in as scripts.
+The engine's git operations (`pull_from_git`, `push_to_git`, …) pull a GitHub repository in as scripts.
 Reading anything the public internet cannot see needs a personal access token
 stored per user and host:
 
@@ -165,7 +165,7 @@ make upload-virtual-world           # deploys virtual-world/ via https://manage.
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
-`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `make upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or `aiwebengine-mcp` MCP server tools when available.
+`upload-virtual-world` runs `scripts/upload-script.js` with `--script-path virtual-world/main.js --script-uri virtual-world --assets-dir virtual-world` — the assets directory is the script directory itself, minus `main.js` and whatever `.aiwebengineignore` excludes. There's a parallel `make upload-import-example` for `import_example/`. Other example scripts have no dedicated upload target — use `scripts/upload-script.js` directly with `--script-path` and `--script-uri`, or upload via the editor at `https://manage.softagen.com/editor` or the engine's MCP tools at `https://manage.softagen.com/mcp` (`write_files`).
 
 The deployed virtual-world is served from `https://world.softagen.com/virtual-world`; the other examples from `https://softagen.com/<name>`.
 
@@ -180,7 +180,7 @@ make set-script-hosts-dry-run       # preview
 
 ### Revisions and what is served
 
-Every write to a script records a revision of the whole script — one batch of assets is one revision, one `edit_asset` is another — and a script has a **head** (its newest revision) and a **serving** revision. By default they are the same: a write advances head, `init()` runs, and the new code answers requests. Pinning separates them.
+Every write to a script records a revision of the whole script — one batch of assets is one revision, one `edit_file` is another — and a script has a **head** (its newest revision) and a **serving** revision. By default they are the same: a write advances head, `init()` runs, and the new code answers requests. Pinning separates them.
 
 ```bash
 make status                  # serving vs head, and how far apart
@@ -223,11 +223,11 @@ make check-head REV=last-good        # or any revision / label
 
 `scripts/check-script.js` asks the engine what the script would do if deployed: it runs `init()` in a sandbox (database writes rolled back unless you pass `--no-rollback`) and reports diagnostics. It catches what `make format lint typecheck` structurally cannot — circular asset-backed imports (which `tsc` accepts and the engine FATALs on), route handler names the entrypoint never defines, and an `init()` over the engine's startup budget. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
-`--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — the other modules still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
+`--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — the other modules still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's `init()` budget, 30 s by default), and `--json` for the raw report.
 
 `--revision <rev>` checks a version that is not being served, which is the only trustworthy verdict on a pinned script's head. The endpoint also accepts a `files` map — a whole multi-module change, laid over the deployed tree, with nothing written — which `scripts/check-script.js` does not expose yet; reach for the `check_script` MCP tool for that.
 
-A check of virtual-world answers in well under a second (`init()` ~591ms of the 10000ms budget). If one hangs, suspect wedged database relations rather than the endpoint.
+A check of virtual-world answers in well under a second (`init()` ~591ms). If one hangs, suspect wedged database relations rather than the endpoint.
 
 The report carries `diagnostics` (each with `severity`, `code`, `message`, `source`), an `init` block with the measured `durationMs` against the engine's `budgetMs`, and `registrations` — every route, stream, and tool the script would register. The `missing-handler` diagnostic is the one that matters most here: virtual-world's thin entrypoint delegates by name string, and this is what catches a delegate that was never defined.
 
@@ -240,7 +240,7 @@ make eval SRC='…' ROLLBACK=false         # keep the database writes
 make eval SRC='…' URI=docs
 ```
 
-`scripts/eval-script.js` posts a snippet to `POST /engine/eval_script`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
+`scripts/eval-script.js` posts a snippet to `POST /engine/eval_script`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes — storage, files and secrets included — roll back unless you pass `ROLLBACK=false`; outbound HTTP is real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
 Use it for one-off questions — reading a table, calling one server function, checking what a helper returns. Eval does not run `init()`.
 
@@ -281,13 +281,13 @@ It therefore tests the **deployed** copy. Deploy first (`make deploy-changed`) o
 
 `--revision <rev>` (`make test-head`, `REV=` to pick another) runs the suite against a revision that is not being served — the second half of vetting a pinned script's head, after `make check-head`.
 
-Script names are derived from the directory name (`foo_bar/` → `foo-bar`); exceptions live in `scriptNames` in `aiwebengine.config.json`. Database writes a test makes are rolled back unless you pass `--no-rollback`; asset writes, secret writes, and outbound HTTP are real.
+Script names are derived from the directory name (`foo_bar/` → `foo-bar`); exceptions live in `scriptNames` in `aiwebengine.config.json`. Database writes a test makes — storage, files and secrets included — are rolled back unless you pass `--no-rollback`; outbound HTTP is real.
 
 ## Architecture
 
 ### Script model
 
-Every deployed script is a single JS/TS entrypoint that must export `init()`. `init()` registers routes/streams/tools against globals declared in `types/aiwebengine.d.ts` (`routeRegistry`, `mcpRegistry`, `ResponseBuilder`, etc. — fetch this file locally with `make fetch-types` before working on type-checked code; it's gitignored). Handlers receive a `HandlerContext` with `context.request` (path, method, headers, query, params, form, body, files, auth).
+Every deployed script is a JS/TS entrypoint (`main.*`) plus the modules it imports. Its `init()` — defined, not exported, and called by the engine — registers routes/streams/tools against globals declared in `types/aiwebengine.d.ts` (`routeRegistry`, `mcpRegistry`, `ResponseBuilder`, etc. — fetch this file locally with `make fetch-types` before working on type-checked code; it's gitignored). Handlers receive a `HandlerContext` with `context.request` (path, method, headers, query, params, form, body, files, auth).
 
 ### Virtual World: entrypoint and server modules
 
@@ -298,12 +298,6 @@ name string in the entrypoint's scope, so those names must stay defined there
 even though the bodies live in server modules. It imports them from
 `./server/*.ts`, which is both where they live locally and the asset path they
 are deployed under.
-
-(Until the repository moved to the engine's git layout, `server/*.ts` was 54
-one-line re-export shims pointing at the real modules under `server/`,
-because only files under `assets/` were deployed. Flattening `assets/` into the
-script directory made the shims meaningless and they are gone; edit
-`server/<name>.ts` directly.)
 
 Server modules under `server/`, by feature — go straight to the right file instead of grepping:
 
@@ -320,7 +314,7 @@ Server modules import each other directly (no dependency injection) — table na
 `virtual-world/public/` is browser-side JS served as static assets:
 
 - `virtual-world-browser-globals.d.ts` defines browser-global types — keep in sync with runtime usage in the client `.js` files.
-- All public `.js` files are plain global scripts (no modules) with JSDoc types, referencing the globals file. They share one global scope; load order is the script-tag order in `page-bootstrap.ts`, and each file also needs a `safeRegisterAssetRoute` entry in `runtime-registration.ts`.
+- All public `.js` files are plain global scripts (no modules) with JSDoc types, referencing the globals file. They share one global scope; load order is the script-tag order in `page-bootstrap.ts`, and each file also needs a file route registered in `runtime-registration.ts`.
 - Shared foundation files: `app-state.js`, `auth.js`, `i18n.js`, `scene.js`, `tiles-and-items.js`.
 - The game client is split into `client-*.js` feature files — find code by feature: `client-core.js` (shared state, HUD pickers/toast), `client-world-render.js` (terrain/tree/house/item meshes), `client-avatars.js` (player/remote/NPC avatars), `client-net.js` (sync, heartbeat, SSE), `client-actions.js` (movement, tree actions), `client-panels.js` (inventory/players panels), `client-container-panel.js` (container panel: open a chest from bag or the ground, put/take items), `client-chat.js` (chat/DM), `client-item-actions.js` (pick/drop/equip), `client-tile-detail.js` (tile inspector), `client-input.js` (keyboard/touch/joystick), `client-editors.js` (creator class editors), `client-main.js` (game loop, startup).
 

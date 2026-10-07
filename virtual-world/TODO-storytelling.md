@@ -1,17 +1,14 @@
 # TODO — storytelling and interaction
 
-What is left of the storytelling work started on 2026-08-12, which asked what
-options there were for richer NPC interaction: roles, conversation, giving an
-item for a hint, places with histories.
+Richer NPC interaction: roles, conversation, giving an item for a hint, places
+with histories. What exists is authored NPC identity (names, descriptions,
+per-locale), NPCs answering in the player's language, speech bubbles, livings
+that hold a post or flee, dialogue trees with per-placement overrides, and
+`livingEffect.affects: "actor"` — the quest flag that lets a conversation
+remember anything.
 
-What shipped that day: authored NPC identity (names, descriptions, per-locale,
-following placement edits), NPCs answering in the player's language, speech
-bubbles, livings that hold a post or flee, dialogue trees with per-placement
-overrides, and `livingEffect.affects: "actor"` — the quest flag that lets a
-conversation remember anything at all.
-
-This file is what did **not** get built, plus the caveats the work left behind.
-Nothing here is blocking. Ordered roughly cheapest-first within each section.
+This file is what is not built, plus the caveats of what is. Nothing here is
+blocking. Ordered roughly cheapest-first within each section.
 
 Neighbouring documents, so this one stays about storytelling:
 
@@ -23,11 +20,8 @@ Neighbouring documents, so this one stays about storytelling:
 
 ## Authoring gaps (a feature exists, but only through the API)
 
-Each of these has bitten already: the save reports success and the creator
-cannot see, or cannot reach, what they just changed. Three separate instances
-were fixed on 2026-08-12 (`execution`/`cost` missing from the action editor,
-`dialogue` missing from the living editor, `behavior` present but never
-loaded). These are the ones still open.
+In each, the save reports success and the creator cannot see, or cannot reach,
+what they just changed.
 
 ### Placement dialogue has no editor field
 
@@ -89,7 +83,7 @@ That depends on the next item.
 `examine` reports an item's class label and its stats. There is no authored
 text anywhere in the item vocabulary: an item class has no `description`, and
 examine has no path that would show one. This is the counterpart of the NPC
-`identity.description` that shipped, and it is what "a place with a history"
+`identity.description`, and it is what "a place with a history"
 would actually read.
 
 ### World descriptions are generated, not authored
@@ -165,14 +159,13 @@ model cannot be talked into paying out.
 
 ### Ownership
 
-- **Editing a built-in class claims it** (2026-08-12), and there is no way to
+- **Editing a built-in class claims it**, and there is no way to
   release it. An empty `ownerIds` means "no opinion" on purpose, so a client
   round-tripping a record cannot accidentally disown it — which leaves no verb
   for deliberately handing a class back to the code definition. Wants one if it
   ever matters.
-- **`npc_human` is currently creator-owned**, a side effect of testing
-  class-level dialogue on 2026-08-12. It works, but no longer picks up code-side
-  changes on deploy. Releasing it needs the verb above or a direct DB edit.
+- **`npc_human` is creator-owned**, so it does not pick up code-side changes
+  on deploy. Releasing it needs the verb above or a direct DB edit.
 
 ### Things verified less than they look
 

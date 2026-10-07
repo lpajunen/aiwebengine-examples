@@ -1,15 +1,14 @@
 # Architectural TODO — from example to a real world platform
 
-Status of this document: remaining work from an architecture review (July
-2026), re-checked against the code in August 2026. The module-level design
+What stands between this example and a real world platform. The module-level design
 (small server modules importing their siblings directly, lease-based
 multi-instance coordination, data-driven content classes) is sound and
 survives all of the changes below. What does **not** carry to platform scale
 is the interaction model: per-step HTTP requests, full-state DB round trips
 per request, regenerate-the-map-per-call, and broadcast-everything events.
 
-Items that have since been implemented are trimmed to their remaining gaps;
-item numbers are preserved so cross-references stay stable. Several changes
+Each item states its remaining gap; item numbers are stable so
+cross-references hold. Several changes
 cannot be made in game code alone — they depend on new runtime (aiwebengine)
 primitives, collected in the
 [runtime capabilities](#capabilities-expected-from-the-runtime) section so
@@ -57,14 +56,14 @@ in-process cache with known instance lifetime).
 Claim-by-delete pickup and `runInWorldTransaction`-wrapped multi-write flows
 are in place. Remaining gaps:
 
-- The player-inventory row is still last-write-wins per user — two concurrent
+- The player-inventory row is last-write-wins per user — two concurrent
   requests _by the same user_ can lose an inventory update or double-spend
-  craft ingredients if the backend's isolation level does not lock the read.
-  Needs versioned rows/compare-and-swap (runtime capability 2).
+  craft ingredients. The engine has what fixes it: read the row with
+  `database.query(..., { forUpdate: true })` inside `database.transaction`.
 - `nextWorldItemId` item-seq allocation has the same read-modify-write shape
-  (now runs inside the craft transaction, but still not CAS-protected).
+  and the same fix.
 
-Until CAS lands, treat the item economy as best-effort and avoid features
+Until then, treat the item economy as best-effort and avoid features
 (trading, currency) that make dupes valuable.
 
 ### 4. Movement as sessions or batched intents, not per-tile POSTs
@@ -75,7 +74,7 @@ path) is in place. Remaining work:
 
 - **The session variant** — a bidirectional session (WebSocket or equivalent
   runtime stream) where the client sends movement intents and the server
-  paces and validates. Gated on runtime capability 3. Server-side validation
+  paces and validates. Gated on runtime capability 2. Server-side validation
   (single-step, walkable, seq-gated) must remain authoritative in either
   model.
 
@@ -95,32 +94,15 @@ and unload map regions.
 
 ### 6. Shared typed protocol module (client/server drift)
 
-Tile values are no longer duplicated: tiles became a class repository, so
-the page ships the tile registry as `WORLD_TILE_DEFS` and the client reads
-values from it (`clientTileValueForName`) rather than from a hand-written
-copy. `ROWS`/`COLS` likewise derive from the map the client is handed.
+Tile values and `ROWS`/`COLS` are shared: the page ships the tile registry as
+`WORLD_TILE_DEFS` and the client reads from it (`clientTileValueForName`).
 Remaining gap:
 
-- **Event payload shapes** are still duplicated by convention between
+- **Event payload shapes** are duplicated by convention between
   emitting server modules and consuming `client-*.js` files, with only the
   browser globals `.d.ts` to keep them honest. One shared module defining
   event types, payload schemas, and API request/response shapes, imported
-  by both sides (client side via bundling, see item 8), is still wanted.
-
-### 7. Composition-root cleanup of `virtual-world.js`
-
-Done, though not the way this item proposed. Rather than building a runtime
-context object, dependency injection was removed outright: server modules
-import their siblings directly, shared constants live in `runtime-config.ts`,
-and the entrypoint shrank from 3.6k lines to ~650 — imports, `init()`, and
-one-line named delegates that exist only because the runtime resolves
-handlers by name in the entrypoint's scope. Adding a module no longer means
-editing wiring blocks.
-
-One constraint this bought, worth knowing before restructuring imports: the
-engine FATALs on circular imports between asset-backed modules even where
-`tsc` accepts them, which takes down every route. Shared constants go in
-`runtime-config.ts` instead of being imported back across a cycle.
+  by both sides (client side via bundling, see item 8).
 
 ### 8. Client modularization and asset pipeline
 
@@ -140,7 +122,8 @@ An owner-or-admin permission model (`ownerIds` on classes, DB-only
 `vworld_admins`) replaces the single creator's-stone gate for class
 mutation. Still missing:
 
-- Per-user rate limits on mutating endpoints (moves, chat, class edits).
+- Per-user rate limits on mutating endpoints (moves, chat, class edits). The
+  engine's `rateLimit` global provides the buckets.
 - Quotas on user-created classes/items.
 - Validation limits on interpreter programs (size, step count).
 - A moderator role between player and DB-admin.
@@ -219,7 +202,7 @@ What the harness does not give (see
   hung and 503'd, which looked related; it was a Caddy fault, fixed by a server
   restart.) `schema-setup.test.ts` exercises `runWorldSchemaStep` on individual
   statements instead, which costs 17 ms and answers the question that matters.
-- **No client-side testing at all**: `assets/public/client-*.js` has no
+- **No client-side testing at all**: `public/client-*.js` has no
   harness, which is the largest untested surface in the project.
 
 **Needed next**, in rough order — the reservation rules
@@ -249,13 +232,13 @@ place. Remaining gap:
 
 - Built-in world-class database records seed one `chest` through their
   `itemSpawns` manifests, but `ensureWorldItems` only seeds a world once
-  (`meta.seeded`), so worlds created before this change never retroactively
-  get one — reachable today only via the `cheat` grant-all nickname or the
+  (`meta.seeded`), so a world seeded before the chest was added to its
+  manifest never gets one — reachable today only via the `cheat` grant-all nickname or the
   item class editor.
 
 ### 12. Slot/bag visibility semantics
 
-Bag contents are now server-side private (only `slots` + `inventory_count`
+Bag contents are server-side private (only `slots` + `inventory_count`
 ship for other livings), and equipped slot items render on remote/NPC/local
 avatars. Remaining gap:
 
@@ -291,7 +274,7 @@ Implies a persistence-tier marker on stored rows, a reset job (the
 scheduler tick or a dedicated cron) that clears ephemeral rows and
 re-seeds from spawn rules, and reset events so connected clients resync
 cleanly (rides on the item 1 resync path). A DB TTL/expiry primitive would
-help (add to runtime capability 9's DB asks) but a lease-guarded sweep can
+help (add to runtime capability 7's DB asks) but a lease-guarded sweep can
 do it in game code.
 
 Note the interaction with placements: authored placements are part of the
@@ -329,13 +312,11 @@ world_ rather than a private timer:
 
 ### 15. Per-world size and creator-defined world types
 
-Per-world `rows`/`cols` and world classes are in place, and the idea went
-further than this item asked: tiles became a fifth class repository
-(`tile-registry.ts`, with its own editor panel), terrain generation became a
-data spec on the world class rather than a preset pick
-(`world-generation.ts`), and authored placements with reservations landed on
-top (`world-placements.ts`, see [DOC-authoring-worlds.md](DOC-authoring-worlds.md)).
-Remaining gaps:
+Per-world `rows`/`cols`, world classes, a tile class repository
+(`tile-registry.ts`), terrain generation as a data spec on the world class
+(`world-generation.ts`) and authored placements with reservations
+(`world-placements.ts`, see [DOC-authoring-worlds.md](DOC-authoring-worlds.md))
+are in place. Remaining gaps:
 
 - The world-class cache refreshes per-instance on CRUD/list calls only —
   cross-instance staleness until item 2's world-state story lands. The
@@ -356,59 +337,44 @@ primitives. Roughly in order of leverage:
    with in-memory state and write-behind persistence (actor/room model), or
    at minimum: documented script-instance lifetime plus an in-process cache
    API with TTL and cross-instance invalidation. Unblocks item 2.
-2. **Transactions or compare-and-swap in the `database` API** — versioned
-   rows with conditional update, or multi-operation transactions. The
-   current `upsert` + lease pattern cannot protect an item economy.
-   Unblocks item 3.
-3. **Bidirectional streams (WebSocket-equivalent)** — today the model is
+2. **Bidirectional streams (WebSocket-equivalent)** — today the model is
    HTTP request in, SSE out. Movement and future real-time interactions need
    client→server messages on a persistent connection with per-connection
    server-side state. Unblocks item 4.
-4. **Richer stream filtering** — beyond exact-match key/value
+3. **Richer stream filtering** — beyond exact-match key/value
    (`world_id`, `recipient_id`): predicate or region-based subscription
    (e.g. numeric range on row/col), and server-side fan-out that scales with
    subscribers per region rather than per world. Unblocks item 5.
-5. **Stream delivery guarantees** — per-subscription ordering and either
+4. **Stream delivery guarantees** — per-subscription ordering and either
    at-least-once delivery with client-side dedupe by seq, or an explicit
    "gap possible, resync from seq N" signal. Complements item 1.
-6. **Scheduler improvements** — the 500 ms recurring NPC tick works; a real
+5. **Scheduler improvements** — the 500 ms recurring NPC tick works; a real
    platform wants per-world timers with jitter control, and a way for a tick
    to know its own lateness (for catch-up simulation).
-7. **Rate limiting / quota primitives** — per-user token buckets usable from
-   handlers, so every script does not hand-roll abuse controls. Unblocks
-   item 9.
-8. **Observability** — structured metrics counters/histograms from scripts,
+6. **Observability** — structured metrics counters/histograms from scripts,
    plus request/stream tracing, beyond string logging.
-9. **DB indexing and query controls** — declared indexes on filter columns
-   (e.g. `world_id`, `user_id`), and pagination beyond the fixed
-   1000-row-limit query pattern, so hot queries like `loadWorldPlayers`
+7. **DB indexing and query controls** — `ensureTable` declares unique
+   indexes only: plain indexes on filter columns (e.g. `world_id`, `user_id`),
+   and pagination beyond `limit`, so hot queries like `loadWorldPlayers`
    scale past small worlds.
-10. **Transactions that nest** — `beginTransaction` documents "or create a
-    savepoint if already in a transaction", but a nested begin starts
-    nothing, a rollback from inside discards the entire transaction
-    (including work from before that begin), and the outer commit then
-    reports "No active transaction to commit". Real savepoints would let a
-    helper protect its own work without endangering its caller's; today
-    every helper has to know whether someone above it opened a transaction.
-11. **Test harness gaps** — the `*.test.ts` runner covers pure code and
-    DB-backed scenarios well (item 10). Missing, roughly in order of what
-    would buy the most: a run-scoped rollback that survives the script
-    committing its own transactions (today the first commit ends the run's
-    rollback and everything after it is written for real), async cases (so
-    SSE delivery and scheduled ticks can be asserted at all), per-case
-    rather than per-run isolation, a way to drive two concurrent callers so
-    lease and seq races can be tested, an output channel from a case (today
-    the only way to print is to fail an assertion), and module stubbing for
-    the few seams where a real DB is the wrong tool. A local or CI-side
-    runner would remove "deploy before you can test"; a browser-side harness
-    would reach `assets/public/`.
+8. **Test harness gaps** — the `*.test.ts` runner covers pure code and
+   DB-backed scenarios well (item 10). Missing, roughly in order of what
+   would buy the most: a run-scoped rollback that survives the script
+   committing its own transactions (today the first commit ends the run's
+   rollback and everything after it is written for real), async cases (so
+   SSE delivery and scheduled ticks can be asserted at all), per-case
+   rather than per-run isolation, a way to drive two concurrent callers so
+   lease and seq races can be tested, an output channel from a case (today
+   the only way to print is to fail an assertion), and module stubbing for
+   the few seams where a real DB is the wrong tool. A local or CI-side
+   runner would remove "deploy before you can test"; a browser-side harness
+   would reach `public/`.
 
 ## What explicitly does _not_ need changing
 
-- The `assets/server/` module decomposition — one module per feature, each
+- The `server/` module decomposition — one module per feature, each
   importing its siblings directly. Keep it; it is what makes the above
-  changes incremental instead of a rewrite. (The dependency injection this
-  list originally endorsed is gone — see item 7.)
+  changes incremental instead of a rewrite.
 - The lease-based multi-instance coordination (NPC tick lease, move lease) —
   it becomes less load-bearing once items 2–3 land, but the pattern is
   correct today.

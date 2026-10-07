@@ -3,9 +3,9 @@
 //
 // `scripts/` is kept identical across the repositories that use this tooling
 // (`make check-tooling` fails when it is not), which only works if nothing
-// repository-specific is baked into it. The defaults that used to be constants
-// -- which script `make eval` talks to, what `make deploy-changed` deploys --
-// live in `aiwebengine.config.json` at the repository root instead.
+// repository-specific is baked into it. Repository defaults -- which script
+// `make eval` talks to, what `make deploy-changed` deploys -- live in
+// `aiwebengine.config.json` at the repository root.
 //
 // Everything here is optional. A repository without the file, or with an
 // incomplete one, simply has no defaults: the scripts that need a script URI

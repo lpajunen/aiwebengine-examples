@@ -247,10 +247,9 @@ async function main() {
         res.setHeader("content-type", "text/html");
         res.end(successPage(5));
 
-        // Deliberately not echoing the access token: it used to be printed as
-        // a ready-to-paste `export`, which put a live credential into terminal
-        // scrollback and any transcript of the session. The tooling reads the
-        // file, so nothing needed it on screen.
+        // Deliberately not echoing the access token: printing it would put a
+        // live credential into terminal scrollback and any transcript of the
+        // session. The tooling reads the file, so nothing needs it on screen.
         console.log(
           `Saved token to ${path.relative(process.cwd(), savedPath)}`,
         );

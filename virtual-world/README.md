@@ -361,11 +361,13 @@ game. Abuse controls beyond this (rate limits, quotas) are tracked in
 
 ## Code layout
 
-- `virtual-world.js` — deployed entrypoint; registers routes, streams, and
-  MCP tools, and delegates to the server modules by name.
-- `assets/server/` — real server-side implementation (the sibling `server/`
-  directory contains one-line re-export shims so local imports resolve).
-- `assets/public/` — browser client: 3D scene, input, aiming, editors, and
+- `main.js` — the entrypoint: imports, `init()`, and one-line named delegates
+  that exist because the engine resolves handlers by name in the entrypoint's
+  scope.
+- `server/` — the server-side implementation. Modules import their siblings
+  directly; shared constants live in `runtime-config.ts`, because the engine
+  refuses circular imports between modules even where `tsc` accepts them.
+- `public/` — browser client: 3D scene, input, aiming, editors, and
   state sync over SSE.
 
 Companion documents:

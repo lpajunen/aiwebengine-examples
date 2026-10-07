@@ -314,10 +314,8 @@ function buildFixtureGroup() {
 
 // ── Generic tile rendering ───────────────────────────────────────────────
 // A tile type names one of these recipes and its colors (see WORLD_TILE_DEFS
-// in world-domain.ts); this dispatcher draws every one of them. It replaced
-// two hand-written passes that between them named ten tile types in code, on
-// top of the tile table already naming them — so a new tile type is now an
-// entry in that table and nothing here.
+// in world-domain.ts); this dispatcher draws every one of them, so a new tile
+// type is an entry in that table and nothing here.
 //
 // A recipe's `parts` are each instanced once per tile of the type. `shade`
 // picks which of the tile's two colors paints a part; a `parity` recipe uses
@@ -963,8 +961,8 @@ function itemTypeColor(type) {
   }
   // Every class ships its own color, so this is only reached by a class that
   // deliberately left the color automatic (0) or by a type the registry has
-  // never heard of. There used to be a per-type table of the built-ins' colors
-  // here as well, a second copy of what item-registry.ts already says.
+  // never heard of. No per-type color table here: item-registry.ts is the one
+  // copy.
   return 0xf3ca40;
 }
 
@@ -1074,7 +1072,7 @@ var ITEM_VISUAL_STYLE_SPECS = {
 
 // Geometry is per style+part and never varies, so build each part's geometry
 // once and let every item mesh share it — a world full of dropped items costs
-// one geometry per distinct part, as the single shared cube used to.
+// one geometry per distinct part.
 /** @type {Record<string, any[]>} */
 var itemStyleGeoCache = {};
 

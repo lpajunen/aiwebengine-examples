@@ -25,11 +25,10 @@ export const VIRTUAL_WORLD_EVENTS_STREAM_PATH = "/virtual-world/events";
 // Item state / living values otherwise work like prototype delegation — an
 // instance stores its own copy of a key and the class template only fills in
 // what the instance is missing (see normalizeItemState in item-registry.ts and
-// normalizeLivingValues in world-domain.ts). That works on a fresh instance,
-// but the save path used to persist the fully MERGED snapshot, so the first
-// write baked every class value into the row and froze it there: raising a
-// class's maxHitPoints left every already-saved instance on the old number,
-// indistinguishable from a deliberate override.
+// normalizeLivingValues in world-domain.ts). Persisting the fully MERGED
+// snapshot would bake every class value into the row on the first write and
+// freeze it there: raising a class's maxHitPoints would leave every saved
+// instance on the old number, indistinguishable from a deliberate override.
 //
 // The keys below are the ones no gameplay code ever writes — they are pure
 // class tuning. For them the relationship is inverted: the class value always
@@ -145,12 +144,9 @@ export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // (see LivingClassRecord in world-domain.ts) starts a fight against a player
 // standing on its tile.
 export const NPC_AGGRO_CHANCE = 0.4;
-// Per-tick odds governing what an NPC does with itself, and the values every
-// class used to be stuck with — they were four literals scattered through
-// npc-tick-helpers.ts, identical for a wolf, a chicken and a woodsman. A
-// living class can now override any of them (LivingClassRecord.behavior), so
-// temperament is content; these remain the defaults for anything that does
-// not say otherwise.
+// Per-tick odds governing what an NPC does with itself. A living class can
+// override any of them (LivingClassRecord.behavior), so temperament is
+// content; these are the defaults for anything that does not say otherwise.
 export const DEFAULT_NPC_BEHAVIOR = {
   // Chance of standing still instead of taking a step.
   idleChance: 0.35,

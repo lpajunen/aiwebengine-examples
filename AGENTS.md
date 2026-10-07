@@ -16,7 +16,7 @@ Run after every code change — no exceptions:
 make format lint typecheck
 ```
 
-This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` for TS and `jsconfig.json` for JS). There is no test suite.
+This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` for TS and `jsconfig.json` for JS). Script tests (`*.test.ts`) run on the server with `make test`; see `CLAUDE.md`.
 
 ## Deployment (CLI)
 

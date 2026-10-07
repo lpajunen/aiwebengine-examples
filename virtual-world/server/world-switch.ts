@@ -84,11 +84,10 @@ export function switchUserToNewWorld(
 }
 
 // Sends a player to the deployment's configured start world. Deliberately does
-// not write the world's type/dimensions/class: it used to rewrite them from the
-// caller's arguments on every use, which reset the start world's class to the
-// bare preset and dropped its placements — leaving a separate self-heal to put
-// them back on the next load. Switching a player is not a reason to reconfigure
-// a world.
+// not write the world's type/dimensions/class: rewriting them from the
+// caller's arguments would reset the start world's class to the bare preset
+// and drop its placements. Switching a player is not a reason to reconfigure a
+// world.
 export function switchUserToStartWorld(userId: string): { ok: boolean } {
   switchUserWorld(
     userId,

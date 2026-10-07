@@ -9,7 +9,7 @@ var LOCALE_FLAG_BY_CODE = { en: "🇬🇧", fi: "🇫🇮" };
 /**
  * Save feedback for a class editor. Editing a built-in nobody owns claims it
  * for you, and that is worth saying: the class stops following the code
- * definition on future deploys, because it is now your content rather than a
+ * definition on future deploys, because it is your content rather than a
  * default. See resolveUpdatedOwnerIds in http-handler-helpers.ts.
  * @param {any} data
  * @param {string} [what] optional name to include, for editors that show one

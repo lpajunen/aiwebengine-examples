@@ -101,15 +101,13 @@ out-of-radius authored living back on its post, which is the backstop.
 ## Editing a built-in type makes it yours
 
 Every class repository seeds its built-ins from code and **resyncs them on each
-bootstrap**, so a deploy can improve a default. That used to mean an edit to a
-built-in through the editor or the MCP tool was reverted before it took effect:
-the save reported success and the change vanished.
-
-Editing a type nobody owns now claims it for you, and the editor says so. The
+bootstrap**, so a deploy can improve a default. An edit to an unowned built-in
+would therefore be reverted on the next bootstrap, so editing a type nobody
+owns claims it for you, and the editor says so. The
 trade is real and worth knowing:
 
-- a **claimed** type is your content — it keeps your edits, and deploys no
-  longer change it;
+- a **claimed** type is your content — it keeps your edits, and deploys do
+  not change it;
 - an **untouched** built-in stays code-owned, and picks up improvements.
 
 Passing a non-empty `ownerIds` still wins, which is how a type is handed to
@@ -135,8 +133,8 @@ A placement may reserve an area — a circle or rectangle — carrying rules:
 Omit a reservation's `row`/`col` and it centres on the placement that owns it,
 which is what you want almost always.
 
-A protected clearing is therefore one placement with one reservation — not a
-world-ID conditional in the engine, which is what it used to be.
+A protected clearing is therefore one placement with one reservation, not a
+world-ID conditional in code.
 
 ## Linking an exterior to an interior
 
@@ -218,8 +216,8 @@ a landmark off the map.
 
 Placements compose existing engine capabilities; they do not add new ones. A
 new terrain generator, a new interaction primitive, a new mesh recipe or a new
-combat rule is still a code change. What no longer is: where things are, what
-they are, what they protect, and where they lead.
+combat rule is a code change. Where things are, what they are, what they
+protect and where they lead are not.
 
 ## Deliberately not built yet
 
@@ -238,7 +236,7 @@ needs it, and speculative to add before then.
 - **More than one reservation per placement in the editor.** The stored schema
   allows several and the server honours all of them; the panel edits the first
   and preserves the rest untouched, so extras stay MCP-editable.
-- **Legacy blocked-zone aliases.** `oak_clearing`/`oak_center` still resolve in
-  `world-reservations.ts`. No seeded row uses them any more (the seeder rewrites
-  them from the definition), so they can go once you are confident nothing
-  copied one before that migration ran.
+- **Blocked-zone aliases.** `oak_clearing`/`oak_center` resolve in
+  `world-reservations.ts` for rows that still name them. No seeded row does
+  (the seeder rewrites them from the definition), so they can go once no
+  stored row uses them.

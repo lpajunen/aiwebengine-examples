@@ -472,10 +472,9 @@ function rebuildActionsBySourceItem(
  * an item class lists actionIds, an action lists the sourceItemIds it is
  * granted by — and this is the union, so declaring either side is enough.
  *
- * They used to have to agree: an action naming an item in sourceItemIds but
- * missing from that item's actionIds simply did not work, failing with
- * error.missing_required_item_for_action and nothing to say why. Every
- * built-in did agree, so the union changes nothing that already existed.
+ * The two sides need not agree: requiring both would make an action naming an
+ * item in sourceItemIds, but missing from that item's actionIds, fail with
+ * error.missing_required_item_for_action and nothing to say why.
  */
 export function getActionsForItemType(itemId: string): string[] {
   const id = String(itemId || "");
@@ -505,8 +504,9 @@ export function getActionsForItemType(itemId: string): string[] {
  * Both directions have to resolve, because sourceItemIds does double duty: it
  * says what grants the action *and* which carried or underfoot item the action
  * reads (the kantele a logicSpec tunes, the door a travel steps through).
- * Declaring only the item side used to leave that second job with nothing to
- * find, so the action ran and silently did nothing.
+ * Resolving only the action side would leave that second job with nothing to
+ * find when only the item side is declared, and the action would silently do
+ * nothing.
  */
 export function getSourceItemIdsForAction(actionId: string): string[] {
   const id = String(actionId || "");

@@ -150,12 +150,10 @@ export interface ActionDefinition {
     // Omitting tileType clears the mod instead, restoring the generated
     // terrain — that is what destroying a house does.
     //
-    // This was a closed `storage: "trees" | "houses"` enum with a per-kind
-    // sub-action, which meant the only two things any action could ever change
-    // about a world were trees and houses. Any of the world tile types
-    // (world-domain.ts) is now reachable: dig a lake, pave a floor, raise a
-    // fence. The legacy fields are still read for rows written before
-    // sourceKind existed — see resolveWorldMutation in tree-action-helpers.ts.
+    // Any of the world tile types (world-domain.ts) is reachable: dig a lake,
+    // pave a floor, raise a fence. Rows that predate sourceKind carry the
+    // older `storage: "trees" | "houses"` fields, which are still read — see
+    // resolveWorldMutation in tree-action-helpers.ts.
     worldMutation?: {
       sourceKind?: string;
       tileType?: string;

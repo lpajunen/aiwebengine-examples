@@ -1,8 +1,8 @@
 /// <reference types="node" />
 // Remembers the dynamically registered OAuth client between logins.
 //
-// Registration is open, so `oauth_pkce_token.js` could simply register a fresh
-// client on every run -- and used to. The cost is the consent screen: the
+// Registration is open, so `oauth_pkce_token.js` could register a fresh client
+// on every run, at the cost of the consent screen: the
 // engine records what you approved per (user, client) in `oauth_client_grants`,
 // so a new client_id each time is a new grant each time, and you approve the
 // same scopes again at every login.
@@ -12,8 +12,8 @@
 // for byte against what the client registered (RFC 6749 3.1.2.3), so a client
 // registered for one callback port is worthless on another. That is why the
 // entry stores the redirect_uri it was registered for and is ignored when the
-// callback server ends up somewhere else, and why the login now asks for a
-// fixed port instead of any free one.
+// callback server ends up somewhere else, and why the login asks for a fixed
+// port instead of any free one.
 //
 // Entries are keyed by issuer, so switching between a local engine and the
 // deployed one keeps a usable client for each rather than re-registering on

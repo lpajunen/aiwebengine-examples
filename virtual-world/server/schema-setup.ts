@@ -181,13 +181,10 @@ export function runChatSchemaStep(
 //
 // The migration lists below are individually idempotent, but each statement is
 // its own database round-trip and there are ~200 of them. The engine gives
-// init() a 5000ms budget, and re-running the whole list on every process start
-// blew it ("FATAL Init timeout (5000ms)" in the script log) — which left the
-// script with NO routes registered at all, so every game route 404'd for a
-// minute or more after each deploy until some later init happened to squeak in
-// under the budget.
+// init() a 5000ms budget, which re-running the whole list on every process
+// start would blow, leaving the script with no routes.
 //
-// So the steady state is now a single query: skip the list while the persisted
+// So the steady state is a single query: skip the list while the persisted
 // marker matches VWORLD_SCHEMA_VERSION. The marker is written only after the
 // list runs to completion, so an init killed mid-migration leaves it stale and
 // the next start retries — the guard can never mark a half-applied schema as

@@ -608,9 +608,8 @@ function virtualWorldManageWorldClassesToolHandler(context) {
 function init() {
   // Registration goes FIRST, before any database work. The engine kills init()
   // at 5000ms and logs "FATAL Init timeout (5000ms)"; everything below this
-  // line is DB round-trips, so a slow startup used to kill init() before it
-  // ever reached registration and the script came up with no routes at all.
-  // Registering first makes a slow startup degrade into "routes up, caches
+  // line is DB round-trips, and a slow startup killed before registration
+  // would come up with no routes at all. Registering first makes a slow startup degrade into "routes up, caches
   // cold" instead of "script entirely absent". It needs no schema:
   // getAllActionIds() falls back to the built-in ACTION_DEFINITIONS when the
   // class table is unreadable.

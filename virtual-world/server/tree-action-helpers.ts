@@ -338,8 +338,8 @@ export function performTreeActionForUser(
   }
 
   // The action's execution config, straight from the class row. Typed off
-  // ActionDefinition rather than restating its shape here — this used to be a
-  // second copy of that type, which is how worldMutation could drift.
+  // ActionDefinition rather than restating its shape here, so the two cannot
+  // drift.
   function getActionExecutionConfig(): ActionDefinition["execution"] | null {
     return actionDefinition && actionDefinition.execution
       ? actionDefinition.execution
@@ -1997,7 +1997,7 @@ export function performTreeActionForUser(
   }
 
   // Declarative living effects (action-registry.ts `livingEffect`). One block
-  // serves every spell: firebolt, fireball, heal and harm are now four rows of
+  // serves every spell: firebolt, fireball, heal and harm are four rows of
   // data rather than four handlers, and a creator's new spell needs no code at
   // all. This block owns *targeting* — who is in reach, and whether the actor
   // may act — while applyLivingEffect owns the mutation, death and broadcasts.

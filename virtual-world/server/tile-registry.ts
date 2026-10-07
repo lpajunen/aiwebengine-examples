@@ -7,10 +7,8 @@ import {
 } from "./tile-class-storage.ts";
 import { ClassLabels, normalizeClassLabels } from "./class-labels.ts";
 
-// Tile types, as a class repository like items, actions, livings and worlds.
-// They used to be a closed enum: a set of string constants, a union type and a
-// literal table in world-domain.ts, which meant the one content vocabulary the
-// map is actually made of was the only one a creator could not extend.
+// Tile types, as a class repository like items, actions, livings and worlds,
+// so the vocabulary the map is made of is one a creator can extend.
 //
 // The numeric `value` is a runtime encoding only — maps are regenerated from a
 // world's seed and world mods store the tile *name* — so values are free to be
@@ -137,8 +135,8 @@ let _tileClassCache: Record<string, TileClassRecord> | null = null;
 let _tileNameByValue: Record<number, string> = {};
 // Flat lookups for the two questions asked per tile per map generation and per
 // step of every move and NPC tick. A 100x100 world is 10k of each, so these
-// must not allocate: worldTileValueForName used to build a fresh def object
-// every call, which was enough to get an NPC tick interrupted mid-job.
+// must not allocate — a fresh object per call is enough to get an NPC tick
+// interrupted mid-job.
 let _tileValueByName: Record<string, number> = {};
 let _tileWalkableByValue: Record<number, boolean> = {};
 // Values already looked up and not found. An instance that booted before a
@@ -211,7 +209,7 @@ function builtInTileClass(classId: string): TileClassRecord | null {
 // timestamps, which change on every write by construction. Only the desired
 // row's columns are examined — extra stored columns (id) are not ours to
 // judge. Fail-safe direction: anything unrecognized compares unequal and we
-// write, which is exactly the old behavior.
+// write.
 function classRowMatchesStored(
   desired: Record<string, unknown>,
   stored: Record<string, unknown>,
@@ -243,10 +241,8 @@ export function bootstrapTileClasses(): void {
   // admin has taken ownership of is theirs — the rule every other class
   // repository uses.
   //
-  // The resync only writes when the stored row actually differs. It used to
-  // upsert all fourteen built-ins unconditionally on every bootstrap, which
-  // meant fourteen DB round-trips (~250ms) on every init for a table that had
-  // not changed since the last deploy.
+  // The resync only writes when the stored row actually differs, so an
+  // unchanged table costs no round-trips per init.
   const ids = Object.keys(DEFAULT_TILE_CLASSES);
   let written = 0;
   for (let i = 0; i < ids.length; i++) {

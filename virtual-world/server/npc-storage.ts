@@ -713,9 +713,8 @@ function applyNPCDefaultItems(
 /**
  * The id of the nth ambient NPC of a class in a world. Deterministic on
  * purpose: seeding runs whenever a world is found with no NPCs at all, and
- * nothing serializes it, so two requests arriving together both used to seed a
- * full population — Birdhaven ended up with four times its manifest, 20
- * chickens against a manifest of 5, because four callers raced after a restart.
+ * nothing serializes it, so requests arriving together after a restart would
+ * each seed a full population.
  *
  * Making the ids a function of (world, class, ordinal) turns the second seed
  * into a no-op instead of a duplicate: the unique index on npc_id rejects it,

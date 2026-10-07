@@ -96,7 +96,7 @@ make token-status                   # how long the saved token has left
 make refresh-token                  # renew by hand (--force to renew early)
 ```
 
-The access token lasts about an hour, but **expiry no longer means logging in
+The access token lasts about an hour, but **expiry does not mean logging in
 again**: the tooling scripts renew it themselves via the refresh token, so a
 long session is not interrupted. `scripts/lib/token.js` holds that logic and
 every script goes through its `loadAccessToken()`; `OAUTH_TOKEN` in the
@@ -104,9 +104,8 @@ environment overrides the file and is used as-is.
 
 Renewing needs the `client_id` that the login registered, which
 `oauth_pkce_token.js` persists into `schemas/token.json` alongside
-`token_endpoint` and `issuer`. A token file saved before that was added has no
-`client_id` and cannot be renewed — `make oauth-login` once fixes it for good.
-Log in again only when the refresh token itself is rejected; the scripts say so
+`token_endpoint` and `issuer`. A token file without a `client_id` cannot be
+renewed — `make oauth-login` once fixes it. Log in again only when the refresh token itself is rejected; the scripts say so
 explicitly when that happens.
 
 ### Git credentials
@@ -162,7 +161,7 @@ credential; without one it is a 403.
 ### Deployment
 
 ```bash
-make upload-virtual-world           # deploys virtual-world.js + assets/ via https://manage.softagen.com
+make upload-virtual-world           # deploys virtual-world/ via https://manage.softagen.com
 make upload-virtual-world-dry-run   # dry run, no upload
 ```
 
@@ -224,11 +223,11 @@ make check-head REV=last-good        # or any revision / label
 
 `scripts/check-script.js` asks the engine what the script would do if deployed: it runs `init()` in a sandbox (database writes rolled back unless you pass `--no-rollback`) and reports diagnostics. It catches what `make format lint typecheck` structurally cannot — circular asset-backed imports (which `tsc` accepts and the engine FATALs on), route handler names the entrypoint never defines, and an `init()` over the engine's startup budget. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
-`--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — modules under `assets/` still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
+`--candidate` sends the local entrypoint instead of the deployed one, but **only** the entrypoint — the other modules still come from the server, so deploy those first or you are checking a mixture. Use `--script-uri`/`--script-path` to point it at another example, `--timeout <seconds>` to bound the wait (default 60; a healthy check answers well inside the engine's own 10s `init()` budget), and `--json` for the raw report.
 
 `--revision <rev>` checks a version that is not being served, which is the only trustworthy verdict on a pinned script's head. The endpoint also accepts a `files` map — a whole multi-module change, laid over the deployed tree, with nothing written — which `scripts/check-script.js` does not expose yet; reach for the `check_script` MCP tool for that.
 
-**This used to time out on virtual-world and no longer does.** The schema migration entry points appeared to stall the check sandbox indefinitely; they were in fact blocking on wedged database relations, which were cleared by recreating the server. A check now answers in well under a second (`init()` ~591ms of the 10000ms budget). If it hangs again, suspect the database rather than the endpoint.
+A check of virtual-world answers in well under a second (`init()` ~591ms of the 10000ms budget). If one hangs, suspect wedged database relations rather than the endpoint.
 
 The report carries `diagnostics` (each with `severity`, `code`, `message`, `source`), an `init` block with the measured `durationMs` against the engine's `budgetMs`, and `registrations` — every route, stream, and tool the script would register. The `missing-handler` diagnostic is the one that matters most here: virtual-world's thin entrypoint delegates by name string, and this is what catches a delegate that was never defined.
 
@@ -243,9 +242,9 @@ make eval SRC='…' URI=docs
 
 `scripts/eval-script.js` posts a snippet to `POST /engine/eval_script`, which runs it inside a deployed script's sandbox and returns the value, everything it logged, and the duration. Database writes roll back unless you pass `ROLLBACK=false`; asset writes, secret writes and outbound HTTP are real either way. It exits 1 when the snippet throws. Needs `make oauth-login`, and the caller must own the script or be an administrator.
 
-This replaces "write a `*.test.ts`, deploy it, run the suite, read the answer out of an assertion message" for one-off questions — reading a table, calling one server function, checking what a helper returns. Unlike `make check-virtual-world` it works fine on virtual-world, because eval does not run `init()`.
+Use it for one-off questions — reading a table, calling one server function, checking what a helper returns. Eval does not run `init()`.
 
-**Scope:** the snippet sees the _entrypoint's_ top-level bindings plus the engine globals, and `import` is not supported (static or dynamic). For virtual-world that means only what `virtual-world.js` itself imports is reachable — `VWORLD_NPC_TABLE` yes, `VWORLD_PLAYER_POSITION_TABLE` no. Use the literal table name for anything the entrypoint does not import.
+**Scope:** the snippet sees the entrypoint's top-level bindings and the engine globals, and can `import` any module of the script the way the script does (`import { VWORLD_PLAYER_POSITION_TABLE } from "./server/runtime-config.ts"`); dynamic `import()` is not supported.
 
 `SRC` is single-quoted inside the recipe, so double quotes in a snippet are safe and single quotes are not — use `FILE` for those. `scripts/eval-script.js` additionally takes `--file -` (stdin), `--timeout <seconds>` and `--json`.
 
@@ -301,7 +300,7 @@ even though the bodies live in server modules. It imports them from
 are deployed under.
 
 (Until the repository moved to the engine's git layout, `server/*.ts` was 54
-one-line re-export shims pointing at the real modules under `assets/server/`,
+one-line re-export shims pointing at the real modules under `server/`,
 because only files under `assets/` were deployed. Flattening `assets/` into the
 script directory made the shims meaningless and they are gone; edit
 `server/<name>.ts` directly.)
@@ -331,7 +330,7 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 
 - `tsconfig.json` covers `.ts`/`.tsx`/`.jsx` files (strict is not set; `checkJs: false`).
 - `jsconfig.json` covers `.js` files in the script directories with `checkJs: true` and `strict: true` — plain JS example scripts are still fully type-checked via JSDoc annotations, so add `@param`/`@returns` JSDoc when writing new `.js` example scripts.
-- Both `include` the script directories by glob (`*/**/*.js`) and `exclude` `node_modules` and `scripts`, since a top-level directory no longer distinguishes a script from the tooling beside it. **`scripts/` is in neither program and is not type-checked.**
+- Both `include` the script directories by glob (`*/**/*.js`) and `exclude` `node_modules` and `scripts`, since a top-level directory alone does not distinguish a script from the tooling beside it. **`scripts/` is in neither program and is not type-checked.**
 - Both include `types/**/*.d.ts`, so `make fetch-types` must be run before typecheck will resolve `HandlerContext`, `ResponseBuilder`, etc.
 
 ### Repo layout

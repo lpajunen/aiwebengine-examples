@@ -643,10 +643,9 @@ export function bootstrapLivingClasses(): void {
       Array.isArray(existing.ownerIds) &&
       existing.ownerIds.length > 0;
     if (isOwned) continue;
-    // Resync only when the stored row actually differs. This loop used to
-    // write all fourteen built-ins on every bootstrap — fourteen round-trips
-    // (~250ms) per init against a table that had not changed since the last
-    // deploy.
+    // Resync only when the stored row actually differs: writing all fourteen
+    // built-ins on every bootstrap is fourteen round-trips (~250ms) per init
+    // against a table that has not changed since the last deploy.
     const desiredRow = livingClassToDbRow(cls, now);
     const storedRow = storedById[classId];
     if (storedRow && classRowMatchesStored(desiredRow, storedRow)) {

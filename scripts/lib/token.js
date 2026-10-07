@@ -1,14 +1,13 @@
 /// <reference types="node" />
 // Shared OAuth token handling for the tooling scripts.
 //
-// The access token the engine issues lives about an hour, and every script
-// here used to do the same thing when it ran out: refuse to work and tell you
-// to run `make oauth-login` again. That login is interactive -- it opens a
-// browser and waits -- so a long session got interrupted repeatedly.
+// The access token the engine issues lives about an hour, and `make
+// oauth-login` is interactive -- it opens a browser and waits -- so a long
+// session must not need it again every hour.
 //
-// The token file already carries a refresh token. Spending it needs the
-// client_id the login registered, which is why `oauth_pkce_token.js` now
-// persists client_id, token_endpoint and issuer next to the token. With those,
+// The token file carries a refresh token. Spending it needs the client_id the
+// login registered, which is why `oauth_pkce_token.js` persists client_id,
+// token_endpoint and issuer next to the token. With those,
 // `loadAccessToken()` renews the token in place and the interactive login is
 // only needed when the refresh token itself is gone or rejected.
 

@@ -84,12 +84,10 @@ describe("re-applying a step", () => {
   });
 
   test("doing it twice more changes nothing", () => {
-    // Establish the precondition rather than inheriting it. This case used to
-    // assume the marker table was already present from a previous migration,
-    // which made it pass or fail on ambient database state: on a freshly
-    // recreated server the first create *succeeded* (empty error) and only the
-    // second collided, so the two answers differed and the case failed. The
-    // claim under test is that re-applying a step is idempotent, so the run
+    // Establish the precondition rather than inheriting it, so the case does
+    // not pass or fail on ambient database state (on a freshly recreated server
+    // the first create succeeds and only the second collides). The claim under
+    // test is that re-applying a step is idempotent, so the run
     // that creates the table is setup, not part of the comparison.
     runWorldSchemaStep(
       "createTable",

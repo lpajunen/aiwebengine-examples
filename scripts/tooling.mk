@@ -138,7 +138,7 @@ git-push:
 
 # Deploy only changed files (git-detected, or pass FILES="a b"), per-file
 # upsert with a sha256 read-back verify. Defaults come from
-# aiwebengine.config.json; URI=/DIR= to retarget.
+# aiwebengine.config.json; URI= and FILES= to retarget.
 deploy-changed:
 	@node scripts/deploy-assets.js $(if $(URI),--script-uri "$(URI)") $(FILES)
 

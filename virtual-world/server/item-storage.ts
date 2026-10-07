@@ -428,8 +428,7 @@ export function spawnItemsOnTile(
 
 // Ensures exactly one world item matching `matchFn` exists in `worldId`, sitting
 // at (row,col). Self-heals duplicates (keeps the lowest/oldest id, deletes the
-// rest) the way the old hard-coded oak seeding did, but matches on
-// a predicate rather than a bare type so a fixture (e.g. a tagged guild door)
+// rest), matching on a predicate rather than a bare type so a fixture (e.g. a tagged guild door)
 // can coexist with player-built items of the same type without clobbering them.
 // A matching item already on the target tile is left untouched, preserving any
 // state a player has toggled on it (e.g. a closed door).
@@ -473,10 +472,8 @@ function ensureSingletonWorldItem(
   return itemId;
 }
 
-// Materializes a world class's authored placements into one world — the
-// data-driven replacement for the old ensureOldOakItem / ensureGuildRoomItems /
-// ensureVillageGuildEntrance trio, which hard-coded Birdhaven's and the guild's
-// contents behind world-ID checks.
+// Materializes a world class's authored placements into one world, so no
+// world's contents are hard-coded behind world-ID checks.
 //
 // Idempotent by (world_id, placement_id): the instance row records which item
 // or tile a placement created, so re-running adopts that object instead of

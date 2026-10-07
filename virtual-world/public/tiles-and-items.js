@@ -1,11 +1,9 @@
 /// <reference path="virtual-world-browser-globals.d.ts" />
 
 // ── Dynamic world-mod state (client-side) ─────────────────────────────────
-// The tile registry the page shipped (see buildVirtualWorldPageState). There
-// used to be a hand-written copy of the whole table here as a fallback for a
-// missing global — it had already drifted (no visuals, so nothing would have
-// rendered from it), and a stale silent copy is worse than the loud failure of
-// having none: the page always ships this.
+// The tile registry the page shipped (see buildVirtualWorldPageState). There is
+// deliberately no hand-written fallback copy: a stale silent copy is worse than
+// the loud failure of having none, and the page always ships this.
 var clientTileDefs = /** @type {Record<string, ClientTileDef>} */ (
   typeof WORLD_TILE_DEFS === "object" && WORLD_TILE_DEFS ? WORLD_TILE_DEFS : {}
 );
@@ -1267,7 +1265,6 @@ function inventoryItemLabel(item) {
     );
   }
   // Reached only for a type the registry has never heard of: every class ships
-  // a label_key and a fallback_label. A per-type table of the built-ins' keys
-  // used to sit in i18n.js for this fallback, duplicating item-registry.ts.
+  // a label_key and a fallback_label.
   return humanizeType(type);
 }

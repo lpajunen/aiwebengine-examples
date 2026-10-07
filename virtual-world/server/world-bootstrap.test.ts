@@ -277,9 +277,9 @@ describe("switching worlds", () => {
   });
 
   test("going home leaves the start world's own configuration alone", () => {
-    // Switching a player is not a reason to reconfigure a world: this used to
-    // rewrite the start world's type, size and class from its arguments,
-    // dropping the class's placements every time someone went home.
+    // Switching a player is not a reason to reconfigure a world: rewriting the
+    // start world's type, size and class from the arguments would drop the
+    // class's placements every time someone went home.
     const before = getWorldInfo(START_WORLD_ID);
     const userId = createTestPlayer(worldId, "switch", tile, 0);
 

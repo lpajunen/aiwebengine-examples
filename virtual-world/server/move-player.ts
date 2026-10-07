@@ -207,7 +207,7 @@ export function movePlayerForUser(
   const newSeq = cur.seq + applied.length;
 
   // Only this player's row is written; rewriting the whole player map here
-  // (the old behavior) could clobber other players' concurrent moves with
+  // could clobber other players' concurrent moves with
   // the stale positions read above.
   savePlayerPosition(userId, worldId, {
     row: posRow,

@@ -1,10 +1,7 @@
 # TODO — virtual world backlog
 
-This file consolidates three lists that used to live separately: item-class
-visual customization (`TODO.md`), dynamic living types (`TODO-living.md`),
-and the targeting/combat/UI follow-ups (`TODO-followups.md`). Statuses were
-re-checked against the code on 2026-08-10; items that had since been
-implemented are dropped, and the ones below are what survived that check.
+The general backlog: item-class visuals, living classes, and targeting,
+combat and UI follow-ups. An item leaves this file when it is built.
 
 Nothing here is blocking. It is the honest set of open caveats, deferred
 features, and things worth eyes-on, ordered roughly by how concrete and
@@ -24,15 +21,13 @@ catch-all:
 
 ## Highest priority (concrete, low-effort)
 
-### Panel context-ranking regression
+### Rank the action palette by context
 
-`DESIGN-targeting.md` step 3 added `rankActionsByContext` — float a
-`validWhen`-gated action (present only when relevant) to the top of the
-action list. When the tile dialog was demoted (UI phase 3) that was its only
-caller, and the function was pruned with it; a grep for the name now returns
-nothing anywhere in the client. The action palette groups by category but no
-longer surfaces the contextually-relevant action first. Restore it inside the
-palette's per-category ordering.
+The action palette groups by category but does not float a `validWhen`-gated
+action — present only when relevant, like Fix on a damaged item — above the
+always-available verbs. Rank within each category so the contextual action
+comes first (git history has a `rankActionsByContext` that did this for the
+old tile dialog).
 
 ### `wieldedWeapon` hardcodes `left_hand`/`right_hand`
 
@@ -50,15 +45,14 @@ generalize-hardcoded-behavior initiative, and it is a small change.
 
 ### Browser pass over the UI
 
-Most of the UI work was verified only headlessly (data + code) because
-`/virtual-world/play` needs session-cookie auth. Phase 3 already surfaced one
-real regression this way (the `bury` bug). Still unconfirmed in a real
+Much of the UI is verified only headlessly (data + code), because
+`/virtual-world/play` needs session-cookie auth. Unconfirmed in a real
 browser:
 
 - Action palette: grouping, 🎯 aim badges, arm → glowing target → tap, the
   target chooser on a crowded tile, the demoted (inspector-only) tile dialog.
 - The reticle aiming (fireball), the aim-target highlight rings, and the aim
-  banner folded into the active-actions panel (phase 4).
+  banner folded into the active-actions panel.
 - The valid-target highlight (damaged item / corpse glow) and its pulse.
 
 ## Combat paths never observed live
@@ -77,12 +71,22 @@ browser:
 
 - **Existing worlds don't pick up NPC/manifest changes.** `npc_archer` only
   appears in freshly-seeded worlds; existing worlds keep their saved NPCs
-  (including the pre-fix unarmed archers). A self-healing "re-equip a class's
+  (including archers saved without a weapon). A self-healing "re-equip a class's
   `defaultItems` weapons on NPC load if missing from its slots" backfill
   would fix both — same pattern as other self-healing backfills in the
   codebase. Related: a world reset (TODO-arch item 13) would subsume it.
-- **Action-first aiming for `line`.** `firebolt` is still target-first; the
-  design's highlight-and-tab single-target aiming mode was not built.
+- **Action-first aiming for `line`.** `firebolt` is target-first; a
+  highlight-and-tab single-target aiming mode is not built.
+- **Item-derived range** (`rangeFrom: "item"`). The server resolves it
+  (`resolveEffectiveActionRange`), but the client's `actionEffectiveRange`
+  reads the action's own range and no item carries a range stat, so a longbow
+  cannot outrange a shortbow.
+- **Effectiveness, as distinct from applicability.** A finisher glow on a
+  low-HP enemy, a "super-effective" mark, guidance toasts — all wait on actions
+  carrying some notion of how well they suit a target.
+- **Grouping a crowded tile** (`3× goblin`) and facing-sector disambiguation —
+  see `DESIGN-targeting.md`; not needed until a world piles identical entities
+  on one square.
 - **PvP / friendly-fire.** `fireball` strikes NPCs only; players in the blast
   are not hit. `livingEffect.targetKinds` / `allowSelf` are the levers.
 - **NPCs don't retaliate when attacked.** Only `aggressive` classes
@@ -131,6 +135,20 @@ creators start asking for shapes the menu cannot approximate.
   behavior.
 - **Collapsible/grouped NPC value display** — deferred until a living class
   has enough slots/values to need it.
+
+## Development tooling
+
+Tools for developing this example rather than playing it — the
+`virtualWorld*` MCP tools cover gameplay only:
+
+- `virtualWorldSeedFixture` — a deterministic world, players and items.
+- `virtualWorldSnapshot` / `virtualWorldRestore` — world-state checkpoints.
+- `virtualWorldForceTick` — drive NPC, follow/fight and respawn ticks without
+  waiting on wall-clock timers.
+- A scripted bot player for end-to-end behaviour checks.
+
+Together they make behavioural testing possible without a browser and without
+waiting on lease and respawn timing.
 
 ## Design tradeoffs / smaller limitations
 
@@ -194,10 +212,10 @@ A "selector" addresses either a specific living slot or the bag:
 - The bag: `"inventory"` (canonical/documented) or `"bag"` (equivalent
   alias, kept indefinitely — not scheduled for deprecation). Both are
   accepted everywhere a selector is read (`isBagSelector` in
-  `assets/server/item-action-helpers.ts`).
+  `server/item-action-helpers.ts`).
 
 Every response that includes a living's `inventory` (or, for NPCs, top-level
 `slots`/`bag`) also includes `inventory_slot_ids` (the living's current slot
 ids) and `inventory_selectors` (`inventory_slot_ids` + `["inventory",
 "bag"]`), built by the shared `buildInventorySelectors` helper in
-`assets/server/world-domain.ts`.
+`server/world-domain.ts`.

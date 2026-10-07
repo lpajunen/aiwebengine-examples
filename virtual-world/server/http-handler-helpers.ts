@@ -106,14 +106,12 @@ export function canManageClass(
  * Who owns a class after an update.
  *
  * A row nobody owns is a built-in, and every class repository resyncs those
- * from the code definition on each bootstrap — so editing one through the
- * editor or the MCP tool used to be reverted before it could take effect. The
- * save reported success and the change simply vanished, which is the worst
- * possible answer.
+ * from the code definition on each bootstrap — so an edit to one would be
+ * reverted before it could take effect, after reporting success.
  *
  * Editing an unowned row therefore claims it for the editor. The trade is
  * explicit and worth stating: a claimed row stops receiving code-side changes
- * on future deploys, because it is now content rather than a default. Callers
+ * on future deploys, because it is content rather than a default. Callers
  * report `claimed` back so the editor can say so.
  *
  * A non-empty ownerIds in the request still wins — that is how a row is handed

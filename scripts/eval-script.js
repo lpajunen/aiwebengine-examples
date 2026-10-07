@@ -12,11 +12,9 @@ require("dotenv").config();
 // Database writes are rolled back unless you pass --no-rollback. Asset writes,
 // secret writes and outbound HTTP are real either way.
 //
-// SCOPE: the snippet sees the *entrypoint's* top-level bindings plus the
-// engine globals — and `import` is not supported, static or dynamic. For
-// virtual-world that means only what virtual-world.js itself imports is
-// reachable: VWORLD_NPC_TABLE yes, VWORLD_PLAYER_POSITION_TABLE no. Use the
-// literal table name for anything the entrypoint does not import.
+// SCOPE: the snippet sees the entrypoint's top-level bindings plus the engine
+// globals, and can `import` any module of the script the way the script does.
+// Dynamic `import()` is not supported.
 //
 // Usage:
 //   node scripts/eval-script.js [options] [snippet]

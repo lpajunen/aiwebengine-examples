@@ -145,8 +145,7 @@ export function saveWorldModLayer(
 // A tile mod is "this square was changed by something, and now looks like
 // `tile_type`". `source_kind` groups the mods so per-kind views can be told
 // apart (planted trees vs built houses vs whatever a creator invents). Trees
-// and houses used to have a bespoke loader, saver and mutator each; they are
-// now two source kinds over these three functions.
+// and houses are two source kinds over these three functions.
 
 /**
  * Every tile mod of one source kind in a world, keyed by "row_col".
@@ -248,7 +247,7 @@ export function saveTileModsOfKind(
 // ── Tree and house views ─────────────────────────────────────────────────
 // Two source kinds over the generic tile mods above, kept as named views
 // because the NPC tick, the page bootstrap and placement reconciliation all
-// think in trees and houses. They no longer own any storage of their own.
+// think in trees and houses. They own no storage of their own.
 
 export function loadWorldTrees(worldId: string): Record<string, any> {
   const trees: Record<string, any> = {};

@@ -1,16 +1,8 @@
 // How a world's terrain is generated, as data.
 //
-// generateWorldMap used to be a run of `worldType === ...` branches: a coast
-// only forests got, a river forests and villages got, lakes nested inside the
-// river's branch, mountains and rocks for forests and caves, trees at one
-// count for forests and another for islands. Five world types were the only
-// kinds of place that could exist, and a creator picking a base preset got
-// whatever that branch did.
-//
-// The ten steps turn out to be five kinds of pass, and the differences between
-// the presets are their parameters. A world class carries a spec; the built-in
-// presets below are seed data reproducing exactly what each branch did,
-// including the order passes run in — which matters, because the generator is
+// Terrain is five kinds of pass, and the differences between world types are
+// their parameters. A world class carries a spec; the built-in presets below
+// are seed data, including the order passes run in — which matters, because the generator is
 // seeded from the world id and every pass draws from the same sequence. Change
 // a spec and every world of that class regenerates differently; terrain is not
 // stored, only world mods layered on top of it.

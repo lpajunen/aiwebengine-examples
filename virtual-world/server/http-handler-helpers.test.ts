@@ -260,9 +260,8 @@ describe("who owns a class after an edit", () => {
 
   test("editing a built-in claims it for the editor", () => {
     // A row nobody owns is resynced from the code definition on every
-    // bootstrap, so an edit to one used to be reverted before it took effect —
-    // reported as saved, and gone. Claiming it is the trade, and the caller is
-    // told so.
+    // bootstrap, so an edit to one would be reverted before it took effect.
+    // Claiming it is the trade, and the caller is told so.
     expect(resolveUpdatedOwnerIds(undefined, [], "editor")).toEqual({
       ownerIds: ["editor"],
       claimed: true,

@@ -23,10 +23,10 @@ require("dotenv").config();
 //              If omitted, defaults to `git diff --name-only HEAD` filtered to
 //              files under --assets-dir or equal to --script-path.
 //
-// Options (defaults target virtual-world):
-//   --script-uri <uri>    Script URI            (default virtual-world)
-//   --assets-dir <path>   Assets root           (default virtual-world)
-//   --script-path <path>  Entrypoint script     (default virtual-world/main.js)
+// Options (defaults come from aiwebengine.config.json):
+//   --script-uri <uri>    Script URI
+//   --assets-dir <path>   Assets root
+//   --script-path <path>  Entrypoint script
 //   --dry-run             Print what would deploy, upload nothing
 //   --no-verify           Skip the sha256 read-back check (the batch write
 //                         still sends a per-file sha256 the server verifies)

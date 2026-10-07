@@ -331,8 +331,7 @@ export interface LivingClassRecord {
   defaultItems?: string[];
   // ── The death/revival cycle, as data ──────────────────────────────────
   // What happens when a living of this class is killed, and how it comes
-  // back. Together these replace the hardcoded player_ghost/npc_corpse names
-  // that used to sit in fight-helpers.ts and the pray handler. See
+  // back, as class data rather than names in fight-helpers.ts. See
   // resolveNPCDeath/resolvePlayerDeath in fight-helpers.ts.
   //
   // The class this living *becomes* when killed, instead of being removed
@@ -731,10 +730,9 @@ export function normalizeWorldType(
     : WORLD_TYPE_FOREST;
 }
 
-// Fallback for a world with no stored row. Deliberately world-id agnostic: the
-// start world and the guild used to be special-cased here, but both have had a
-// stored type since long before placements, and hard-coding two ids meant no
-// other deployment could ever have a non-forest front door.
+// Fallback for a world with no stored row. Deliberately world-id agnostic:
+// hard-coding ids would mean no other deployment could have a non-forest
+// front door.
 export function getDefaultWorldTypeForWorldId(
   _worldId: string | number,
 ): WorldType {
@@ -1393,10 +1391,9 @@ export function fromStoredWorldTimestamp(storedTs: unknown): number {
 
 // Facings are radians in memory, but every `rotation` column is INTEGER — the
 // engine's schema API has no float column type — so they are stored as whole
-// milliradians. Binding the raw float used to be rounded silently by the
-// database layer; inside a transaction it now fails with "integer out of
-// range", and that failure aborts the transaction, so a tick that turns an
-// NPC east loses every write it made.
+// milliradians. Binding the raw float fails with "integer out of range", and
+// inside a transaction that aborts the transaction, so a tick that turns an
+// NPC east would lose every write it made.
 export function toStoredRotation(radians: unknown): number {
   const numeric = Number(radians);
   if (!isFinite(numeric)) return 0;

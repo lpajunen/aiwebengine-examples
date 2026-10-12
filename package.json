@@ -1,6 +1,8 @@
 {
   "name": "aiwebengine-examples",
   "version": "1.0.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
   "scripts": {
     "outdated": "npm outdated || echo '\u2713 Checked for outdated packages'",
     "format": "prettier --write --log-level warn \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '\u2713 JavaScript files formatted'",

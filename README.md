@@ -38,3 +38,8 @@ Or paste a script into the editor at `/editor`, or write it over MCP.
 
 `schemas/token.json` holds an OAuth access token, written by
 `make oauth-login`. It is gitignored; never commit it.
+
+## License
+
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
+your option.

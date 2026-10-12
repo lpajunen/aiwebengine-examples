@@ -137,7 +137,7 @@ Be respectful, welcoming, and constructive. We're all learning together:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same [AGPL-3.0 License](LICENSE) that covers the project.
+This project is licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. Unless you say otherwise, a contribution you submit is licensed the same way, with no additional terms.
 
 ## Thank You!
 

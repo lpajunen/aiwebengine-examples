@@ -27,6 +27,8 @@ require("dotenv").config();
 //   --branch <branch>    Branch to read (default: the repository's default branch)
 //   --prefix <prefix>    Name prefix: a script directory `shop` lands as `<prefix>-shop`
 //                        (default: none, so it lands as `shop`)
+//   --scripts <a,b>      Take only these top-level directories. Remembered: a later
+//                        pull without --scripts refreshes only what was taken
 //   --force              Re-apply even when the repository has not moved
 // Push options:
 //   --script <uri>       Script to publish (default: virtual-world)
@@ -54,6 +56,7 @@ const DEFAULT_SCRIPT_URI = defaultScriptUri();
  *   repo: string,
  *   branch: string,
  *   prefix: string,
+ *   scripts: string[],
  *   script: string,
  *   message: string,
  *   force: boolean,
@@ -72,6 +75,7 @@ function parseArgs() {
     repo: "",
     branch: "",
     prefix: "",
+    scripts: [],
     script: "",
     message: "",
     force: false,
@@ -91,6 +95,12 @@ function parseArgs() {
         break;
       case "--prefix":
         config.prefix = args[++i];
+        break;
+      case "--scripts":
+        config.scripts = (args[++i] || "")
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean);
         break;
       case "--script":
       case "--script-uri":
@@ -145,6 +155,9 @@ function usage() {
   console.error("  --branch <branch>    Branch to read or write");
   console.error(
     "  --prefix <prefix>    pull: name prefix (`<prefix>-<directory>`), default none",
+  );
+  console.error(
+    "  --scripts <a,b>      pull: only these top-level directories (remembered)",
   );
   console.error(
     `  --script <uri>       push: script to publish (default: ${DEFAULT_SCRIPT_URI})`,
@@ -242,6 +255,7 @@ async function pull(token, config) {
   const body = { repo: config.repo };
   if (config.branch) body.branch = config.branch;
   if (config.prefix) body.prefix = config.prefix;
+  if (config.scripts.length > 0) body.scripts = config.scripts;
   if (config.force) body.force = true;
 
   if (config.dryRun) {

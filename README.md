@@ -14,6 +14,13 @@ engine:
 pull_from_git(repo: "lpajunen/aiwebengine-examples", prefix: "demo")
 ```
 
+Or take only the ones you want. Later pulls without `scripts` refresh just
+those:
+
+```text
+pull_from_git(repo: "lpajunen/aiwebengine-examples", scripts: ["virtual-world"])
+```
+
 ## Deploying from a checkout
 
 ```bash

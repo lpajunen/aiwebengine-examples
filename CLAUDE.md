@@ -132,14 +132,14 @@ at rest, and never returns it again — `make git-credentials` shows metadata on
 
 ```bash
 make git-pull REPO=owner/repo                      # repo -> engine, as scripts
-make git-pull REPO=owner/repo BRANCH=main PREFIX=examples
+make git-pull REPO=owner/repo REF=v1.4.0 PREFIX=examples   # a branch, tag or commit
 make git-push REPO=owner/repo MSG="Fix the cart total"   # script -> repo, one commit
 make git-push SCRIPT=blog REPO=owner/repo
 ```
 
 `scripts/git-sync.js` wraps `POST $MANAGE_HOST/engine/pull_from_git` and
 `POST $MANAGE_HOST/engine/push_to_git`. Both take `DRY=true` (print the request,
-call nothing), `BRANCH=`, and `FORCE=`; `make git-push` defaults `SCRIPT=` to
+call nothing) and `FORCE=`; a pull takes `REF=` (branch, tag or full commit sha) and a push `BRANCH=`; `make git-push` defaults `SCRIPT=` to
 virtual-world and takes `MSG=` for the commit message.
 
 The repository layout is the whole contract — there is no manifest. A directory

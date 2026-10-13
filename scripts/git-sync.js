@@ -24,7 +24,9 @@ require("dotenv").config();
 //   node scripts/git-sync.js push [--script <uri>] [options]
 // Pull options:
 //   --repo <owner/repo>  Repository to read, or any GitHub URL naming it (required)
-//   --branch <branch>    Branch to read (default: the repository's default branch)
+//   --ref <ref>          Branch, tag or full commit sha to read (default: the ref the
+//                        repository is followed at, else its default branch). Naming
+//                        another ref moves the engine's follow there
 //   --prefix <prefix>    Name prefix: a script directory `shop` lands as `<prefix>-shop`
 //                        (default: none, so it lands as `shop`)
 //   --scripts <a,b>      Take only these top-level directories. Remembered: a later
@@ -54,6 +56,7 @@ const DEFAULT_SCRIPT_URI = defaultScriptUri();
  * @typedef {{
  *   command: string,
  *   repo: string,
+ *   ref: string,
  *   branch: string,
  *   prefix: string,
  *   scripts: string[],
@@ -73,6 +76,7 @@ function parseArgs() {
   const config = {
     command: "",
     repo: "",
+    ref: "",
     branch: "",
     prefix: "",
     scripts: [],
@@ -89,6 +93,9 @@ function parseArgs() {
     switch (arg) {
       case "--repo":
         config.repo = args[++i];
+        break;
+      case "--ref":
+        config.ref = args[++i];
         break;
       case "--branch":
         config.branch = args[++i];
@@ -152,7 +159,8 @@ function usage() {
   console.error("");
   console.error("Options:");
   console.error("  --repo <owner/repo>  Repository (required for pull)");
-  console.error("  --branch <branch>    Branch to read or write");
+  console.error("  --ref <ref>          pull: branch, tag or full commit sha");
+  console.error("  --branch <branch>    push: branch to write");
   console.error(
     "  --prefix <prefix>    pull: name prefix (`<prefix>-<directory>`), default none",
   );
@@ -250,10 +258,15 @@ async function pull(token, config) {
   if (!config.repo) {
     throw new Error("pull needs --repo <owner/repo>");
   }
+  if (config.branch) {
+    throw new Error(
+      "pull reads --ref <branch, tag or sha>; --branch is for push",
+    );
+  }
 
   /** @type {Record<string, unknown>} */
   const body = { repo: config.repo };
-  if (config.branch) body.branch = config.branch;
+  if (config.ref) body.ref = config.ref;
   if (config.prefix) body.prefix = config.prefix;
   if (config.scripts.length > 0) body.scripts = config.scripts;
   if (config.force) body.force = true;
@@ -265,7 +278,7 @@ async function pull(token, config) {
   }
 
   console.log(
-    `Pulling ${config.repo}${config.branch ? `#${config.branch}` : ""} into ${manageHost}...`,
+    `Pulling ${config.repo}${config.ref ? `#${config.ref}` : ""} into ${manageHost}...`,
   );
   const result = await post(
     token,
@@ -276,9 +289,9 @@ async function pull(token, config) {
 
   if (result.status !== 200) {
     fail(result, {
-      400: "unusable repository, branch or layout -- nothing was written",
+      400: "unusable repository, ref or layout -- nothing was written",
       403: "the pull would write a script you do not own",
-      404: "no such repository or branch, or it is private (store a credential with `make set-git-credentials`)",
+      404: "no such repository or ref, or it is private (store a credential with `make set-git-credentials`)",
       413: "the repository is larger than this engine will read",
       502: "GitHub refused or could not be reached",
     });
@@ -329,10 +342,12 @@ async function pull(token, config) {
   const commit = result.parsed.commit
     ? ` at ${String(result.parsed.commit).slice(0, 12)}`
     : "";
-  const branch = result.parsed.branch ? `#${result.parsed.branch}` : "";
+  const ref = result.parsed.ref
+    ? `#${String(result.parsed.ref).replace(/^refs\/(heads|tags)\//, "")}`
+    : "";
   const moved = scripts.filter((script) => script.changed).length;
   console.log(
-    `✓ ${scripts.length} script(s) from ${config.repo}${branch}${commit}` +
+    `✓ ${scripts.length} script(s) from ${config.repo}${ref}${commit}` +
       ` — ${moved} changed, ${scripts.length - moved} already current`,
   );
 }

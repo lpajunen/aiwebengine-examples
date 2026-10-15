@@ -12,14 +12,15 @@
 #
 # Engine operations call node directly rather than going through package.json,
 # so this file works in any repository that has scripts/ and node, regardless
-# of what its npm scripts are named.
+# of what its npm scripts are named. Formatting, linting, typechecking and the
+# type definitions are the engine's script kit (.aiwebengine/verify.mk).
 
-.PHONY: sync-tooling check-tooling fetch-types fetch-openapi \
+.PHONY: sync-tooling check-tooling fetch-openapi \
         oauth-login oauth-relogin refresh-token token-status \
         set-git-credentials git-credentials forget-git-credentials git-pull git-push \
         deploy-changed deploy-changed-dry-run check-head eval test test-list test-head \
         status revisions revision-diff pin unpin promote revert label \
-        install outdated format format-check lint typecheck verify
+        install outdated
 
 # SERVER_HOST is the engine's default host for deployed solutions; MANAGE_HOST
 # serves the engine management API (/engine/...) and MCP (/mcp).
@@ -28,7 +29,7 @@ export MANAGE_HOST ?= https://manage.softagen.com
 
 # Where the shared tooling comes from, and what counts as shared.
 TOOLING_SOURCE ?= ../aiwebengine-examples
-TOOLING_FILES ?= scripts tsconfig.json jsconfig.json
+TOOLING_FILES ?= scripts
 
 # Copy the tooling from the source repository over this one's. Directories are
 # mirrored rather than merged, so a file deleted upstream disappears here too.
@@ -73,10 +74,6 @@ check-tooling:
 	fi
 
 # --- Remote metadata -------------------------------------------------------
-
-fetch-types:
-	@mkdir -p types && curl -sS $(MANAGE_HOST)/engine/types/v0.1.0/aiwebengine.d.ts \
-	  -o types/aiwebengine.d.ts && echo '✓ Type definitions updated'
 
 fetch-openapi:
 	@mkdir -p apis && curl -sS $(MANAGE_HOST)/engine/openapi.json \
@@ -208,25 +205,10 @@ label:
 	@node scripts/revisions.js label $(REV) $(LABEL) \
 	  $(if $(URI),--script-uri "$(URI)")
 
-# --- Local checks ----------------------------------------------------------
+# --- Packages ---------------------------------------------------------------
 
 install:
 	npm install
 
 outdated:
 	npm run outdated
-
-format:
-	npm run format
-
-format-check:
-	npm run format-check
-
-lint:
-	npm run lint
-
-typecheck:
-	npm run typecheck
-
-verify:
-	npm run verify

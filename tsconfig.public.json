@@ -1,0 +1,5 @@
+{
+  "extends": "./.aiwebengine/tsconfig.browser.json",
+  "include": ["**/public/**/*.js", "**/public/**/*.ts"],
+  "exclude": ["node_modules"]
+}

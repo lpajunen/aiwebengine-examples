@@ -1,11 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./node_modules/.bin/tsc *)",
-      "Bash(./node_modules/.bin/markdownlint *)",
-      "Bash(make fetch-types)",
-      "Bash(make fetch-types *)",
-      "Bash(./node_modules/.bin/prettier *)",
+      "Bash(make types)",
+      "Bash(make types *)",
       "Bash(make format *)",
       "Bash(make upload-virtual-world)",
       "Bash(make upload-virtual-world *)",
@@ -15,10 +12,8 @@
       "Bash(make typecheck *)",
       "Bash(make lint)",
       "Bash(make lint *)",
-      "Bash(npm run typecheck)",
-      "Bash(npm run typecheck:js)",
-      "Bash(npm run typecheck:ts)",
-      "Bash(npm run verify)",
+      "Bash(make verify)",
+      "Bash(make verify *)",
       "mcp__softagen__virtualWorldGetState",
       "mcp__softagen__read_logs",
       "mcp__softagen__read_asset",

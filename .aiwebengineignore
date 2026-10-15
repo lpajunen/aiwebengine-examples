@@ -8,12 +8,14 @@
 # Everything below is repository furniture or tooling, plus the notes that live
 # beside virtual-world's code and are not assets of it.
 
+/.aiwebengine
+/.github
+/.markdownlint.json
 /aiwebengine.config.json
 /AGENTS.md
 /apis
 /CLAUDE.md
 /CONTRIBUTING.md
-/jsconfig.json
 /LICENSE-APACHE
 /LICENSE-MIT
 /Makefile
@@ -25,6 +27,7 @@
 /scripts
 /SECURITY.md
 /tsconfig.json
+/tsconfig.public.json
 /types
 
 # virtual-world's working notes sit next to its code; they are not assets.

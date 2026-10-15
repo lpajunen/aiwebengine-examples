@@ -13,10 +13,10 @@ The other script directories are standalone examples. Keep changes scoped to the
 Run after every code change — no exceptions:
 
 ```bash
-make format lint typecheck
+make format verify
 ```
 
-This runs Prettier, markdownlint, and TypeScript checks (both `tsconfig.json` for TS and `jsconfig.json` for JS). Script tests (`*.test.ts`) run on the server with `make test`; see `CLAUDE.md`.
+This runs Prettier, markdownlint, and TypeScript checks (`tsconfig.json` for scripts, `tsconfig.public.json` for browser code) — the same `make verify` CI runs. Script tests (`*.test.ts`) run on the server with `make test`; see `CLAUDE.md`.
 
 ## Deployment (CLI)
 
@@ -51,7 +51,7 @@ Alternatively, use the engine's MCP tools at `https://manage.softagen.com/mcp` (
 - one top-level directory per script: `main.*` is the entrypoint, everything else under it is an asset at the same relative path
 - `.aiwebengineignore` — what is not part of any script (tooling, metadata, virtual-world's notes)
 - `scripts/` — tooling: OAuth login, upload, deploy, revisions, git sync, tests
-- `types/` — fetched aiwebengine type definitions (gitignored; run `make fetch-types`)
+- `types/` — fetched aiwebengine type definitions (gitignored; run `make types`)
 - `apis/` — fetched OpenAPI spec (gitignored; run `make fetch-openapi`)
 - `schemas/token.json` — OAuth tokens (gitignored, never commit)
 

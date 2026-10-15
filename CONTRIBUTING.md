@@ -62,7 +62,7 @@ We welcome all kinds of contributions:
 3. Test your changes:
 
    ```bash
-   make fetch-types
+   make verify    # formatting, Markdown and types: what CI runs
    # Test any affected functionality
    ```
 

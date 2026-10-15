@@ -41,22 +41,23 @@ it there deploys it as an asset.
 Run after every code change — no exceptions:
 
 ```bash
-make format lint typecheck
-# equivalent to: npm run format && npm run lint && npm run typecheck
+make format verify
 ```
 
-- `format` — Prettier, writes `**/*.js **/*.ts **/*.json **/*.md`
-- `lint` — markdownlint on `**/*.md`
-- `typecheck` — runs both `tsc -p tsconfig.json` (TS/TSX files) and `tsc -p jsconfig.json` (checked JS files); there is no test suite
+- `format` — Prettier, writes `**/*.{js,mjs,jsx,ts,tsx,json,md}`
+- `verify` — `format-check`, `lint` (markdownlint) and `typecheck`, no writes;
+  what CI runs. `typecheck` is `tsc -p tsconfig.json` (scripts, against the
+  engine's API) and `tsc -p tsconfig.public.json` (browser code under
+  `public/`, against the DOM); there is no test suite
 
-`make verify` (`format-check` + `lint` + `typecheck`, no writes) is the CI-safe variant used to check without mutating files.
-
-To typecheck/lint a single file, invoke the underlying tools directly, e.g. `./node_modules/.bin/tsc -p tsconfig.json --noEmit` (project-wide only — `tsc` config here doesn't support single-file checking) or `./node_modules/.bin/prettier --check path/to/file.ts`.
+These targets are the engine's script kit, `.aiwebengine/verify.mk`, a verbatim
+copy of `script-kit/` in `../aiwebengine` — see `.aiwebengine/README.md`. Fix it
+there, then `make sync-kit` here; CI fails on drift (`make check-kit`). The
+tools run through `npx` at pinned versions, not from `node_modules`.
 
 ### Shared tooling
 
-`scripts/` and the two TypeScript configs are shared verbatim with
-`../aiwebengine-dev`; **this repository is the source of truth**, so fixes are
+`scripts/` is shared verbatim with `../aiwebengine-dev`; **this repository is the source of truth**, so fixes are
 made here and pulled over there with `make sync-tooling`.
 
 ```bash
@@ -75,15 +76,16 @@ That only works if nothing repository-specific sits in the shared files:
 - Generic make targets live in `scripts/tooling.mk`, which the `Makefile`
   includes; the `Makefile` itself holds only this repository's upload targets
   and host bindings.
-- `package.json` carries the local toolchain (`format`, `lint`, `typecheck`,
-  `verify`, `outdated`) and nothing else. Engine operations are make targets
-  that call `node scripts/...` directly, so there is one interface rather than
-  a make target wrapping an npm script wrapping a node call.
+- `package.json` carries what `scripts/` needs and `outdated`, nothing else.
+  Engine operations are make targets that call `node scripts/...` directly, so
+  there is one interface rather than a make target wrapping an npm script
+  wrapping a node call.
 
 ### Fetching remote metadata (gitignored, regenerate as needed)
 
 ```bash
-make fetch-types    # types/aiwebengine.d.ts
+make types          # types/aiwebengine.d.ts, from the engine image (docker)
+make types TYPES_FROM=../aiwebengine   # or from an engine checkout (cargo)
 make fetch-openapi  # apis/openapi.json
 make all            # both of the above + format
 ```
@@ -322,10 +324,17 @@ JSX in this repo uses `h`/`Fragment` factories (configured via `jsxFactory`/`jsx
 
 ### Type checking split
 
-- `tsconfig.json` covers `.ts`/`.tsx`/`.jsx` files (strict is not set; `checkJs: false`).
-- `jsconfig.json` covers `.js` files in the script directories with `checkJs: true` and `strict: true` — plain JS example scripts are still fully type-checked via JSDoc annotations, so add `@param`/`@returns` JSDoc when writing new `.js` example scripts.
-- Both `include` the script directories by glob (`*/**/*.js`) and `exclude` `node_modules` and `scripts`, since a top-level directory alone does not distinguish a script from the tooling beside it. **`scripts/` is in neither program and is not type-checked.**
-- Both include `types/**/*.d.ts`, so `make fetch-types` must be run before typecheck will resolve `HandlerContext`, `ResponseBuilder`, etc.
+- `tsconfig.json` covers every `.ts`/`.tsx`/`.js`/`.jsx` file outside `public/`
+  with `strict: true` and `checkJs: true` — plain JS example scripts are fully
+  type-checked via JSDoc annotations, so add `@param`/`@returns` JSDoc when
+  writing new `.js` example scripts. Every file is a module, so two scripts'
+  top-level functions do not collide.
+- `tsconfig.public.json` covers browser code under `public/`, with the DOM and
+  without the engine's API.
+- Both `exclude` `node_modules` and `scripts`. **`scripts/` is node tooling and
+  is not type-checked.**
+- `types/aiwebengine.d.ts` is generated; `make typecheck` runs `make types`
+  when it is missing.
 
 ### Repo layout
 

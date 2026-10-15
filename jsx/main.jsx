@@ -1,5 +1,6 @@
 /// <reference path="../types/aiwebengine.d.ts" />
 
+/** @param {{ name: string, price: number, description: string }} product */
 function ProductCard({ name, price, description }) {
   return (
     <div className="product-card">
@@ -10,11 +11,12 @@ function ProductCard({ name, price, description }) {
   );
 }
 
+/** @param {HandlerContext} context */
 function jsxHandler(context) {
   const products = [
     { name: "Laptop", price: 999, description: "Powerful computing device" },
     { name: "Mouse", price: 29, description: "Wireless optical mouse" },
-    { name: "Keyboard", price: 79, description: "Mechanical gaming keyboard" }
+    { name: "Keyboard", price: 79, description: "Mechanical gaming keyboard" },
   ];
 
   const html = (
@@ -32,11 +34,11 @@ function jsxHandler(context) {
       <body>
         <h1>Product Catalog - JSX Example</h1>
         <div className="products">
-          {products.map(product => (
-            <ProductCard 
-              name={product.name} 
-              price={product.price} 
-              description={product.description} 
+          {products.map((product) => (
+            <ProductCard
+              name={product.name}
+              price={product.price}
+              description={product.description}
             />
           ))}
         </div>

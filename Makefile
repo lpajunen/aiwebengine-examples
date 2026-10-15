@@ -1,6 +1,8 @@
 # Repository-specific targets. Everything generic lives in scripts/tooling.mk,
 # which is shared verbatim with the other repositories that use this tooling
 # (`make check-tooling`); per-script defaults live in aiwebengine.config.json.
+# Formatting, linting and typechecking are the engine's script kit
+# (.aiwebengine/verify.mk, `make check-kit`).
 #
 # This repository is the tooling source, so sync-tooling and check-tooling are
 # no-ops here and do the copying in the repositories that consume it.
@@ -10,8 +12,9 @@
         check-virtual-world check-virtual-world-candidate
 
 # Fetch types and the OpenAPI description, then format.
-all: fetch-types fetch-openapi format
+all: types fetch-openapi format
 
+include .aiwebengine/verify.mk
 include scripts/tooling.mk
 
 # WORLD_HOST is the hostname the virtual-world example is published on.

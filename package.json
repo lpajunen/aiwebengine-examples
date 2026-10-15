@@ -4,21 +4,11 @@
   "private": true,
   "license": "MIT OR Apache-2.0",
   "scripts": {
-    "outdated": "npm outdated || echo '\u2713 Checked for outdated packages'",
-    "format": "prettier --write --log-level warn \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '\u2713 JavaScript files formatted'",
-    "format-check": "prettier --check \"**/*.js\" \"**/*.ts\" \"**/*.json\" \"**/*.md\" && echo '\u2713 Source files match Prettier formatting'",
-    "lint": "markdownlint \"**/*.md\" --ignore node_modules && echo '\u2713 Markdown files linted'",
-    "typecheck:ts": "tsc -p tsconfig.json",
-    "typecheck:js": "tsc -p jsconfig.json",
-    "typecheck": "npm run typecheck:ts && npm run typecheck:js && echo '\u2713 TypeScript and JavaScript type checks passed'",
-    "verify": "npm run format-check && npm run lint && npm run typecheck"
+    "outdated": "npm outdated || echo '\u2713 Checked for outdated packages'"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "dotenv": "^17.3.1",
-    "markdownlint-cli": "^0.49.1",
-    "minimatch": "^10.2.5",
-    "prettier": "^3.8.1",
-    "typescript": "^6.0.3"
+    "minimatch": "^10.2.5"
   }
 }

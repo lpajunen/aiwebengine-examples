@@ -286,13 +286,16 @@ export function maybeTickWorldNPCs(worldId: string): void {
 
 export function registerRecurringNPCTick(): void {
   try {
-    schedulerService.registerRecurring({
+    const result = scriptTasks.schedule({
+      key: "vworld-npc-tick",
       handler: "runNPCTickScheduledJob",
       intervalMilliseconds: NPC_TICK_MS,
-      name: "vworld-npc-tick",
     });
+    if (!result.ok) {
+      vwLog("npc tick schedule not declared", { reason: result.reason });
+    }
   } catch (e) {
-    vwLog("npc scheduler registerRecurring failed", {
+    vwLog("npc tick schedule refused", {
       error: String(e),
     });
   }

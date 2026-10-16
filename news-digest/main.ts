@@ -25,7 +25,7 @@ const MAX_SEEN = 1000;
 /** Articles kept in the list; the oldest drop off. */
 const MAX_ARTICLES = 500;
 const PAGE_SIZE = 15;
-const MODEL = "claude-haiku-4-5";
+const MODEL = "claude-haiku-5-5";
 /** Many news sites refuse a request that names no client. */
 const HEADERS = {
   "user-agent": "Mozilla/5.0 (compatible; aiwebengine-news-digest/1.0)",
@@ -430,7 +430,12 @@ function summarise(
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 16000,
-      output_config: { format: { type: "json_schema", schema: SCHEMA } },
+      thinking: { type: "adaptive" },
+      // A summary needs little thought; thinking counts toward max_tokens.
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: SCHEMA },
+      },
       system: SYSTEM,
       messages: [
         {

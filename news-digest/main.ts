@@ -5,9 +5,10 @@
 // A signed-in person lists the feeds they read, picks a time and a time
 // zone, and gives the script permission to act for them. Every day at that
 // time a run acting as them reads the feeds, fetches the articles that are
-// new since the last digest, and asks Claude for a plain headline and a short
-// summary of each. The digest is kept in their personal storage and shown at
-// /news-digest, each item linking to the original.
+// new since the last run, and asks Claude for a plain headline and a short
+// summary of each. Every article retrieved is kept in their personal storage
+// and listed at /news-digest, newest first, a page at a time; opening one
+// marks it read, and read ones can be hidden.
 //
 // The script's operator stores one Anthropic API key as the script secret
 // `anthropic_api_key` (`write_secret`). A run sends it with `{{secret:...}}`,
@@ -21,7 +22,10 @@ const MAX_ITEMS = 12;
 const MAX_ARTICLE_CHARS = 4000;
 /** Item ids remembered so an item is summarised once. */
 const MAX_SEEN = 1000;
-const MODEL = "claude-opus-5-5";
+/** Articles kept in the list; the oldest drop off. */
+const MAX_ARTICLES = 500;
+const PAGE_SIZE = 15;
+const MODEL = "claude-haiku-4-5";
 /** Many news sites refuse a request that names no client. */
 const HEADERS = {
   "user-agent": "Mozilla/5.0 (compatible; aiwebengine-news-digest/1.0)",
@@ -35,6 +39,7 @@ interface Settings {
 }
 
 interface DigestItem {
+  id: string;
   headline: string;
   summary: string;
   originalTitle: string;
@@ -43,9 +48,10 @@ interface DigestItem {
   published: string | null;
 }
 
-interface Digest {
+/** What the last run did. */
+interface LastRun {
   createdAt: string;
-  items: DigestItem[];
+  added: number;
   /** Feeds that could not be read this time, and why. */
   problems: string[];
 }
@@ -84,33 +90,80 @@ function page(body: string): HttpResponse {
       `<title>News digest</title>` +
       `<style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem}` +
       `article{margin:1.5rem 0}h2{font-size:1.1rem;margin:0}` +
-      `.meta{color:#666;font-size:.85rem}textarea{width:100%}</style>` +
+      `.meta{color:#666;font-size:.85rem}textarea{width:100%}` +
+      `.read h2 a{color:#666;font-weight:normal}.meta form{display:inline;margin-left:.5rem}` +
+      `.meta button{font-size:.8rem}.nav{text-align:center}</style>` +
       `<h1>News digest</h1>${body}`,
   );
 }
 
-function renderDigest(digest: Digest | null): string {
-  if (!digest) return `<p>No digest yet.</p>`;
-  const items = digest.items
-    .map(
-      (item) =>
-        `<article><h2><a href="${escapeHtml(item.link)}">${escapeHtml(item.headline)}</a></h2>` +
+function renderLastRun(run: LastRun | null): string {
+  if (!run) return `<p>No digest yet.</p>`;
+  const problems = run.problems.length
+    ? ` Not read: ${run.problems.map(escapeHtml).join("; ")}.`
+    : "";
+  return (
+    `<p class=meta>Last run ${escapeHtml(run.createdAt.slice(0, 16).replace("T", " "))} UTC: ` +
+    `${run.added} new.${problems}</p>`
+  );
+}
+
+function pageLink(pageNo: number, unread: boolean): string {
+  const query = [];
+  if (pageNo > 1) query.push(`page=${pageNo}`);
+  if (unread) query.push("unread=1");
+  return "/news-digest" + (query.length ? `?${query.join("&")}` : "");
+}
+
+function renderArticles(
+  articles: DigestItem[],
+  read: Set<string>,
+  pageNo: number,
+  unread: boolean,
+): string {
+  const shown = unread ? articles.filter((a) => !read.has(a.id)) : articles;
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const current = Math.min(Math.max(1, pageNo), pages);
+  const back = pageLink(current, unread);
+  const toggle = unread
+    ? `<a href="${pageLink(1, false)}">Show read articles</a>`
+    : `<a href="${pageLink(1, true)}">Hide read articles</a>`;
+  const list = shown
+    .slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+    .map((item) => {
+      const isRead = read.has(item.id);
+      const id = encodeURIComponent(item.id);
+      return (
+        `<article${isRead ? " class=read" : ""}>` +
+        `<h2><a href="/news-digest/open?id=${id}">${escapeHtml(item.headline)}</a></h2>` +
         `<p>${escapeHtml(item.summary)}</p>` +
         `<p class=meta>${escapeHtml(item.source)}` +
         (item.published
           ? ` · ${escapeHtml(item.published.slice(0, 10))}`
           : "") +
-        ` · originally “${escapeHtml(item.originalTitle)}”</p></article>`,
-    )
+        ` · originally “${escapeHtml(item.originalTitle)}”` +
+        `<form method=post action="/news-digest/read">` +
+        `<input type=hidden name=id value="${escapeHtml(item.id)}">` +
+        `<input type=hidden name=read value="${isRead ? "0" : "1"}">` +
+        `<input type=hidden name=back value="${escapeHtml(back)}">` +
+        `<button>${isRead ? "Mark unread" : "Mark read"}</button></form></p></article>`
+      );
+    })
     .join("");
-  const problems = digest.problems.length
-    ? `<p class=meta>Not read: ${digest.problems.map(escapeHtml).join("; ")}</p>`
-    : "";
-  return (
-    `<p class=meta>Digest of ${escapeHtml(digest.createdAt.slice(0, 16).replace("T", " "))} UTC</p>` +
-    (items || `<p>Nothing new since the last digest.</p>`) +
-    problems
-  );
+  const nav =
+    pages > 1
+      ? `<p class=nav>` +
+        (current > 1
+          ? `<a href="${pageLink(current - 1, unread)}">← Newer</a> `
+          : "") +
+        `Page ${current} of ${pages}` +
+        (current < pages
+          ? ` <a href="${pageLink(current + 1, unread)}">Older →</a>`
+          : "") +
+        `</p>`
+      : "";
+  const empty = unread ? "Nothing unread." : "No articles yet.";
+  return `<p class=meta>${toggle}</p>` + (list || `<p>${empty}</p>`) + nav;
 }
 
 function newsDigestPage(context: HandlerContext): HttpResponse {
@@ -148,9 +201,17 @@ function newsDigestPage(context: HandlerContext): HttpResponse {
     ? ""
     : `<p><strong>No model key is configured for this script yet.</strong></p>`;
 
+  const query = context.request.query ?? {};
+  const read = new Set(readJson<string[]>("read", []));
   return page(
     keyMissing +
-      renderDigest(readJson<Digest | null>("digest", null)) +
+      renderLastRun(readJson<LastRun | null>("lastRun", null)) +
+      renderArticles(
+        readJson<DigestItem[]>("articles", []),
+        read,
+        Number(query.page) || 1,
+        query.unread === "1",
+      ) +
       `<hr><p>${escapeHtml(state)}</p>` +
       `<form method=post action="/news-digest">` +
       `<label>Feeds, one URL per line (RSS, Atom or JSON Feed)<br>` +
@@ -208,6 +269,48 @@ function newsDigestRunNow(context: HandlerContext): HttpResponse {
     return ResponseBuilder.error(403, e instanceof Error ? e.message : "");
   }
   return ResponseBuilder.redirect("/news-digest", 303);
+}
+
+/** Read ids, kept to the articles still in the list. */
+function saveRead(read: Set<string>): void {
+  const kept = readJson<DigestItem[]>("articles", [])
+    .map((a) => a.id)
+    .filter((id) => read.has(id));
+  personalStorage.setItem("read", JSON.stringify(kept));
+}
+
+// Following an article's link marks it read on the way to the original.
+function newsDigestOpen(context: HandlerContext): HttpResponse {
+  if (!context.request?.auth?.isAuthenticated) {
+    return ResponseBuilder.error(401, "Sign in first");
+  }
+  const id = context.request.query?.id ?? "";
+  const article = readJson<DigestItem[]>("articles", []).find(
+    (a) => a.id === id,
+  );
+  if (!article) return ResponseBuilder.error(404, "No such article");
+  const read = new Set(readJson<string[]>("read", []));
+  if (!read.has(id)) {
+    read.add(id);
+    saveRead(read);
+  }
+  return ResponseBuilder.redirect(article.link, 303);
+}
+
+function newsDigestMarkRead(context: HandlerContext): HttpResponse {
+  if (!context.request?.auth?.isAuthenticated) {
+    return ResponseBuilder.error(401, "Sign in first");
+  }
+  const form = context.request.form ?? {};
+  const read = new Set(readJson<string[]>("read", []));
+  if (form.read === "1") read.add(form.id ?? "");
+  else read.delete(form.id ?? "");
+  saveRead(read);
+  const back = form.back ?? "";
+  return ResponseBuilder.redirect(
+    back.startsWith("/news-digest") ? back : "/news-digest",
+    303,
+  );
 }
 
 /** New items across the feeds, newest first, each with the text to summarise. */
@@ -323,17 +426,11 @@ function summarise(
       "content-type": "application/json",
       "x-api-key": "{{secret:anthropic_api_key}}",
       "anthropic-version": "2023-06-01",
-      // A declined request is re-run on Anthropic's recommended fallback.
-      "anthropic-beta": "server-side-fallback-2026-07-01",
     },
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 16000,
-      fallbacks: "default",
-      output_config: {
-        effort: "low",
-        format: { type: "json_schema", schema: SCHEMA },
-      },
+      output_config: { format: { type: "json_schema", schema: SCHEMA } },
       system: SYSTEM,
       messages: [
         {
@@ -372,25 +469,27 @@ function buildDigest(context: HandlerContext): void {
   const seen = new Set(seenList);
   const problems: string[] = [];
   const items = collect(settings.feeds, seen, problems);
-  let digestItems: DigestItem[] = [];
 
   if (items.length > 0) {
     readArticles(items);
-    const summaries = summarise(items);
-    digestItems = summaries.flatMap((s) => {
-      const item = items[Number(s.id)];
-      if (!item) return [];
-      return [
-        {
-          headline: s.headline,
-          summary: s.summary,
-          originalTitle: item.title,
-          link: item.link,
-          source: item.source,
-          published: item.published,
-        },
-      ];
-    });
+    const summaries = new Map(
+      summarise(items).map((s) => [Number(s.id), s] as const),
+    );
+    // Every article retrieved is listed; one the model left out keeps its
+    // own title and the start of its text.
+    const added: DigestItem[] = items.map((item, i) => ({
+      id: item.id,
+      headline: summaries.get(i)?.headline ?? item.title,
+      summary: summaries.get(i)?.summary ?? item.text.slice(0, 300),
+      originalTitle: item.title,
+      link: item.link,
+      source: item.source,
+      published: item.published,
+    }));
+    const articles = added
+      .concat(readJson<DigestItem[]>("articles", []))
+      .slice(0, MAX_ARTICLES);
+    personalStorage.setItem("articles", JSON.stringify(articles));
     // Remembered only once summarised: a failed run leaves them for the next.
     const remembered = seenList.concat(items.map((item) => item.id));
     personalStorage.setItem(
@@ -399,12 +498,12 @@ function buildDigest(context: HandlerContext): void {
     );
   }
 
-  const digest: Digest = {
+  const run: LastRun = {
     createdAt: context.meta?.schedule?.scheduledFor ?? new Date().toISOString(),
-    items: digestItems,
+    added: items.length,
     problems,
   };
-  personalStorage.setItem("digest", JSON.stringify(digest));
+  personalStorage.setItem("lastRun", JSON.stringify(run));
 }
 
 function init(): void {
@@ -415,6 +514,13 @@ function init(): void {
   });
   routeRegistry.registerRoute("/news-digest/run", {
     handler: "newsDigestRunNow",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/news-digest/open", {
+    handler: "newsDigestOpen",
+  });
+  routeRegistry.registerRoute("/news-digest/read", {
+    handler: "newsDigestMarkRead",
     method: "POST",
   });
 }

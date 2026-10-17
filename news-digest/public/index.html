@@ -168,6 +168,19 @@
       .meta .original {
         overflow-wrap: anywhere;
       }
+      /* Out of the way of the button above, which is the one pressed in a
+         row; this one is pressed now and then. */
+      .meta .skip {
+        margin-left: auto;
+      }
+      .reason {
+        color: var(--aw-color-warning);
+        font-weight: 600;
+      }
+      #toggle-filtered[aria-pressed="true"] {
+        border-color: var(--aw-color-focus);
+        color: var(--aw-color-focus);
+      }
       .articles li.read .headline a,
       .articles li.read .summary {
         color: var(--aw-color-muted);
@@ -219,7 +232,7 @@
          menu rather than above the news. The engine's menu adds who is signed
          in, the account page and sign-out. -->
     <aw-account-menu>
-      <button type="button" id="open-feeds">Feeds</button>
+      <button type="button" id="open-feeds">Feeds and interests</button>
       <a id="grant-link" href="#" hidden>Permissions</a>
     </aw-account-menu>
     <main>
@@ -232,7 +245,7 @@
       <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
 
       <section id="feeds-panel" hidden>
-        <h2>Feeds</h2>
+        <h2>Feeds and interests</h2>
         <label for="feeds"
           >One URL per line: RSS, Atom or JSON Feed, at most 10.</label
         >
@@ -240,6 +253,15 @@
           id="feeds"
           spellcheck="false"
           placeholder="https://example.com/feed.xml"
+        ></textarea>
+        <label for="interests"
+          >What you want to read, and what you do not, in your own words.
+          Articles that do not fit go under Filtered.</label
+        >
+        <textarea
+          id="interests"
+          maxlength="2000"
+          placeholder="Not interested in sports, celebrities or horoscopes. Very interested in politics, energy and AI."
         ></textarea>
         <div class="row">
           <button id="save-feeds">Save</button>
@@ -257,10 +279,18 @@
       <section>
         <div class="row" style="margin-top: 0">
           <h2 style="margin: 0">
-            News<span id="unread-count" class="count" hidden></span>
+            <span id="list-title">News</span
+            ><span id="unread-count" class="count" hidden></span>
           </h2>
           <span class="spacer"></span>
-          <label class="aw-choice aw-muted">
+          <button
+            id="toggle-filtered"
+            class="aw-button--secondary aw-button--small"
+            aria-pressed="false"
+          >
+            Filtered
+          </button>
+          <label id="show-read-choice" class="aw-choice aw-muted">
             <input type="checkbox" id="show-read" />
             Show read
           </label>

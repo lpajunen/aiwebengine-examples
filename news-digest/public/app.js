@@ -9,16 +9,16 @@
  * @typedef {{
  *   id: string, headline: string, summary: string, originalTitle: string,
  *   link: string, source: string, published: string | null,
- *   addedAt?: string, read: boolean
+ *   addedAt?: string, filtered?: string, read: boolean
  * }} Article
  * @typedef {{ checkedAt: string, added: number, problem?: string }} FeedStatus
  * @typedef {{
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
- *   keyConfigured?: boolean, feeds?: string[],
+ *   keyConfigured?: boolean, feeds?: string[], interests?: string,
  *   feedStatus?: Record<string, FeedStatus>,
  *   schedule?: { state: string, pausedReason: string | null,
  *     nextRunAt: string, lastRunAt: string | null } | null,
- *   unread?: number, newSince?: number, latest?: string
+ *   unread?: number, filtered?: number, newSince?: number, latest?: string
  * }} State
  */
 
@@ -45,6 +45,7 @@ const el = {
   grantLink: /** @type {HTMLAnchorElement} */ (byId("grant-link")),
   feedsPanel: byId("feeds-panel"),
   feeds: /** @type {HTMLTextAreaElement} */ (byId("feeds")),
+  interests: /** @type {HTMLTextAreaElement} */ (byId("interests")),
   saveFeeds: /** @type {HTMLButtonElement} */ (byId("save-feeds")),
   closeFeeds: byId("close-feeds"),
   runNow: /** @type {HTMLButtonElement} */ (byId("run-now")),
@@ -52,6 +53,9 @@ const el = {
   feedStatus: byId("feed-status"),
   newBanner: byId("new-banner"),
   unreadCount: byId("unread-count"),
+  listTitle: byId("list-title"),
+  toggleFiltered: byId("toggle-filtered"),
+  showReadChoice: byId("show-read-choice"),
   showRead: /** @type {HTMLInputElement} */ (byId("show-read")),
   markAll: /** @type {HTMLButtonElement} */ (byId("mark-all")),
   articles: byId("articles"),
@@ -72,6 +76,8 @@ const view = {
   /** Articles after this are marked fresh: new since the previous drawing. */
   freshAfter: "",
   eagerUntil: 0,
+  /** Showing what was filtered out rather than the news. */
+  filtered: false,
   /** @type {number | undefined} */
   timer: undefined,
   /** @type {State | null} */
@@ -197,15 +203,24 @@ function renderArticle(article) {
 
   // The button leads the item, top right, so that reading down the list and
   // marking each one read never moves the pointer: with read articles hidden,
-  // the next item's button slides up into the same place.
+  // the next item's button slides up into the same place. Under Filtered it
+  // is the way back instead.
   const button = /** @type {HTMLButtonElement} */ (
     make("button", "aw-button--secondary aw-button--small mark")
   );
   button.type = "button";
-  button.textContent = article.read ? "Mark unread" : "Mark read";
-  button.addEventListener("click", () => {
-    void toggleRead(article, item, button);
-  });
+  if (view.filtered) {
+    button.textContent = "Show it after all";
+    button.title = "Back to the news, and remembered as what you want";
+    button.addEventListener("click", () => {
+      void sendVerdict(article, item, "want");
+    });
+  } else {
+    button.textContent = article.read ? "Mark unread" : "Mark read";
+    button.addEventListener("click", () => {
+      void toggleRead(article, item, button);
+    });
+  }
 
   const headline = make("h3", "headline");
   const link = document.createElement("a");
@@ -222,6 +237,7 @@ function renderArticle(article) {
   header.append(headline, button);
 
   const meta = make("div", "meta");
+  if (article.filtered) meta.append(make("span", "reason", article.filtered));
   meta.append(make("span", "", article.source));
   if (article.published) {
     meta.append(
@@ -231,9 +247,54 @@ function renderArticle(article) {
   meta.append(
     make("span", "original", `originally “${article.originalTitle}”`),
   );
+  if (!view.filtered) {
+    const skip = /** @type {HTMLButtonElement} */ (
+      make("button", "aw-button--secondary aw-button--small skip")
+    );
+    skip.type = "button";
+    skip.textContent = "Not interested";
+    skip.title = "Moves it to Filtered, and fewer like it from now on";
+    skip.addEventListener("click", () => {
+      void sendVerdict(article, item, "skip");
+    });
+    meta.append(skip);
+  }
 
   item.append(header, make("p", "summary", article.summary), meta);
   return item;
+}
+
+/**
+ * File an article under Filtered ("skip") or bring it back ("want"); either
+ * way it leaves the list in view, at once, and returns if refused.
+ * @param {Article} article
+ * @param {HTMLElement} item
+ * @param {"skip" | "want"} verdict
+ */
+async function sendVerdict(article, item, verdict) {
+  const next = item.nextSibling;
+  const unread = !item.classList.contains("read");
+  const counts = () => {
+    if (!view.state) return;
+    const sign = verdict === "skip" ? 1 : -1;
+    view.state.filtered = Math.max(0, (view.state.filtered ?? 0) + sign);
+    if (unread) {
+      view.state.unread = Math.max(0, (view.state.unread ?? 0) - sign);
+    }
+    renderUnread();
+  };
+  item.remove();
+  counts();
+  try {
+    await api("/news-digest/verdict", { id: article.id, verdict });
+  } catch (e) {
+    el.articles.insertBefore(item, next);
+    verdict = verdict === "skip" ? "want" : "skip";
+    counts();
+    showNotice(e instanceof Error ? e.message : String(e));
+    return;
+  }
+  if (el.articles.children.length === 0) await loadArticles();
 }
 
 /**
@@ -278,13 +339,29 @@ function setRead(item, button, read) {
 
 function renderUnread() {
   const unread = view.state?.unread ?? 0;
-  el.unreadCount.hidden = unread === 0;
+  el.unreadCount.hidden = view.filtered || unread === 0;
   el.unreadCount.textContent = String(unread);
+  const filtered = view.state?.filtered ?? 0;
+  el.toggleFiltered.textContent = view.filtered
+    ? "Back to news"
+    : filtered
+      ? `Filtered (${filtered})`
+      : "Filtered";
+}
+
+/** Between the news and what was filtered out of it. */
+function renderView() {
+  el.listTitle.textContent = view.filtered ? "Filtered" : "News";
+  el.toggleFiltered.setAttribute("aria-pressed", String(view.filtered));
+  el.showReadChoice.hidden = view.filtered;
+  el.markAll.hidden = view.filtered;
+  renderUnread();
 }
 
 async function loadArticles() {
   const query = new URLSearchParams({ page: String(view.page) });
-  if (el.showRead.checked) query.set("all", "1");
+  if (view.filtered) query.set("filtered", "1");
+  else if (el.showRead.checked) query.set("all", "1");
   /** @type {{ page: number, pages: number, total: number, articles: Article[] }} */
   const list = await api("/news-digest/articles?" + query);
   view.page = list.page;
@@ -295,11 +372,13 @@ async function loadArticles() {
       make(
         "li",
         "empty",
-        feeds === 0
-          ? "No feeds yet. Add some from Feeds in the account menu."
-          : el.showRead.checked
-            ? "No articles yet. The first ones arrive within 15 minutes."
-            : "Nothing unread.",
+        view.filtered
+          ? "Nothing filtered out."
+          : feeds === 0
+            ? "No feeds yet. Add some from Feeds and interests in the account menu."
+            : el.showRead.checked
+              ? "No articles yet. The first ones arrive within 15 minutes."
+              : "Nothing unread.",
       ),
     );
   }
@@ -413,6 +492,8 @@ async function showLatest() {
   view.freshAfter = view.listedUpTo;
   view.listedUpTo = state.latest || "0";
   view.page = 1;
+  view.filtered = false;
+  renderView();
   renderNew({ ...state, newSince: 0 });
   await loadArticles();
 }
@@ -439,6 +520,7 @@ async function poll() {
 
 function openFeeds() {
   el.feeds.value = (view.state?.feeds ?? []).join("\n");
+  el.interests.value = view.state?.interests ?? "";
   setStatus(el.feedsStatus, "");
   el.feedsPanel.hidden = false;
   el.feeds.focus();
@@ -457,8 +539,14 @@ el.saveFeeds.addEventListener("click", async () => {
   el.saveFeeds.disabled = true;
   setStatus(el.feedsStatus, "Saving…");
   try {
-    await api("/news-digest/feeds", { feeds });
-    setStatus(el.feedsStatus, "Saved. New feeds are being read now.");
+    await api("/news-digest/feeds", {
+      feeds,
+      interests: el.interests.value,
+    });
+    setStatus(
+      el.feedsStatus,
+      "Saved. New feeds are read now; interests apply to articles from now on.",
+    );
     view.eagerUntil = Date.now() + EAGER_FOR_MS;
     await refreshState();
     void poll();
@@ -486,6 +574,13 @@ el.runNow.addEventListener("click", async () => {
 el.newBanner.addEventListener("click", () => {
   void showLatest();
   window.scrollTo({ top: 0 });
+});
+
+el.toggleFiltered.addEventListener("click", () => {
+  view.filtered = !view.filtered;
+  view.page = 1;
+  renderView();
+  void loadArticles();
 });
 
 el.showRead.addEventListener("change", () => {

@@ -195,15 +195,31 @@ function renderArticle(article) {
       (article.addedAt ?? "") > view.freshAfter,
   );
 
+  // The button leads the item, top right, so that reading down the list and
+  // marking each one read never moves the pointer: with read articles hidden,
+  // the next item's button slides up into the same place.
+  const button = /** @type {HTMLButtonElement} */ (
+    make("button", "aw-button--secondary aw-button--small mark")
+  );
+  button.type = "button";
+  button.textContent = article.read ? "Mark unread" : "Mark read";
+  button.addEventListener("click", () => {
+    void toggleRead(article, item, button);
+  });
+
   const headline = make("h3", "headline");
   const link = document.createElement("a");
   link.href = "/news-digest/open?id=" + encodeURIComponent(article.id);
   link.target = "_blank";
   link.rel = "noopener";
   link.textContent = article.headline;
-  // The script marks it read on the way through; the list follows suit.
+  // The script marks it read on the way through; the list follows suit, but
+  // keeps it in place, dimmed, until the list is next drawn.
   link.addEventListener("click", () => setRead(item, button, true));
   headline.append(link);
+
+  const header = make("div", "article-head");
+  header.append(headline, button);
 
   const meta = make("div", "meta");
   meta.append(make("span", "", article.source));
@@ -215,27 +231,34 @@ function renderArticle(article) {
   meta.append(
     make("span", "original", `originally “${article.originalTitle}”`),
   );
-  const button = /** @type {HTMLButtonElement} */ (
-    make("button", "aw-button--secondary aw-button--small")
-  );
-  button.type = "button";
-  button.textContent = article.read ? "Mark unread" : "Mark read";
-  button.addEventListener("click", async () => {
-    const read = !item.classList.contains("read");
-    button.disabled = true;
-    try {
-      await api("/news-digest/read", { id: article.id, read });
-      setRead(item, button, read);
-    } catch (e) {
-      showNotice(e instanceof Error ? e.message : String(e));
-    } finally {
-      button.disabled = false;
-    }
-  });
-  meta.append(button);
 
-  item.append(headline, make("p", "summary", article.summary), meta);
+  item.append(header, make("p", "summary", article.summary), meta);
   return item;
+}
+
+/**
+ * Mark one read or unread. Shown at once and sent behind it, so a run of
+ * clicks is as fast as the reading; a refusal puts it back.
+ * @param {Article} article
+ * @param {HTMLElement} item
+ * @param {HTMLButtonElement} button
+ */
+async function toggleRead(article, item, button) {
+  const read = !item.classList.contains("read");
+  const hide = read && !el.showRead.checked;
+  const next = item.nextSibling;
+  setRead(item, button, read);
+  if (hide) item.remove();
+  try {
+    await api("/news-digest/read", { id: article.id, read });
+  } catch (e) {
+    setRead(item, button, !read);
+    if (hide) el.articles.insertBefore(item, next);
+    showNotice(e instanceof Error ? e.message : String(e));
+    return;
+  }
+  // The last one on the page gone: bring in what was behind it.
+  if (hide && el.articles.children.length === 0) await loadArticles();
 }
 
 /**

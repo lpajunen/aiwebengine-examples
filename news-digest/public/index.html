@@ -116,9 +116,23 @@
       .articles li:last-child {
         padding-bottom: 0;
       }
+      .article-head {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--aw-space-3);
+        margin-bottom: var(--aw-space-1);
+      }
       .headline {
+        flex: 1;
+        min-width: 0;
         font-size: 1.05rem;
-        margin: 0 0 var(--aw-space-1);
+        margin: 0;
+      }
+      /* One width for both labels, so the button does not move under the
+         pointer when it changes. */
+      .mark {
+        flex: none;
+        min-width: 7.5rem;
       }
       .headline a {
         color: var(--aw-color-text);
@@ -153,9 +167,6 @@
       }
       .meta .original {
         overflow-wrap: anywhere;
-      }
-      .meta button {
-        margin-left: auto;
       }
       .articles li.read .headline a,
       .articles li.read .summary {

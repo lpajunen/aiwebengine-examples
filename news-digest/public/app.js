@@ -324,19 +324,24 @@ function renderState(state) {
     );
     return;
   }
-  if (state.consentUrl) {
+  // The engine's consent page, told to come back here whichever way the
+  // person leaves it.
+  const consent = state.consentUrl
+    ? state.consentUrl + "&redirect=" + encodeURIComponent(location.pathname)
+    : null;
+  if (consent) {
     el.grantLink.hidden = false;
-    el.grantLink.href = state.consentUrl;
-    el.grantLink.textContent = state.granted
-      ? "Permissions"
-      : "Give permission";
+    el.grantLink.href = consent;
+    el.grantLink.title = state.granted
+      ? "What the digest may do while you are away."
+      : "The digest has no permission to work while you are away yet.";
   }
   if (!state.granted) {
     showNotice(
       "The digest is put together while you are away, so it needs your " +
         "permission: personal storage, with write.",
-      "Give it",
-      state.consentUrl ?? "#",
+      "Give permission",
+      consent ?? "#",
     );
   } else if (!state.keyConfigured) {
     showNotice("No model key is configured for this script yet.");

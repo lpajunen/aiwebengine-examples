@@ -2,21 +2,24 @@
 
 // News Digest: the news you follow, summarised, without the clickbait.
 //
-// A signed-in person lists the feeds they read, picks a time and a time
-// zone, and gives the script permission to act for them. Every day at that
-// time a run acting as them reads the feeds, fetches the articles that are
-// new since the last run, and asks Claude for a plain headline and a short
-// summary of each. Every article retrieved is kept in their personal storage
-// and listed at /news-digest, newest first, a page at a time; opening one
-// marks it read, and read ones can be hidden.
+// A signed-in person lists the feeds they read (from the account menu) and
+// gives the script permission to act for them. Every 15 minutes a run acting
+// as them reads the next feed in turn, fetches the articles that are new
+// since that feed was last read, and asks Claude for a plain headline and a
+// short summary of each. Every article retrieved is kept in their personal
+// storage and listed at /news-digest, newest first, a page at a time, unread
+// ones only unless asked. Opening one marks it read. The page asks every
+// minute whether anything arrived since it last listed, and says so.
 //
 // The script's operator stores one Anthropic API key as the script secret
 // `anthropic_api_key` (`write_secret`). A run sends it with `{{secret:...}}`,
 // so it never passes through this code.
 
 const KEY = "news-digest";
+/** The engine's floor for a person's schedule. */
+const INTERVAL_MINUTES = 15;
 const MAX_FEEDS = 10;
-/** New items summarised in one digest; the rest wait for the next. */
+/** New items summarised in one run; the rest wait for the next. */
 const MAX_ITEMS = 12;
 /** Article text sent to the model per item: enough for a summary. */
 const MAX_ARTICLE_CHARS = 4000;
@@ -34,8 +37,6 @@ const HEADERS = {
 
 interface Settings {
   feeds: string[];
-  time: string;
-  timeZone: string;
 }
 
 interface DigestItem {
@@ -46,18 +47,22 @@ interface DigestItem {
   link: string;
   source: string;
   published: string | null;
+  /** When this digest took it in, UTC; what "new" is measured by. */
+  addedAt?: string;
 }
 
-/** What the last run did. */
-interface LastRun {
-  createdAt: string;
+/** What the last read of one feed did. */
+interface FeedStatus {
+  checkedAt: string;
   added: number;
-  /** Feeds that could not be read this time, and why. */
-  problems: string[];
+  /** Why it could not be read, if it could not. */
+  problem?: string;
 }
 
 interface Candidate {
   id: string;
+  /** The feed it came from. */
+  feed: string;
   title: string;
   link: string;
   source: string;
@@ -65,14 +70,6 @@ interface Candidate {
   /** BCP 47 tag from the page or the feed, e.g. "fi"; null when neither says. */
   language: string | null;
   text: string;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** A language tag such as "fi" or "en-GB", or null for anything else. */
@@ -92,192 +89,165 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function page(body: string): HttpResponse {
-  return ResponseBuilder.html(
-    `<!doctype html><meta charset=utf-8>` +
-      `<meta name=viewport content="width=device-width, initial-scale=1">` +
-      `<title>News digest</title>` +
-      `<style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem}` +
-      `article{margin:1.5rem 0}h2{font-size:1.1rem;margin:0}` +
-      `.meta{color:#666;font-size:.85rem}textarea{width:100%}` +
-      `.read h2 a{color:#666;font-weight:normal}.meta form{display:inline;margin-left:.5rem}` +
-      `.meta button{font-size:.8rem}.nav{text-align:center}</style>` +
-      `<h1>News digest</h1>${body}`,
-  );
+function fail(status: number, error: string): HttpResponse {
+  return ResponseBuilder.json({ error }, status);
 }
 
-function renderLastRun(run: LastRun | null): string {
-  if (!run) return `<p>No digest yet.</p>`;
-  const problems = run.problems.length
-    ? ` Not read: ${run.problems.map(escapeHtml).join("; ")}.`
-    : "";
+/** The JSON body, or an empty object for one that is not. */
+function body(context: HandlerContext): Record<string, unknown> {
+  try {
+    const value = context.request?.json();
+    return value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function signedIn(context: HandlerContext): boolean {
+  return Boolean(context.request?.auth?.isAuthenticated);
+}
+
+/** Whether runs can act for this person: storage, with write. */
+function permitted(grant: DelegationState): boolean {
+  const scopes = grant.scopes ?? [];
   return (
-    `<p class=meta>Last run ${escapeHtml(run.createdAt.slice(0, 16).replace("T", " "))} UTC: ` +
-    `${run.added} new.${problems}</p>`
+    grant.granted &&
+    scopes.indexOf("personal_storage") !== -1 &&
+    scopes.indexOf("write") !== -1
   );
 }
 
-function pageLink(pageNo: number, unread: boolean): string {
-  const query = [];
-  if (pageNo > 1) query.push(`page=${pageNo}`);
-  if (unread) query.push("unread=1");
-  return "/news-digest" + (query.length ? `?${query.join("&")}` : "");
+function declareSchedule(): PersonalSchedule {
+  // Saying it again under the same key replaces it.
+  return personalTasks.schedule({
+    key: KEY,
+    handler: "buildDigest",
+    intervalMinutes: INTERVAL_MINUTES,
+  });
 }
 
-function renderArticles(
+/** Unread articles taken in after `since`. */
+function countNew(
   articles: DigestItem[],
   read: Set<string>,
-  pageNo: number,
-  unread: boolean,
-): string {
-  const shown = unread ? articles.filter((a) => !read.has(a.id)) : articles;
-  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
-  const current = Math.min(Math.max(1, pageNo), pages);
-  const back = pageLink(current, unread);
-  const toggle = unread
-    ? `<a href="${pageLink(1, false)}">Show read articles</a>`
-    : `<a href="${pageLink(1, true)}">Hide read articles</a>`;
-  const list = shown
-    .slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
-    .map((item) => {
-      const isRead = read.has(item.id);
-      const id = encodeURIComponent(item.id);
-      return (
-        `<article${isRead ? " class=read" : ""}>` +
-        `<h2><a href="/news-digest/open?id=${id}">${escapeHtml(item.headline)}</a></h2>` +
-        `<p>${escapeHtml(item.summary)}</p>` +
-        `<p class=meta>${escapeHtml(item.source)}` +
-        (item.published
-          ? ` · ${escapeHtml(item.published.slice(0, 10))}`
-          : "") +
-        ` · originally “${escapeHtml(item.originalTitle)}”` +
-        `<form method=post action="/news-digest/read">` +
-        `<input type=hidden name=id value="${escapeHtml(item.id)}">` +
-        `<input type=hidden name=read value="${isRead ? "0" : "1"}">` +
-        `<input type=hidden name=back value="${escapeHtml(back)}">` +
-        `<button>${isRead ? "Mark unread" : "Mark read"}</button></form></p></article>`
-      );
-    })
-    .join("");
-  const nav =
-    pages > 1
-      ? `<p class=nav>` +
-        (current > 1
-          ? `<a href="${pageLink(current - 1, unread)}">← Newer</a> `
-          : "") +
-        `Page ${current} of ${pages}` +
-        (current < pages
-          ? ` <a href="${pageLink(current + 1, unread)}">Older →</a>`
-          : "") +
-        `</p>`
-      : "";
-  const empty = unread ? "Nothing unread." : "No articles yet.";
-  return `<p class=meta>${toggle}</p>` + (list || `<p>${empty}</p>`) + nav;
+  since: string,
+): number {
+  return articles.filter(
+    (a) => a.addedAt !== undefined && a.addedAt > since && !read.has(a.id),
+  ).length;
 }
 
-function newsDigestPage(context: HandlerContext): HttpResponse {
-  if (!context.request?.auth?.isAuthenticated) {
-    return page(
-      `<p><a href="/auth/login?redirect=/news-digest">Sign in</a> first.</p>`,
-    );
-  }
+// Everything the page needs besides the list: who, what is allowed, the
+// feeds and how each last went, and how much is new since `since`.
+function newsDigestState(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return ResponseBuilder.json({ signedIn: false });
   const grant = personalTasks.authorization();
-  const scopes = grant.scopes ?? [];
-  if (
-    !grant.granted ||
-    scopes.indexOf("personal_storage") === -1 ||
-    scopes.indexOf("write") === -1
-  ) {
-    return page(
-      `<p>The digest is put together while you are away, so it needs your ` +
-        `permission (personal storage, with write). ` +
-        `<a href="${escapeHtml(grant.consentUrl ?? "")}">Give it</a>.</p>`,
-    );
+  const allowed = permitted(grant);
+  const settings = readJson<Settings>("settings", { feeds: [] });
+  let schedule = personalTasks.schedules().find((s) => s.key === KEY) ?? null;
+  // A schedule declared before the rotation ran once a day; move it over.
+  if (allowed && schedule && schedule.cron !== null) {
+    try {
+      schedule = declareSchedule();
+    } catch (e) {
+      console.warn(`news-digest: moving the schedule over: ${e}`);
+    }
   }
-
-  const settings = readJson<Settings>("settings", {
-    feeds: [],
-    time: "07:00",
-    timeZone: "UTC",
-  });
-  const schedule = personalTasks.schedules().find((s) => s.key === KEY);
-  const state = schedule
-    ? schedule.state === "active"
-      ? `Next digest: ${schedule.nextRunAt} (UTC).`
-      : `Paused (${schedule.pausedReason}).`
-    : "Not scheduled.";
-  const keyMissing = secretStorage.exists("anthropic_api_key")
-    ? ""
-    : `<p><strong>No model key is configured for this script yet.</strong></p>`;
-
-  const query = context.request.query ?? {};
+  const articles = readJson<DigestItem[]>("articles", []);
   const read = new Set(readJson<string[]>("read", []));
-  return page(
-    keyMissing +
-      renderLastRun(readJson<LastRun | null>("lastRun", null)) +
-      renderArticles(
-        readJson<DigestItem[]>("articles", []),
-        read,
-        Number(query.page) || 1,
-        query.unread === "1",
-      ) +
-      `<hr><p>${escapeHtml(state)}</p>` +
-      `<form method=post action="/news-digest">` +
-      `<label>Feeds, one URL per line (RSS, Atom or JSON Feed)<br>` +
-      `<textarea name=feeds rows=5>${escapeHtml(settings.feeds.join("\n"))}</textarea></label><br>` +
-      `<label>Time <input name=time value="${escapeHtml(settings.time)}"></label> ` +
-      `<label>Time zone <input name=timeZone value="${escapeHtml(settings.timeZone)}"></label> ` +
-      `<button>Save and schedule</button></form>` +
-      `<form method=post action="/news-digest/run"><button>Make a digest now</button></form>`,
-  );
+  const since = context.request?.query?.since ?? "";
+  return ResponseBuilder.json({
+    signedIn: true,
+    granted: allowed,
+    consentUrl: grant.consentUrl ?? null,
+    keyConfigured: secretStorage.exists("anthropic_api_key"),
+    feeds: settings.feeds,
+    feedStatus: readJson<Record<string, FeedStatus>>("feedStatus", {}),
+    schedule: schedule && {
+      state: schedule.state,
+      pausedReason: schedule.pausedReason ?? null,
+      nextRunAt: schedule.nextRunAt,
+      lastRunAt: schedule.lastRunAt,
+    },
+    unread: articles.filter((a) => !read.has(a.id)).length,
+    newSince: since ? countNew(articles, read, since) : 0,
+    latest: articles.reduce(
+      (max, a) => (a.addedAt && a.addedAt > max ? a.addedAt : max),
+      "",
+    ),
+  });
 }
 
-function newsDigestSave(context: HandlerContext): HttpResponse {
-  if (!context.request?.auth?.isAuthenticated) {
-    return ResponseBuilder.error(401, "Sign in first");
-  }
-  const form = context.request.form ?? {};
-  const feeds = (form.feeds ?? "")
-    .split(/\s+/)
-    .map((url) => url.trim())
-    .filter((url) => url !== "");
+// One page of the list, newest first; unread only unless `all=1`.
+function newsDigestArticles(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  const query = context.request?.query ?? {};
+  const all = query.all === "1";
+  const read = new Set(readJson<string[]>("read", []));
+  const articles = readJson<DigestItem[]>("articles", []);
+  const shown = all ? articles : articles.filter((a) => !read.has(a.id));
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const current = Math.min(Math.max(1, Number(query.page) || 1), pages);
+  return ResponseBuilder.json({
+    page: current,
+    pages,
+    total: shown.length,
+    articles: shown
+      .slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+      .map((a) => ({ ...a, read: read.has(a.id) })),
+  });
+}
+
+function newsDigestSaveFeeds(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  const given = body(context).feeds;
+  const feeds = (Array.isArray(given) ? given : [])
+    .map((url) => String(url).trim())
+    .filter((url, i, list) => url !== "" && list.indexOf(url) === i);
   if (feeds.length > MAX_FEEDS) {
-    return ResponseBuilder.error(400, `At most ${MAX_FEEDS} feeds`);
+    return fail(400, `At most ${MAX_FEEDS} feeds`);
   }
   const bad = feeds.find((url) => !/^https?:\/\/[^\s]+$/.test(url));
-  if (bad) return ResponseBuilder.error(400, `Not a URL: ${bad}`);
-  const match = /^(\d{1,2}):(\d{2})$/.exec(form.time ?? "");
-  if (!match) return ResponseBuilder.error(400, "time must be HH:MM");
-  const settings: Settings = {
-    feeds,
-    time: form.time ?? "07:00",
-    timeZone: form.timeZone || "UTC",
-  };
+  if (bad) return fail(400, `Not a URL: ${bad}`);
+  const before = readJson<Settings>("settings", { feeds: [] }).feeds;
   try {
-    // Saying it again under the same key replaces it.
-    personalTasks.schedule({
-      key: KEY,
-      handler: "buildDigest",
-      cron: `${Number(match[2])} ${Number(match[1])} * * *`,
-      timeZone: settings.timeZone,
-    });
+    if (feeds.length === 0) {
+      personalTasks.unschedule(KEY);
+    } else {
+      declareSchedule();
+      // A feed just added is read now rather than when its turn comes.
+      const added = feeds.filter((url) => before.indexOf(url) === -1);
+      if (added.length > 0) {
+        personalTasks.enqueue({
+          handler: "buildDigest",
+          payload: { feeds: added },
+        });
+      }
+    }
   } catch (e) {
-    return ResponseBuilder.error(400, e instanceof Error ? e.message : "");
+    return fail(403, e instanceof Error ? e.message : "Not allowed");
   }
-  personalStorage.setItem("settings", JSON.stringify(settings));
-  return ResponseBuilder.redirect("/news-digest", 303);
+  personalStorage.setItem("settings", JSON.stringify({ feeds }));
+  const status = readJson<Record<string, FeedStatus>>("feedStatus", {});
+  const kept: Record<string, FeedStatus> = {};
+  for (const url of feeds) if (status[url]) kept[url] = status[url];
+  personalStorage.setItem("feedStatus", JSON.stringify(kept));
+  return ResponseBuilder.json({ ok: true, feeds });
 }
 
+// Every feed, now, rather than one in turn.
 function newsDigestRunNow(context: HandlerContext): HttpResponse {
-  if (!context.request?.auth?.isAuthenticated) {
-    return ResponseBuilder.error(401, "Sign in first");
-  }
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  const feeds = readJson<Settings>("settings", { feeds: [] }).feeds;
+  if (feeds.length === 0) return fail(400, "No feeds yet");
   try {
-    personalTasks.enqueue({ handler: "buildDigest" });
+    personalTasks.enqueue({ handler: "buildDigest", payload: { feeds } });
   } catch (e) {
-    return ResponseBuilder.error(403, e instanceof Error ? e.message : "");
+    return fail(403, e instanceof Error ? e.message : "Not allowed");
   }
-  return ResponseBuilder.redirect("/news-digest", 303);
+  return ResponseBuilder.json({ ok: true });
 }
 
 /** Read ids, kept to the articles still in the list. */
@@ -290,10 +260,8 @@ function saveRead(read: Set<string>): void {
 
 // Following an article's link marks it read on the way to the original.
 function newsDigestOpen(context: HandlerContext): HttpResponse {
-  if (!context.request?.auth?.isAuthenticated) {
-    return ResponseBuilder.error(401, "Sign in first");
-  }
-  const id = context.request.query?.id ?? "";
+  if (!signedIn(context)) return ResponseBuilder.error(401, "Sign in first");
+  const id = context.request?.query?.id ?? "";
   const article = readJson<DigestItem[]>("articles", []).find(
     (a) => a.id === id,
   );
@@ -306,27 +274,29 @@ function newsDigestOpen(context: HandlerContext): HttpResponse {
   return ResponseBuilder.redirect(article.link, 303);
 }
 
+// `{id, read}` marks one; `{all: true}` marks every article read.
 function newsDigestMarkRead(context: HandlerContext): HttpResponse {
-  if (!context.request?.auth?.isAuthenticated) {
-    return ResponseBuilder.error(401, "Sign in first");
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  const request = body(context);
+  if (request.all === true) {
+    const ids = readJson<DigestItem[]>("articles", []).map((a) => a.id);
+    personalStorage.setItem("read", JSON.stringify(ids));
+    return ResponseBuilder.json({ ok: true });
   }
-  const form = context.request.form ?? {};
+  const id = typeof request.id === "string" ? request.id : "";
+  if (!id) return fail(400, "id is required");
   const read = new Set(readJson<string[]>("read", []));
-  if (form.read === "1") read.add(form.id ?? "");
-  else read.delete(form.id ?? "");
+  if (request.read === false) read.delete(id);
+  else read.add(id);
   saveRead(read);
-  const back = form.back ?? "";
-  return ResponseBuilder.redirect(
-    back.startsWith("/news-digest") ? back : "/news-digest",
-    303,
-  );
+  return ResponseBuilder.json({ ok: true });
 }
 
 /** New items across the feeds, newest first, each with the text to summarise. */
 function collect(
   feeds: string[],
   seen: Set<string>,
-  problems: string[],
+  problems: Map<string, string>,
 ): Candidate[] {
   const responses = fetchAll(
     feeds.map((url) => ({
@@ -338,16 +308,14 @@ function collect(
   responses.forEach((response, i) => {
     const url = feeds[i];
     if (!response.ok) {
-      problems.push(`${url} (HTTP ${response.status})`);
+      problems.set(url, `HTTP ${response.status}`);
       return;
     }
     let feed: Feed;
     try {
       feed = convert.parse_feed(response.body, { baseUrl: url });
     } catch (e) {
-      problems.push(
-        `${url} (${e instanceof Error ? e.message : "unreadable"})`,
-      );
+      problems.set(url, e instanceof Error ? e.message : "unreadable");
       return;
     }
     const source = feed.title ?? /^https?:\/\/([^/?#]+)/.exec(url)?.[1] ?? url;
@@ -355,6 +323,7 @@ function collect(
       if (!item.link || seen.has(item.id)) continue;
       fresh.push({
         id: item.id,
+        feed: url,
         title: item.title ?? "(untitled)",
         link: item.link,
         source,
@@ -478,15 +447,29 @@ function summarise(
   ).items;
 }
 
-// The scheduled run, or "Make a digest now": a task acting as the person.
+/** The next feed in turn; the turn advances whether or not it reads. */
+function nextFeed(feeds: string[]): string {
+  const turn = readJson<number>("turn", 0);
+  personalStorage.setItem("turn", JSON.stringify(turn + 1));
+  return feeds[turn % feeds.length];
+}
+
+// A task acting as the person: the schedule's run reads the next feed in
+// turn; one queued from the page names the feeds to read now.
 function buildDigest(context: HandlerContext): void {
   const settings = readJson<Settings | null>("settings", null);
   if (!settings || settings.feeds.length === 0) return;
+  const asked = context.meta?.task?.payload?.feeds;
+  const feeds = Array.isArray(asked)
+    ? settings.feeds.filter((url) => asked.indexOf(url) !== -1)
+    : [nextFeed(settings.feeds)];
+  if (feeds.length === 0) return;
 
   const seenList = readJson<string[]>("seen", []);
   const seen = new Set(seenList);
-  const problems: string[] = [];
-  const items = collect(settings.feeds, seen, problems);
+  const problems = new Map<string, string>();
+  const items = collect(feeds, seen, problems);
+  const now = new Date().toISOString();
 
   if (items.length > 0) {
     readArticles(items);
@@ -503,6 +486,7 @@ function buildDigest(context: HandlerContext): void {
       link: item.link,
       source: item.source,
       published: item.published,
+      addedAt: now,
     }));
     const articles = added
       .concat(readJson<DigestItem[]>("articles", []))
@@ -516,18 +500,31 @@ function buildDigest(context: HandlerContext): void {
     );
   }
 
-  const run: LastRun = {
-    createdAt: context.meta?.schedule?.scheduledFor ?? new Date().toISOString(),
-    added: items.length,
-    problems,
-  };
-  personalStorage.setItem("lastRun", JSON.stringify(run));
+  const status = readJson<Record<string, FeedStatus>>("feedStatus", {});
+  for (const url of feeds) {
+    const problem = problems.get(url);
+    status[url] = {
+      checkedAt: now,
+      added: items.filter((item) => item.feed === url).length,
+      ...(problem ? { problem } : {}),
+    };
+  }
+  personalStorage.setItem("feedStatus", JSON.stringify(status));
 }
 
 function init(): void {
-  routeRegistry.registerRoute("/news-digest", { handler: "newsDigestPage" });
-  routeRegistry.registerRoute("/news-digest", {
-    handler: "newsDigestSave",
+  routeRegistry.registerRoute("/news-digest", { file: "public/index.html" });
+  routeRegistry.registerRoute("/news-digest/app.js", {
+    file: "public/app.js",
+  });
+  routeRegistry.registerRoute("/news-digest/state", {
+    handler: "newsDigestState",
+  });
+  routeRegistry.registerRoute("/news-digest/articles", {
+    handler: "newsDigestArticles",
+  });
+  routeRegistry.registerRoute("/news-digest/feeds", {
+    handler: "newsDigestSaveFeeds",
     method: "POST",
   });
   routeRegistry.registerRoute("/news-digest/run", {

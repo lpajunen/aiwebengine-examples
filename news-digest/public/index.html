@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>News digest</title>
+    <link rel="stylesheet" href="/engine/engine.css" />
+    <script src="/engine/engine.js" defer></script>
+    <style>
+      /* The engine's own stylesheet supplies tokens, form controls, buttons and
+         the menu; what follows is only what this page adds, written against
+         the same --aw-* properties so it follows the engine's look and its
+         dark mode. */
+      body {
+        padding: var(--aw-space-5) var(--aw-space-4) 4rem;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        padding-right: 3rem;
+        margin-bottom: var(--aw-space-1);
+      }
+      .sub {
+        color: var(--aw-color-muted);
+        margin: 0 0 var(--aw-space-5);
+      }
+      section {
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-lg);
+        box-shadow: var(--aw-shadow);
+        padding: var(--aw-space-4);
+        margin-bottom: var(--aw-space-4);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--aw-color-muted);
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+        font-family: var(--aw-font-mono);
+        font-size: 0.85rem;
+      }
+      .row {
+        display: flex;
+        gap: var(--aw-space-2);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--aw-space-3);
+      }
+      .row .aw-choice {
+        margin: 0;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .status {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .status.error {
+        color: var(--aw-color-danger);
+      }
+      /* Something arrived since the list was drawn: the one thing on the page
+         asking to be pressed, so it is drawn like the agent's waiting panel. */
+      .new-banner {
+        display: block;
+        width: 100%;
+        margin-bottom: var(--aw-space-4);
+        padding: var(--aw-space-3) var(--aw-space-4);
+        text-align: left;
+        font-weight: 600;
+        color: var(--aw-color-text);
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-focus);
+        border-radius: var(--aw-radius-lg);
+        box-shadow:
+          inset 3px 0 0 var(--aw-color-focus),
+          var(--aw-shadow);
+        cursor: pointer;
+      }
+      .new-banner:hover {
+        background: var(--aw-color-surface-sunken);
+      }
+      .count {
+        display: inline-block;
+        min-width: 1.5em;
+        padding: 0 0.4em;
+        margin-left: var(--aw-space-1);
+        border-radius: 999px;
+        font-size: 0.75rem;
+        text-align: center;
+        color: var(--aw-color-on-primary);
+        background: var(--aw-color-focus);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .articles li {
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-4) 0;
+      }
+      .articles li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .articles li:last-child {
+        padding-bottom: 0;
+      }
+      .headline {
+        font-size: 1.05rem;
+        margin: 0 0 var(--aw-space-1);
+      }
+      .headline a {
+        color: var(--aw-color-text);
+        text-decoration: none;
+      }
+      .headline a:hover {
+        color: var(--aw-color-link);
+        text-decoration: underline;
+      }
+      /* Fresh since the last visit: a dot, not a colour alone. */
+      .articles li.fresh .headline::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: var(--aw-space-2);
+        vertical-align: middle;
+        border-radius: 50%;
+        background: var(--aw-color-focus);
+      }
+      .summary {
+        margin: 0 0 var(--aw-space-2);
+        overflow-wrap: anywhere;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--aw-space-1) var(--aw-space-2);
+        color: var(--aw-color-muted);
+        font-size: 0.8rem;
+      }
+      .meta .original {
+        overflow-wrap: anywhere;
+      }
+      .meta button {
+        margin-left: auto;
+      }
+      .articles li.read .headline a,
+      .articles li.read .summary {
+        color: var(--aw-color-muted);
+      }
+      .articles li.read .headline a {
+        font-weight: 400;
+      }
+      .empty {
+        color: var(--aw-color-muted);
+        margin: 0;
+      }
+      .pager {
+        justify-content: center;
+      }
+      .feed-status {
+        margin-top: var(--aw-space-3);
+      }
+      .feed-status li {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--aw-space-3);
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-2) 0;
+        font-size: 0.85rem;
+      }
+      .feed-url {
+        font-family: var(--aw-font-mono);
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+      }
+      .feed-when {
+        color: var(--aw-color-muted);
+        white-space: nowrap;
+      }
+      .feed-when.error {
+        color: var(--aw-color-danger);
+        white-space: normal;
+      }
+      @media (max-width: 520px) {
+        .feed-status li {
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Feeds and permissions are changed rarely, so they live in the account
+         menu rather than above the news. The engine's menu adds who is signed
+         in, the account page and sign-out. -->
+    <aw-account-menu>
+      <button type="button" id="open-feeds">Feeds</button>
+      <a id="grant-link" href="#" hidden>Permissions</a>
+    </aw-account-menu>
+    <main>
+      <h1>News digest</h1>
+      <p class="sub">
+        The news you follow, summarised without the clickbait. One feed is read
+        every 15 minutes, in turn.
+      </p>
+
+      <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <section id="feeds-panel" hidden>
+        <h2>Feeds</h2>
+        <label for="feeds"
+          >One URL per line: RSS, Atom or JSON Feed, at most 10.</label
+        >
+        <textarea
+          id="feeds"
+          spellcheck="false"
+          placeholder="https://example.com/feed.xml"
+        ></textarea>
+        <div class="row">
+          <button id="save-feeds">Save</button>
+          <button id="close-feeds" class="aw-button--secondary">Close</button>
+          <button id="run-now" class="aw-button--secondary">
+            Check all now
+          </button>
+          <span id="feeds-status" class="status"></span>
+        </div>
+        <ul id="feed-status" class="feed-status"></ul>
+      </section>
+
+      <button id="new-banner" class="new-banner" hidden></button>
+
+      <section>
+        <div class="row" style="margin-top: 0">
+          <h2 style="margin: 0">
+            News<span id="unread-count" class="count" hidden></span>
+          </h2>
+          <span class="spacer"></span>
+          <label class="aw-choice aw-muted">
+            <input type="checkbox" id="show-read" />
+            Show read
+          </label>
+          <button id="mark-all" class="aw-button--secondary aw-button--small">
+            Mark all read
+          </button>
+        </div>
+        <ul id="articles" class="articles" style="margin-top: var(--aw-space-4)">
+          <li class="empty">Loading…</li>
+        </ul>
+        <div id="pager" class="row pager" hidden>
+          <button id="newer" class="aw-button--secondary aw-button--small">
+            ← Newer
+          </button>
+          <span id="page-label" class="status"></span>
+          <button id="older" class="aw-button--secondary aw-button--small">
+            Older →
+          </button>
+        </div>
+      </section>
+      <p id="schedule-status" class="status"></p>
+    </main>
+    <script src="/news-digest/app.js"></script>
+  </body>
+</html>

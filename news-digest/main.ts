@@ -17,6 +17,10 @@
 // article is not deleted; it is listed under Filtered with the reason, so a
 // mistake can be seen and undone.
 //
+// The same digest is offered as MCP tools (news_latest, news_mark_read,
+// news_not_interested, news_show_anyway), so an agent the person talks to
+// from a chat can read it to them and file what they say.
+//
 // Each reader pays for their own summaries: they store their Anthropic API
 // key from the account menu, and it is kept as their secret in this script.
 // A run sends it with `{{secret:...}}`, so it never passes through this code,
@@ -361,17 +365,27 @@ function newsDigestMarkRead(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return fail(401, "Sign in first");
   const request = body(context);
   if (request.all === true) {
-    const ids = readJson<DigestItem[]>("articles", []).map((a) => a.id);
-    personalStorage.setItem("read", JSON.stringify(ids));
+    markAllRead();
     return ResponseBuilder.json({ ok: true });
   }
   const id = typeof request.id === "string" ? request.id : "";
   if (!id) return fail(400, "id is required");
-  const read = new Set(readJson<string[]>("read", []));
-  if (request.read === false) read.delete(id);
-  else read.add(id);
-  saveRead(read);
+  markRead([id], request.read !== false);
   return ResponseBuilder.json({ ok: true });
+}
+
+function markAllRead(): void {
+  const ids = readJson<DigestItem[]>("articles", []).map((a) => a.id);
+  personalStorage.setItem("read", JSON.stringify(ids));
+}
+
+function markRead(ids: string[], read: boolean): void {
+  const set = new Set(readJson<string[]>("read", []));
+  for (const id of ids) {
+    if (read) set.add(id);
+    else set.delete(id);
+  }
+  saveRead(set);
 }
 
 /** `list` with `item` moved to its end, at most MAX_EXAMPLES long. */
@@ -392,9 +406,17 @@ function newsDigestVerdict(context: HandlerContext): HttpResponse {
   if (verdict !== "skip" && verdict !== "want") {
     return fail(400, 'verdict is "skip" or "want"');
   }
+  if (!applyVerdict(String(request.id ?? ""), verdict)) {
+    return fail(404, "No such article");
+  }
+  return ResponseBuilder.json({ ok: true });
+}
+
+/** Files one article by the reader's say-so; false when there is none. */
+function applyVerdict(id: string, verdict: "skip" | "want"): boolean {
   const articles = readJson<DigestItem[]>("articles", []);
-  const article = articles.find((a) => a.id === request.id);
-  if (!article) return fail(404, "No such article");
+  const article = articles.find((a) => a.id === id);
+  if (!article) return false;
   const example = `${article.headline} (${article.source})`;
   const examples = readJson<Examples>("examples", { skipped: [], wanted: [] });
   if (verdict === "skip") {
@@ -408,7 +430,158 @@ function newsDigestVerdict(context: HandlerContext): HttpResponse {
   }
   personalStorage.setItem("articles", JSON.stringify(articles));
   personalStorage.setItem("examples", JSON.stringify(examples));
-  return ResponseBuilder.json({ ok: true });
+  return true;
+}
+
+// ============================================================================
+// MCP tools: the same digest for the person's other apps, such as an agent
+// they talk to from a chat. Each runs as the caller, on their own storage.
+// ============================================================================
+
+const MAX_TOOL_ARTICLES = 30;
+
+function toolArgs(context: HandlerContext): Record<string, unknown> {
+  return (context.args ?? {}) as Record<string, unknown>;
+}
+
+function toolIds(args: Record<string, unknown>): string[] {
+  const ids = args.ids;
+  return Array.isArray(ids) ? ids.map(String).filter((id) => id !== "") : [];
+}
+
+// The newest articles that passed the filter, unread only unless asked, or
+// what the filter took out.
+function newsLatestTool(context: HandlerContext): unknown {
+  const args = toolArgs(context);
+  const limit = Math.min(
+    Math.max(1, Number(args.limit) || 10),
+    MAX_TOOL_ARTICLES,
+  );
+  const read = new Set(readJson<string[]>("read", []));
+  const articles = readJson<DigestItem[]>("articles", []);
+  const unread = articles.filter((a) => !a.filtered && !read.has(a.id));
+  const shown =
+    args.filtered === true
+      ? articles.filter((a) => a.filtered)
+      : args.includeRead === true
+        ? articles.filter((a) => !a.filtered)
+        : unread;
+  return {
+    unread: unread.length,
+    shown: Math.min(limit, shown.length),
+    of: shown.length,
+    articles: shown.slice(0, limit).map((a) => ({
+      id: a.id,
+      headline: a.headline,
+      summary: a.summary,
+      source: a.source,
+      published: a.published,
+      link: a.link,
+      read: read.has(a.id),
+      ...(a.filtered ? { filteredBecause: a.filtered } : {}),
+    })),
+  };
+}
+
+function newsMarkReadTool(context: HandlerContext): unknown {
+  const args = toolArgs(context);
+  if (args.all === true) {
+    markAllRead();
+    return { ok: true, marked: "all" };
+  }
+  const ids = toolIds(args);
+  if (ids.length === 0) throw new Error("Give ids, or all: true.");
+  const known = new Set(
+    readJson<DigestItem[]>("articles", []).map((a) => a.id),
+  );
+  const found = ids.filter((id) => known.has(id));
+  markRead(found, args.read !== false);
+  return {
+    ok: true,
+    marked: found.length,
+    ...(found.length < ids.length
+      ? { unknown: ids.filter((id) => !known.has(id)) }
+      : {}),
+  };
+}
+
+function verdictTool(context: HandlerContext, verdict: "skip" | "want") {
+  const ids = toolIds(toolArgs(context));
+  if (ids.length === 0) throw new Error("Give ids.");
+  const unknown = ids.filter((id) => !applyVerdict(id, verdict));
+  return {
+    ok: true,
+    done: ids.length - unknown.length,
+    ...(unknown.length ? { unknown } : {}),
+  };
+}
+
+function newsNotInterestedTool(context: HandlerContext): unknown {
+  return verdictTool(context, "skip");
+}
+
+function newsShowAnywayTool(context: HandlerContext): unknown {
+  return verdictTool(context, "want");
+}
+
+const IDS_SCHEMA = {
+  type: "array",
+  items: { type: "string" },
+  description: "Article ids, exactly as news_latest gave them.",
+};
+
+function registerTools(): void {
+  mcpRegistry.registerTool("news_latest", {
+    description:
+      "The person's news digest: the newest articles that passed their interest filter, each with a plain headline, a short summary, source and link. Unread only unless includeRead; filtered: true lists what the filter took out instead, with why.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: MAX_TOOL_ARTICLES,
+          description: "How many, newest first (default 10).",
+        },
+        includeRead: { type: "boolean" },
+        filtered: { type: "boolean" },
+      },
+    },
+    handler: "newsLatestTool",
+  });
+  mcpRegistry.registerTool("news_mark_read", {
+    description:
+      "Mark news digest articles read (or unread with read: false), by id or all: true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ids: IDS_SCHEMA,
+        all: { type: "boolean" },
+        read: { type: "boolean" },
+      },
+    },
+    handler: "newsMarkReadTool",
+  });
+  mcpRegistry.registerTool("news_not_interested", {
+    description:
+      "The person does not want these news digest articles: they move under Filtered and teach the filter what to skip.",
+    inputSchema: {
+      type: "object",
+      properties: { ids: IDS_SCHEMA },
+      required: ["ids"],
+    },
+    handler: "newsNotInterestedTool",
+  });
+  mcpRegistry.registerTool("news_show_anyway", {
+    description:
+      "Bring filtered news digest articles back to the news, and teach the filter the person wants ones like them.",
+    inputSchema: {
+      type: "object",
+      properties: { ids: IDS_SCHEMA },
+      required: ["ids"],
+    },
+    handler: "newsShowAnywayTool",
+  });
 }
 
 /** New items across the feeds, newest first, each with the text to summarise. */
@@ -857,6 +1030,7 @@ function recordStatus(
 }
 
 function init(): void {
+  registerTools();
   routeRegistry.registerRoute("/news-digest", { file: "public/index.html" });
   routeRegistry.registerRoute("/news-digest/app.js", {
     file: "public/app.js",

@@ -673,6 +673,19 @@ function rejudgeFiltered(): void {
   );
 }
 
+/** A failed model call, as the reader can act on it. */
+function modelProblem(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  if (/HTTP 401\b/.test(message)) {
+    return "Model: your API key was refused; store it again under API key";
+  }
+  if (/HTTP 429\b/.test(message)) {
+    return "Model: rate limited or out of credit on your API key";
+  }
+  const detail = /"message":"([^"]*)"/.exec(message)?.[1];
+  return `Model: ${detail ?? message.replace(/^model: /, "")}`.slice(0, 200);
+}
+
 /** The next feed in turn; the turn advances whether or not it reads. */
 function nextFeed(feeds: string[]): string {
   const turn = readJson<number>("turn", 0);
@@ -710,8 +723,19 @@ function buildDigest(context: HandlerContext): void {
       settings.interests ?? "",
       readJson<Examples>("examples", { skipped: [], wanted: [] }),
     );
+    let summarised: Summary[];
+    try {
+      summarised = summarise(items, prefs);
+    } catch (e) {
+      // Said on each feed it held up, then thrown on: the run still fails,
+      // so the queue retries it and repeated failure pauses the schedule.
+      const problem = modelProblem(e);
+      for (const item of items) problems.set(item.feed, problem);
+      recordStatus(feeds, [], problems, now);
+      throw e;
+    }
     const summaries = new Map(
-      summarise(items, prefs).map((s) => [Number(s.id), s] as const),
+      summarised.map((s) => [Number(s.id), s] as const),
     );
     // Every article retrieved is listed; one the model left out keeps its
     // own title and the start of its text, and is kept.

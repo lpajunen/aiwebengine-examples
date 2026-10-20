@@ -478,7 +478,22 @@ function renderSchedule(state) {
       ? "Not scheduled: save the feeds again to start."
       : schedule.state === "active"
         ? `Next feed is read at ${timeOfDay(schedule.nextRunAt)}.`
-        : `Paused (${schedule.pausedReason ?? "unknown"}).`;
+        : schedule.pausedReason === "failing"
+          ? `Paused: the last runs failed (${lastProblem(state) ?? "see the logs"}). Save the feeds to start again.`
+          : schedule.pausedReason === "expired"
+            ? "Paused: your permission has lapsed. Give it again to start."
+            : `Paused (${schedule.pausedReason ?? "unknown"}).`;
+}
+
+/**
+ * The newest problem any feed reported, if any.
+ * @param {State} state
+ * @returns {string | undefined}
+ */
+function lastProblem(state) {
+  return Object.values(state.feedStatus ?? {})
+    .filter((s) => s.problem)
+    .sort((a, b) => b.checkedAt.localeCompare(a.checkedAt))[0]?.problem;
 }
 
 /** @param {State} state */

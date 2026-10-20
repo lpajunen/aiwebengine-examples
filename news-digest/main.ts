@@ -34,6 +34,8 @@ const MAX_FEEDS = 10;
 const MAX_ITEMS = 48;
 /** Items per model call. The calls run together, so a run takes as long as one. */
 const BATCH = 12;
+/** Article pages fetched at once; each is about half a megabyte. */
+const PAGE_WAVE = 8;
 /** Article text sent to the model per item: enough for a summary. */
 const MAX_ARTICLE_CHARS = 4000;
 /** Item ids remembered so an item is summarised once. */
@@ -459,29 +461,39 @@ function collect(
     .sort((a, b) => (b.published ?? "").localeCompare(a.published ?? ""));
 }
 
-/** Replace a feed's teaser with the article itself, where the page has one. */
+/**
+ * Replace a feed's teaser with the article itself, where the page has one.
+ *
+ * A news page is half a megabyte of HTML, and a run's memory is bounded, so
+ * the pages are fetched a wave at a time and only the text the model is sent
+ * is kept from each.
+ */
 function readArticles(items: Candidate[]): void {
-  const pages = fetchAll(
-    items.map((item) => ({
-      url: item.link,
-      options: { timeout: 10_000, headers: HEADERS },
-    })),
-  );
-  pages.forEach((response, i) => {
-    if (!response.ok) return;
-    try {
-      const article = convert.extract_article(response.body, {
-        url: items[i].link,
-        format: "text",
-      });
-      items[i].language = languageTag(article?.language) ?? items[i].language;
-      if (article && article.text.length > items[i].text.length) {
-        items[i].text = article.text;
+  for (let start = 0; start < items.length; start += PAGE_WAVE) {
+    const wave = items.slice(start, start + PAGE_WAVE);
+    const pages = fetchAll(
+      wave.map((item) => ({
+        url: item.link,
+        options: { timeout: 10_000, headers: HEADERS },
+      })),
+    );
+    pages.forEach((response, i) => {
+      const item = wave[i];
+      if (!response.ok) return;
+      try {
+        const article = convert.extract_article(response.body, {
+          url: item.link,
+          format: "text",
+        });
+        item.language = languageTag(article?.language) ?? item.language;
+        if (article && article.text.length > item.text.length) {
+          item.text = article.text.slice(0, MAX_ARTICLE_CHARS);
+        }
+      } catch (e) {
+        console.warn(`news-digest: ${item.link}: ${e}`);
       }
-    } catch (e) {
-      console.warn(`news-digest: ${items[i].link}: ${e}`);
-    }
-  });
+    });
+  }
 }
 
 /** Both prompts: the reader's words outweigh their hand-sorted examples. */

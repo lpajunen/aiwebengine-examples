@@ -18,7 +18,8 @@
  *   feedStatus?: Record<string, FeedStatus>,
  *   schedule?: { state: string, pausedReason: string | null,
  *     nextRunAt: string, lastRunAt: string | null } | null,
- *   unread?: number, filtered?: number, newSince?: number, latest?: string
+ *   unread?: number, filtered?: number, newSince?: number, latest?: string,
+ *   rejudgedAt?: string
  * }} State
  */
 
@@ -517,8 +518,13 @@ async function poll() {
   window.clearTimeout(view.timer);
   try {
     if (document.visibilityState === "visible") {
+      const before = view.state?.rejudgedAt;
       const state = await refreshState();
       if (state.signedIn) renderNew(state);
+      // Filtering was redone for new interests: the list as drawn is stale.
+      if (before !== undefined && state.rejudgedAt !== before) {
+        await loadArticles();
+      }
     }
   } catch {
     // A missed poll is retried on the next one.
@@ -619,13 +625,15 @@ el.saveFeeds.addEventListener("click", async () => {
   el.saveFeeds.disabled = true;
   setStatus(el.feedsStatus, "Saving…");
   try {
-    await api("/news-digest/feeds", {
+    const saved = await api("/news-digest/feeds", {
       feeds,
       interests: el.interests.value,
     });
     setStatus(
       el.feedsStatus,
-      "Saved. New feeds are read now; interests apply to articles from now on.",
+      saved.rejudge
+        ? "Saved. Filtered articles are being checked against your new interests; what you want comes back to the news in a minute."
+        : "Saved. New feeds are read now.",
     );
     view.eagerUntil = Date.now() + EAGER_FOR_MS;
     await refreshState();

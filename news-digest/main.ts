@@ -17,9 +17,10 @@
 // article is not deleted; it is listed under Filtered with the reason, so a
 // mistake can be seen and undone.
 //
-// The script's operator stores one Anthropic API key as the script secret
-// `anthropic_api_key` (`write_secret`). A run sends it with `{{secret:...}}`,
-// so it never passes through this code.
+// Each reader pays for their own summaries: they store their Anthropic API
+// key from the account menu, and it is kept as their secret in this script.
+// A run sends it with `{{secret:...}}`, so it never passes through this code,
+// and reaching it while they are away is part of the permission they give.
 
 const KEY = "news-digest";
 /** The engine's floor for a person's schedule. */
@@ -38,6 +39,8 @@ const PAGE_SIZE = 15;
 const MAX_EXAMPLES = 30;
 const MAX_INTERESTS_CHARS = 2000;
 const MODEL = "claude-haiku-5-5";
+/** The reader's own key, in `user_secrets`; the same name the agent uses. */
+const SECRET_NAME = "ANTHROPIC_API_KEY";
 /** Many news sites refuse a request that names no client. */
 const HEADERS = {
   "user-agent": "Mozilla/5.0 (compatible; aiwebengine-news-digest/1.0)",
@@ -130,13 +133,14 @@ function signedIn(context: HandlerContext): boolean {
   return Boolean(context.request?.auth?.isAuthenticated);
 }
 
-/** Whether runs can act for this person: storage, with write. */
+/** Whether runs can act for this person: storage with write, and their key. */
 function permitted(grant: DelegationState): boolean {
   const scopes = grant.scopes ?? [];
   return (
     grant.granted &&
     scopes.indexOf("personal_storage") !== -1 &&
-    scopes.indexOf("write") !== -1
+    scopes.indexOf("write") !== -1 &&
+    scopes.indexOf("secrets") !== -1
   );
 }
 
@@ -187,7 +191,7 @@ function newsDigestState(context: HandlerContext): HttpResponse {
     signedIn: true,
     granted: allowed,
     consentUrl: grant.consentUrl ?? null,
-    keyConfigured: secretStorage.exists("anthropic_api_key"),
+    hasKey: secretStorage.exists(SECRET_NAME),
     feeds: settings.feeds,
     interests: settings.interests ?? "",
     feedStatus: readJson<Record<string, FeedStatus>>("feedStatus", {}),
@@ -278,12 +282,35 @@ function newsDigestRunNow(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return fail(401, "Sign in first");
   const feeds = readJson<Settings>("settings", { feeds: [] }).feeds;
   if (feeds.length === 0) return fail(400, "No feeds yet");
+  if (!secretStorage.exists(SECRET_NAME)) {
+    return fail(400, "Store your API key first");
+  }
   try {
     personalTasks.enqueue({ handler: "buildDigest", payload: { feeds } });
   } catch (e) {
     return fail(403, e instanceof Error ? e.message : "Not allowed");
   }
   return ResponseBuilder.json({ ok: true });
+}
+
+// The reader's own key. It lands in `user_secrets` under their account, so
+// nobody else's runs can use it and this script cannot read it back.
+function newsDigestStoreKey(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  const key = String(body(context).key ?? "").trim();
+  if (!key) return fail(400, "A key is required");
+  try {
+    secretStorage.setSecret(SECRET_NAME, key);
+  } catch (e) {
+    return fail(400, e instanceof Error ? e.message : String(e));
+  }
+  return ResponseBuilder.json({ hasKey: true });
+}
+
+function newsDigestForgetKey(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return fail(401, "Sign in first");
+  secretStorage.removeSecret(SECRET_NAME);
+  return ResponseBuilder.json({ hasKey: secretStorage.exists(SECRET_NAME) });
 }
 
 /** Read ids, kept to the articles still in the list. */
@@ -514,7 +541,7 @@ function summarise(items: Candidate[], prefs: string): Summary[] {
     timeout: 40_000,
     headers: {
       "content-type": "application/json",
-      "x-api-key": "{{secret:anthropic_api_key}}",
+      "x-api-key": "{{secret:" + SECRET_NAME + "}}",
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
@@ -568,12 +595,19 @@ function buildDigest(context: HandlerContext): void {
     ? settings.feeds.filter((url) => asked.indexOf(url) !== -1)
     : [nextFeed(settings.feeds)];
   if (feeds.length === 0) return;
+  const now = new Date().toISOString();
+  if (!secretStorage.exists(SECRET_NAME)) {
+    // Nothing is taken in without a key to summarise it with, so it is all
+    // still new when one is stored.
+    const problems = new Map(feeds.map((url) => [url, "No API key stored"]));
+    recordStatus(feeds, [], problems, now);
+    return;
+  }
 
   const seenList = readJson<string[]>("seen", []);
   const seen = new Set(seenList);
   const problems = new Map<string, string>();
   const items = collect(feeds, seen, problems);
-  const now = new Date().toISOString();
 
   if (items.length > 0) {
     readArticles(items);
@@ -612,6 +646,16 @@ function buildDigest(context: HandlerContext): void {
     );
   }
 
+  recordStatus(feeds, items, problems, now);
+}
+
+/** How reading each feed went, for the feeds panel. */
+function recordStatus(
+  feeds: string[],
+  items: Candidate[],
+  problems: Map<string, string>,
+  now: string,
+): void {
   const status = readJson<Record<string, FeedStatus>>("feedStatus", {});
   for (const url of feeds) {
     const problem = problems.get(url);
@@ -642,6 +686,14 @@ function init(): void {
   routeRegistry.registerRoute("/news-digest/run", {
     handler: "newsDigestRunNow",
     method: "POST",
+  });
+  routeRegistry.registerRoute("/news-digest/key", {
+    handler: "newsDigestStoreKey",
+    method: "POST",
+  });
+  routeRegistry.registerRoute("/news-digest/key", {
+    handler: "newsDigestForgetKey",
+    method: "DELETE",
   });
   routeRegistry.registerRoute("/news-digest/open", {
     handler: "newsDigestOpen",

@@ -228,11 +228,12 @@
     </style>
   </head>
   <body>
-    <!-- Feeds and permissions are changed rarely, so they live in the account
+    <!-- Feeds, the key and permissions are changed rarely, so they live in the account
          menu rather than above the news. The engine's menu adds who is signed
          in, the account page and sign-out. -->
     <aw-account-menu>
       <button type="button" id="open-feeds">Feeds and interests</button>
+      <button type="button" id="open-key">API key</button>
       <a id="grant-link" href="#" hidden>Permissions</a>
     </aw-account-menu>
     <main>
@@ -243,6 +244,32 @@
       </p>
 
       <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <section id="key-panel" hidden>
+        <h2>Your API key</h2>
+        <p class="status">
+          Summaries are billed to your own Anthropic key. It is stored against
+          your account, encrypted, and never readable by this page or by the
+          script — the engine substitutes it into the request itself.
+        </p>
+        <div class="row">
+          <input
+            id="key"
+            type="password"
+            placeholder="sk-ant-..."
+            autocomplete="off"
+            aria-label="Anthropic API key"
+          />
+        </div>
+        <div class="row">
+          <button id="save-key">Save key</button>
+          <button id="forget-key" class="aw-button--secondary" hidden>
+            Remove key
+          </button>
+          <button id="close-key" class="aw-button--secondary">Close</button>
+          <span id="key-status" class="status"></span>
+        </div>
+      </section>
 
       <section id="feeds-panel" hidden>
         <h2>Feeds and interests</h2>

@@ -477,7 +477,7 @@ function renderSchedule(state) {
     : !schedule
       ? "Not scheduled: save the feeds again to start."
       : schedule.state === "active"
-        ? `Next feed is read at ${timeOfDay(schedule.nextRunAt)}.`
+        ? `Feeds are read next at ${timeOfDay(schedule.nextRunAt)}.`
         : schedule.pausedReason === "failing"
           ? `Paused: the last runs failed (${lastProblem(state) ?? "see the logs"}). Save the feeds to start again.`
           : schedule.pausedReason === "expired"

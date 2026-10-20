@@ -4,9 +4,9 @@
 //
 // A signed-in person lists the feeds they read (from the account menu) and
 // gives the script permission to act for them. Every 15 minutes a run acting
-// as them reads the next feed in turn, fetches the articles that are new
-// since that feed was last read, and asks Claude for a plain headline and a
-// short summary of each. Every article retrieved is kept in their personal
+// as them reads every feed, fetches the articles that are new since it last
+// read them, and asks Claude for a plain headline and a short summary of
+// each, a batch at a time with the batches in parallel. Every article retrieved is kept in their personal
 // storage and listed at /news-digest, newest first, a page at a time, unread
 // ones only unless asked. Opening one marks it read. The page asks every
 // minute whether anything arrived since it last listed, and says so.
@@ -26,8 +26,14 @@ const KEY = "news-digest";
 /** The engine's floor for a person's schedule. */
 const INTERVAL_MINUTES = 15;
 const MAX_FEEDS = 10;
-/** New items summarised in one run; the rest wait for the next. */
-const MAX_ITEMS = 12;
+/**
+ * New items summarised in one run; the rest wait for the next. Well above
+ * what busy news feeds publish in 15 minutes, so a backlog (after a pause,
+ * say) clears in a run or two.
+ */
+const MAX_ITEMS = 48;
+/** Items per model call. The calls run together, so a run takes as long as one. */
+const BATCH = 12;
 /** Article text sent to the model per item: enough for a summary. */
 const MAX_ARTICLE_CHARS = 4000;
 /** Item ids remembered so an item is summarised once. */
@@ -265,7 +271,7 @@ function newsDigestSaveFeeds(context: HandlerContext): HttpResponse {
       personalTasks.unschedule(KEY);
     } else {
       declareSchedule();
-      // A feed just added is read now rather than when its turn comes.
+      // A feed just added is read now rather than at the next run.
       const added = feeds.filter((url) => before.indexOf(url) === -1);
       if (added.length > 0) {
         personalTasks.enqueue({
@@ -288,7 +294,7 @@ function newsDigestSaveFeeds(context: HandlerContext): HttpResponse {
   return ResponseBuilder.json({ ok: true, feeds, interests, rejudge });
 }
 
-// Every feed, now, rather than one in turn.
+// Every feed, now, rather than at the next run.
 function newsDigestRunNow(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return fail(401, "Sign in first");
   const feeds = readJson<Settings>("settings", { feeds: [] }).feeds;
@@ -445,8 +451,12 @@ function collect(
       });
     }
   });
-  fresh.sort((a, b) => (b.published ?? "").localeCompare(a.published ?? ""));
-  return fresh.slice(0, MAX_ITEMS);
+  // Oldest first: when there are more than fit, the ones about to drop off
+  // the end of their feed go now and the newest wait one run.
+  fresh.sort((a, b) => (a.published ?? "").localeCompare(b.published ?? ""));
+  return fresh
+    .slice(0, MAX_ITEMS)
+    .sort((a, b) => (b.published ?? "").localeCompare(a.published ?? ""));
 }
 
 /** Replace a feed's teaser with the article itself, where the page has one. */
@@ -540,7 +550,46 @@ function preferences(interests: string, examples: Examples): string {
     : "The reader has given no preferences.";
 }
 
-function summarise(items: Candidate[], prefs: string): Summary[] {
+/**
+ * Summaries by index into `items`, a model call per batch, all at once. A
+ * batch that fails puts its items' indexes in `failed` and its error in
+ * `errors`.
+ */
+function summarise(
+  items: Candidate[],
+  prefs: string,
+): { summaries: Map<number, Summary>; failed: Set<number>; errors: unknown[] } {
+  const starts: number[] = [];
+  for (let i = 0; i < items.length; i += BATCH) starts.push(i);
+  const responses = fetchAll(
+    starts.map((start) =>
+      modelRequest(
+        SYSTEM,
+        SCHEMA,
+        summaryPrompt(items.slice(start, start + BATCH), prefs),
+      ),
+    ),
+  );
+  const summaries = new Map<number, Summary>();
+  const failed = new Set<number>();
+  const errors: unknown[] = [];
+  responses.forEach((response, b) => {
+    try {
+      const batch = modelAnswer<{ items: Summary[] }>(response).items;
+      for (const s of batch) {
+        const local = Number(s.id);
+        if (local >= 0 && local < BATCH) summaries.set(starts[b] + local, s);
+      }
+    } catch (e) {
+      errors.push(e);
+      const end = Math.min(starts[b] + BATCH, items.length);
+      for (let i = starts[b]; i < end; i++) failed.add(i);
+    }
+  });
+  return { summaries, failed, errors };
+}
+
+function summaryPrompt(items: Candidate[], prefs: string): string {
   const articles = items
     .map(
       (item, i) =>
@@ -552,36 +601,47 @@ function summarise(items: Candidate[], prefs: string): Summary[] {
         `${item.text.slice(0, MAX_ARTICLE_CHARS)}\n</article>`,
     )
     .join("\n\n");
-  return askModel<{ items: Summary[] }>(
-    SYSTEM,
-    SCHEMA,
-    `${prefs}\n\nSummarise each article and say whether to keep it. Answer with its id.\n\n${articles}`,
-  ).items;
+  return `${prefs}\n\nSummarise each article and say whether to keep it. Answer with its id.\n\n${articles}`;
 }
 
 /** One structured answer from the model, on the reader's own key. */
 function askModel<T>(system: string, schema: object, content: string): T {
-  const response = fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    timeout: 40_000,
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": "{{secret:" + SECRET_NAME + "}}",
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      // A summary needs little thought; thinking counts toward max_tokens.
-      output_config: {
-        effort: "low",
-        format: { type: "json_schema", schema },
+  const request = modelRequest(system, schema, content);
+  return modelAnswer<T>(fetch(request.url, request.options));
+}
+
+function modelRequest(
+  system: string,
+  schema: object,
+  content: string,
+): { url: string; options: FetchOptions } {
+  return {
+    url: "https://api.anthropic.com/v1/messages",
+    options: {
+      method: "POST",
+      timeout: 40_000,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": "{{secret:" + SECRET_NAME + "}}",
+        "anthropic-version": "2023-06-01",
       },
-      system,
-      messages: [{ role: "user", content }],
-    }),
-  });
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 16000,
+        thinking: { type: "adaptive" },
+        // A summary needs little thought; thinking counts toward max_tokens.
+        output_config: {
+          effort: "low",
+          format: { type: "json_schema", schema },
+        },
+        system,
+        messages: [{ role: "user", content }],
+      }),
+    },
+  };
+}
+
+function modelAnswer<T>(response: FetchResponse): T {
   if (!response.ok) {
     throw new Error(
       `model: HTTP ${response.status}: ${response.body.slice(0, 300)}`,
@@ -686,22 +746,15 @@ function modelProblem(e: unknown): string {
   return `Model: ${detail ?? message.replace(/^model: /, "")}`.slice(0, 200);
 }
 
-/** The next feed in turn; the turn advances whether or not it reads. */
-function nextFeed(feeds: string[]): string {
-  const turn = readJson<number>("turn", 0);
-  personalStorage.setItem("turn", JSON.stringify(turn + 1));
-  return feeds[turn % feeds.length];
-}
-
-// A task acting as the person: the schedule's run reads the next feed in
-// turn; one queued from the page names the feeds to read now.
+// A task acting as the person: the schedule's run reads every feed; one
+// queued from the page may name only the feeds just added.
 function buildDigest(context: HandlerContext): void {
   const settings = readJson<Settings | null>("settings", null);
   if (!settings || settings.feeds.length === 0) return;
   const asked = context.meta?.task?.payload?.feeds;
   const feeds = Array.isArray(asked)
     ? settings.feeds.filter((url) => asked.indexOf(url) !== -1)
-    : [nextFeed(settings.feeds)];
+    : settings.feeds;
   if (feeds.length === 0) return;
   const now = new Date().toISOString();
   if (!secretStorage.exists(SECRET_NAME)) {
@@ -716,6 +769,7 @@ function buildDigest(context: HandlerContext): void {
   const seen = new Set(seenList);
   const problems = new Map<string, string>();
   const items = collect(feeds, seen, problems);
+  const taken: Candidate[] = [];
 
   if (items.length > 0) {
     readArticles(items);
@@ -723,25 +777,28 @@ function buildDigest(context: HandlerContext): void {
       settings.interests ?? "",
       readJson<Examples>("examples", { skipped: [], wanted: [] }),
     );
-    let summarised: Summary[];
-    try {
-      summarised = summarise(items, prefs);
-    } catch (e) {
-      // Said on each feed it held up, then thrown on: the run still fails,
-      // so the queue retries it and repeated failure pauses the schedule.
-      const problem = modelProblem(e);
-      for (const item of items) problems.set(item.feed, problem);
-      recordStatus(feeds, [], problems, now);
-      throw e;
+    const { summaries, failed, errors } = summarise(items, prefs);
+    // A failed batch is said on each feed it held up, and its articles stay
+    // unseen for the next run. When nothing came back the run fails, so the
+    // queue retries it and repeated failure pauses the schedule.
+    if (errors.length > 0) {
+      const problem = modelProblem(errors[0]);
+      items.forEach((item, i) => {
+        if (failed.has(i)) problems.set(item.feed, problem);
+      });
+      if (failed.size === items.length) {
+        recordStatus(feeds, [], problems, now);
+        throw errors[0];
+      }
     }
-    const summaries = new Map(
-      summarised.map((s) => [Number(s.id), s] as const),
-    );
-    // Every article retrieved is listed; one the model left out keeps its
-    // own title and the start of its text, and is kept.
-    const added: DigestItem[] = items.map((item, i) => {
+    // An article the model left out of an answered batch keeps its own
+    // title and the start of its text, and is kept.
+    const added: DigestItem[] = [];
+    items.forEach((item, i) => {
+      if (failed.has(i)) return;
+      taken.push(item);
       const s = summaries.get(i);
-      return {
+      added.push({
         id: item.id,
         headline: s?.headline ?? item.title,
         summary: s?.summary ?? item.text.slice(0, 300),
@@ -751,21 +808,21 @@ function buildDigest(context: HandlerContext): void {
         published: item.published,
         addedAt: now,
         ...(s && !s.keep ? { filtered: s.reason || "Not for you" } : {}),
-      };
+      });
     });
     const articles = added
       .concat(readJson<DigestItem[]>("articles", []))
       .slice(0, MAX_ARTICLES);
     personalStorage.setItem("articles", JSON.stringify(articles));
     // Remembered only once summarised: a failed run leaves them for the next.
-    const remembered = seenList.concat(items.map((item) => item.id));
+    const remembered = seenList.concat(taken.map((item) => item.id));
     personalStorage.setItem(
       "seen",
       JSON.stringify(remembered.slice(-MAX_SEEN)),
     );
   }
 
-  recordStatus(feeds, items, problems, now);
+  recordStatus(feeds, taken, problems, now);
 }
 
 /** How reading each feed went, for the feeds panel. */

@@ -18,6 +18,8 @@ catch-all:
   and linked worlds without code.
 - [TODO-storytelling.md](TODO-storytelling.md) — NPC interaction, dialogue,
   quests, and the authoring gaps that work left open.
+- [DESIGN-kalevala.md](DESIGN-kalevala.md) — the plan for a Kalevala world
+  players grow: home islands, classes, recurring events.
 
 ## Highest priority (concrete, low-effort)
 

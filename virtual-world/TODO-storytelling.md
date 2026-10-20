@@ -17,6 +17,8 @@ Neighbouring documents, so this one stays about storytelling:
 - [TODO.md](TODO.md) — the general backlog.
 - [TODO-arch.md](TODO-arch.md) — scalability and runtime primitives.
 - [DESIGN-targeting.md](DESIGN-targeting.md) — targeting and aiming.
+- [DESIGN-kalevala.md](DESIGN-kalevala.md) — the plan for a Kalevala world
+  players grow: home islands, classes, recurring events.
 
 ## Authoring gaps (a feature exists, but only through the API)
 

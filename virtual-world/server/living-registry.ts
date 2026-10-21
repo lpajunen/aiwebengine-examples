@@ -11,6 +11,12 @@ import {
   upsertLivingClassRow,
 } from "./living-class-storage.ts";
 import { normalizeClassLabels } from "./class-labels.ts";
+import {
+  chooseClassActionId,
+  newcomerAttributes,
+  PLAYER_ATTRIBUTES,
+  PLAYER_CLASSES,
+} from "./player-classes.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
   normalizeClassColor,
@@ -160,17 +166,107 @@ function defaultFatigueValueSchema(): LivingValueSchema {
   };
 }
 
+// A player's values: the shared ones plus the five attributes, which are
+// public — a D&D sheet is something others may read.
+function playerValueSchema(): LivingValueSchema {
+  const schema = defaultFatigueValueSchema();
+  PLAYER_ATTRIBUTES.forEach(function (attribute) {
+    schema[attribute] = {
+      kind: "number",
+      labelKey: "living.value." + attribute,
+      fallbackLabel: attribute.charAt(0).toUpperCase() + attribute.slice(1),
+      visibility: "public",
+    };
+  });
+  return schema;
+}
+
+// One living class per player class (player-classes.ts). Attributes in the
+// template are where a fresh character of the class starts; the player's own
+// values override them as they grow.
+function playerClassRecords(): Record<string, LivingClassRecord> {
+  const out: Record<string, LivingClassRecord> = {};
+  PLAYER_CLASSES.forEach(function (cls) {
+    out[cls.id] = {
+      id: cls.id,
+      kind: "player",
+      labelKey: "living.class." + cls.id,
+      fallbackLabel: cls.fallbackLabel,
+      slotDefinitions: bipedSlotDefinitions(),
+      valueTemplate: Object.assign(
+        defaultFatigueValueTemplate(),
+        cls.attributes,
+        { maxHitPoints: cls.maxHitPoints },
+      ),
+      valueSchema: playerValueSchema(),
+      color: cls.color,
+      deathClassId: "player_ghost",
+      labels: { fi: cls.fiLabel },
+    };
+  });
+  return out;
+}
+
+// What the elder says: a newcomer is asked who they are, and the answer is
+// their class. Everyone else is only greeted.
+function elderDialogue(): LivingClassRecord["dialogue"] {
+  return {
+    nodes: [
+      {
+        id: "newcomer",
+        text: "You have come across the water. Every one of us here is something — who are you?",
+        textKey: "dialogue.elder.newcomer",
+        conditions: [{ field: "class_id", op: "eq", value: "player_human" }],
+        choices: PLAYER_CLASSES.map(function (cls) {
+          const suffix = cls.id.replace(/^player_/, "");
+          return {
+            text: cls.fallbackLabel,
+            textKey: "dialogue.elder.choose." + suffix,
+            action: chooseClassActionId(cls.id),
+            next: "chosen",
+          };
+        }),
+      },
+      {
+        id: "chosen",
+        text: "Go, then, and grow this land. It is yours as much as mine.",
+        textKey: "dialogue.elder.chosen",
+      },
+    ],
+  };
+}
+
 const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
+  // The newcomer: what every player is until they choose a class from the
+  // elder in Väinölä.
   player_human: {
     id: "player_human",
     kind: "player",
     labelKey: "living.class.player_human",
-    fallbackLabel: "Human",
+    fallbackLabel: "Newcomer",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: Object.assign(
+      defaultFatigueValueTemplate(),
+      newcomerAttributes(),
+    ),
+    valueSchema: playerValueSchema(),
+    deathClassId: "player_ghost",
+    isDefault: true,
+  },
+  ...playerClassRecords(),
+  // The elder on Väinölä's shore, who asks a newcomer what they are.
+  npc_elder: {
+    id: "npc_elder",
+    kind: "npc",
+    labelKey: "living.class.npc_elder",
+    fallbackLabel: "Elder",
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
-    deathClassId: "player_ghost",
-    isDefault: true,
+    color: "#e8e4d8",
+    combatant: false,
+    behavior: { roamRadius: 0, idleChance: 1 },
+    dialogue: elderDialogue(),
   },
   player_elf: {
     id: "player_elf",
@@ -585,6 +681,8 @@ function getBuiltInLivingClass(classId: string): LivingClassRecord | null {
     combatant: cls.combatant !== false,
     isDefault: !!cls.isDefault,
     behavior: Object.assign({}, cls.behavior || {}),
+    labels: normalizeClassLabels(cls.labels),
+    ...(cls.dialogue ? { dialogue: cls.dialogue } : {}),
   };
 }
 

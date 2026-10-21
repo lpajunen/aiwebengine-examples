@@ -31,6 +31,7 @@ import {
   VWORLD_PLAYER_HOME_TABLE,
   VWORLD_ISLAND_INVITE_TABLE,
   VWORLD_WELCOME_TABLE,
+  VWORLD_PLAYER_CHARACTER_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1809,6 +1810,41 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     return database.ensureTable(VWORLD_WELCOME_TABLE, {
       columns: [],
       uniqueIndexes: [["greeter_id", "newcomer_id"]],
+    });
+  });
+
+  // One row per player who has chosen a class (see player-character.ts).
+  step("createTable", VWORLD_PLAYER_CHARACTER_TABLE, function () {
+    return database.ensureTable(VWORLD_PLAYER_CHARACTER_TABLE, {
+      columns: [],
+    });
+  });
+  [
+    ["addTextColumn", "user_id"],
+    ["addTextColumn", "class_id"],
+    ["addIntegerColumn", "chosen_at"],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_PLAYER_CHARACTER_TABLE,
+      function () {
+        return database.ensureTable(VWORLD_PLAYER_CHARACTER_TABLE, {
+          columns: [
+            {
+              name: String(entry[1]),
+              type: entry[0] === "addIntegerColumn" ? "integer" : "text",
+              nullable: false,
+            },
+          ],
+        });
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_PLAYER_CHARACTER_TABLE, function () {
+    return database.ensureTable(VWORLD_PLAYER_CHARACTER_TABLE, {
+      columns: [],
+      uniqueIndexes: [["user_id"]],
     });
   });
 

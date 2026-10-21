@@ -85,6 +85,11 @@ import {
   recordWelcome,
 } from "./home-island.ts";
 import { isIslandGuest } from "./island-invites.ts";
+import {
+  NEWCOMER_CLASS_ID,
+  playerClassForChoiceAction,
+} from "./player-classes.ts";
+import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
 import { resolveIslandToVisit } from "./island-visits.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
@@ -1458,13 +1463,75 @@ export function performTreeActionForUser(
     };
   }
 
+  // Choosing a class from the elder: once, as a newcomer. The class's
+  // attributes become the player's own, to grow from there.
+  const chosenClass = playerClassForChoiceAction(action);
+  if (chosenClass) {
+    if (String(inv.class_id || "") !== NEWCOMER_CLASS_ID) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.class_already_chosen" },
+      };
+    }
+    const elderId = String((body && body.target_living_id) || "");
+    const elder = loadWorldNPCs(worldId)[elderId];
+    if (
+      !elder ||
+      String(elder.class_id || "") !== "npc_elder" ||
+      !isWithinTileDistance(
+        Number(elder.row),
+        Number(elder.col),
+        canonical.row,
+        canonical.col,
+        NEARBY_TARGET_TILE_DISTANCE,
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.ask_the_elder" },
+      };
+    }
+    inv.class_id = chosenClass.id;
+    inv.values = Object.assign({}, inv.values, chosenClass.attributes, {
+      maxHitPoints: chosenClass.maxHitPoints,
+      currentHitPoints: chosenClass.maxHitPoints,
+    });
+    savePlayerInventory(userId, inv);
+    saveChosenClassId(userId, chosenClass.id);
+    sendWorldScopedStreamEvent(String(worldId), "player_moved", {
+      player_id: userId,
+      row: canonical.row,
+      col: canonical.col,
+      seq: canonical.seq,
+      rotation: canonical.rotation,
+      class_id: inv.class_id,
+      values: inv.values,
+    });
+    const suffix = chosenClass.id.replace(/^player_/, "");
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.class_chosen." + suffix,
+          "You are now a " + chosenClass.fallbackLabel.toLowerCase() + ".",
+        ),
+        inventory: inv,
+        class_id: inv.class_id,
+      }),
+    };
+  }
+
   if (action === "pray") {
     // Praying revives whatever class declares a reviveClassId — the inverse
     // of the deathClassId that put the player in it. No class is named here,
-    // so a creator's own death form is revived by the same handler.
+    // so a creator's own death form is revived by the same handler. A player
+    // who chose a class returns as that class rather than as a newcomer.
     const prayClass = getLivingClassWithRefresh(String(inv.class_id || ""));
-    const reviveClassId = prayClass
+    const declaredRevive = prayClass
       ? String(prayClass.reviveClassId || "")
+      : "";
+    const reviveClassId = declaredRevive
+      ? loadChosenClassId(userId) || declaredRevive
       : "";
     if (reviveClassId) {
       inv.class_id = reviveClassId;
@@ -1486,7 +1553,7 @@ export function performTreeActionForUser(
         payload: buildConfiguredSuccessPayload({
           ...toastFields(
             "tree_action.pray_revived_toast",
-            "You feel alive again! You are human once more.",
+            "You feel alive again!",
           ),
           inventory: inv,
         }),

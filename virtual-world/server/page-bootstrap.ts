@@ -1,4 +1,8 @@
 import { buildIslandVisitState } from "./island-visits.ts";
+import {
+  NEWCOMER_CLASS_ID,
+  RETIRED_PLAYER_CLASS_IDS,
+} from "./player-classes.ts";
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
 import { getTileDefs, refreshTileClassCache } from "./tile-registry.ts";
 import {
@@ -132,6 +136,17 @@ export function ensureBoat(userId: string): void {
   savePlayerInventory(userId, inv);
 }
 
+// The elf, hobbit and giant bodies were replaced by the classes chosen from
+// the elder. A player still in one becomes a newcomer, free to choose.
+export function retireOldPlayerClass(userId: string): void {
+  const inv = loadPlayerInventory(userId);
+  if (RETIRED_PLAYER_CLASS_IDS.indexOf(String(inv.class_id || "")) === -1) {
+    return;
+  }
+  inv.class_id = NEWCOMER_CLASS_ID;
+  savePlayerInventory(userId, inv);
+}
+
 export function escapeHtml(value: string): string {
   return String(value || "").replace(/[<>&]/g, function (c) {
     if (c === "<") return "&lt;";
@@ -150,6 +165,7 @@ export function buildVirtualWorldPageState(
   markNPCWorldActive(worldId);
   ensureStarterKit(userId);
   ensureBoat(userId);
+  retireOldPlayerClass(userId);
   const map = generateMap(worldId);
   const worldMods = loadWorldMods(worldId);
   const treeMods = loadWorldTrees(worldId);

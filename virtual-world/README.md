@@ -262,6 +262,17 @@ experience. The boat also fishes (`fish`, facing any water): the pike's
 jawbone is what a kantele is made from, and making one sets the player's first
 origin flag, `values.synty_kantele`.
 
+### Classes
+
+Every player is a newcomer (`player_human`) until they choose a class from
+Väinämöinen, the elder at the head of the arrival shore: sage (tietäjä),
+smith (seppä), singer (laulaja), woodsman (eränkävijä) or hero (urho). Each
+is a living class with its own colour, hit points and five starting
+attributes — `voima`, `ketteryys`, `kestavyys`, `tieto` and `sana` — defined
+in `player-classes.ts`. The choice is made once, recorded in
+`vworld_player_characters`, and is what a dead player prays back to. Skills
+and class-only actions are planned in `DESIGN-kalevala.md`.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

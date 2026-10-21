@@ -8,8 +8,9 @@
  * that can no longer be made are each a broken promise of the design.
  *
  * Database-backed; every player, world and pending action a case makes is
- * removed afterwards. Väinölä itself is the live start world, so cases there
- * only add players to it.
+ * removed afterwards. Väinölä is the live start world, whose livings and items
+ * the running game ticks; only the shore case goes there, and everything else
+ * happens in worlds of the tests' own.
  */
 
 import {
@@ -81,26 +82,44 @@ function newcomer(): string {
   return userId;
 }
 
-/** A player in Väinölä standing next to `other`. */
-function playerBeside(other: string, prefix: string): string {
+/**
+ * A newcomer who arrived just now, in a world of the test's own: the first
+ * arrival itself is tested on the shore, and greeting needs no Väinölä.
+ */
+function freshNewcomer(worldId: string): string {
+  const userId = createTestPlayer(
+    worldId,
+    "newcomer",
+    walkableRunFinder(worldId)(1)[0],
+  );
+  savePlayerHome({
+    userId: userId,
+    homeWorldId: "test-no-island-" + userId,
+    onboardingDoneAt: Date.now(),
+    createdAt: Date.now(),
+  });
+  const inv = loadPlayerInventory(userId);
+  inv.values.newcomer = 1;
+  savePlayerInventory(userId, inv);
+  return userId;
+}
+
+/** A player standing next to `other`, in the same world. */
+function playerBeside(worldId: string, other: string, prefix: string): string {
   const at = loadPlayerPosition(other);
-  const map = getEffectiveMap(START_WORLD_ID);
-  const offsets = [
-    [0, 1],
-    [0, -1],
-    [1, 0],
-    [-1, 0],
-  ];
-  for (let i = 0; i < offsets.length; i++) {
-    const row = Number(at && at.row) + offsets[i][0];
-    const col = Number(at && at.col) + offsets[i][1];
-    if (map[row] && isWorldTileWalkable(map[row][col])) {
-      const userId = createTestPlayer(START_WORLD_ID, prefix, {
-        row: row,
-        col: col,
-      });
-      give(userId, "starter_kit");
-      return userId;
+  const map = getEffectiveMap(worldId);
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const row = Number(at && at.row) + dr;
+      const col = Number(at && at.col) + dc;
+      if ((dr || dc) && map[row] && isWorldTileWalkable(map[row][col])) {
+        const userId = createTestPlayer(worldId, prefix, {
+          row: row,
+          col: col,
+        });
+        give(userId, "starter_kit");
+        return userId;
+      }
     }
   }
   throw new Error("no free tile beside " + other);
@@ -122,16 +141,17 @@ describe("the arrival shore", () => {
     expect(getEffectiveMap(START_WORLD_ID)[at!.row][at!.col]).toBe(
       worldTileValueForName("sand"),
     );
+    expect(loadPlayerInventory(userId).values.newcomer).toBe(1);
   });
 });
 
 describe("welcoming a newcomer", () => {
   test("rewards the greeter once", () => {
-    const arrived = newcomer();
-    const greeter = playerBeside(arrived, "greeter");
+    const world = createTestWorld(16, 16);
+    const arrived = freshNewcomer(world);
+    const greeter = playerBeside(world, arrived, "greeter");
     const before = Number(loadPlayerInventory(greeter).values.experience || 0);
 
-    expect(loadPlayerInventory(arrived).values.newcomer).toBe(1);
     expect(
       act(greeter, "welcome_newcomer", { target_living_id: arrived }).ok,
     ).toBe(true);
@@ -145,11 +165,12 @@ describe("welcoming a newcomer", () => {
   });
 
   test("is refused once the newcomer's first minutes are over", () => {
-    const arrived = newcomer();
+    const world = createTestWorld(16, 16);
+    const arrived = freshNewcomer(world);
     const home = loadPlayerHome(arrived)!;
     home.onboardingDoneAt = Date.now() - NEWCOMER_WINDOW_MS - 1000;
     savePlayerHome(home);
-    const greeter = playerBeside(arrived, "late-greeter");
+    const greeter = playerBeside(world, arrived, "late-greeter");
 
     expect(
       act(greeter, "welcome_newcomer", { target_living_id: arrived }).error,
@@ -181,32 +202,33 @@ describe("welcoming a newcomer", () => {
 });
 
 describe("the pike", () => {
-  /** A walkable tile in Väinölä with water straight to its south. */
-  function besideWater(): { row: number; col: number } {
-    const map = getEffectiveMap(START_WORLD_ID);
-    const water = ["ocean", "lake", "river"].map(worldTileValueForName);
-    for (let row = 0; row + 1 < map.length; row++) {
-      for (let col = 0; col < map[row].length; col++) {
-        if (
-          isWorldTileWalkable(map[row][col]) &&
-          water.indexOf(map[row + 1][col]) !== -1
-        ) {
-          return { row: row, col: col };
+  test("is fished from the boat, facing water", () => {
+    // The home island is sand in open sea: somewhere on it, the sea lies
+    // straight to the south.
+    const userId = testUserId("fisher");
+    const island = trackTestWorld(getOrCreatePlayerWorld(userId));
+    const map = getEffectiveMap(island);
+    const ocean = worldTileValueForName("ocean");
+    let shore: { row: number; col: number } | null = null;
+    for (let row = 0; row + 1 < map.length && !shore; row++) {
+      for (let col = 0; col < map[row].length && !shore; col++) {
+        if (isWorldTileWalkable(map[row][col]) && map[row + 1][col] === ocean) {
+          shore = { row: row, col: col };
         }
       }
     }
-    throw new Error("Väinölä has no water");
-  }
+    savePlayerPosition(userId, island, {
+      row: shore!.row,
+      col: shore!.col,
+      seq: 0,
+      rotation: 0,
+    });
+    give(userId, "boat");
 
-  test("is fished from the boat, facing water", () => {
-    const fisher = createTestPlayer(START_WORLD_ID, "fisher", besideWater());
-    give(fisher, "boat");
+    expect(act(userId, "fish").ok).toBe(true);
+    resolvePendingActionsForWorld(island, Date.now() + 60000);
 
-    const started = act(fisher, "fish");
-    expect(started.ok).toBe(true);
-    resolvePendingActionsForWorld(START_WORLD_ID, Date.now() + 60000);
-
-    expect(held(fisher, "pike_jawbone")).toBe(1);
+    expect(held(userId, "pike_jawbone")).toBe(1);
   });
 
   test("is not fished from dry land", () => {

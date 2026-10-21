@@ -140,6 +140,29 @@ build departed from the plan:
 Every player has a class, a handful of attributes, and skills that grow with
 use. A class decides where a player starts and how far each skill can go.
 
+### Built so far
+
+Classes, attributes and the choice; skills, class-only verbs, levels that do
+something and starting anew are still to come. Where the build departed from
+the plan:
+
+- The classes are data in `player-classes.ts`, one living class each
+  (`player_tietaja`, `player_seppa`, `player_laulaja`, `player_erankavija`,
+  `player_urho`). The attributes are player values (`voima`, `ketteryys`,
+  `kestavyys`, `tieto`, `sana`), public, starting from each class's array
+  (two favoured, each set summing to 58); a newcomer has 10 in each.
+- The elder is Väinämöinen, an `npc_elder` placed at the head of the arrival
+  shore. His conversation asks a newcomer what they are; each answer runs a
+  `choose_class_*` action, offered only beside him and only once.
+- Hit points are fixed per class for now (8, 10 or 12): `maxHitPoints` is a
+  class-owned value, so growing it per player by the hit die needs it to
+  become the player's own first.
+- The chosen class is kept in `vworld_player_characters`, so a dead player
+  prays back to it rather than to a newcomer.
+- Elf, hobbit and giant are retired: a player still in one becomes a
+  newcomer when the page loads. The living classes stay in the code so their
+  rows remain valid.
+
 ### Classes
 
 Chosen on arrival in Väinölä, from the elder's dialogue. Until then a player is

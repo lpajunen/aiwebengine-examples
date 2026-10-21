@@ -237,7 +237,7 @@ const GUILD_ENTRY_COL = 1;
 
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
-const SYSTEM_PLACEMENT_REVISION = 4;
+const SYSTEM_PLACEMENT_REVISION = 5;
 
 // Birdhaven's authored contents, as data rather than the world-ID branches in
 // item-storage.ts. Phase 1 only persists these; phase 3 materializes them and
@@ -289,6 +289,21 @@ function arrivalShorePlacements(): WorldClassPlacement[] {
 function birdhavenPlacements(): WorldClassPlacement[] {
   return [
     ...arrivalShorePlacements(),
+    {
+      // Väinämöinen, at the head of the shore, where every newcomer lands:
+      // he asks them what they are, and the answer is their class.
+      id: "elder",
+      kind: "npc",
+      classId: "npc_elder",
+      position: { strategy: "exact", row: SHORE_ROW - 1, col: SHORE_COL + 1 },
+      state: {},
+      reservations: [],
+      identity: {
+        name: "Väinämöinen",
+        description: "Old and steadfast, the eternal sage.",
+        descriptions: { fi: "Vaka vanha, tietäjä iänikuinen." },
+      },
+    },
     {
       id: "old-oak",
       kind: "fixture",

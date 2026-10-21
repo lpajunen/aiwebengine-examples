@@ -9,6 +9,7 @@ import {
   RESERVATION_BLOCK_PLANT,
   RESERVATION_PROTECT_LANDMARK,
 } from "./runtime-config.ts";
+import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
 
 // Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
 // aimed and how far it reaches, independent of the existing `targetKind` (which
@@ -451,7 +452,37 @@ const LOOK_AT_TARGETING: ActionTargeting = {
   targetScope: "any",
 };
 
+// Choosing a class, one action per class, run by the elder's conversation
+// (living-registry.ts) and offered in the palette only beside the elder.
+function classChoiceActions(): Record<string, ActionDefinition> {
+  const out: Record<string, ActionDefinition> = {};
+  PLAYER_CLASSES.forEach(function (cls) {
+    const id = chooseClassActionId(cls.id);
+    out[id] = {
+      id: id,
+      labelKey: "tree_action." + id,
+      fallbackLabel: "Become a " + cls.fallbackLabel.toLowerCase(),
+      targetKind: "living",
+      sourceItemIds: ["starter_kit"],
+      // Answered where the player stands, as a conversation is.
+      targeting: {
+        range: NEARBY_TARGET_TILE_DISTANCE,
+        rangeShape: "line",
+        approach: "none",
+      },
+      validWhen: [{ field: "type", op: "eq", value: "npc_elder" }],
+      execution: {
+        successPayload: {
+          includeInventory: true,
+        },
+      },
+    };
+  });
+  return out;
+}
+
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
+  ...classChoiceActions(),
   plant: {
     id: "plant",
     labelKey: "tree_action.plant",
@@ -1765,6 +1796,11 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   row_to_island: "travel",
   fish: "gather",
   welcome_newcomer: "social",
+  choose_class_tietaja: "social",
+  choose_class_seppa: "social",
+  choose_class_laulaja: "social",
+  choose_class_erankavija: "social",
+  choose_class_urho: "social",
   skip_onboarding: "travel",
   // misc
   pray: "misc",

@@ -1,3 +1,4 @@
+import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
 import {
   CLASS_OWNED_ITEM_STATE_KEYS,
   MAX_CONTAINER_ITEMS,
@@ -304,6 +305,9 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "craft_stone_axe",
       "craft_boat",
       "welcome_newcomer",
+      ...PLAYER_CLASSES.map(function (cls) {
+        return chooseClassActionId(cls.id);
+      }),
     ],
   },
   blessing_marker: {

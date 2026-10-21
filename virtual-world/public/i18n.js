@@ -107,7 +107,19 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         "A sword, a shortbow and a longbow appear in your bag.",
       craft_kantele_start_toast: "You start crafting a Kantele.",
       craft_kantele_toast: "You finished crafting a Kantele.",
-      pray_revived_toast: "You feel alive again! You are human once more.",
+      pray_revived_toast: "You feel alive again!",
+      choose_class_tietaja: "Become a sage",
+      choose_class_seppa: "Become a smith",
+      choose_class_laulaja: "Become a singer",
+      choose_class_erankavija: "Become a woodsman",
+      choose_class_urho: "Become a hero",
+      class_chosen: {
+        tietaja: "You are now a sage: lore and spells are yours.",
+        seppa: "You are now a smith: iron and building are yours.",
+        laulaja: "You are now a singer: song and the animals are yours.",
+        erankavija: "You are now a woodsman: the bow and the wilds are yours.",
+        urho: "You are now a hero: the fight and the shield are yours.",
+      },
       pray_toast: "You pray hard!",
       advance_level_toast: "You advance to level {level}!",
       examine_toast: "You examine {target}.",
@@ -230,7 +242,13 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     living: {
       class: {
-        player_human: "Human",
+        player_human: "Newcomer",
+        player_tietaja: "Sage",
+        player_seppa: "Smith",
+        player_laulaja: "Singer",
+        player_erankavija: "Woodsman",
+        player_urho: "Hero",
+        npc_elder: "Elder",
         player_elf: "Elf",
         player_hobbit: "Hobbit",
         player_ghost: "Ghost",
@@ -256,6 +274,11 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         back_right_leg: "Back Right Leg",
       },
       value: {
+        voima: "Strength (Voima)",
+        ketteryys: "Dexterity (Ketteryys)",
+        kestavyys: "Constitution (Kestävyys)",
+        tieto: "Lore (Tieto)",
+        sana: "Presence (Sana)",
         level: "Level",
         experience: "Experience",
         total_experience: "Total experience",
@@ -559,6 +582,20 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     welcome: {
       welcomed_you: "{nick} welcomes you to Väinölä!",
     },
+    dialogue: {
+      elder: {
+        newcomer:
+          "You have come across the water. Every one of us here is something — who are you?",
+        choose: {
+          tietaja: "A sage, who knows how things came to be.",
+          seppa: "A smith, who forges and builds.",
+          laulaja: "A singer, whose songs the animals heed.",
+          erankavija: "A woodsman, at home in the wilds with a bow.",
+          urho: "A hero, who stands in front when it comes to a fight.",
+        },
+        chosen: "Go, then, and grow this land. It is yours as much as mine.",
+      },
+    },
     island: {
       invited_you: "{nick} invites you to their island.",
       invite_row: "{nick} invites you to their island · {min} min left",
@@ -582,6 +619,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       not_your_island: "That is someone else's island.",
       not_as_a_guest: "A guest cannot do that on someone else's island.",
       fish_needs_water: "Face open water to fish.",
+      class_already_chosen: "You have already chosen what you are.",
+      ask_the_elder: "Ask the elder in Väinölä.",
       not_a_newcomer: "They are not new here any more.",
       already_welcomed: "You have already welcomed them.",
       no_island_invite: "Nobody has invited you to their island.",
@@ -771,7 +810,19 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         "Miekka, lyhytjousi ja pitkäjousi ilmestyvät laukkuusi.",
       craft_kantele_start_toast: "Alat valmistaa kanteletta.",
       craft_kantele_toast: "Sait kanteleen valmiiksi.",
-      pray_revived_toast: "Tunnet elävyyden taas! Olet jälleen ihminen.",
+      pray_revived_toast: "Tunnet elävyyden taas!",
+      choose_class_tietaja: "Ryhdy tietäjäksi",
+      choose_class_seppa: "Ryhdy sepäksi",
+      choose_class_laulaja: "Ryhdy laulajaksi",
+      choose_class_erankavija: "Ryhdy eränkävijäksi",
+      choose_class_urho: "Ryhdy urhoksi",
+      class_chosen: {
+        tietaja: "Olet nyt tietäjä: synnyt ja loitsut ovat sinun.",
+        seppa: "Olet nyt seppä: rauta ja rakentaminen ovat sinun.",
+        laulaja: "Olet nyt laulaja: laulu ja eläimet ovat sinun.",
+        erankavija: "Olet nyt eränkävijä: jousi ja erämaa ovat sinun.",
+        urho: "Olet nyt urho: taistelu ja kilpi ovat sinun.",
+      },
       pray_toast: "Rukoilet hartaasti!",
       advance_level_toast: "Nouset tasolle {level}!",
       examine_toast: "Tutkit kohdetta {target}.",
@@ -891,7 +942,13 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     living: {
       class: {
-        player_human: "Ihminen",
+        player_human: "Tulokas",
+        player_tietaja: "Tietäjä",
+        player_seppa: "Seppä",
+        player_laulaja: "Laulaja",
+        player_erankavija: "Eränkävijä",
+        player_urho: "Urho",
+        npc_elder: "Vanhin",
         player_elf: "Haltia",
         player_hobbit: "Hobitti",
         player_ghost: "Aave",
@@ -917,6 +974,11 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         back_right_leg: "Takaoikea jalka",
       },
       value: {
+        voima: "Voima",
+        ketteryys: "Ketteryys",
+        kestavyys: "Kestävyys",
+        tieto: "Tieto",
+        sana: "Sana",
         level: "Taso",
         experience: "Kokemus",
         total_experience: "Kokonaiskokemus",
@@ -1223,6 +1285,21 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     welcome: {
       welcomed_you: "{nick} toivottaa sinut tervetulleeksi Väinölään!",
     },
+    dialogue: {
+      elder: {
+        newcomer:
+          "Tulit vetten takaa. Jokainen meistä täällä on jotakin — kuka sinä olet?",
+        choose: {
+          tietaja: "Tietäjä, joka tuntee asioiden synnyt.",
+          seppa: "Seppä, joka takoo ja rakentaa.",
+          laulaja: "Laulaja, jonka laulua eläimet kuuntelevat.",
+          erankavija: "Eränkävijä, joka on kotonaan erämaassa jousi kädessä.",
+          urho: "Urho, joka seisoo edessä, kun tulee taisto.",
+        },
+        chosen:
+          "Mene siis ja kasvata tätä maata. Se on yhtä lailla sinun kuin minun.",
+      },
+    },
     island: {
       invited_you: "{nick} kutsuu sinut saarelleen.",
       invite_row: "{nick} kutsuu sinut saarelleen · {min} min jäljellä",
@@ -1245,6 +1322,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       not_your_island: "Se on jonkun toisen saari.",
       not_as_a_guest: "Vieraana et voi tehdä sitä toisen saarella.",
       fish_needs_water: "Käänny kohti avovettä kalastaaksesi.",
+      class_already_chosen: "Olet jo valinnut, mikä olet.",
+      ask_the_elder: "Kysy Väinölän vanhimmalta.",
       not_a_newcomer: "Hän ei ole enää tulokas.",
       already_welcomed: "Olet jo toivottanut hänet tervetulleeksi.",
       no_island_invite: "Kukaan ei ole kutsunut sinua saarelleen.",

@@ -104,6 +104,8 @@ export const ISLAND_HOST_STALE_MS = 2 * 60 * 1000;
 // who has welcomed whom (once per pair). See welcome_newcomer.
 export const NEWCOMER_WINDOW_MS = 15 * 60 * 1000;
 export const VWORLD_WELCOME_TABLE = "vworld_welcomes";
+// Each player's chosen class, kept through death. See player-character.ts.
+export const VWORLD_PLAYER_CHARACTER_TABLE = "vworld_player_characters";
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -156,7 +158,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v15: vworld_player_homes, each player's home island and onboarding.
 // v16: vworld_island_invites, who may row to whose island.
 // v17: vworld_welcomes, who has welcomed which newcomer.
-export const VWORLD_SCHEMA_VERSION = 17;
+// v18: vworld_player_characters, each player's chosen class.
+export const VWORLD_SCHEMA_VERSION = 18;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

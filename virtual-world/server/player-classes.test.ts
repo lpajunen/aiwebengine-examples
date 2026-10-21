@@ -217,3 +217,64 @@ describe("attribute modifiers", () => {
     expect(attributeModifier(15)).toBe(2);
   });
 });
+
+/** A player of the given class in a forest of their own, carrying `items`. */
+function playerOfClass(classId: string, items: string[]): string {
+  const forest = createTestWorld(16, 16);
+  const userId = createTestPlayer(
+    forest,
+    "of-" + classId,
+    walkableRunFinder(forest)(1)[0],
+  );
+  const inv = loadPlayerInventory(userId);
+  inv.class_id = classId;
+  savePlayerInventory(userId, inv);
+  items.forEach(function (type) {
+    give(userId, type);
+  });
+  return userId;
+}
+
+describe("what belongs to one class", () => {
+  test("the fireball is the sage's alone", () => {
+    const hero = playerOfClass("player_urho", ["spellbook"]);
+    const sage = playerOfClass("player_tietaja", ["spellbook"]);
+    const at = loadPlayerPosition(sage)!;
+
+    expect(act(hero, "fireball", { row: at.row, col: at.col }).error).toBe(
+      "error.not_for_your_class",
+    );
+    expect(act(sage, "fireball", { row: at.row, col: at.col }).error).not.toBe(
+      "error.not_for_your_class",
+    );
+  });
+
+  test("the longbow is carried by anyone but drawn only by a woodsman", () => {
+    const hero = playerOfClass("player_urho", ["longbow"]);
+    const woodsman = playerOfClass("player_erankavija", ["longbow"]);
+    function equip(userId: string): any {
+      const index = loadPlayerInventory(userId).bag.findIndex(function (
+        item: any,
+      ) {
+        return item && item.type === "longbow";
+      });
+      return performTreeActionForUser(userId, {
+        action: "equip",
+        from: "bag",
+        index: index,
+        to: "right_hand",
+      }).payload;
+    }
+
+    expect(equip(hero).error).toBe("error.not_for_your_class");
+    expect(
+      loadPlayerInventory(hero).bag.some(function (item: any) {
+        return item && item.type === "longbow";
+      }),
+    ).toBe(true);
+    expect(equip(woodsman).ok).toBe(true);
+    expect(loadPlayerInventory(woodsman).slots.right_hand!.type).toBe(
+      "longbow",
+    );
+  });
+});

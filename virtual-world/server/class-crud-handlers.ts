@@ -107,6 +107,9 @@ export function createItemClassHandler(context: any) {
     kind: String((body && body.kind) || "tool"),
     nonDroppable: !!(body && body.nonDroppable),
     nonPickable: !!(body && body.nonPickable),
+    wieldClasses: Array.isArray(body && body.wieldClasses)
+      ? body.wieldClasses.map(String)
+      : undefined,
     visuals: {
       // 0 is "automatic": the client then falls back to its own per-type
       // default color rather than rendering the item black.
@@ -196,6 +199,10 @@ export function updateItemClassHandler(context: any) {
       body && body.nonPickable !== undefined
         ? !!body.nonPickable
         : existing.nonPickable,
+    wieldClasses:
+      body && Array.isArray(body.wieldClasses)
+        ? body.wieldClasses.map(String)
+        : existing.wieldClasses,
     visuals: {
       color: normalizeColorNumber(
         body && body.visuals && body.visuals.color !== undefined
@@ -351,6 +358,9 @@ export function createActionClassHandler(context: any) {
     itemEffect: body && body.itemEffect ? body.itemEffect : undefined,
     progression: body && body.progression ? body.progression : undefined,
     skill: body && body.skill ? body.skill : undefined,
+    classes: Array.isArray(body && body.classes)
+      ? body.classes.map(String)
+      : undefined,
     messages: body && body.messages ? body.messages : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
@@ -491,6 +501,10 @@ export function updateActionClassHandler(context: any) {
         ? body.progression
         : existing.progression,
     skill: body && body.skill !== undefined ? body.skill : existing.skill,
+    classes:
+      body && Array.isArray(body.classes)
+        ? body.classes.map(String)
+        : existing.classes,
     messages:
       body && body.messages !== undefined ? body.messages : existing.messages,
     fatigueCost:

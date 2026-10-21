@@ -311,6 +311,11 @@ export function virtualWorldManageItemClassesToolHandler(
       kind: String(args.kind || "tool"),
       nonDroppable: !!args.nonDroppable,
       nonPickable: !!args.nonPickable,
+      wieldClasses: Array.isArray(args.wieldClasses)
+        ? args.wieldClasses.map(String)
+        : existing
+          ? existing.wieldClasses
+          : undefined,
       visuals: {
         color: normalizeColorNumber(
           args.color !== undefined
@@ -454,6 +459,11 @@ export function virtualWorldManageActionClassesToolHandler(
       progression:
         args.progression ?? (existing ? existing.progression : undefined),
       skill: args.skill ?? (existing ? existing.skill : undefined),
+      classes: Array.isArray(args.classes)
+        ? args.classes.map(String)
+        : existing
+          ? existing.classes
+          : undefined,
       messages: args.messages ?? (existing ? existing.messages : undefined),
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,

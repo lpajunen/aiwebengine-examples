@@ -247,6 +247,17 @@ export function performTreeActionForUser(
       payload: { ok: false, error: "error.skill_too_low" },
     };
   }
+  const allowedClasses = actionDefinition.classes;
+  if (
+    Array.isArray(allowedClasses) &&
+    allowedClasses.length > 0 &&
+    allowedClasses.indexOf(String(inv.class_id || "")) === -1
+  ) {
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.not_for_your_class" },
+    };
+  }
   // The d20 bonus the action's skill lends a rolled effect; 0 for actions
   // whose skill does not affect rolls.
   const attackBonus =

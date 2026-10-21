@@ -284,6 +284,12 @@ export function registerVirtualWorldRuntime(): void {
         type: "boolean",
         description: "Whether the item cannot be picked up",
       },
+      wieldClasses: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          'Player classes that may hold the item in a hand, e.g. ["player_urho"]; anyone else may carry it but not wield it. Omit for anyone.',
+      },
       color: {
         type: "number",
         description:
@@ -673,6 +679,12 @@ export function registerVirtualWorldRuntime(): void {
           gain: { type: "number" },
           affects: { type: "string", enum: ["roll", "duration", "yield"] },
         },
+      },
+      classes: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          'Player classes that may use the action, e.g. ["player_tietaja"]; omit for anyone.',
       },
       guestAllowed: {
         type: "boolean",

@@ -42,6 +42,9 @@ export interface ItemDefinition {
   kind: ItemKind;
   nonDroppable?: boolean;
   nonPickable?: boolean;
+  // Only players of these classes may hold it in a hand. Others may still
+  // carry it, trade it and hand it on. Missing or empty: anyone.
+  wieldClasses?: string[];
   visuals: {
     color: number;
     labelKey: string;
@@ -61,6 +64,7 @@ export interface ItemClassRecord {
   kind: string;
   nonDroppable: boolean;
   nonPickable: boolean;
+  wieldClasses?: string[];
   visuals: {
     color: number;
     labelKey: string;
@@ -126,6 +130,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   longbow: {
     id: "longbow",
     kind: "tool",
+    // The longbow is the woodsman's: others may carry it, not draw it.
+    wieldClasses: ["player_erankavija"],
     visuals: {
       color: 0x7a5220,
       labelKey: "item.longbow.name",
@@ -673,6 +679,7 @@ export function getBootstrapRegistry(): {
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
+      wield_classes?: string[];
     }
   >;
   actions: Record<
@@ -686,6 +693,7 @@ export function getBootstrapRegistry(): {
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
       skill?: ActionDefinition["skill"];
+      classes?: string[];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -717,6 +725,7 @@ export function getBootstrapRegistry(): {
       action_ids: string[];
       kind: string;
       non_pickable?: boolean;
+      wield_classes?: string[];
     }
   > = {};
   const actions: Record<
@@ -730,6 +739,7 @@ export function getBootstrapRegistry(): {
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
       skill?: ActionDefinition["skill"];
+      classes?: string[];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -759,6 +769,7 @@ export function getBootstrapRegistry(): {
         action_ids: getActionsForItemType(itemId),
         kind: cls.kind,
         non_pickable: !!cls.nonPickable,
+        wield_classes: cls.wieldClasses,
       };
     });
   } else {
@@ -774,6 +785,7 @@ export function getBootstrapRegistry(): {
         action_ids: getActionsForItemType(itemId),
         kind: item.kind,
         non_pickable: !!item.nonPickable,
+        wield_classes: item.wieldClasses,
       };
     });
   }
@@ -800,6 +812,7 @@ export function getBootstrapRegistry(): {
       targeting: resolveActionTargeting(action),
       valid_when: action.validWhen,
       skill: action.skill,
+      classes: action.classes,
       category: actionCategory(actionId),
       source_kind: worldMutation ? worldMutation.sourceKind : undefined,
       tile_type: worldMutation ? worldMutation.tileType : undefined,
@@ -848,6 +861,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     kind: def.kind,
     nonDroppable: !!def.nonDroppable,
     nonPickable: !!def.nonPickable,
+    ...(def.wieldClasses ? { wieldClasses: def.wieldClasses.slice() } : {}),
     visuals: {
       color: def.visuals.color,
       labelKey: def.visuals.labelKey,
@@ -879,6 +893,14 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
     kind: String(row.kind || "tool") as ItemKind,
     nonDroppable: row.non_droppable === 1 || row.non_droppable === true,
     nonPickable: row.non_pickable === 1 || row.non_pickable === true,
+    wieldClasses: (function () {
+      try {
+        const parsed = JSON.parse(row.wield_classes_json || "null");
+        return Array.isArray(parsed) ? parsed.map(String) : undefined;
+      } catch (e) {
+        return undefined;
+      }
+    })(),
     visuals: {
       color: Number(row.color || 0),
       labelKey: String(row.label_key || ""),
@@ -920,6 +942,7 @@ function itemClassToDbRow(
   kind: string;
   non_droppable: number;
   non_pickable: number;
+  wield_classes_json: string;
   color: number;
   size: string;
   style: string;
@@ -944,6 +967,9 @@ function itemClassToDbRow(
     extra: 0,
     non_droppable: record.nonDroppable ? 1 : 0,
     non_pickable: record.nonPickable ? 1 : 0,
+    wield_classes_json: Array.isArray(record.wieldClasses)
+      ? JSON.stringify(record.wieldClasses)
+      : "",
     color: record.visuals.color,
     size: normalizeClassSize(record.visuals.size),
     style: normalizeItemVisualStyle(record.visuals.style),
@@ -1014,6 +1040,20 @@ function backfillItemClassDefaults(
       normalizeItemVisualStyle(existing.visuals.style) === "scroll"
     ) {
       existing.visuals.style = "book";
+      changed = true;
+    }
+    // Who may wield a built-in follows the code for a row nobody owns; a
+    // creator's row keeps its own.
+    const wieldIsCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+    if (
+      wieldIsCodeOwned &&
+      JSON.stringify(existing.wieldClasses || []) !==
+        JSON.stringify(def.wieldClasses || [])
+    ) {
+      existing.wieldClasses = def.wieldClasses
+        ? def.wieldClasses.slice()
+        : undefined;
       changed = true;
     }
     if (changed) {
@@ -1428,6 +1468,7 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["progression"] | undefined,
     skill: parseJson(row.skill_json, undefined) as
       ActionDefinition["skill"] | undefined,
+    classes: parseJson(row.classes_json, undefined) as string[] | undefined,
     messages: parseJson(row.messages_json, undefined) as
       ActionDefinition["messages"] | undefined,
     fatigueCost:
@@ -1474,6 +1515,7 @@ function actionClassToDbRow(
   item_effect_json: string;
   progression_json: string;
   skill_json: string;
+  classes_json: string;
   messages_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
@@ -1513,6 +1555,9 @@ function actionClassToDbRow(
       ? JSON.stringify(record.progression)
       : "",
     skill_json: record.skill ? JSON.stringify(record.skill) : "",
+    classes_json: Array.isArray(record.classes)
+      ? JSON.stringify(record.classes)
+      : "",
     messages_json: record.messages ? JSON.stringify(record.messages) : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
@@ -1778,6 +1823,16 @@ function backfillActionClassDefaults(
       JSON.stringify(existing.skill) !== JSON.stringify(def.skill)
     ) {
       existing.skill = def.skill;
+      changed = true;
+    }
+    // Which classes may use a built-in follows the code for a row nobody
+    // owns, like the skill above.
+    if (
+      skillIsCodeOwned &&
+      JSON.stringify(existing.classes || []) !==
+        JSON.stringify(def.classes || [])
+    ) {
+      existing.classes = def.classes ? def.classes.slice() : undefined;
       changed = true;
     }
     // Who may use a built-in on someone else's island follows the code for a

@@ -736,7 +736,7 @@ function actionValidForTarget(actionId, target) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string, targetScope?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, skill?: {id: string, min?: number, gain?: number, attribute?: string, affects?: string}, category?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string, targetScope?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, skill?: {id: string, min?: number, gain?: number, attribute?: string, affects?: string}, classes?: string[], category?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -1200,14 +1200,21 @@ function isNearbyItemActionApplicable(item, action) {
 
 /** @returns {string[]} */
 /**
- * Whether the player's skill reaches the action's `skill.min`, the client
- * mirror of meetsSkillMin (skills.ts). An expert action is not offered to a
- * player who cannot yet do it.
+ * Whether the player may use the action at all: their class is among its
+ * `classes`, and their skill reaches its `skill.min` — the client mirror of
+ * the server's checks in performTreeActionForUser, so the palette does not
+ * offer what would be refused.
  * @param {string} action
  * @returns {boolean}
  */
-function meetsActionSkillMin(action) {
+function playerMayUseAction(action) {
   var def = getRegistryActionDef(action);
+  // A class-only action is not offered to the other classes either.
+  var classes = def && def.classes;
+  if (Array.isArray(classes) && classes.length > 0) {
+    var classId = normalizeClientInventory(playerInventory).class_id || "";
+    if (classes.indexOf(classId) === -1) return false;
+  }
   var skill = def && def.skill;
   if (!skill || !(Number(skill.min) > 0)) return true;
   var values = normalizeClientInventory(playerInventory).values || {};
@@ -1258,7 +1265,7 @@ function getOwnedTreeActions() {
       } else if (!isNearbyItemActionApplicable(all[j], actions[m])) {
         continue;
       }
-      if (!meetsActionSkillMin(actions[m])) continue;
+      if (!playerMayUseAction(actions[m])) continue;
       actionsByType[actions[m]] = true;
     }
   }

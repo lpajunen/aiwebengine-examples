@@ -172,6 +172,26 @@ function makeCheatItemId(
   );
 }
 
+/**
+ * Whether the player's class may hold this item in the slot: an item class's
+ * wieldClasses restricts its hand slots only, so anyone may still carry it in
+ * the bag.
+ */
+function mayWieldInSlot(inv: any, slotId: string, item: any): boolean {
+  const itemClass = getItemClass(String((item && item.type) || ""));
+  const allowed = itemClass && itemClass.wieldClasses;
+  if (!Array.isArray(allowed) || allowed.length === 0) return true;
+  const livingClass = getLivingClass(String((inv && inv.class_id) || ""));
+  const slot = livingClass
+    ? livingClass.slotDefinitions.find(function (def) {
+        return def.id === slotId;
+      })
+    : null;
+  const isHand =
+    !!slot && Array.isArray(slot.tags) && slot.tags.indexOf("hand") !== -1;
+  return !isHand || allowed.indexOf(String(inv.class_id || "")) !== -1;
+}
+
 export function handleItemActionForUser(
   userId: string,
   body: any,
@@ -334,6 +354,14 @@ export function handleItemActionForUser(
           ok: false,
           error: "error.item_cannot_be_equipped",
         },
+      };
+    }
+
+    if (!mayWieldInSlot(inv, toSlot, movingItem)) {
+      placeItemToSelector(inv, fromSlot, movingItem);
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.not_for_your_class" },
       };
     }
 

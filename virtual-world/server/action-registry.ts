@@ -180,6 +180,9 @@ export interface ActionDefinition {
   // The skill this action uses and trains, and what the skill changes about
   // it. See skills.ts.
   skill?: ActionSkill;
+  // Only players of these classes may use it: the summit of a craft belongs
+  // to one class. Missing or empty: anyone.
+  classes?: string[];
   validation?: {
     requireWalkableTile?: {
       errorMessage: string;
@@ -1327,6 +1330,8 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fireball",
     targetKind: "point",
     sourceItemIds: ["spellbook"],
+    // The strongest spell is the sage's alone.
+    classes: ["player_tietaja"],
     skill: { id: "synnyt", attribute: "tieto", gain: 2, affects: "roll" },
     experience: { amount: 20, onKill: true },
     targeting: {

@@ -24,6 +24,7 @@ export function upsertItemClassRow(row: {
   extra: number;
   non_droppable: number;
   non_pickable: number;
+  wield_classes_json?: string;
   color: number;
   size: string;
   style: string;

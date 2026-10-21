@@ -142,9 +142,9 @@ use. A class decides where a player starts and how far each skill can go.
 
 ### Built so far
 
-Classes, attributes, the choice, and skills; class-only verbs, levels that
-do something and starting anew are still to come. Where the build departed
-from the plan:
+Classes, attributes, the choice, skills and class-only verbs; levels that do
+something and starting anew are still to come. Where the build departed from
+the plan:
 
 - The classes are data in `player-classes.ts`, one living class each
   (`player_tietaja`, `player_seppa`, `player_laulaja`, `player_erankavija`,
@@ -175,6 +175,14 @@ skill) / cap`, so growth is quick at first and slows near the top; the cap
   healing (`parannus`), firebolt, fireball and harm (`synnyt`, roll), and
   fighting (`lahitaistelu`, roll). Nothing uses `takominen` or `jousi` yet,
   and no built-in has a `min`: those wait for forging and the bows.
+- `classes` on an action class and `wieldClasses` on an item class are
+  built, each in its own column and resynced from the code for rows nobody
+  owns. The server checks `classes` beside the skill minimum, and the palette
+  hides what the class may not use; `wieldClasses` is checked when an item
+  goes into a slot tagged `hand`, and only for players. The two built-in
+  examples are `fireball` (the sage's) and the longbow (the woodsman's). The
+  rest of the table above waits for its content: there are no great weapons,
+  forging, group songs or snares yet.
 - Elf, hobbit and giant are retired: a player still in one becomes a
   newcomer when the page loads. The living classes stay in the code so their
   rows remain valid.

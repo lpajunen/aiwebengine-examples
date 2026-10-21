@@ -277,8 +277,12 @@ healing — grow with use up to a cap set by the class: 100 for its main
 skills, 60 for its secondary ones and 30 for the rest. An action class names
 its skill in a `skill` block (`id`, `gain`, optional `attribute`, `min` and
 `affects`): a skilled player rolls better, finishes sooner or gets more,
-depending on the action. See `skills.ts`. Class-only actions are planned in
-`DESIGN-kalevala.md`.
+depending on the action. See `skills.ts`.
+
+The very best verbs belong to one class: an action class may name the
+`classes` that can use it (the fireball is the sage's), and an item class the
+`wieldClasses` that can hold it in a hand (the longbow is the woodsman's).
+Anyone may still carry such an item, trade it and hand it on.
 
 ## Creating a world
 

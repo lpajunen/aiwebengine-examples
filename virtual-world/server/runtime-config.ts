@@ -93,6 +93,13 @@ export const START_WORLD_CLASS_ID = "birdhaven";
 // VWORLD_PLAYER_HOME_TABLE. See home-island.ts.
 export const HOME_ISLAND_CLASS_ID = "home_island";
 export const VWORLD_PLAYER_HOME_TABLE = "vworld_player_homes";
+// Who may row to whose island: one row per host and guest. See
+// island-invites.ts.
+export const VWORLD_ISLAND_INVITE_TABLE = "vworld_island_invites";
+// How long an invite stays open for the guest to arrive in.
+export const ISLAND_INVITE_TTL_MS = 15 * 60 * 1000;
+// A host whose heartbeat is older than this counts as gone from their island.
+export const ISLAND_HOST_STALE_MS = 2 * 60 * 1000;
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -143,7 +150,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v12: npc home_row/home_col, the post a leashed living returns to.
 // v13: living class dialogue_json, what it says when talked to.
 // v15: vworld_player_homes, each player's home island and onboarding.
-export const VWORLD_SCHEMA_VERSION = 15;
+// v16: vworld_island_invites, who may row to whose island.
+export const VWORLD_SCHEMA_VERSION = 16;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

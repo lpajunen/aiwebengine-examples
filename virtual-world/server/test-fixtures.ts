@@ -10,6 +10,7 @@
 // `afterEach`, rather than trusting the rollback.
 
 import {
+  VWORLD_ISLAND_INVITE_TABLE,
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
   VWORLD_NPC_TICK_LEASE_TABLE,
@@ -239,6 +240,15 @@ export function cleanupTestData(): void {
       for (let t = 0; t < PLAYER_TABLES.length; t++) {
         deleteWorldRowsWhere(PLAYER_TABLES[t], filters);
       }
+      // Invites name a player twice over, neither column as user_id.
+      deleteWorldRowsWhere(
+        VWORLD_ISLAND_INVITE_TABLE,
+        JSON.stringify({ host_id: createdUserIds[i] }),
+      );
+      deleteWorldRowsWhere(
+        VWORLD_ISLAND_INVITE_TABLE,
+        JSON.stringify({ guest_id: createdUserIds[i] }),
+      );
     }
     for (let i = 0; i < createdWorldIds.length; i++) {
       const filters = JSON.stringify({ world_id: createdWorldIds[i] });

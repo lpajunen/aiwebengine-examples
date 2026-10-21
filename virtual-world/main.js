@@ -306,6 +306,7 @@ import {
   heartbeatHandler as heartbeatHandlerImpl,
   newWorldHandler as newWorldHandlerImpl,
   startWorldHandler as startWorldHandlerImpl,
+  islandInviteHandler as islandInviteHandlerImpl,
   livingsHandler as livingsHandlerImpl,
   resyncHandler as resyncHandlerImpl,
   currentWorldHandler as currentWorldHandlerImpl,
@@ -537,6 +538,10 @@ function newWorldHandler(context) {
 /** @param {*} context */
 function startWorldHandler(context) {
   return startWorldHandlerImpl(context);
+}
+/** @param {*} context */
+function islandInviteHandler(context) {
+  return islandInviteHandlerImpl(context);
 }
 /** @param {*} context */
 function livingsHandler(context) {

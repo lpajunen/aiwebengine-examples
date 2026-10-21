@@ -81,6 +81,8 @@ import {
   isOnboardingDone,
   markOnboardingDone,
 } from "./home-island.ts";
+import { isIslandGuest } from "./island-invites.ts";
+import { resolveIslandToVisit } from "./island-visits.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
   canInventoryUseTreeAction,
@@ -206,6 +208,20 @@ export function performTreeActionForUser(
     };
   }
   ensureWorldItems(worldId);
+
+  // A guest on someone else's island may look, talk and trade, and use only
+  // what is marked for guests. Checked when the action starts, not when a
+  // timed one resolves.
+  if (
+    !(options && options.resuming) &&
+    !actionDefinition.guestAllowed &&
+    isIslandGuest(userId, worldId)
+  ) {
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.not_as_a_guest" },
+    };
+  }
 
   const inv = loadPlayerInventory(userId);
   const canonical = getCanonicalPlayerState(worldId, userId);
@@ -1294,6 +1310,41 @@ export function performTreeActionForUser(
       status: 200,
       payload: buildConfiguredSuccessPayload({
         world_id: homeWorldId,
+      }),
+    };
+  }
+
+  if (action === "row_to_island") {
+    const visit = resolveIslandToVisit(
+      userId,
+      String((body && body.host_id) || ""),
+      Date.now(),
+    );
+    if ("error" in visit) {
+      return { status: 200, payload: { ok: false, error: visit.error } };
+    }
+    if (String(worldId) === visit.islandId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.already_on_that_island" },
+      };
+    }
+    if (
+      !switchUserWorld(
+        userId,
+        visit.islandId,
+        getDefaultSpawnPosition(visit.islandId, userId),
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.not_your_island" },
+      };
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        world_id: visit.islandId,
       }),
     };
   }

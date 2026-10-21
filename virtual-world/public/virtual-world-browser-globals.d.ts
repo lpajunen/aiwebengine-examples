@@ -11,6 +11,15 @@ declare var LIVINGS: any[];
 declare var worldId: string;
 declare var WORLD_CLASS_ID: string;
 declare var ONBOARDING: boolean;
+declare var ISLAND_VISITS: {
+  homeWorldId: string;
+  invitesToMe: Array<{
+    host_id: string;
+    host_nick: string;
+    expires_at: number;
+  }>;
+  invitedByMe: Array<{ guest_id: string; expires_at: number }>;
+};
 declare var playerId: string;
 declare var PLAYER_NICK: string;
 declare var ONLINE_PLAYERS: any;

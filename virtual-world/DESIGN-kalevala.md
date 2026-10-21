@@ -102,39 +102,27 @@ departed from the first plan:
   `craft_kantele` comes to cost one — the first kantele was a pike's jaw. It
   also sets the player's first origin flag, `synty_kantele`.
 
-### Visiting another's island
+### Visiting another's island — built
 
-Nobody can go to another player's island on their own; a player can invite
-someone there.
+Nobody can go to another player's island on their own; a host invites them.
+The README's "Home islands and the boat" describes how it works. Where the
+build departed from the plan:
 
-- A table `vworld_island_invites`: `host_id`, `guest_id`, `expires_at`. One
-  live invite per pair. A host may have any number live at once, and there is
-  no ceiling on guests, so a whole group can visit together.
-- An invite is issued only while the host is on their own island, and lasts
-  15 minutes. The host may issue it again to renew it.
-- `invite_to_island` targets a player by name, from the player list or a
-  direct message. `revoke_island_invite` withdraws it.
-- While an invite is live, the guest's boat offers `row_to_island` for that
-  host. The 15 minutes are the window to arrive in; a guest who has arrived
-  stays for as long as the host does.
-- **The visit ends when the host leaves.** When the host switches world, every
-  guest on the island is rowed back to Väinölä and every live invite of theirs
-  lapses. A host who drops offline is treated the same way once their presence
-  heartbeat has been stale for two minutes, checked in the world tick.
-- The guard is built: `switchUserWorld` refuses someone else's island
-  (`mayEnterWorld` in `home-island.ts`). Invites extend `mayEnterWorld` to
-  accept a live invite.
-- `linkedWorld` always creates a new world, so a portal built on an island
-  cannot lead into another island; the guard covers `existing_world`
-  placements and anything added later.
-- Guests may look, talk and trade. They cannot build, cut, plant or pick up on
-  the island: world-mod writes and `pick_item` check island ownership.
-- The host can send a guest away (`send_guest_home`). Revoking an invite while
-  the guest is on the island sends them back to Väinölä.
-
-**Tests** (the built part is in `home-island.test.ts`): the switch guard for
-invited, expired, revoked and host-away guests, several guests at once, guests
-sent back when the host leaves or goes stale, and the guest's blocked verbs.
+- Invites are issued from the players panel through a route of their own
+  (`/virtual-world/island-invite`), not as actions: a host picks a player from
+  a list rather than facing one, and the player is usually in another world.
+  `row_to_island` is the boat's action, and without a host named it rows on
+  the latest open invite.
+- "On the island" means the island is the host's current world and they have
+  been heard from — a heartbeat or a move — within two minutes. A host who
+  closed the game is still recorded on their island, so the world alone is
+  not enough.
+- What a guest may do is data: `guestAllowed` on an action class, off by
+  default, so an action a creator adds is held to the guest rule until they say
+  otherwise. Picking up and taking from containers are refused outright; a
+  guest may drop things as gifts.
+- The client still offers a guest the actions they cannot use; the server
+  refuses them with `error.not_as_a_guest`.
 
 ## 2. Classes and abilities
 

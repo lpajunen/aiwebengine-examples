@@ -240,9 +240,20 @@ onboarding and is announced in Väinölä's chat. Until then the bundle's
 `return_home` and the start-world and new-world routes refuse.
 
 Entry is decided in `switchUserWorld`, which every way between worlds goes
-through: someone else's home island is refused, whatever leads there. A player
-from before home islands has no home row, counts as past onboarding, and gets
-an island the first time they row home.
+through: someone else's home island is refused without an open invite,
+whatever leads there. A player from before home islands has no home row,
+counts as past onboarding, and gets an island the first time they row home.
+
+A host on their own island invites others from the players panel
+(`POST /virtual-world/island-invite`, ops `invite`, `revoke`, `send_home`;
+rows in `vworld_island_invites`). An invite gives the guest 15 minutes to
+arrive with the boat's `row_to_island`, and only while the host is on the
+island; there is no limit on guests. Once there, a guest stays until the host
+leaves, sends them away or revokes the invite, and is then rowed back to
+Väinölä. A host who has not been heard from for two minutes counts as gone,
+checked in the world tick. A guest may use only actions marked `guestAllowed`
+(looking, talking, playing, healing, the boat), and may leave items but not
+pick any up. The logic is in `island-invites.ts` and `island-visits.ts`.
 
 ## Creating a world
 

@@ -235,6 +235,26 @@ canvas {
   opacity: 0.75;
 }
 
+#hud-island-invites {
+  left: 50%;
+  bottom: 190px;
+  transform: translateX(-50%);
+  max-width: min(460px, calc(100vw - 28px));
+  font-size: 14px;
+  z-index: 1010;
+  pointer-events: auto;
+  border-color: rgba(120, 180, 230, 0.6);
+  background: rgba(20, 40, 60, 0.88);
+}
+.island-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.island-invite-row + .island-invite-row {
+  margin-top: 6px;
+}
+
 #hud-active-actions {
   top: 14px;
   left: 50%;

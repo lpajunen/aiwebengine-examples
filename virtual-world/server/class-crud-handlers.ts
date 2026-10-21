@@ -359,6 +359,10 @@ export function createActionClassHandler(context: any) {
       body && body.durationMs !== undefined
         ? Number(body.durationMs)
         : undefined,
+    guestAllowed:
+      body && body.guestAllowed !== undefined
+        ? Boolean(body.guestAllowed)
+        : undefined,
     ownerIds: [context.request.auth.userId],
     labels: normalizeClassLabels(body && body.labels),
   };
@@ -495,6 +499,10 @@ export function updateActionClassHandler(context: any) {
       body && body.durationMs !== undefined
         ? Number(body.durationMs)
         : existing.durationMs,
+    guestAllowed:
+      body && body.guestAllowed !== undefined
+        ? Boolean(body.guestAllowed)
+        : existing.guestAllowed,
     ownerIds: ownership.ownerIds,
     labels:
       body && body.labels !== undefined

@@ -15,6 +15,7 @@ import {
   upsertWorldItem,
 } from "./item-storage.ts";
 import { getPlayerWorld } from "./player-persistence.ts";
+import { isIslandGuest } from "./island-invites.ts";
 import { getCanonicalPlayerState } from "./player-snapshots.ts";
 import {
   broadcastItemChange,
@@ -184,6 +185,17 @@ export function handleItemActionForUser(
     };
   }
   ensureWorldItems(worldId);
+
+  // A guest may leave things on a host's island, but not take any.
+  if (
+    (action === "pick" || action === "container_get") &&
+    isIslandGuest(userId, worldId)
+  ) {
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.not_as_a_guest" },
+    };
+  }
 
   const canonical = getCanonicalPlayerState(worldId, userId);
   const tileKey = canonical.row + "_" + canonical.col;

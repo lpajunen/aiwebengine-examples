@@ -6,6 +6,10 @@
  * their island, a player who can row onto someone else's, or an old player sent
  * back to a tutorial they never needed are each worse than any missing feature.
  *
+ * Visits come under the same reasoning: a guest who can walk onto an island
+ * uninvited, or who is left behind on it once the host has gone, breaks the
+ * one promise an island makes.
+ *
  * Database-backed; every player, island and pending action a case makes is
  * removed afterwards.
  */
@@ -22,8 +26,18 @@ import {
   isOnboardingDone,
   loadPlayerHome,
   markOnboardingDone,
-  mayEnterWorld,
 } from "./home-island.ts";
+import {
+  listIslandInvitesByHost,
+  mayEnterWorld,
+  saveIslandInvite,
+} from "./island-invites.ts";
+import {
+  inviteToIsland,
+  revokeIslandInvite,
+  sendGuestHome,
+  tickIslandVisitsForWorld,
+} from "./island-visits.ts";
 import {
   switchUserToNewWorld,
   switchUserToStartWorld,
@@ -274,5 +288,168 @@ describe("a player from before home islands", () => {
 
     expect(markOnboardingDone(userId)).toBe(true);
     expect(markOnboardingDone(userId)).toBe(false);
+  });
+});
+
+/** A host standing on their island now, as a player who just moved there. */
+function hostAtHome(): { hostId: string; island: string } {
+  const { userId, island } = newPlayer();
+  savePlayerPosition(userId, island, { row: 7, col: 7, seq: 0, rotation: 0 });
+  return { hostId: userId, island: island };
+}
+
+/** A player elsewhere, with a boat to row in. */
+function guestWithBoat(prefix: string): string {
+  const forest = createTestWorld(16, 16);
+  const guestId = createTestPlayer(
+    forest,
+    prefix,
+    walkableRunFinder(forest)(1)[0],
+    0,
+  );
+  give(guestId, "boat");
+  return guestId;
+}
+
+function rowTo(guestId: string, hostId: string): any {
+  return performTreeActionForUser(guestId, {
+    action: "row_to_island",
+    host_id: hostId,
+  }).payload;
+}
+
+describe("visiting an island", () => {
+  test("an invited guest rows over and lands on it", () => {
+    const { hostId, island } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+
+    expect(inviteToIsland(hostId, guestId).ok).toBe(true);
+    expect(mayEnterWorld(guestId, island)).toBe(true);
+
+    expect(rowTo(guestId, hostId).ok).toBe(true);
+    expect(getPlayerWorld(guestId)).toBe(island);
+  });
+
+  test("without a host named, rows on the latest invite", () => {
+    const { hostId, island } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    inviteToIsland(hostId, guestId);
+
+    expect(act(guestId, "row_to_island").ok).toBe(true);
+    expect(getPlayerWorld(guestId)).toBe(island);
+  });
+
+  test("is invited to only from the host's own island", () => {
+    const hostId = guestWithBoat("roaming-host");
+    trackTestWorld(ensurePlayerHomeWorld(hostId));
+    const guestId = guestWithBoat("guest");
+
+    expect(inviteToIsland(hostId, guestId).error).toBe(
+      "error.invite_from_your_island",
+    );
+  });
+
+  test("is refused once the invite has lapsed", () => {
+    const { hostId, island } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    saveIslandInvite({
+      hostId: hostId,
+      guestId: guestId,
+      expiresAt: Date.now() - 1000,
+      createdAt: Date.now() - 16 * 60 * 1000,
+    });
+
+    expect(rowTo(guestId, hostId).error).toBe("error.no_island_invite");
+    expect(switchUserWorld(guestId, island)).toBe(false);
+  });
+
+  test("is refused while the host is away from the island", () => {
+    const { userId: hostId, island } = newPlayer();
+    // On the island by record, but not heard from for ten minutes.
+    savePlayerPosition(hostId, island, {
+      row: 7,
+      col: 7,
+      seq: 0,
+      rotation: 0,
+      ts: Date.now() - 10 * 60 * 1000,
+    });
+    const guestId = guestWithBoat("guest");
+    saveIslandInvite({
+      hostId: hostId,
+      guestId: guestId,
+      expiresAt: Date.now() + 60000,
+      createdAt: Date.now(),
+    });
+
+    expect(rowTo(guestId, hostId).error).toBe("error.host_not_on_island");
+    expect(getPlayerWorld(guestId)).not.toBe(island);
+  });
+
+  test("ends for every guest when the host leaves", () => {
+    const { hostId, island } = hostAtHome();
+    const first = guestWithBoat("first");
+    const second = guestWithBoat("second");
+    inviteToIsland(hostId, first);
+    inviteToIsland(hostId, second);
+    rowTo(first, hostId);
+    rowTo(second, hostId);
+    const elsewhere = createTestWorld(16, 16);
+
+    expect(switchUserWorld(hostId, elsewhere)).toBe(true);
+
+    expect(getPlayerWorld(first)).toBe(START_WORLD_ID);
+    expect(getPlayerWorld(second)).toBe(START_WORLD_ID);
+    expect(listIslandInvitesByHost(hostId, 0)).toHaveLength(0);
+  });
+
+  test("ends when the host has not been heard from", () => {
+    const { hostId, island } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    inviteToIsland(hostId, guestId);
+    rowTo(guestId, hostId);
+
+    tickIslandVisitsForWorld(island, Date.now() + 60000);
+    expect(getPlayerWorld(guestId)).toBe(island);
+
+    tickIslandVisitsForWorld(island, Date.now() + 3 * 60 * 1000);
+    expect(getPlayerWorld(guestId)).toBe(START_WORLD_ID);
+  });
+
+  test("a revoked invite rows the guest back", () => {
+    const { hostId } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    inviteToIsland(hostId, guestId);
+    rowTo(guestId, hostId);
+
+    expect(revokeIslandInvite(hostId, guestId).ok).toBe(true);
+
+    expect(getPlayerWorld(guestId)).toBe(START_WORLD_ID);
+    expect(rowTo(guestId, hostId).error).toBe("error.no_island_invite");
+  });
+
+  test("the host can send a guest away", () => {
+    const { hostId } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    inviteToIsland(hostId, guestId);
+    rowTo(guestId, hostId);
+
+    expect(sendGuestHome(hostId, guestId).ok).toBe(true);
+
+    expect(getPlayerWorld(guestId)).toBe(START_WORLD_ID);
+  });
+
+  test("a guest may not plant or pick up, but may row away", () => {
+    const { hostId } = hostAtHome();
+    const guestId = guestWithBoat("guest");
+    give(guestId, "seed_pouch");
+    inviteToIsland(hostId, guestId);
+    rowTo(guestId, hostId);
+
+    expect(act(guestId, "sow_tree").error).toBe("error.not_as_a_guest");
+    expect(act(guestId, "pick").error).toBe("error.not_as_a_guest");
+    expect(held(guestId, "seed_pouch")).toBe(1);
+
+    expect(act(guestId, "row_to_vainola").ok).toBe(true);
+    expect(getPlayerWorld(guestId)).toBe(START_WORLD_ID);
   });
 });

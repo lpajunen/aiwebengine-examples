@@ -368,6 +368,24 @@ function renderPlayersPanel() {
         '" onclick="openChatPanelDM(this.dataset.uid)">💬 ' +
         escapeHtml(t("players.dm_button", "DM")) +
         "</button>";
+    // On their own island a host invites, uninvites and sends guests away.
+    var islandOp = "";
+    if (!isMe && isOnOwnIsland()) {
+      islandOp = sameWorld
+        ? "send_home"
+        : hasInvitedToIsland(p.player_id)
+          ? "revoke"
+          : "invite";
+    }
+    var islandBtn = islandOp
+      ? '<button class="btn-dm" data-uid="' +
+        escapeHtml(p.player_id) +
+        '" data-op="' +
+        islandOp +
+        '" onclick="islandInviteAction(this.dataset.op, this.dataset.uid)">' +
+        escapeHtml(t("players." + islandOp + "_button", islandOp)) +
+        "</button>"
+      : "";
     return (
       "<tr" +
       (sameWorld && !isMe
@@ -390,6 +408,7 @@ function renderPlayersPanel() {
       "</td>" +
       "<td>" +
       dmBtn +
+      islandBtn +
       "</td>" +
       "</tr>"
     );
@@ -579,4 +598,184 @@ function renderOnboardingHint() {
     escHtml(t("onboarding.skip", "")) +
     "</div>";
   el.style.display = "";
+}
+
+// ── Island visits ──────────────────────────────────────────────────────
+// A host invites from the players panel while on their own island; a guest
+// rows over from the invites panel. ISLAND_VISITS comes from the server with
+// the page and every world swap, and the stream keeps it current between.
+
+/** @returns {{ homeWorldId: string, invitesToMe: any[], invitedByMe: any[] }} */
+function islandVisits() {
+  var v = typeof ISLAND_VISITS !== "undefined" && ISLAND_VISITS;
+  return {
+    homeWorldId: String((v && v.homeWorldId) || ""),
+    invitesToMe: (v && Array.isArray(v.invitesToMe) && v.invitesToMe) || [],
+    invitedByMe: (v && Array.isArray(v.invitedByMe) && v.invitedByMe) || [],
+  };
+}
+
+/** @returns {boolean} */
+function isOnOwnIsland() {
+  var home = islandVisits().homeWorldId;
+  return !!home && String(worldId) === home;
+}
+
+/** @param {string} otherId */
+function hasInvitedToIsland(otherId) {
+  var now = Date.now();
+  return islandVisits().invitedByMe.some(function (invite) {
+    return invite.guest_id === otherId && Number(invite.expires_at) > now;
+  });
+}
+
+/**
+ * @param {string} text
+ * @param {Record<string, string | number>} values
+ */
+function fillPlaceholders(text, values) {
+  return String(text).replace(/\{(\w+)\}/g, function (whole, name) {
+    return Object.prototype.hasOwnProperty.call(values, name)
+      ? String(values[name])
+      : whole;
+  });
+}
+
+/** @param {string} otherId */
+function nickOfPlayer(otherId) {
+  var entry = onlinePlayersList.find(function (p) {
+    return p.player_id === otherId;
+  });
+  return entry ? String(entry.nick) : shortenId(otherId);
+}
+
+function renderIslandInvites() {
+  var el = document.getElementById("hud-island-invites");
+  if (!el) return;
+  var now = Date.now();
+  var open = islandVisits().invitesToMe.filter(function (invite) {
+    return Number(invite.expires_at) > now;
+  });
+  // A guest already on an island has rowed on one of these; the panel is for
+  // getting there.
+  var onSomeonesIsland =
+    typeof WORLD_CLASS_ID !== "undefined" &&
+    WORLD_CLASS_ID === "home_island" &&
+    !isOnOwnIsland();
+  if (!open.length || onSomeonesIsland) {
+    el.style.display = "none";
+    return;
+  }
+  el.innerHTML = open
+    .map(function (invite) {
+      var minutes = Math.max(
+        1,
+        Math.ceil((Number(invite.expires_at) - now) / 60000),
+      );
+      return (
+        '<div class="island-invite-row">' +
+        "<span>" +
+        escHtml(
+          fillPlaceholders(t("island.invite_row", ""), {
+            nick: invite.host_nick || shortenId(invite.host_id),
+            min: minutes,
+          }),
+        ) +
+        "</span>" +
+        '<button class="btn-dm" data-host="' +
+        escapeHtml(invite.host_id) +
+        '" onclick="postTreeAction(\'row_to_island\', { host_id: this.dataset.host })">' +
+        escHtml(t("island.row_there", "Row there")) +
+        "</button>" +
+        "</div>"
+      );
+    })
+    .join("");
+  el.style.display = "";
+}
+
+// Lapsed invites drop out of the panel without waiting for an event.
+setInterval(renderIslandInvites, 30000);
+
+/**
+ * @param {string} op "invite", "revoke" or "send_home"
+ * @param {string} otherId
+ */
+function islandInviteAction(op, otherId) {
+  fetchWithAuth("/virtual-world/island-invite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ op: op, player_id: otherId }),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      if (result && result.visits) ISLAND_VISITS = result.visits;
+      if (!result || !result.ok) {
+        showHudToast(
+          translateServerMessage((result && result.error) || "error"),
+          true,
+        );
+      } else if (op === "invite") {
+        showHudToast(
+          fillPlaceholders(t("island.invite_sent", ""), {
+            nick: nickOfPlayer(otherId),
+          }),
+          false,
+        );
+      } else if (op === "revoke") {
+        showHudToast(t("island.invite_revoked", ""), false);
+      } else {
+        showHudToast(t("island.guest_sent_home", ""), false);
+      }
+      if (playersPanelVisible) renderPlayersPanel();
+    })
+    .catch(function () {});
+}
+
+/** @param {any} payload */
+function handleIslandInviteEvent(payload) {
+  if (!payload || !payload.host_id) return;
+  var v = islandVisits();
+  v.invitesToMe = v.invitesToMe.filter(function (invite) {
+    return invite.host_id !== payload.host_id;
+  });
+  v.invitesToMe.unshift({
+    host_id: String(payload.host_id),
+    host_nick: String(payload.host_nick || ""),
+    expires_at: Number(payload.expires_at || 0),
+  });
+  ISLAND_VISITS = v;
+  showHudToast(
+    fillPlaceholders(t("island.invited_you", ""), {
+      nick: payload.host_nick || shortenId(payload.host_id),
+    }),
+    false,
+  );
+  renderIslandInvites();
+}
+
+/** @param {any} payload */
+function handleIslandInviteEndedEvent(payload) {
+  if (!payload || !payload.host_id) return;
+  var v = islandVisits();
+  v.invitesToMe = v.invitesToMe.filter(function (invite) {
+    return invite.host_id !== payload.host_id;
+  });
+  ISLAND_VISITS = v;
+  renderIslandInvites();
+}
+
+/** @param {any} payload */
+function handleIslandVisitEndedEvent(payload) {
+  if (!payload) return;
+  handleIslandInviteEndedEvent(payload);
+  var reason = String(payload.reason || "host_left");
+  showHudToast(
+    fillPlaceholders(t("island.visit_ended." + reason, ""), {
+      nick: payload.host_nick || shortenId(String(payload.host_id || "")),
+    }),
+    false,
+  );
 }

@@ -25,6 +25,12 @@ import {
   switchUserToStartWorld,
 } from "./world-switch.ts";
 import {
+  buildIslandVisitState,
+  inviteToIsland,
+  revokeIslandInvite,
+  sendGuestHome,
+} from "./island-visits.ts";
+import {
   nextDiagRequestId,
   summarizeInventory,
   summarizeItems,
@@ -509,6 +515,41 @@ export function startWorldHandler(context: any) {
   }
   var userId = context.request.auth.userId;
   return ResponseBuilder.json(switchUserToStartWorld(userId));
+}
+
+/**
+ * A host's invites to their island: body.op is "invite", "revoke" or
+ * "send_home", body.player_id the other player. Answers with the outcome and
+ * the host's visit state as it now stands.
+ *
+ * @param {*} context
+ */
+export function islandInviteHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var userId = context.request.auth.userId;
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  var op = String((body && body.op) || "");
+  var other = String((body && body.player_id) || "");
+  var result =
+    op === "invite"
+      ? inviteToIsland(userId, other)
+      : op === "revoke"
+        ? revokeIslandInvite(userId, other)
+        : op === "send_home"
+          ? sendGuestHome(userId, other)
+          : { ok: false, error: "error.invalid_action" };
+  return ResponseBuilder.json(
+    Object.assign({}, result, { visits: buildIslandVisitState(userId) }),
+  );
 }
 
 /**

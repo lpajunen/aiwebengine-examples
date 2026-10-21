@@ -419,6 +419,7 @@ function updateStatsHud() {
   // What the player carries is most of what says where they are on their
   // island (client-panels.js).
   if (typeof renderOnboardingHint === "function") renderOnboardingHint();
+  if (typeof renderIslandInvites === "function") renderIslandInvites();
 }
 
 var logoutClickCount = 0;

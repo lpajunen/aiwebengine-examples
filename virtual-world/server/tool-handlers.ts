@@ -458,6 +458,12 @@ export function virtualWorldManageActionClassesToolHandler(
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,
       durationMs:
         args.durationMs !== undefined ? Number(args.durationMs) : undefined,
+      guestAllowed:
+        args.guestAllowed !== undefined
+          ? Boolean(args.guestAllowed)
+          : existing
+            ? existing.guestAllowed
+            : undefined,
       // Editing a row nobody owns claims it, the same rule the editor uses —
       // otherwise the bootstrap resyncs a built-in from code and the change
       // disappears. See resolveUpdatedOwnerIds in http-handler-helpers.ts.

@@ -29,6 +29,7 @@ import { loadWorldPlayers } from "./player-snapshots.ts";
 import { tickFollowForWorld } from "./follow-helpers.ts";
 import { loadActiveNPCFighterIds, tickFightForWorld } from "./fight-helpers.ts";
 import { processDueSpawnTimers } from "./spawn-timers.ts";
+import { tickIslandVisitsForWorld } from "./island-visits.ts";
 import {
   FATIGUE_RECOVERY_PER_SECOND,
   NPC_ACTIVE_WORLD_TTL_MS,
@@ -250,6 +251,8 @@ export function tryTickWorldNPCs(worldId: string, now: number): boolean {
   // ...and to advance any active fights (chase + roll a hit when
   // co-located; see fight-helpers.ts).
   tickFightForWorld(worldId, now);
+  // ...and to row guests home from an island whose host has gone.
+  tickIslandVisitsForWorld(worldId, now);
   return true;
 }
 

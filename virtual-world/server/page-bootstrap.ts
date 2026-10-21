@@ -1,3 +1,4 @@
+import { buildIslandVisitState } from "./island-visits.ts";
 import { getWorldNPCSnapshot } from "./npc-orchestration.ts";
 import { getTileDefs, refreshTileClassCache } from "./tile-registry.ts";
 import {
@@ -78,6 +79,9 @@ type PageState = {
   // True while the player is still learning on their home island; the client
   // shows the step they are on (renderOnboardingHint in client-panels.js).
   onboarding: boolean;
+  // The player's own island and the invites to and from it; the client shows
+  // them in the players panel and the invites panel (client-panels.js).
+  islandVisits: ReturnType<typeof buildIslandVisitState>;
   // World-independent registries — present when building the full page, omitted
   // by the in-place world-swap endpoint (the client already holds them from
   // boot). See buildVirtualWorldPageState's includeRegistries option.
@@ -234,6 +238,7 @@ export function buildVirtualWorldPageState(
     worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
     worldClassId: getWorldInfo(worldId).world_class_id,
     onboarding: !isOnboardingDone(userId),
+    islandVisits: buildIslandVisitState(userId),
     activeActions: activeActions,
   };
 
@@ -342,6 +347,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
 
   <div class="hud" id="hud-active-actions" style="display:none;"></div>
   <div class="hud" id="hud-onboarding" aria-live="polite" style="display:none;"></div>
+  <div class="hud" id="hud-island-invites" aria-live="polite" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
@@ -689,6 +695,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var worldId  = ${JSON.stringify(state.worldId)};
     var WORLD_CLASS_ID = ${JSON.stringify(state.worldClassId)};
     var ONBOARDING = ${JSON.stringify(state.onboarding)};
+    var ISLAND_VISITS = ${JSON.stringify(state.islandVisits)};
     var playerId = ${JSON.stringify(state.userId)};
     var PLAYER_NICK = ${JSON.stringify(state.playerNick)};
     var ONLINE_PLAYERS = ${JSON.stringify(state.onlinePlayers)};

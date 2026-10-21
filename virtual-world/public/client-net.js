@@ -497,6 +497,7 @@ function swapToWorld(state) {
   worldId = state.worldId;
   WORLD_CLASS_ID = state.worldClassId;
   ONBOARDING = !!state.onboarding;
+  if (state.islandVisits) ISLAND_VISITS = state.islandVisits;
   worldItemsByTile = normalizeClientWorldItems(state.worldItems || {});
   if (state.playerInventory) {
     playerInventory = normalizeClientInventory(state.playerInventory);
@@ -1110,6 +1111,15 @@ function initMultiplayer() {
         return;
       case "poked":
         handlePokedEvent(payload);
+        return;
+      case "island_invite":
+        handleIslandInviteEvent(payload);
+        return;
+      case "island_invite_ended":
+        handleIslandInviteEndedEvent(payload);
+        return;
+      case "island_visit_ended":
+        handleIslandVisitEndedEvent(payload);
         return;
       case "follow_ended":
         handleFollowEndedEvent(payload);

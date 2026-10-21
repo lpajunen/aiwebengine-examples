@@ -29,6 +29,7 @@ import {
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
   VWORLD_PLAYER_HOME_TABLE,
+  VWORLD_ISLAND_INVITE_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1275,6 +1276,7 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     ["addTextColumn", "messages_json", true],
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
+    ["addIntegerColumn", "guest_allowed", true],
     ["addTextColumn", "owner_ids_json", true],
     ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],
@@ -1731,6 +1733,48 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     return database.ensureTable(VWORLD_PLAYER_HOME_TABLE, {
       columns: [],
       uniqueIndexes: [["user_id"]],
+    });
+  });
+  // Read on every action, to tell a guest from the island's owner.
+  step("addUniqueIndex", VWORLD_PLAYER_HOME_TABLE, function () {
+    return database.ensureTable(VWORLD_PLAYER_HOME_TABLE, {
+      columns: [],
+      uniqueIndexes: [["home_world_id"]],
+    });
+  });
+
+  // One row per host and guest: the guest may row to the host's island until
+  // expires_at (see island-invites.ts).
+  step("createTable", VWORLD_ISLAND_INVITE_TABLE, function () {
+    return database.ensureTable(VWORLD_ISLAND_INVITE_TABLE, { columns: [] });
+  });
+  [
+    ["addTextColumn", "host_id"],
+    ["addTextColumn", "guest_id"],
+    ["addIntegerColumn", "expires_at"],
+    ["addIntegerColumn", "created_at"],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_ISLAND_INVITE_TABLE,
+      function () {
+        return database.ensureTable(VWORLD_ISLAND_INVITE_TABLE, {
+          columns: [
+            {
+              name: String(entry[1]),
+              type: entry[0] === "addIntegerColumn" ? "integer" : "text",
+              nullable: false,
+            },
+          ],
+        });
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_ISLAND_INVITE_TABLE, function () {
+    return database.ensureTable(VWORLD_ISLAND_INVITE_TABLE, {
+      columns: [],
+      uniqueIndexes: [["host_id", "guest_id"]],
     });
   });
 

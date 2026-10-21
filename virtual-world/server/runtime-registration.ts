@@ -662,6 +662,11 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Optional delay in milliseconds between the action starting and its effects/produces resolving. Costs and fatigue are charged at the start; execution.startToastMessage is shown then, and execution.toastMessage is shown when it finishes.",
       },
+      guestAllowed: {
+        type: "boolean",
+        description:
+          "Whether a guest may use the action on someone else's home island. Off by default: guests may not build, cut, plant or pick up there.",
+      },
     },
   };
   registerTool(
@@ -1105,6 +1110,7 @@ export function registerVirtualWorldRuntime(): void {
   );
   registerRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   registerRoute("/virtual-world/start-world", "startWorldHandler", "POST");
+  registerRoute("/virtual-world/island-invite", "islandInviteHandler", "POST");
   registerRoute("/virtual-world/livings", "livingsHandler", "GET");
   registerRoute("/virtual-world/resync", "resyncHandler", "GET");
   registerRoute("/virtual-world/current-world", "currentWorldHandler", "GET");

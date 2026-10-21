@@ -454,7 +454,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.boat.name",
       fallbackLabel: "Boat",
     },
-    actionIds: ["row_to_vainola", "row_home"],
+    actionIds: ["row_to_vainola", "row_home", "row_to_island"],
   },
   chest: {
     id: "chest",
@@ -1415,6 +1415,10 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       row.duration_ms === null || row.duration_ms === undefined
         ? undefined
         : Number(row.duration_ms),
+    guestAllowed:
+      row.guest_allowed === null || row.guest_allowed === undefined
+        ? undefined
+        : Number(row.guest_allowed) === 1,
     ownerIds: (function () {
       const parsed = parseJson(row.owner_ids_json, []) as unknown[];
       return Array.isArray(parsed) ? parsed.map(String) : [];
@@ -1449,6 +1453,7 @@ function actionClassToDbRow(
   messages_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
+  guest_allowed?: number;
   owner_ids_json: string;
   labels_json: string;
   created_at: number;
@@ -1494,6 +1499,9 @@ function actionClassToDbRow(
       : {}),
     ...(record.durationMs !== undefined
       ? { duration_ms: Number(record.durationMs) }
+      : {}),
+    ...(record.guestAllowed !== undefined
+      ? { guest_allowed: record.guestAllowed ? 1 : 0 }
       : {}),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
@@ -1719,6 +1727,20 @@ function backfillActionClassDefaults(
     }
     if (existing.durationMs === undefined && def.durationMs !== undefined) {
       existing.durationMs = def.durationMs;
+      changed = true;
+    }
+    // Who may use a built-in on someone else's island follows the code for a
+    // row nobody owns, like targeting below; a creator's row keeps its own.
+    const guestAllowedIsCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+    if (def.guestAllowed !== undefined && existing.guestAllowed === undefined) {
+      existing.guestAllowed = def.guestAllowed;
+      changed = true;
+    } else if (
+      guestAllowedIsCodeOwned &&
+      Boolean(existing.guestAllowed) !== Boolean(def.guestAllowed)
+    ) {
+      existing.guestAllowed = def.guestAllowed;
       changed = true;
     }
     // Keep the aiming spec (DESIGN-targeting.md) in sync with the code for

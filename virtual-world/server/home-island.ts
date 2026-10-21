@@ -8,7 +8,8 @@ import {
 // Each player's home island: the world a new player wakes in, learns the game
 // on, and rows home to. The island itself is an ordinary world of class
 // HOME_ISLAND_CLASS_ID, created in world-bootstrap.ts; this module only records
-// whose it is and whether its owner has finished onboarding.
+// whose it is and whether its owner has finished onboarding. Who else may
+// enter it is island-invites.ts.
 //
 // A player with no row predates home islands. They were already playing in the
 // shared world, so they count as past onboarding, and their island is created
@@ -85,13 +86,4 @@ export function markOnboardingDone(userId: string): boolean {
   home.onboardingDoneAt = Date.now();
   savePlayerHome(home);
   return true;
-}
-
-/**
- * Whether a player may enter a world: anyone may enter a world that is nobody's
- * home, and only its owner may enter a home island.
- */
-export function mayEnterWorld(userId: string, worldId: string): boolean {
-  const owner = getHomeIslandOwner(worldId);
-  return !owner || owner === String(userId);
 }

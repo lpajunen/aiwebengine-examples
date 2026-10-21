@@ -13,10 +13,18 @@ import {
   getEffectiveNick,
   sendGlobalPresenceEvent,
 } from "./social-state.ts";
-import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
+import {
+  sendRecipientScopedStreamEvent,
+  sendWorldScopedStreamEvent,
+} from "./stream-broadcast.ts";
 import { createWorldOfType } from "./world-bootstrap.ts";
 import { START_WORLD_ID } from "./runtime-config.ts";
-import { isOnboardingDone, mayEnterWorld } from "./home-island.ts";
+import { getHomeIslandOwner, isOnboardingDone } from "./home-island.ts";
+import {
+  deleteIslandInvitesByHost,
+  listPlayersInWorld,
+  mayEnterWorld,
+} from "./island-invites.ts";
 type SpawnPosition = {
   row: number;
   col: number;
@@ -27,8 +35,10 @@ type SpawnPosition = {
 /**
  * Moves a player into another world. Every way between worlds comes through
  * here, so this is where entry is decided: someone else's home island is
- * refused, whatever led there. Returns false when the move was refused, and
- * the player stays where they are.
+ * refused without an open invite, whatever led there. Returns false when the
+ * move was refused, and the player stays where they are.
+ *
+ * A host leaving their own island ends every visit to it.
  */
 export function switchUserWorld(
   userId: string,
@@ -80,7 +90,59 @@ export function switchUserWorld(
   }
   deletePlayerMoveLease(userId);
   deleteOnlinePresence(userId);
+  if (
+    oldWorldId &&
+    String(oldWorldId) !== String(targetWorldId) &&
+    getHomeIslandOwner(oldWorldId) === String(userId)
+  ) {
+    endIslandVisits(userId, String(oldWorldId), "host_left");
+  }
   return true;
+}
+
+/**
+ * Sends a guest from a host's island back to Väinölä, and tells them why:
+ * "host_left", "sent_home" or "revoked".
+ */
+export function sendGuestToVainola(
+  guestId: string,
+  hostId: string,
+  reason: string,
+): void {
+  switchUserWorld(
+    guestId,
+    START_WORLD_ID,
+    getDefaultSpawnPosition(START_WORLD_ID, guestId),
+  );
+  sendRecipientScopedStreamEvent(guestId, "island_visit_ended", {
+    host_id: String(hostId),
+    host_nick: getEffectiveNick(hostId),
+    reason: reason,
+  });
+}
+
+/**
+ * Ends every visit to the host's island: every invite they issued lapses, and
+ * everyone else on the island is rowed back to Väinölä.
+ */
+export function endIslandVisits(
+  hostId: string,
+  islandId: string,
+  reason: string,
+): void {
+  const invited = deleteIslandInvitesByHost(hostId);
+  const guests = listPlayersInWorld(islandId).filter(function (id) {
+    return id !== String(hostId);
+  });
+  for (let i = 0; i < guests.length; i++) {
+    sendGuestToVainola(guests[i], hostId, reason);
+  }
+  for (let i = 0; i < invited.length; i++) {
+    if (guests.indexOf(invited[i]) !== -1) continue;
+    sendRecipientScopedStreamEvent(invited[i], "island_invite_ended", {
+      host_id: String(hostId),
+    });
+  }
 }
 
 export function switchUserToNewWorld(

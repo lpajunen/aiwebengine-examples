@@ -170,6 +170,11 @@ export interface ActionDefinition {
       eventId: string;
     };
   };
+  // May a guest use this on someone else's home island? Missing == no: a
+  // guest may look, talk and trade, but not build, cut, plant or pick up, and
+  // an action a creator adds is held to that until they say otherwise. See
+  // island-invites.ts.
+  guestAllowed?: boolean;
   validation?: {
     requireWalkableTile?: {
       errorMessage: string;
@@ -799,6 +804,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Tune kantele",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    guestAllowed: true,
     fatigueCost: 10,
     experience: { amount: 4 },
     execution: {
@@ -821,6 +827,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Play kantele tune",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    guestAllowed: true,
     experience: { amount: 4 },
     execution: {
       successPayload: {
@@ -1021,6 +1028,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Travel to the old oak",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
     execution: {
       successPayload: {
         includeSwitchedWorld: true,
@@ -1034,6 +1042,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Examine",
     targetKind: "item",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
     // Look at any item within reach — a neighbouring tile's fixture or one
     // straight out of the bag (DESIGN-targeting.md step 5).
     targeting: LOOK_AT_TARGETING,
@@ -1127,6 +1136,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Poke",
     targetKind: "living",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
     // Pursue a living chosen up to range tiles away, then poke on arrival.
     targeting: WALK_ADJACENT_TARGETING,
   },
@@ -1136,6 +1146,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Follow",
     targetKind: "living_nearby",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
   },
   stop_follow: {
     id: "stop_follow",
@@ -1143,6 +1154,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Stop following",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
   },
   // Stops any in-flight walk-then-act approach (see cancel_approach handler in
   // tree-action-helpers.ts) — the Stop button on an approaching active-action.
@@ -1152,6 +1164,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Stop moving",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
   },
   fight: {
     id: "fight",
@@ -1179,6 +1192,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Stop fighting",
     targetKind: "self",
     sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
   },
   // Ranged single-target attack (DESIGN-targeting.md step 4, `line` shape): a
   // one-shot strike on a living up to `range` tiles away, resolved from the
@@ -1295,6 +1309,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Heal",
     targetKind: "living_nearby",
     sourceItemIds: ["shaman_talisman"],
+    guestAllowed: true,
     targeting: {
       range: 8,
       rangeShape: "line",
@@ -1584,6 +1599,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Row to Väinölä",
     targetKind: "self",
     sourceItemIds: ["boat"],
+    guestAllowed: true,
     execution: {
       successPayload: {
         includeSwitchedWorld: true,
@@ -1597,6 +1613,23 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Row home",
     targetKind: "self",
     sourceItemIds: ["boat"],
+    guestAllowed: true,
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
+  },
+  // To another player's island, on their invite: the one named by
+  // body.host_id, or else the latest open one (see island-visits.ts).
+  row_to_island: {
+    id: "row_to_island",
+    labelKey: "tree_action.row_to_island",
+    fallbackLabel: "Row to a friend's island",
+    targetKind: "self",
+    sourceItemIds: ["boat"],
+    guestAllowed: true,
     execution: {
       successPayload: {
         includeSwitchedWorld: true,
@@ -1670,6 +1703,7 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   return_home: "travel",
   row_to_vainola: "travel",
   row_home: "travel",
+  row_to_island: "travel",
   skip_onboarding: "travel",
   // misc
   pray: "misc",

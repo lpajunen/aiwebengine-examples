@@ -18,6 +18,11 @@ require("dotenv").config();
 // change is tested while production stays where it is: pin, deploy, run the
 // suite against head, promote only if it is green.
 //
+// A script's suite runs one test module at a time, each its own request: the
+// engine gives a run one time budget (60s by default), and a whole suite on a
+// busy server can outgrow it and stop part-way, with the rest never run. A
+// --filter run is one request, as before.
+//
 // Usage:
 //   node scripts/run-tests.js [options]
 //
@@ -156,6 +161,58 @@ async function runTests(token, scriptUri, options) {
   }
 }
 
+/**
+ * Runs the script's test modules one request each and adds the reports up,
+ * so no single run carries the whole suite against the engine's time budget.
+ * A module the server has no tests for counts as a failure: it is here, so
+ * the server is out of step with it.
+ *
+ * @param {string} token
+ * @param {string} scriptUri
+ * @param {string[]} modules
+ * @param {{ revision?: string, rollback: boolean }} options
+ * @returns {Promise<{ report?: TestReport, status: number, body: string }>}
+ */
+async function runTestsByModule(token, scriptUri, modules, options) {
+  /** @type {TestReport} */
+  const merged = {
+    success: true,
+    total: 0,
+    passed: 0,
+    failed: 0,
+    durationMs: 0,
+    timedOut: false,
+    cases: [],
+  };
+  for (const module of modules) {
+    const result = await runTests(token, scriptUri, {
+      ...options,
+      filter: module,
+    });
+    const report = result.report;
+    if (!report || result.status !== 200 || report.error) return result;
+    if (report.total === 0) {
+      merged.success = false;
+      merged.failed++;
+      merged.cases.push({
+        name: "no tests on the server — deploy them first",
+        file: module,
+        status: "failed",
+        durationMs: 0,
+      });
+      continue;
+    }
+    merged.success = merged.success && report.success;
+    merged.total += report.total;
+    merged.passed += report.passed;
+    merged.failed += report.failed;
+    merged.durationMs += report.durationMs;
+    merged.timedOut = merged.timedOut || report.timedOut;
+    merged.cases.push(...(report.cases || []));
+  }
+  return { report: merged, status: 200, body: "" };
+}
+
 /** @param {TestReport} report */
 function printReport(report) {
   for (const testCase of report.cases || []) {
@@ -216,7 +273,13 @@ async function main() {
 
   const discovered = discoverProjects();
   const targets = onlyUri
-    ? [{ project: onlyUri, scriptUri: onlyUri, modules: [] }]
+    ? [
+        discovered.find((target) => target.scriptUri === onlyUri) || {
+          project: onlyUri,
+          scriptUri: onlyUri,
+          modules: [],
+        },
+      ]
     : discovered;
 
   if (targets.length === 0) {
@@ -242,11 +305,17 @@ async function main() {
 
   for (const target of targets) {
     console.log(`  ${target.scriptUri}`);
-    const { report, status, body } = await runTests(token, target.scriptUri, {
-      filter,
-      revision,
-      rollback,
-    });
+    const { report, status, body } =
+      filter || target.modules.length === 0
+        ? await runTests(token, target.scriptUri, {
+            filter,
+            revision,
+            rollback,
+          })
+        : await runTestsByModule(token, target.scriptUri, target.modules, {
+            revision,
+            rollback,
+          });
 
     if (!report) {
       // The endpoint answers JSON for everything it handles, including its

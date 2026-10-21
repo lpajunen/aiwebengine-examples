@@ -51,6 +51,7 @@ import {
   refreshItemClassCache,
 } from "./item-registry.ts";
 import { getAllLivingItems, LivingState } from "./world-domain.ts";
+import { isOnboardingDone } from "./home-island.ts";
 
 type PageState = {
   map: number[][];
@@ -74,6 +75,9 @@ type PageState = {
   worldFlavorText: string;
   worldFlavorTextIndex: number;
   worldClassId: string;
+  // True while the player is still learning on their home island; the client
+  // shows the step they are on (renderOnboardingHint in client-panels.js).
+  onboarding: boolean;
   // World-independent registries — present when building the full page, omitted
   // by the in-place world-swap endpoint (the client already holds them from
   // boot). See buildVirtualWorldPageState's includeRegistries option.
@@ -104,6 +108,26 @@ export function ensureStarterKit(userId: string): void {
   }
 }
 
+// Every player past onboarding carries a boat: it is how they cross between
+// their island and Väinölä. Players from before home islands get theirs here,
+// and so does anyone who lost one.
+export function ensureBoat(userId: string): void {
+  if (!isOnboardingDone(userId)) return;
+  const inv = loadPlayerInventory(userId);
+  const hasBoat = getAllLivingItems(inv).some(function (item) {
+    return item && item.type === "boat";
+  });
+  if (hasBoat) return;
+  if (!Array.isArray(inv.bag)) inv.bag = [];
+  inv.bag.push({
+    id: "boat_" + userId,
+    type: "boat",
+    created_at: Date.now(),
+    non_droppable: true,
+  });
+  savePlayerInventory(userId, inv);
+}
+
 export function escapeHtml(value: string): string {
   return String(value || "").replace(/[<>&]/g, function (c) {
     if (c === "<") return "&lt;";
@@ -121,6 +145,7 @@ export function buildVirtualWorldPageState(
   const worldId = getOrCreatePlayerWorld(userId);
   markNPCWorldActive(worldId);
   ensureStarterKit(userId);
+  ensureBoat(userId);
   const map = generateMap(worldId);
   const worldMods = loadWorldMods(worldId);
   const treeMods = loadWorldTrees(worldId);
@@ -208,6 +233,7 @@ export function buildVirtualWorldPageState(
     ),
     worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
     worldClassId: getWorldInfo(worldId).world_class_id,
+    onboarding: !isOnboardingDone(userId),
     activeActions: activeActions,
   };
 
@@ -315,6 +341,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   </div>
 
   <div class="hud" id="hud-active-actions" style="display:none;"></div>
+  <div class="hud" id="hud-onboarding" aria-live="polite" style="display:none;"></div>
 
   <div class="hud" id="hud-tree-actions">
     <button id="btn-use" onclick="useItem()"><span data-i18n-key="hud.use">Use</span></button>
@@ -661,6 +688,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var LIVINGS = ${JSON.stringify(state.livings)};
     var worldId  = ${JSON.stringify(state.worldId)};
     var WORLD_CLASS_ID = ${JSON.stringify(state.worldClassId)};
+    var ONBOARDING = ${JSON.stringify(state.onboarding)};
     var playerId = ${JSON.stringify(state.userId)};
     var PLAYER_NICK = ${JSON.stringify(state.playerNick)};
     var ONLINE_PLAYERS = ${JSON.stringify(state.onlinePlayers)};

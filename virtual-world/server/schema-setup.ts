@@ -28,6 +28,7 @@ import {
   VWORLD_PLAYER_HEARTBEAT_TABLE,
   VWORLD_PLAYER_INVENTORY_TABLE,
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
+  VWORLD_PLAYER_HOME_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1695,6 +1696,41 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     return database.ensureTable(VWORLD_FIGHT_TABLE, {
       columns: [],
       uniqueIndexes: [["attacker_id"]],
+    });
+  });
+
+  // One row per player who has a home island. A player with no row predates
+  // home islands, and counts as past onboarding (see home-island.ts).
+  step("createTable", VWORLD_PLAYER_HOME_TABLE, function () {
+    return database.ensureTable(VWORLD_PLAYER_HOME_TABLE, { columns: [] });
+  });
+  [
+    ["addTextColumn", "user_id", false],
+    ["addTextColumn", "home_world_id", false],
+    ["addIntegerColumn", "onboarding_done_at", true],
+    ["addIntegerColumn", "created_at", false],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_PLAYER_HOME_TABLE,
+      function () {
+        return database.ensureTable(VWORLD_PLAYER_HOME_TABLE, {
+          columns: [
+            {
+              name: String(entry[1]),
+              type: entry[0] === "addIntegerColumn" ? "integer" : "text",
+              nullable: Boolean(entry[2]),
+            },
+          ],
+        });
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_PLAYER_HOME_TABLE, function () {
+    return database.ensureTable(VWORLD_PLAYER_HOME_TABLE, {
+      columns: [],
+      uniqueIndexes: [["user_id"]],
     });
   });
 

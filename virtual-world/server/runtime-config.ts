@@ -88,6 +88,11 @@ export const VWORLD_TILE_CLASS_TABLE = "vworld_tile_classes";
 // drop new players into. Change these to move the game's front door.
 export const START_WORLD_ID = "10000";
 export const START_WORLD_CLASS_ID = "birdhaven";
+// Every player's own island: where a new player wakes, and where the boat
+// rows them home. One world of this class per player, recorded in
+// VWORLD_PLAYER_HOME_TABLE. See home-island.ts.
+export const HOME_ISLAND_CLASS_ID = "home_island";
+export const VWORLD_PLAYER_HOME_TABLE = "vworld_player_homes";
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -137,7 +142,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v11: world chat text_key, so an authored line localizes per reader.
 // v12: npc home_row/home_col, the post a leashed living returns to.
 // v13: living class dialogue_json, what it says when talked to.
-export const VWORLD_SCHEMA_VERSION = 14;
+// v15: vworld_player_homes, each player's home island and onboarding.
+export const VWORLD_SCHEMA_VERSION = 15;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

@@ -263,6 +263,8 @@ function applyTileModLocally(
   rebuildLegacyDynamicViews();
   refreshMeshesForTileChange(previousTileType, tileType);
   refreshTileDetailIfOpen();
+  // A sown or felled tree moves the home island's onboarding along.
+  if (typeof renderOnboardingHint === "function") renderOnboardingHint();
 }
 
 /**

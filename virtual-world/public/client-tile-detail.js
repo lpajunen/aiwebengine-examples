@@ -399,6 +399,8 @@ function renderTileDetailPanel() {
     terrainLabel = t("terrain.wood_floor", "Wood floor");
   } else if (terrainType === clientTileValueForName("bridge")) {
     terrainLabel = t("terrain.bridge", "Bridge");
+  } else if (terrainType === clientTileValueForName("heather")) {
+    terrainLabel = t("terrain.heather", "Heather");
   } else {
     terrainLabel =
       treeMod && treeMod.action === "cut"

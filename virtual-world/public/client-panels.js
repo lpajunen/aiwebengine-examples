@@ -518,3 +518,65 @@ function commitNickEdit() {
       cancelNickEdit();
     });
 }
+
+// ── Home island onboarding ─────────────────────────────────────────────
+// The step a new player is on, read from what they carry and from whether a
+// tree grows on their island — nothing is stored for it, so it cannot drift
+// from what the player actually has. Shown only on the home island, and only
+// until the player first rows to Väinölä (ONBOARDING, from the server).
+
+/** @returns {boolean} */
+function islandHasTree() {
+  var pine = clientTileValueForName("pine_tree");
+  for (var row = 0; row < MAP.length; row++) {
+    var cols = MAP[row] || [];
+    for (var col = 0; col < cols.length; col++) {
+      if (cols[col] === pine) return true;
+    }
+  }
+  return false;
+}
+
+/** @returns {string} */
+function currentOnboardingStep() {
+  var inv = normalizeClientInventory(playerInventory);
+  /** @type {Record<string, boolean>} */
+  var carried = {};
+  var items = (inv.bag || []).slice();
+  Object.keys(inv.slots || {}).forEach(function (slotId) {
+    if (inv.slots[slotId]) items.push(inv.slots[slotId]);
+  });
+  items.forEach(function (item) {
+    if (item && item.type) carried[String(item.type)] = true;
+  });
+  if (carried.boat) return "row";
+  if (carried.log) return "carve";
+  var tree = islandHasTree();
+  if (carried.stone_axe) return tree ? "fell" : "sow";
+  if (tree) return "axe";
+  if (carried.seed_pouch) return "sow";
+  return "pouch";
+}
+
+function renderOnboardingHint() {
+  var el = document.getElementById("hud-onboarding");
+  if (!el) return;
+  var active =
+    typeof ONBOARDING !== "undefined" &&
+    ONBOARDING &&
+    typeof WORLD_CLASS_ID !== "undefined" &&
+    WORLD_CLASS_ID === "home_island";
+  if (!active) {
+    el.style.display = "none";
+    return;
+  }
+  var step = currentOnboardingStep();
+  el.innerHTML =
+    '<div class="onboarding-step">' +
+    escHtml(t("onboarding.step." + step, "")) +
+    "</div>" +
+    '<div class="onboarding-skip">' +
+    escHtml(t("onboarding.skip", "")) +
+    "</div>";
+  el.style.display = "";
+}

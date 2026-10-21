@@ -16,6 +16,7 @@ import {
 import { sendWorldScopedStreamEvent } from "./stream-broadcast.ts";
 import { createWorldOfType } from "./world-bootstrap.ts";
 import { START_WORLD_ID } from "./runtime-config.ts";
+import { isOnboardingDone, mayEnterWorld } from "./home-island.ts";
 type SpawnPosition = {
   row: number;
   col: number;
@@ -23,11 +24,18 @@ type SpawnPosition = {
   rotation?: number;
 };
 
+/**
+ * Moves a player into another world. Every way between worlds comes through
+ * here, so this is where entry is decided: someone else's home island is
+ * refused, whatever led there. Returns false when the move was refused, and
+ * the player stays where they are.
+ */
 export function switchUserWorld(
   userId: string,
   targetWorldId: string,
   spawnPosition?: SpawnPosition,
-): void {
+): boolean {
+  if (!mayEnterWorld(userId, String(targetWorldId))) return false;
   const oldWorldId = getPlayerWorld(userId);
   if (oldWorldId) {
     const oldPosition = loadPlayerPosition(userId);
@@ -72,12 +80,16 @@ export function switchUserWorld(
   }
   deletePlayerMoveLease(userId);
   deleteOnlinePresence(userId);
+  return true;
 }
 
 export function switchUserToNewWorld(
   userId: string,
   worldType: string,
-): { ok: boolean } {
+): { ok: boolean; error?: string } {
+  if (!isOnboardingDone(userId)) {
+    return { ok: false, error: "error.finish_island_first" };
+  }
   const createdWorld = createWorldOfType(worldType);
   switchUserWorld(userId, createdWorld.world_id);
   return { ok: true };
@@ -88,7 +100,16 @@ export function switchUserToNewWorld(
 // caller's arguments would reset the start world's class to the bare preset
 // and drop its placements. Switching a player is not a reason to reconfigure a
 // world.
-export function switchUserToStartWorld(userId: string): { ok: boolean } {
+//
+// A player still on their home island's onboarding is refused: the way off the
+// island is the boat they make there.
+export function switchUserToStartWorld(userId: string): {
+  ok: boolean;
+  error?: string;
+} {
+  if (!isOnboardingDone(userId)) {
+    return { ok: false, error: "error.finish_island_first" };
+  }
   switchUserWorld(
     userId,
     START_WORLD_ID,

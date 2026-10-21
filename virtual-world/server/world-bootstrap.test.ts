@@ -12,7 +12,11 @@
  * including the ones the code under test creates for itself.
  */
 
-import { START_WORLD_CLASS_ID, START_WORLD_ID } from "./runtime-config.ts";
+import {
+  HOME_ISLAND_CLASS_ID,
+  START_WORLD_CLASS_ID,
+  START_WORLD_ID,
+} from "./runtime-config.ts";
 import {
   createWorldOfType,
   getEffectiveMap,
@@ -64,18 +68,21 @@ afterEach(function () {
 });
 
 describe("which world a player is in", () => {
-  test("a player nobody has placed starts in the start world", () => {
+  test("a player nobody has placed wakes on a home island of their own", () => {
     const userId = testUserId("bootstrap");
 
-    expect(getOrCreatePlayerWorld(userId)).toBe(START_WORLD_ID);
+    const island = trackTestWorld(getOrCreatePlayerWorld(userId));
+
+    expect(island).not.toBe(START_WORLD_ID);
+    expect(getWorldInfo(island).world_class_id).toBe(HOME_ISLAND_CLASS_ID);
     // And it is written down, not just returned.
-    expect(getPlayerWorld(userId)).toBe(START_WORLD_ID);
+    expect(getPlayerWorld(userId)).toBe(island);
   });
 
   test("asking twice does not move them", () => {
     const userId = testUserId("bootstrap");
 
-    const first = getOrCreatePlayerWorld(userId);
+    const first = trackTestWorld(getOrCreatePlayerWorld(userId));
     const second = getOrCreatePlayerWorld(userId);
 
     expect(second).toBe(first);

@@ -416,6 +416,9 @@ function updateStatsHud() {
   syncLocalAvatarEquippedItems();
   syncLocalAvatarGhostVisual();
   syncLocalAvatarSize();
+  // What the player carries is most of what says where they are on their
+  // island (client-panels.js).
+  if (typeof renderOnboardingHint === "function") renderOnboardingHint();
 }
 
 var logoutClickCount = 0;

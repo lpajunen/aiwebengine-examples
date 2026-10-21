@@ -44,12 +44,11 @@ of things than a newcomer, but is not unbeatable at any one.
 
 ## Where the code stands
 
-- A new player is put straight into the start world (`getOrCreatePlayerWorld`,
-  `START_WORLD_ID = "10000"`, class `birdhaven`). `return_home` always leads
-  there too, so no player has a home of their own.
+- A new player wakes on a home island of their own and rows to the start
+  world, Väinölä (`START_WORLD_ID = "10000"`, class `birdhaven`), by boat.
 - Every world switch goes through `switchUserWorld` in `world-switch.ts`. Its
-  callers are `return_home` and portal/door travel in `tree-action-helpers.ts`,
-  and the two routes in `route-handlers.ts` (`switchUserToNewWorld`,
+  callers are `return_home`, the boat and portal/door travel in
+  `tree-action-helpers.ts`, and the two routes in `route-handlers.ts` (`switchUserToNewWorld`,
   `switchUserToStartWorld`).
 - Player classes (`player_human`, `player_elf`, `player_hobbit`,
   `player_giant`) differ only in looks. Every living has the same combat
@@ -63,68 +62,45 @@ of things than a newcomer, but is not unbeatable at any one.
   (`spawn-timers.ts`), quest flags (`livingEffect.affects: "actor"`),
   `validWhen` and `actorConditions`, dialogue trees, the NPC tick, world chat,
   and a global stream scope (`sendGlobalPresenceEvent`).
-- Missing: per-player worlds, any notion of a skill or ability, an event state
-  machine, authored item and world descriptions.
+- Missing: any notion of a skill or ability, an event state machine, authored
+  item and world descriptions.
 
 ## 1. The home island
 
 A new player wakes on a small island of their own, learns the game's verbs by
 retelling the opening of the Kalevala, and rows to Väinölä.
 
-### Per-player worlds
+### Built
 
-- A world class `home_island`: base type `island`, 12×12. Generation gives
-  rock, sand, heather and water at the edges, no trees. Placements: a seed
-  pouch, a stone, a branch and a landing beach for the boat. Empty spawn
-  manifests.
-- A table `vworld_player_home`: `user_id` → `home_world_id`,
-  `onboarding_done_at`.
-- `getOrCreatePlayerWorld` creates a home island for a new player and puts them
-  there. A backfill marks every player who already has a player row as done,
-  so nobody already in Väinölä is sent back.
-- `return_home` leads to the player's island, creating it lazily, so existing
-  players get a home too.
-- `switchUserToStartWorld` is refused until onboarding is done or skipped.
-- The cost is small: terrain is derived from the seed, so an island is a world
-  row and a handful of items. The 504s noted in TODO-storytelling are a 100×100
-  first-load problem.
+The island, the onboarding path, the boat and the entry guard are in place;
+the README's "Home islands and the boat" describes them. Where the build
+departed from the first plan:
 
-### The onboarding path
+- Progress is not stored. The client works out the step from what the player
+  carries and whether a tree grows on the island, so it cannot drift from what
+  the player has.
+- `return_home` still leads to the old oak; the boat is the way to the island.
+  Every player past onboarding is given one.
+- The island is 14×14 open water with a round patch of sand and heather. The
+  pouch, stone and branch are placements, so one taken is back the next time
+  the island loads and nobody can be stranded. `sow_tree` therefore works only
+  on a home island (`validation.requireWorldClass`).
+- No backfill: a player with no home row predates home islands and counts as
+  past onboarding.
+- World ids are now drawn until one names no existing world; with an island per
+  player, a random id landing on someone's world was no longer a remote chance.
 
-Progress is a player value, `onboarding_step` (0–6), written by
-`livingEffect.affects: "actor"`.
+### Still to build
 
-| Step                | New content                                                            | How                                                                                     |
-| ------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 1. Move             | —                                                                      | Leaving the beach tile advances it                                                      |
-| 2. Take the seeds   | Item `seed_pouch` (Sampsa Pellervoinen's)                              | A placement; picking it advances the step                                               |
-| 3. Plant            | Action `plant_sapling_home`                                            | Like `plant`, with `durationMs` ≈ 10 s and a grown tree as the result; home island only |
-| 4. Make a stone axe | Items `stone`, `branch`, `stone_axe`; action `craft_stone_axe`         | Shaped like `craft_kantele`                                                             |
-| 5. Fell and carve   | Items `log`, `boat` (non-droppable); actions `fell_tree`, `craft_boat` | `cut` also accepts the stone axe; carving takes ≈ 15 s                                  |
-| 6. Row              | Actions `row_to_vainola`, `row_home`                                   | A branch beside `return_home`; the destination is Väinölä's `arrival-shore` placement   |
-
-- A small hint panel (`client-panels.js`) shows the current step's text from
-  `onboarding_step`, in Finnish and English (`i18n.js`).
-- `skip_onboarding` hands over the boat and the axe at once. It is offered only
-  while `onboarding_step < 6`.
-- Optional, the pike: `fish` on a faced water tile yields a `pike_jawbone`, and
+- An `arrival-shore` placement in Väinölä. Newcomers land at the oak clearing,
+  Väinölä's spawn area, for now.
+- The class choice from the elder on arrival (see 2).
+- `welcome_newcomer`: rewarding the player who greets a newcomer within 15
+  minutes of arrival, once per pair (`vworld_welcomes`), keyed by an
+  `arrived_at` value set on arrival.
+- The pike: `fish` on a faced water tile yields a `pike_jawbone`, and
   `craft_kantele` comes to cost one — the first kantele was a pike's jaw. It
   also sets the player's first origin flag, `synty_kantele`.
-
-The path is class-neutral. The class is chosen on arrival (below), so the
-tutorial teaches verbs every class shares.
-
-### Arriving in Väinölä
-
-- Birdhaven's labels become Väinölä (`labels.fi`, `fallbackLabel`); the class
-  id `birdhaven` can stay.
-- A placement `arrival-shore` with a `spawn_area` reservation. Every newcomer
-  lands here, which makes it where the old and the new meet.
-- Arrival posts "X rowed ashore at Väinölä" to world chat and sets a player
-  value `arrived_at`.
-- On the shore, an elder asks who the newcomer is: the class choice (see 2).
-- Later: `welcome_newcomer` on a nearby player whose `arrived_at` is under 15
-  minutes old rewards the one who welcomes, once per pair (`vworld_welcomes`).
 
 ### Visiting another's island
 
@@ -145,11 +121,9 @@ someone there.
   guest on the island is rowed back to Väinölä and every live invite of theirs
   lapses. A host who drops offline is treated the same way once their presence
   heartbeat has been stale for two minutes, checked in the world tick.
-- **The rule lives in `switchUserWorld`, not in the callers.** Before
-  switching, it looks the target up in `vworld_player_home`. If the target is
-  someone's island, the switch is refused unless the user is the owner or holds
-  a live invite. That covers every route in, including a portal whose
-  destination names the world directly.
+- The guard is built: `switchUserWorld` refuses someone else's island
+  (`mayEnterWorld` in `home-island.ts`). Invites extend `mayEnterWorld` to
+  accept a live invite.
 - `linkedWorld` always creates a new world, so a portal built on an island
   cannot lead into another island; the guard covers `existing_world`
   placements and anything added later.
@@ -158,11 +132,9 @@ someone there.
 - The host can send a guest away (`send_guest_home`). Revoking an invite while
   the guest is on the island sends them back to Väinölä.
 
-**Tests:** island creation and the backfill, each onboarding step, skipping,
-`row_*` travel, `return_home` for a pre-existing player, the switch guard (owner,
-invited, uninvited, expired, revoked, host away), several guests at once,
-guests sent back when the host leaves or goes stale, and the guest's blocked
-verbs.
+**Tests** (the built part is in `home-island.test.ts`): the switch guard for
+invited, expired, revoked and host-away guests, several guests at once, guests
+sent back when the host leaves or goes stale, and the guest's blocked verbs.
 
 ## 2. Classes and abilities
 

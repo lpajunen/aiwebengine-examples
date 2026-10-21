@@ -301,6 +301,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "summon_knife",
       "summon_weapons",
       "craft_kantele",
+      "craft_stone_axe",
+      "craft_boat",
     ],
   },
   blessing_marker: {
@@ -365,6 +367,94 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       fallbackLabel: "Corpse",
     },
     actionIds: [],
+  },
+  // The home island's things (see homeIslandPlacements in
+  // world-class-storage.ts). The pouch, stone and branch are placements, so
+  // one taken from the island is back the next time its world loads: nobody
+  // can be stranded by having used them up.
+  sotka_nest: {
+    id: "sotka_nest",
+    kind: "placeable",
+    nonDroppable: true,
+    nonPickable: true,
+    visuals: {
+      color: 0x9b8a6a,
+      labelKey: "item.sotka_nest.name",
+      fallbackLabel: "Sotka's nest",
+      size: "small",
+      style: "chest",
+    },
+    actionIds: ["skip_onboarding"],
+  },
+  seed_pouch: {
+    id: "seed_pouch",
+    kind: "tool",
+    visuals: {
+      color: 0x8fb05a,
+      labelKey: "item.seed_pouch.name",
+      fallbackLabel: "Sampsa's seed pouch",
+      size: "small",
+      style: "plant",
+    },
+    actionIds: ["sow_tree"],
+  },
+  stone: {
+    id: "stone",
+    kind: "world_item",
+    visuals: {
+      color: 0x8c8f94,
+      labelKey: "item.stone.name",
+      fallbackLabel: "Stone",
+      size: "small",
+      style: "orb",
+    },
+    actionIds: [],
+  },
+  branch: {
+    id: "branch",
+    kind: "world_item",
+    visuals: {
+      color: 0x7a5a36,
+      labelKey: "item.branch.name",
+      fallbackLabel: "Branch",
+      size: "small",
+      style: "staff",
+    },
+    actionIds: [],
+  },
+  stone_axe: {
+    id: "stone_axe",
+    kind: "tool",
+    visuals: {
+      color: 0x8c8f94,
+      labelKey: "item.stone_axe.name",
+      fallbackLabel: "Stone axe",
+      style: "staff",
+    },
+    actionIds: ["fell_tree"],
+  },
+  log: {
+    id: "log",
+    kind: "world_item",
+    visuals: {
+      color: 0x9b6c3f,
+      labelKey: "item.log.name",
+      fallbackLabel: "Log",
+    },
+    actionIds: [],
+  },
+  // How a player crosses between their island and Väinölä. Every player past
+  // onboarding carries one (ensureBoat in page-bootstrap.ts).
+  boat: {
+    id: "boat",
+    kind: "tool",
+    nonDroppable: true,
+    visuals: {
+      color: 0x7d5a3a,
+      labelKey: "item.boat.name",
+      fallbackLabel: "Boat",
+    },
+    actionIds: ["row_to_vainola", "row_home"],
   },
   chest: {
     id: "chest",

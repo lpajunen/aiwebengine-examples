@@ -71,9 +71,16 @@ import {
 } from "./stream-broadcast.ts";
 import {
   createWorldOfType,
+  ensurePlayerHomeWorld,
   getEffectiveMap,
   getWorldDimensions,
+  getWorldInfo,
 } from "./world-bootstrap.ts";
+import {
+  getHomeIslandOwner,
+  isOnboardingDone,
+  markOnboardingDone,
+} from "./home-island.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
   canInventoryUseTreeAction,
@@ -102,6 +109,7 @@ import {
   WORLD_TILE_HOUSE,
   WORLD_TILE_PINE_TREE,
   consumeLivingItemsByType,
+  getAllLivingItems,
   worldTileValueForName,
   countItemsByType,
   countLivingItemsByType,
@@ -426,6 +434,27 @@ export function performTreeActionForUser(
     sendWorldScopedStreamEvent(String(worldId), "chat_message", chatMsg);
   }
 
+  // "X rowed ashore at Väinölä", in Väinölä's chat, the first time a player
+  // arrives there. Attributed to the newcomer, so a reply finds them.
+  function announceArrival(): void {
+    const nick = getEffectiveNick(userId);
+    const chatMsg = {
+      id:
+        "wc-" +
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).slice(2),
+      sender_id: userId,
+      sender_nick: nick,
+      sender_kind: "player" as ChatSenderKind,
+      text: "rowed ashore at Väinölä for the first time.",
+      text_key: "chat.arrived_in_vainola",
+      ts: Date.now(),
+    };
+    appendWorldChatMessage(START_WORLD_ID, chatMsg);
+    sendWorldScopedStreamEvent(START_WORLD_ID, "chat_message", chatMsg);
+  }
+
   function withConfiguredToastMessage(payload: any): any {
     const execution = getActionExecutionConfig();
     if (!execution || !execution.toastMessage) return payload;
@@ -654,6 +683,16 @@ export function performTreeActionForUser(
   ): string | null {
     const validation = actionDefinition && actionDefinition.validation;
     if (!validation) return null;
+
+    if (
+      validation.requireWorldClass &&
+      Array.isArray(validation.requireWorldClass.classIds) &&
+      validation.requireWorldClass.classIds.indexOf(
+        getWorldInfo(worldId).world_class_id,
+      ) === -1
+    ) {
+      return validation.requireWorldClass.errorMessage;
+    }
 
     if (
       validation.requireWalkableTile &&
@@ -1020,14 +1059,18 @@ export function performTreeActionForUser(
 
     if (actionDefinition && Number(actionDefinition.durationMs || 0) > 0) {
       const readyAt = Date.now() + Number(actionDefinition.durationMs);
+      // The resumed call resolves its target again from these, so they are
+      // where the actor stood, not the tile they aimed at: a facing-tile
+      // action resumed from its own target would land one tile further on. A
+      // point action's row/col is the aimed point either way.
       addPendingAction(
         worldId,
         userId,
         action,
         {
           ...body,
-          row: resolvedTarget.row,
-          col: resolvedTarget.col,
+          row: playerRow,
+          col: playerCol,
           rotation: rotation,
         },
         readyAt,
@@ -1054,7 +1097,10 @@ export function performTreeActionForUser(
     return null;
   }
 
-  if (!canUseAction) {
+  // Checked when an action starts, not again when a durationMs action
+  // resumes: the start charged its cost, and the cost may be the very item that
+  // granted it — the seed pouch is spent on sowing.
+  if (!canUseAction && !(options && options.resuming)) {
     return {
       status: 200,
       payload: {
@@ -1183,7 +1229,15 @@ export function performTreeActionForUser(
     }
   }
 
+  // The old oak is in Väinölä, which a player still learning on their home
+  // island reaches by boat, not by the bundle.
   if (action === "return_home") {
+    if (!isOnboardingDone(userId)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.finish_island_first" },
+      };
+    }
     switchUserWorld(
       userId,
       START_WORLD_ID,
@@ -1195,6 +1249,89 @@ export function performTreeActionForUser(
         action: "return_home",
         world_id: START_WORLD_ID,
       }),
+    };
+  }
+
+  // The boat: from anywhere to Väinölä, and from anywhere to the player's own
+  // island. The first crossing to Väinölä ends onboarding and is announced
+  // there, so the people already in the shared world can greet the newcomer.
+  if (action === "row_to_vainola") {
+    if (String(worldId) === START_WORLD_ID) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.already_in_vainola" },
+      };
+    }
+    const firstArrival = markOnboardingDone(userId);
+    switchUserWorld(
+      userId,
+      START_WORLD_ID,
+      getDefaultSpawnPosition(START_WORLD_ID, userId),
+    );
+    if (firstArrival) announceArrival();
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        world_id: START_WORLD_ID,
+      }),
+    };
+  }
+
+  if (action === "row_home") {
+    const homeWorldId = ensurePlayerHomeWorld(userId);
+    if (String(worldId) === homeWorldId) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.already_home" },
+      };
+    }
+    switchUserWorld(
+      userId,
+      homeWorldId,
+      getDefaultSpawnPosition(homeWorldId, userId),
+    );
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        world_id: homeWorldId,
+      }),
+    };
+  }
+
+  // For a player who already knows the game: the boat and the axe the island
+  // would have taught them to make. Only on their own island, and only once —
+  // after onboarding it has nothing left to give.
+  if (action === "skip_onboarding") {
+    if (isOnboardingDone(userId)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.onboarding_already_done" },
+      };
+    }
+    if (getHomeIslandOwner(worldId) !== String(userId)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.not_your_island" },
+      };
+    }
+    const carried = getAllLivingItems(inv);
+    const missing = ["boat", "stone_axe"].filter(function (itemId) {
+      return !carried.some(function (item) {
+        return item && item.type === itemId;
+      });
+    });
+    spawnItemsForUser(
+      worldId,
+      userId,
+      inv,
+      missing.map(function (itemId) {
+        return { itemId: itemId, count: 1 };
+      }),
+    );
+    savePlayerInventory(userId, inv);
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload(),
     };
   }
 
@@ -1238,7 +1375,12 @@ export function performTreeActionForUser(
       Number.isFinite(destinationRow) && Number.isFinite(destinationCol)
         ? { row: destinationRow, col: destinationCol }
         : undefined;
-    switchUserWorld(userId, newWorldId, destinationSpawn);
+    if (!switchUserWorld(userId, newWorldId, destinationSpawn)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.not_your_island" },
+      };
+    }
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({

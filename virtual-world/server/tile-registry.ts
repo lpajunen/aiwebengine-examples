@@ -127,6 +127,12 @@ const DEFAULT_TILE_CLASSES: Record<string, TileClassSeed> = {
     layer: TILE_LAYER_TERRAIN,
     visual: { style: "floor", color: 0xb08a55, colorAlt: 0x9a7447, y: 0.03 },
   },
+  heather: {
+    value: 14,
+    walkable: true,
+    layer: TILE_LAYER_TERRAIN,
+    visual: { style: "floor", color: 0x8a6a80, colorAlt: 0x7a5d72 },
+  },
 };
 
 let _tileClassCache: Record<string, TileClassRecord> | null = null;

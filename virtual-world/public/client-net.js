@@ -496,6 +496,7 @@ function swapToWorld(state) {
   HOUSE_MODS = state.houseMods || {};
   worldId = state.worldId;
   WORLD_CLASS_ID = state.worldClassId;
+  ONBOARDING = !!state.onboarding;
   worldItemsByTile = normalizeClientWorldItems(state.worldItems || {});
   if (state.playerInventory) {
     playerInventory = normalizeClientInventory(state.playerInventory);

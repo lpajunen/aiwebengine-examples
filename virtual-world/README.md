@@ -221,6 +221,29 @@ Authored links (see placements, below) choose a destination mode:
 - `source_world` — lead back to whoever linked here. This is what a return
   door uses: a class template cannot name its own callers.
 
+### Home islands and the boat
+
+Every player has a home island of their own (world class `home_island`,
+14×14), recorded in `vworld_player_homes`. A new player wakes there rather
+than in the shared start world, Väinölä, and learns the game by retelling the
+Kalevala's opening: pick up Sampsa's seed pouch, sow a tree, bind a stone to a
+branch for an axe, fell the tree, carve a boat from the trunk, and row to
+Väinölä. The steps are ordinary action classes (`sow_tree`,
+`craft_stone_axe`, `fell_tree`, `craft_boat`); the client shows the step the
+player is on, worked out from what they carry and whether a tree grows on the
+island, so nothing is stored for it. The sotka's nest beside the spawn offers
+`skip_onboarding` — a boat and an axe — to a player who knows the game.
+
+The boat (`row_to_vainola`, `row_home`) is the way between the island and
+Väinölä, and every player past onboarding carries one. The first crossing ends
+onboarding and is announced in Väinölä's chat. Until then the bundle's
+`return_home` and the start-world and new-world routes refuse.
+
+Entry is decided in `switchUserWorld`, which every way between worlds goes
+through: someone else's home island is refused, whatever leads there. A player
+from before home islands has no home row, counts as past onboarding, and gets
+an island the first time they row home.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

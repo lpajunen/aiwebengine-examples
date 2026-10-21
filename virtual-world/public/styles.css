@@ -216,6 +216,25 @@ canvas {
   background: rgba(120, 35, 25, 0.92);
 }
 
+#hud-onboarding {
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  max-width: min(460px, calc(100vw - 28px));
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+  z-index: 1010;
+  pointer-events: none;
+  border-color: rgba(230, 200, 120, 0.6);
+  background: rgba(60, 45, 20, 0.88);
+}
+#hud-onboarding .onboarding-skip {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 #hud-active-actions {
   top: 14px;
   left: 50%;

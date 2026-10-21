@@ -3,6 +3,7 @@ import {
   ActionLogicSpec,
 } from "./action-logic-interpreter.ts";
 import {
+  HOME_ISLAND_CLASS_ID,
   NEARBY_TARGET_TILE_DISTANCE,
   RESERVATION_BLOCK_BUILD,
   RESERVATION_BLOCK_PLANT,
@@ -222,6 +223,13 @@ export interface ActionDefinition {
       kind: string;
       errorMessage: string;
     }>;
+    // The action works only in worlds of these classes — the seed pouch sows
+    // on a home island and nowhere else, because a placement's pouch is back
+    // whenever the island loads.
+    requireWorldClass?: {
+      classIds: string[];
+      errorMessage: string;
+    };
   };
   logicSpec?: ActionLogicSpec;
   // Aiming/reach spec (DESIGN-targeting.md). Optional: when omitted, the
@@ -1426,6 +1434,190 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       toastMessageKey: "tree_action.craft_kantele_toast",
     },
   },
+  // The home island's onboarding (DESIGN-kalevala.md): sow a tree, make an
+  // axe, fell the tree, carve a boat, row to Väinölä. Each step is ordinary
+  // data; only the rowing and skipping have handlers of their own.
+  sow_tree: {
+    id: "sow_tree",
+    labelKey: "tree_action.sow_tree",
+    fallbackLabel: "Sow a tree",
+    targetKind: "facing_tile",
+    sourceItemIds: ["seed_pouch"],
+    cost: [{ itemId: "seed_pouch", count: 1 }],
+    experience: { amount: 3 },
+    durationMs: 8000,
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+      },
+      startToastMessage: "You sow the seed. Something stirs in the sand.",
+      startToastMessageKey: "tree_action.sow_tree_start_toast",
+      toastMessage: "A pine has grown where you sowed.",
+      toastMessageKey: "tree_action.sow_tree_toast",
+      worldMutation: {
+        sourceKind: "tree",
+        tileType: "pine_tree",
+      },
+      worldEvent: {
+        eventId: "world_mod_changed",
+      },
+    },
+    validation: {
+      requireWalkableTile: {
+        errorMessage: "error.cannot_plant_here",
+      },
+      requireTileState: [
+        {
+          tileType: "pine_tree",
+          kind: "absent",
+          errorMessage: "error.tree_already_exists",
+        },
+      ],
+      blockedZones: [
+        {
+          kind: RESERVATION_BLOCK_PLANT,
+          errorMessage: "error.area_is_protected",
+        },
+      ],
+      requireWorldClass: {
+        classIds: [HOME_ISLAND_CLASS_ID],
+        errorMessage: "error.sow_only_on_home_island",
+      },
+    },
+  },
+  craft_stone_axe: {
+    id: "craft_stone_axe",
+    labelKey: "recipe.craft_stone_axe",
+    fallbackLabel: "Make a stone axe",
+    targetKind: "inventory",
+    sourceItemIds: ["starter_kit"],
+    cost: [
+      { itemId: "stone", count: 1 },
+      { itemId: "branch", count: 1 },
+    ],
+    experience: { amount: 5 },
+    produces: [{ itemId: "stone_axe", count: 1 }],
+    durationMs: 3000,
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      startToastMessage: "You bind the stone to the branch.",
+      startToastMessageKey: "tree_action.craft_stone_axe_start_toast",
+      toastMessage: "You have a stone axe.",
+      toastMessageKey: "tree_action.craft_stone_axe_toast",
+    },
+  },
+  fell_tree: {
+    id: "fell_tree",
+    labelKey: "tree_action.fell_tree",
+    fallbackLabel: "Fell the tree",
+    targetKind: "facing_tile",
+    sourceItemIds: ["stone_axe"],
+    experience: { amount: 5 },
+    produces: [{ itemId: "log", count: 1 }],
+    durationMs: 5000,
+    execution: {
+      successPayload: {
+        includeTargetPosition: true,
+        includeWorldId: true,
+        includeInventory: true,
+      },
+      startToastMessage: "You swing the axe.",
+      startToastMessageKey: "tree_action.fell_tree_start_toast",
+      toastMessage: "The tree falls, and you take its trunk.",
+      toastMessageKey: "tree_action.fell_tree_toast",
+      worldMutation: {
+        sourceKind: "tree",
+        tileType: "ground",
+      },
+      worldEvent: {
+        eventId: "world_mod_changed",
+      },
+    },
+    validation: {
+      requireTileState: [
+        {
+          sourceKind: "tree",
+          tileType: "ground",
+          kind: "absent",
+          errorMessage: "error.tree_already_cut",
+        },
+        {
+          tileType: "pine_tree",
+          kind: "present",
+          errorMessage: "error.no_tree_to_cut",
+        },
+      ],
+      blockedZones: [
+        {
+          kind: RESERVATION_PROTECT_LANDMARK,
+          errorMessage: "error.landmark_stands_firm",
+        },
+      ],
+    },
+  },
+  craft_boat: {
+    id: "craft_boat",
+    labelKey: "recipe.craft_boat",
+    fallbackLabel: "Carve a boat",
+    targetKind: "inventory",
+    sourceItemIds: ["starter_kit"],
+    cost: [{ itemId: "log", count: 1 }],
+    experience: { amount: 15 },
+    produces: [{ itemId: "boat", count: 1 }],
+    durationMs: 10000,
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      startToastMessage: "You start hollowing out the trunk.",
+      startToastMessageKey: "tree_action.craft_boat_start_toast",
+      toastMessage: "Your boat is ready.",
+      toastMessageKey: "tree_action.craft_boat_toast",
+    },
+  },
+  row_to_vainola: {
+    id: "row_to_vainola",
+    labelKey: "tree_action.row_to_vainola",
+    fallbackLabel: "Row to Väinölä",
+    targetKind: "self",
+    sourceItemIds: ["boat"],
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
+  },
+  row_home: {
+    id: "row_home",
+    labelKey: "tree_action.row_home",
+    fallbackLabel: "Row home",
+    targetKind: "self",
+    sourceItemIds: ["boat"],
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
+  },
+  skip_onboarding: {
+    id: "skip_onboarding",
+    labelKey: "tree_action.skip_onboarding",
+    fallbackLabel: "I know the way — give me a boat",
+    targetKind: "self",
+    sourceItemIds: ["sotka_nest"],
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      toastMessage: "You find a boat and an axe beside the nest.",
+      toastMessageKey: "tree_action.skip_onboarding_toast",
+    },
+  },
 };
 
 // Display category for grouping actions in the client action palette (UI phase
@@ -1437,6 +1629,8 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   plant: "build",
   cut: "build",
   grow_pine_tree: "build",
+  sow_tree: "build",
+  fell_tree: "build",
   build_house: "build",
   destroy_house: "build",
   build_door: "build",
@@ -1446,6 +1640,8 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   place_blessing: "build",
   // craft
   craft_kantele: "craft",
+  craft_stone_axe: "craft",
+  craft_boat: "craft",
   summon_knife: "craft",
   summon_weapons: "craft",
   // magic / music
@@ -1472,6 +1668,9 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   open_door: "travel",
   close_door: "travel",
   return_home: "travel",
+  row_to_vainola: "travel",
+  row_home: "travel",
+  skip_onboarding: "travel",
   // misc
   pray: "misc",
   advance_level: "misc",

@@ -1,4 +1,5 @@
 import {
+  HOME_ISLAND_CLASS_ID,
   START_WORLD_CLASS_ID,
   VWORLD_WORLD_CLASS_TABLE,
   VWORLD_WORLD_TYPE_TABLE,
@@ -12,6 +13,7 @@ import {
   WORLD_TILE_PINE_TREE,
   WORLD_TYPE_BUILDING,
   WORLD_TYPE_FOREST,
+  WORLD_TYPE_ISLAND,
   WORLD_TYPE_VILLAGE,
   WORLD_TYPES,
 } from "./world-domain.ts";
@@ -345,14 +347,14 @@ function birdhavenWorldClassRecord(): WorldClassRecord {
     rows: BIRDHAVEN_ROWS,
     cols: BIRDHAVEN_COLS,
     labelKey: "world_class." + START_WORLD_CLASS_ID + ".name",
-    fallbackLabel: "Birdhaven",
+    fallbackLabel: "Väinölä",
     itemSpawns: copySpawnEntries(BUILTIN_ITEM_SPAWNS),
     npcSpawns: copySpawnEntries(BUILTIN_VILLAGE_NPC_SPAWNS),
     placements: birdhavenPlacements(),
     generation: null,
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
-    labels: { fi: "Lintukoto" },
+    labels: { fi: "Väinölä" },
   };
 }
 
@@ -379,12 +381,110 @@ export function adventurersGuildWorldClassRecord(): WorldClassRecord {
   };
 }
 
+// Home island placements. The sand is a blob centred within a tile of the
+// middle (see homeIslandGeneration), so everything authored sits within three
+// tiles of it and is always on land.
+const HOME_ISLAND_SIZE = 14;
+
+function homeIslandPlacements(): WorldClassPlacement[] {
+  return [
+    {
+      // Where the island's owner wakes: the sotka's nest, the place the
+      // world's egg broke. Its action lets a player who already knows the game
+      // skip the rest.
+      id: "sotka-nest",
+      kind: "fixture",
+      classId: "sotka_nest",
+      position: { strategy: "exact", row: 7, col: 6 },
+      state: {},
+      reservations: [
+        {
+          kind: "circle",
+          row: 7,
+          col: 6,
+          radius: 1,
+          rules: [RESERVATION_SPAWN_AREA, RESERVATION_BLOCK_PLANT],
+        },
+      ],
+    },
+    {
+      id: "seed-pouch",
+      kind: "item",
+      classId: "seed_pouch",
+      position: { strategy: "exact", row: 6, col: 9 },
+      state: {},
+      reservations: [],
+    },
+    {
+      id: "stone",
+      kind: "item",
+      classId: "stone",
+      position: { strategy: "exact", row: 9, col: 8 },
+      state: {},
+      reservations: [],
+    },
+    {
+      id: "branch",
+      kind: "item",
+      classId: "branch",
+      position: { strategy: "exact", row: 9, col: 5 },
+      state: {},
+      reservations: [],
+    },
+  ];
+}
+
+// A bare island: open water, one round patch of sand, and heather on it. No
+// trees — the first one is the player's to sow.
+function homeIslandGeneration(): WorldGenerationSpec {
+  return {
+    floorTile: "ocean",
+    boundaryTile: "ocean",
+    wallTile: "rock",
+    passes: [
+      {
+        kind: "blobs",
+        tile: "sand",
+        count: 1,
+        minRadius: 4,
+        maxRadius: 5,
+        margin: 6,
+      },
+      { kind: "scatter", tile: "heather", count: 14, on: "walkable" },
+    ],
+  };
+}
+
+function homeIslandWorldClassRecord(): WorldClassRecord {
+  return {
+    id: HOME_ISLAND_CLASS_ID,
+    baseType: WORLD_TYPE_ISLAND,
+    rows: HOME_ISLAND_SIZE,
+    cols: HOME_ISLAND_SIZE,
+    labelKey: "world_class." + HOME_ISLAND_CLASS_ID + ".name",
+    fallbackLabel: "Home island",
+    // Deliberately empty: what is on the island is authored, and a respawning
+    // stranger's wolf has no place on someone's first minutes.
+    itemSpawns: [],
+    npcSpawns: [],
+    placements: homeIslandPlacements(),
+    generation: homeIslandGeneration(),
+    placementRevision: SYSTEM_PLACEMENT_REVISION,
+    ownerIds: [],
+    labels: { fi: "Kotisaari" },
+  };
+}
+
 // System world classes that aren't generation presets (not in WORLD_TYPES) but
 // are still seeded/backfilled like built-ins so they show in the world-type
 // editor. Birdhaven is the start village's own class (village terrain + spawns,
 // pinned to the oak world's 30x30 size); the guild is its linked interior.
 function systemWorldClassRecords(): WorldClassRecord[] {
-  return [birdhavenWorldClassRecord(), adventurersGuildWorldClassRecord()];
+  return [
+    birdhavenWorldClassRecord(),
+    adventurersGuildWorldClassRecord(),
+    homeIslandWorldClassRecord(),
+  ];
 }
 
 export function normalizeWorldClassRecord(record: {
@@ -580,10 +680,29 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       continue;
     }
     let changed = false;
-    if (desired.labels.fi && !(existing.labels && existing.labels.fi)) {
+    // A system class nobody has claimed is code-owned, so its Finnish name
+    // follows the code; a claimed one only has an empty name filled.
+    const labelsAreCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+    const existingFi = existing.labels ? existing.labels.fi : "";
+    if (
+      desired.labels.fi &&
+      existingFi !== desired.labels.fi &&
+      (labelsAreCodeOwned || !existingFi)
+    ) {
       existing.labels = Object.assign({}, existing.labels || {}, {
         fi: desired.labels.fi,
       });
+      changed = true;
+    }
+    // The spec of a code-owned system class follows the code too: the home
+    // island's terrain is its whole definition.
+    if (
+      labelsAreCodeOwned &&
+      desired.generation &&
+      JSON.stringify(existing.generation) !== JSON.stringify(desired.generation)
+    ) {
+      existing.generation = desired.generation;
       changed = true;
     }
     if (existing.fallbackLabel !== desired.fallbackLabel) {

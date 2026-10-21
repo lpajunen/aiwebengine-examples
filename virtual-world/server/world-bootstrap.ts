@@ -1,4 +1,5 @@
 import {
+  HOME_ISLAND_CLASS_ID,
   START_WORLD_CLASS_ID,
   START_WORLD_ID,
   VWORLD_WORLD_ITEM_META_TABLE,
@@ -8,6 +9,7 @@ import {
 import { generateWorldMap, applyWorldModsToMap } from "./world-map.ts";
 import { loadWorldMods } from "./world-mod-storage.ts";
 import { getPlayerWorld, savePlayerWorld } from "./player-persistence.ts";
+import { loadPlayerHome, savePlayerHome } from "./home-island.ts";
 import {
   createWorldId,
   COLS,
@@ -28,14 +30,49 @@ import {
   upsertWorldRow,
 } from "./world-db.ts";
 
+// A player nobody has placed yet is new: they wake on a home island of their
+// own, with onboarding ahead of them.
 export function getOrCreatePlayerWorld(userId: string): string {
   let worldId = getPlayerWorld(userId);
   if (!worldId) {
-    worldId = START_WORLD_ID;
+    worldId = createHomeIsland();
+    savePlayerHome({
+      userId: String(userId),
+      homeWorldId: worldId,
+      onboardingDoneAt: null,
+      createdAt: Date.now(),
+    });
     savePlayerWorld(userId, worldId);
   }
   ensureStartWorldRow(worldId);
   return worldId;
+}
+
+/**
+ * The player's home island, created on first need. A player with no home row
+ * predates home islands and was already in the shared world, so the row this
+ * writes for them records onboarding as done.
+ */
+export function ensurePlayerHomeWorld(userId: string): string {
+  const home = loadPlayerHome(userId);
+  if (home && home.homeWorldId) return home.homeWorldId;
+  const worldId = createHomeIsland();
+  savePlayerHome({
+    userId: String(userId),
+    homeWorldId: worldId,
+    onboardingDoneAt: home ? home.onboardingDoneAt : Date.now(),
+    createdAt: home ? home.createdAt : Date.now(),
+  });
+  return worldId;
+}
+
+function createHomeIsland(): string {
+  const homeClass = getWorldClassWithRefresh(HOME_ISLAND_CLASS_ID);
+  return createWorldOfType(
+    homeClass ? homeClass.baseType : "island",
+    homeClass ? { rows: homeClass.rows, cols: homeClass.cols } : undefined,
+    HOME_ISLAND_CLASS_ID,
+  ).world_id;
 }
 
 // Creates the start world's row the first time the deployment is used, from
@@ -160,6 +197,22 @@ export function resolvePortalDestinationWorldType(
   return undefined;
 }
 
+// A fresh world id that names no world yet. Ids are drawn from a million, and
+// every player owns a home island, so a draw that lands on an existing world —
+// the start world included — has to be drawn again rather than overwrite it.
+function unusedWorldId(): string {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = createWorldId();
+    if (candidate === START_WORLD_ID) continue;
+    const taken = querySingleWorldRow(
+      VWORLD_WORLD_TYPE_TABLE,
+      JSON.stringify({ world_id: candidate }),
+    );
+    if (!taken) return candidate;
+  }
+  throw new Error("no unused world id after 20 draws");
+}
+
 export function createWorldOfType(
   worldType: string | undefined | null,
   dimensions?: Partial<WorldDimensions>,
@@ -170,7 +223,7 @@ export function createWorldOfType(
     rows: normalizeWorldDimension(dimensions && dimensions.rows, ROWS),
     cols: normalizeWorldDimension(dimensions && dimensions.cols, COLS),
   };
-  const worldId = createWorldId();
+  const worldId = unusedWorldId();
   saveWorldType(
     worldId,
     normalizedType,

@@ -10,6 +10,7 @@ declare var PLAYER_INV: any;
 declare var LIVINGS: any[];
 declare var worldId: string;
 declare var WORLD_CLASS_ID: string;
+declare var ONBOARDING: boolean;
 declare var playerId: string;
 declare var PLAYER_NICK: string;
 declare var ONLINE_PLAYERS: any;

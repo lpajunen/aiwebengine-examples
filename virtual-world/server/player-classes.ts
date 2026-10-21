@@ -17,6 +17,26 @@ export const PLAYER_ATTRIBUTES = [
 
 export type PlayerAttribute = (typeof PLAYER_ATTRIBUTES)[number];
 
+/** The skills, by their value keys. Each grows by use (see skills.ts). */
+export const PLAYER_SKILLS = [
+  "puutyo",
+  "takominen",
+  "metsastys",
+  "synnyt",
+  "soitto",
+  "lahitaistelu",
+  "jousi",
+  "parannus",
+] as const;
+
+export type PlayerSkill = (typeof PLAYER_SKILLS)[number];
+
+// How far a skill can grow: its class's main skills to 100, its secondary ones
+// to 60, and everything else — and everything for a newcomer — to 30.
+export const SKILL_CAP_MAIN = 100;
+export const SKILL_CAP_SECONDARY = 60;
+export const SKILL_CAP_OTHER = 30;
+
 /** The class a new player starts as, and the only one a class is chosen from. */
 export const NEWCOMER_CLASS_ID = "player_human";
 
@@ -39,6 +59,8 @@ export interface PlayerClassDefinition {
   // rolled: levels do not change hit points yet).
   maxHitPoints: number;
   hitDie: number;
+  mainSkills: PlayerSkill[];
+  secondarySkills: PlayerSkill[];
 }
 
 export const PLAYER_CLASSES: PlayerClassDefinition[] = [
@@ -50,6 +72,8 @@ export const PLAYER_CLASSES: PlayerClassDefinition[] = [
     attributes: { voima: 8, ketteryys: 10, kestavyys: 12, tieto: 15, sana: 13 },
     maxHitPoints: 8,
     hitDie: 6,
+    mainSkills: ["synnyt", "parannus"],
+    secondarySkills: ["soitto", "puutyo"],
   },
   {
     id: "player_seppa",
@@ -59,6 +83,8 @@ export const PLAYER_CLASSES: PlayerClassDefinition[] = [
     attributes: { voima: 15, ketteryys: 8, kestavyys: 13, tieto: 12, sana: 10 },
     maxHitPoints: 12,
     hitDie: 10,
+    mainSkills: ["takominen", "puutyo"],
+    secondarySkills: ["lahitaistelu"],
   },
   {
     id: "player_laulaja",
@@ -68,6 +94,8 @@ export const PLAYER_CLASSES: PlayerClassDefinition[] = [
     attributes: { voima: 8, ketteryys: 13, kestavyys: 10, tieto: 12, sana: 15 },
     maxHitPoints: 8,
     hitDie: 6,
+    mainSkills: ["soitto"],
+    secondarySkills: ["synnyt", "parannus", "metsastys"],
   },
   {
     id: "player_erankavija",
@@ -77,6 +105,8 @@ export const PLAYER_CLASSES: PlayerClassDefinition[] = [
     attributes: { voima: 12, ketteryys: 15, kestavyys: 13, tieto: 10, sana: 8 },
     maxHitPoints: 10,
     hitDie: 8,
+    mainSkills: ["jousi", "metsastys"],
+    secondarySkills: ["puutyo", "lahitaistelu"],
   },
   {
     id: "player_urho",
@@ -86,6 +116,8 @@ export const PLAYER_CLASSES: PlayerClassDefinition[] = [
     attributes: { voima: 15, ketteryys: 12, kestavyys: 13, tieto: 8, sana: 10 },
     maxHitPoints: 12,
     hitDie: 10,
+    mainSkills: ["lahitaistelu"],
+    secondarySkills: ["jousi", "metsastys"],
   },
 ];
 
@@ -114,4 +146,22 @@ export function playerClassForChoiceAction(
 /** An attribute's D&D modifier: floor((value − 10) / 2). */
 export function attributeModifier(value: number): number {
   return Math.floor((Number(value) - 10) / 2);
+}
+
+export function getPlayerClass(classId: string): PlayerClassDefinition | null {
+  for (let i = 0; i < PLAYER_CLASSES.length; i++) {
+    if (PLAYER_CLASSES[i].id === classId) return PLAYER_CLASSES[i];
+  }
+  return null;
+}
+
+/** How far a player of this class can take the skill. */
+export function skillCap(classId: string, skill: string): number {
+  const cls = getPlayerClass(classId);
+  if (!cls) return SKILL_CAP_OTHER;
+  if ((cls.mainSkills as string[]).indexOf(skill) !== -1) return SKILL_CAP_MAIN;
+  if ((cls.secondarySkills as string[]).indexOf(skill) !== -1) {
+    return SKILL_CAP_SECONDARY;
+  }
+  return SKILL_CAP_OTHER;
 }

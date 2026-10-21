@@ -350,6 +350,7 @@ export function createActionClassHandler(context: any) {
     linkedWorld: body && body.linkedWorld ? body.linkedWorld : undefined,
     itemEffect: body && body.itemEffect ? body.itemEffect : undefined,
     progression: body && body.progression ? body.progression : undefined,
+    skill: body && body.skill ? body.skill : undefined,
     messages: body && body.messages ? body.messages : undefined,
     fatigueCost:
       body && body.fatigueCost !== undefined
@@ -489,6 +490,7 @@ export function updateActionClassHandler(context: any) {
       body && body.progression !== undefined
         ? body.progression
         : existing.progression,
+    skill: body && body.skill !== undefined ? body.skill : existing.skill,
     messages:
       body && body.messages !== undefined ? body.messages : existing.messages,
     fatigueCost:

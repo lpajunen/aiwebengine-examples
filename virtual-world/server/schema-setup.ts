@@ -1279,6 +1279,7 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     ["addIntegerColumn", "fatigue_cost", true],
     ["addIntegerColumn", "duration_ms", true],
     ["addIntegerColumn", "guest_allowed", true],
+    ["addTextColumn", "skill_json", true],
     ["addTextColumn", "owner_ids_json", true],
     ["addTextColumn", "labels_json", true],
     ["addIntegerColumn", "created_at", false],

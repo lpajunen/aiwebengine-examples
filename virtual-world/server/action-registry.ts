@@ -10,6 +10,7 @@ import {
   RESERVATION_PROTECT_LANDMARK,
 } from "./runtime-config.ts";
 import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
+import { ActionSkill } from "./skills.ts";
 
 // Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
 // aimed and how far it reaches, independent of the existing `targetKind` (which
@@ -176,6 +177,9 @@ export interface ActionDefinition {
   // an action a creator adds is held to that until they say otherwise. See
   // island-invites.ts.
   guestAllowed?: boolean;
+  // The skill this action uses and trains, and what the skill changes about
+  // it. See skills.ts.
+  skill?: ActionSkill;
   validation?: {
     requireWalkableTile?: {
       errorMessage: string;
@@ -489,6 +493,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Plant pine sapling",
     targetKind: "facing_tile",
     sourceItemIds: ["tree_planter"],
+    skill: { id: "puutyo", gain: 1 },
     experience: { amount: 3 },
     execution: {
       successPayload: {
@@ -530,6 +535,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Use woodsman's saw",
     targetKind: "facing_tile",
     sourceItemIds: ["saw"],
+    skill: { id: "puutyo", attribute: "voima", gain: 1 },
     experience: { amount: 5 },
     execution: {
       successPayload: {
@@ -838,6 +844,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Tune kantele",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    skill: { id: "soitto", attribute: "sana", gain: 1 },
     guestAllowed: true,
     fatigueCost: 10,
     experience: { amount: 4 },
@@ -861,6 +868,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Play kantele tune",
     targetKind: "self",
     sourceItemIds: ["kantele"],
+    skill: { id: "soitto", attribute: "sana", gain: 2 },
     guestAllowed: true,
     experience: { amount: 4 },
     execution: {
@@ -1223,6 +1231,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fight",
     targetKind: "living_nearby",
     sourceItemIds: ["starter_kit"],
+    skill: { id: "lahitaistelu", attribute: "voima", gain: 1, affects: "roll" },
     // Base XP for a kill; the combat resolver multiplies this by the slain
     // target's level (onKill defers the award off the fight-start path).
     experience: { amount: 20, onKill: true },
@@ -1256,6 +1265,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Firebolt",
     targetKind: "living_nearby",
     sourceItemIds: ["spellbook"],
+    skill: { id: "synnyt", attribute: "tieto", gain: 2, affects: "roll" },
     experience: { amount: 20, onKill: true },
     targeting: {
       range: 8,
@@ -1317,6 +1327,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fireball",
     targetKind: "point",
     sourceItemIds: ["spellbook"],
+    skill: { id: "synnyt", attribute: "tieto", gain: 2, affects: "roll" },
     experience: { amount: 20, onKill: true },
     targeting: {
       range: 8,
@@ -1360,6 +1371,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Heal",
     targetKind: "living_nearby",
     sourceItemIds: ["shaman_talisman"],
+    skill: { id: "parannus", attribute: "tieto", gain: 2 },
     guestAllowed: true,
     targeting: {
       range: 8,
@@ -1404,6 +1416,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Harm",
     targetKind: "living_nearby",
     sourceItemIds: ["shaman_talisman"],
+    skill: { id: "synnyt", attribute: "tieto", gain: 1, affects: "roll" },
     targeting: {
       range: 8,
       rangeShape: "line",
@@ -1482,6 +1495,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Craft kantele",
     targetKind: "inventory",
     sourceItemIds: ["starter_kit"],
+    skill: { id: "puutyo", gain: 2, affects: "duration" },
     // The first kantele was made from a great pike's jawbone, and making one
     // is the player's first origin: they now know how the kantele came to be.
     cost: [
@@ -1517,6 +1531,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Sow a tree",
     targetKind: "facing_tile",
     sourceItemIds: ["seed_pouch"],
+    skill: { id: "puutyo", gain: 1 },
     cost: [{ itemId: "seed_pouch", count: 1 }],
     experience: { amount: 3 },
     durationMs: 8000,
@@ -1566,6 +1581,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Make a stone axe",
     targetKind: "inventory",
     sourceItemIds: ["starter_kit"],
+    skill: { id: "puutyo", gain: 1, affects: "duration" },
     cost: [
       { itemId: "stone", count: 1 },
       { itemId: "branch", count: 1 },
@@ -1589,6 +1605,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fell the tree",
     targetKind: "facing_tile",
     sourceItemIds: ["stone_axe"],
+    skill: { id: "puutyo", attribute: "voima", gain: 2, affects: "duration" },
     experience: { amount: 5 },
     produces: [{ itemId: "log", count: 1 }],
     durationMs: 5000,
@@ -1638,6 +1655,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Carve a boat",
     targetKind: "inventory",
     sourceItemIds: ["starter_kit"],
+    skill: { id: "puutyo", gain: 3, affects: "duration" },
     cost: [{ itemId: "log", count: 1 }],
     experience: { amount: 15 },
     produces: [{ itemId: "boat", count: 1 }],
@@ -1687,6 +1705,12 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Fish",
     targetKind: "facing_tile",
     sourceItemIds: ["boat"],
+    skill: {
+      id: "metsastys",
+      attribute: "ketteryys",
+      gain: 2,
+      affects: "yield",
+    },
     fatigueCost: 5,
     durationMs: 6000,
     experience: { amount: 5 },

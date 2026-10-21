@@ -270,8 +270,15 @@ smith (seppä), singer (laulaja), woodsman (eränkävijä) or hero (urho). Each
 is a living class with its own colour, hit points and five starting
 attributes — `voima`, `ketteryys`, `kestavyys`, `tieto` and `sana` — defined
 in `player-classes.ts`. The choice is made once, recorded in
-`vworld_player_characters`, and is what a dead player prays back to. Skills
-and class-only actions are planned in `DESIGN-kalevala.md`.
+`vworld_player_characters`, and is what a dead player prays back to.
+
+Skills — woodcraft, smithing, hunting, origins, playing, melee, archery and
+healing — grow with use up to a cap set by the class: 100 for its main
+skills, 60 for its secondary ones and 30 for the rest. An action class names
+its skill in a `skill` block (`id`, `gain`, optional `attribute`, `min` and
+`affects`): a skilled player rolls better, finishes sooner or gets more,
+depending on the action. See `skills.ts`. Class-only actions are planned in
+`DESIGN-kalevala.md`.
 
 ## Creating a world
 

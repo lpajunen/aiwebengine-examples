@@ -90,6 +90,14 @@ import {
   playerClassForChoiceAction,
 } from "./player-classes.ts";
 import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
+import {
+  extraYield,
+  meetsSkillMin,
+  rollBonus,
+  skilledDuration,
+  skillValue,
+  trainSkill,
+} from "./skills.ts";
 import { resolveIslandToVisit } from "./island-visits.ts";
 import { getWorldClassWithRefresh } from "./world-class-storage.ts";
 import {
@@ -232,6 +240,19 @@ export function performTreeActionForUser(
   }
 
   const inv = loadPlayerInventory(userId);
+  const actionSkill = actionDefinition.skill;
+  if (!meetsSkillMin(inv.values || {}, actionSkill)) {
+    return {
+      status: 200,
+      payload: { ok: false, error: "error.skill_too_low" },
+    };
+  }
+  // The d20 bonus the action's skill lends a rolled effect; 0 for actions
+  // whose skill does not affect rolls.
+  const attackBonus =
+    actionSkill && actionSkill.affects === "roll"
+      ? rollBonus(inv.values || {}, actionSkill)
+      : 0;
   const canonical = getCanonicalPlayerState(worldId, userId);
   const playerRow = Number.isFinite(Number(body && body.row))
     ? Number(body.row)
@@ -250,6 +271,25 @@ export function performTreeActionForUser(
   // success choke point — is reached from many different return branches.
   let experienceAwarded = false;
   let experienceGained = 0;
+  let skillTrained = false;
+  let skillGained = 0;
+  // Trains the action's skill once, on success — alongside the experience
+  // award, and through the same inventory object so neither overwrites the
+  // other.
+  function maybeTrainActionSkill(): void {
+    if (skillTrained) return;
+    skillTrained = true;
+    if (!actionSkill || !actionSkill.id) return;
+    skillGained = trainSkill(
+      inv.values,
+      String(inv.class_id || ""),
+      actionSkill,
+    );
+    if (skillGained > 0) {
+      savePlayerInventory(userId, inv);
+      broadcastPlayerValuesChanged(worldId, userId, inv.values);
+    }
+  }
   function maybeAwardActionExperience(): void {
     if (experienceAwarded) return;
     experienceAwarded = true;
@@ -498,12 +538,17 @@ export function performTreeActionForUser(
     // (includeInventory, or the always-attached copy below) reflects the new
     // experience values.
     maybeAwardActionExperience();
+    maybeTrainActionSkill();
     const execution = getActionExecutionConfig();
     const payload: any = {
       ok: true,
       action: action,
       ...(overrides || {}),
     };
+    if (skillGained > 0 && actionSkill) {
+      payload.skill_gained = { id: actionSkill.id, amount: skillGained };
+      if (payload.inventory == null) payload.inventory = inv;
+    }
     if (experienceGained > 0) {
       payload.experience_gained = experienceGained;
       // Ensure the acting client always sees the updated experience/HP even
@@ -1092,7 +1137,14 @@ export function performTreeActionForUser(
     if (costError) return costError;
 
     if (actionDefinition && Number(actionDefinition.durationMs || 0) > 0) {
-      const readyAt = Date.now() + Number(actionDefinition.durationMs);
+      const durationMs =
+        actionSkill && actionSkill.affects === "duration"
+          ? skilledDuration(
+              Number(actionDefinition.durationMs),
+              skillValue(inv.values || {}, actionSkill.id),
+            )
+          : Number(actionDefinition.durationMs);
+      const readyAt = Date.now() + durationMs;
       // The resumed call resolves its target again from these, so they are
       // where the actor stood, not the tile they aimed at: a facing-tile
       // action resumed from its own target would land one tile further on. A
@@ -2488,6 +2540,7 @@ export function performTreeActionForUser(
           livingEffect,
           killBase,
           inv,
+          attackBonus,
         );
         // A blocked target failed its own gate (a ghost caught in the blast);
         // in area mode that is a skip, not an error for the whole cast.
@@ -2578,6 +2631,7 @@ export function performTreeActionForUser(
       livingEffect,
       killBase,
       inv,
+      attackBonus,
     );
     if (outcome.result === "blocked") {
       return {
@@ -2857,7 +2911,18 @@ export function performTreeActionForUser(
     });
 
     if (inventoryProduces.length > 0) {
-      spawnItemsForUser(worldId, userId, inv, inventoryProduces);
+      const bonus =
+        actionSkill && actionSkill.affects === "yield"
+          ? extraYield(skillValue(inv.values || {}, actionSkill.id))
+          : 0;
+      spawnItemsForUser(
+        worldId,
+        userId,
+        inv,
+        inventoryProduces.map(function (entry) {
+          return { itemId: entry.itemId, count: entry.count + bonus };
+        }),
+      );
       savePlayerInventory(userId, inv);
     }
 

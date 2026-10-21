@@ -39,6 +39,7 @@ import {
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
+import { rollBonus, trainSkill } from "./skills.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import {
   isWorldTileWalkable,
@@ -386,6 +387,10 @@ export function applyLivingEffect(
   // last. Omitted by callers with no such copy (the combat tick), which then
   // load it as before.
   actorInventory?: LivingState | null,
+  // Added to the d20 of an attack roll: the actor's attribute modifier and
+  // skill (see rollBonus in skills.ts). A natural 1 still misses and a
+  // natural 20 still hits.
+  attackBonus = 0,
 ): LivingEffectOutcome {
   const npcs = targetType === "npc" ? loadWorldNPCs(worldId) : {};
   const targetNpc = targetType === "npc" ? npcs[targetId] : null;
@@ -438,7 +443,8 @@ export function applyLivingEffect(
     const armorClass = Number(targetValues.armorClass) || 0;
     const attackRoll = 1 + Math.floor(Math.random() * 20);
     const isHit =
-      attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+      attackRoll === 20 ||
+      (attackRoll !== 1 && attackRoll + attackBonus > armorClass);
     if (!isHit) {
       return { result: "miss", delta: 0, target_label: targetLabel };
     }
@@ -553,10 +559,42 @@ function resolveCombatHit(
   const targetValues = targetInv ? targetInv.values || {} : target.values || {};
   const armorClass = Number(targetValues.armorClass) || 0;
 
+  // A player fights with the fight action's skill: its attribute modifier and
+  // skill add to the roll, and every hit trains it.
+  const fightSkill =
+    fight.attacker_type === "player"
+      ? (getActionDefinition("fight") || { skill: undefined }).skill
+      : undefined;
+  const attackerInv =
+    fightSkill && fightSkill.affects === "roll"
+      ? loadPlayerInventory(fight.attacker_id)
+      : null;
+  const attackBonus =
+    attackerInv && fightSkill
+      ? rollBonus(attackerInv.values || {}, fightSkill)
+      : 0;
+
   // Same d20-vs-armor-class hit roll as the "break" item-damage action.
   const attackRoll = 1 + Math.floor(Math.random() * 20);
   const isHit =
-    attackRoll === 20 || (attackRoll !== 1 && attackRoll > armorClass);
+    attackRoll === 20 ||
+    (attackRoll !== 1 && attackRoll + attackBonus > armorClass);
+  if (isHit && attackerInv && fightSkill) {
+    if (
+      trainSkill(
+        attackerInv.values,
+        String(attackerInv.class_id || ""),
+        fightSkill,
+      ) > 0
+    ) {
+      savePlayerInventory(fight.attacker_id, attackerInv);
+      broadcastPlayerValuesChanged(
+        worldId,
+        fight.attacker_id,
+        attackerInv.values,
+      );
+    }
+  }
 
   const targetLabel =
     fight.target_type === "npc"

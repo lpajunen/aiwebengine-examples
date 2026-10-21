@@ -16,6 +16,7 @@ import {
   newcomerAttributes,
   PLAYER_ATTRIBUTES,
   PLAYER_CLASSES,
+  PLAYER_SKILLS,
 } from "./player-classes.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
@@ -176,6 +177,17 @@ function playerValueSchema(): LivingValueSchema {
       labelKey: "living.value." + attribute,
       fallbackLabel: attribute.charAt(0).toUpperCase() + attribute.slice(1),
       visibility: "public",
+    };
+  });
+  // Skills are the player's own business; a value appears once first used.
+  PLAYER_SKILLS.forEach(function (skill) {
+    schema[skill] = {
+      kind: "number",
+      min: 0,
+      max: 100,
+      labelKey: "living.value." + skill,
+      fallbackLabel: skill.charAt(0).toUpperCase() + skill.slice(1),
+      visibility: "owner",
     };
   });
   return schema;

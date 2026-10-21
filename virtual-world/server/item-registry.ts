@@ -685,6 +685,7 @@ export function getBootstrapRegistry(): {
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
+      skill?: ActionDefinition["skill"];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -728,6 +729,7 @@ export function getBootstrapRegistry(): {
       target_kind: string;
       targeting?: ActionDefinition["targeting"];
       valid_when?: ActionDefinition["validWhen"];
+      skill?: ActionDefinition["skill"];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -797,6 +799,7 @@ export function getBootstrapRegistry(): {
       // making the client keep a second copy of it.
       targeting: resolveActionTargeting(action),
       valid_when: action.validWhen,
+      skill: action.skill,
       category: actionCategory(actionId),
       source_kind: worldMutation ? worldMutation.sourceKind : undefined,
       tile_type: worldMutation ? worldMutation.tileType : undefined,
@@ -1423,6 +1426,8 @@ function actionClassFromDbRow(row: any): ActionClassRecord {
       ActionDefinition["itemEffect"] | undefined,
     progression: parseJson(row.progression_json, undefined) as
       ActionDefinition["progression"] | undefined,
+    skill: parseJson(row.skill_json, undefined) as
+      ActionDefinition["skill"] | undefined,
     messages: parseJson(row.messages_json, undefined) as
       ActionDefinition["messages"] | undefined,
     fatigueCost:
@@ -1468,6 +1473,7 @@ function actionClassToDbRow(
   linked_world_json: string;
   item_effect_json: string;
   progression_json: string;
+  skill_json: string;
   messages_json: string;
   fatigue_cost?: number;
   duration_ms?: number;
@@ -1506,6 +1512,7 @@ function actionClassToDbRow(
     progression_json: record.progression
       ? JSON.stringify(record.progression)
       : "",
+    skill_json: record.skill ? JSON.stringify(record.skill) : "",
     messages_json: record.messages ? JSON.stringify(record.messages) : "",
     // The host's JSON->SQL binding can't infer an INTEGER type from a JSON
     // `null` value (binds it as text, which Postgres then rejects against
@@ -1757,6 +1764,20 @@ function backfillActionClassDefaults(
     }
     if (existing.durationMs === undefined && def.durationMs !== undefined) {
       existing.durationMs = def.durationMs;
+      changed = true;
+    }
+    // A built-in's skill block follows the code for a row nobody owns, so
+    // balancing it reaches deployed rows; a creator's row keeps its own.
+    const skillIsCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+    if (existing.skill === undefined && def.skill !== undefined) {
+      existing.skill = def.skill;
+      changed = true;
+    } else if (
+      skillIsCodeOwned &&
+      JSON.stringify(existing.skill) !== JSON.stringify(def.skill)
+    ) {
+      existing.skill = def.skill;
       changed = true;
     }
     // Who may use a built-in on someone else's island follows the code for a

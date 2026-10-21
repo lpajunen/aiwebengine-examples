@@ -453,6 +453,7 @@ export function virtualWorldManageActionClassesToolHandler(
         args.itemEffect ?? (existing ? existing.itemEffect : undefined),
       progression:
         args.progression ?? (existing ? existing.progression : undefined),
+      skill: args.skill ?? (existing ? existing.skill : undefined),
       messages: args.messages ?? (existing ? existing.messages : undefined),
       fatigueCost:
         args.fatigueCost !== undefined ? Number(args.fatigueCost) : undefined,

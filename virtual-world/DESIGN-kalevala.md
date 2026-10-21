@@ -142,9 +142,9 @@ use. A class decides where a player starts and how far each skill can go.
 
 ### Built so far
 
-Classes, attributes and the choice; skills, class-only verbs, levels that do
-something and starting anew are still to come. Where the build departed from
-the plan:
+Classes, attributes, the choice, and skills; class-only verbs, levels that
+do something and starting anew are still to come. Where the build departed
+from the plan:
 
 - The classes are data in `player-classes.ts`, one living class each
   (`player_tietaja`, `player_seppa`, `player_laulaja`, `player_erankavija`,
@@ -159,6 +159,22 @@ the plan:
   become the player's own first.
 - The chosen class is kept in `vworld_player_characters`, so a dead player
   prays back to it rather than to a newcomer.
+- Skills are owner-visible player values, absent until first used. Each
+  class has main skills (cap 100) and secondary ones (cap 60), listed in
+  `player-classes.ts`; the rest cap at 30. A use gains `gain × (cap −
+skill) / cap`, so growth is quick at first and slows near the top; the cap
+  is the affinity, with no separate multiplier. The arithmetic is
+  `skills.ts`.
+- `skill` is stored in its own column and resynced from the code for rows
+  nobody owns. `roll` adds the attribute modifier and skill / 20 to the d20,
+  for spells and for the fight tick, where each hit trains melee.
+  `duration` shortens to half at 100; `yield` adds one item per 50 points.
+  `min` is checked by the server and hides the action in the palette.
+- Built-ins with a skill: planting, sowing, cutting, felling and carving
+  (`puutyo`), fishing (`metsastys`, yield), tuning and playing (`soitto`),
+  healing (`parannus`), firebolt, fireball and harm (`synnyt`, roll), and
+  fighting (`lahitaistelu`, roll). Nothing uses `takominen` or `jousi` yet,
+  and no built-in has a `min`: those wait for forging and the bows.
 - Elf, hobbit and giant are retired: a player still in one becomes a
   newcomer when the page loads. The living classes stay in the code so their
   rows remain valid.

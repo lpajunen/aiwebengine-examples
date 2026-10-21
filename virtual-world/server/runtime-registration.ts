@@ -662,6 +662,18 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Optional delay in milliseconds between the action starting and its effects/produces resolving. Costs and fatigue are charged at the start; execution.startToastMessage is shown then, and execution.toastMessage is shown when it finishes.",
       },
+      skill: {
+        type: "object",
+        description:
+          "The skill the action uses and trains: id (puutyo, takominen, metsastys, synnyt, soitto, lahitaistelu, jousi, parannus), gain per use, optional attribute (voima, ketteryys, kestavyys, tieto, sana) added to rolls, optional min below which it is not offered, and affects: roll, duration or yield.",
+        properties: {
+          id: { type: "string" },
+          attribute: { type: "string" },
+          min: { type: "number" },
+          gain: { type: "number" },
+          affects: { type: "string", enum: ["roll", "duration", "yield"] },
+        },
+      },
       guestAllowed: {
         type: "boolean",
         description:

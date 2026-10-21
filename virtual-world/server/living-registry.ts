@@ -17,6 +17,7 @@ import {
   PLAYER_ATTRIBUTES,
   PLAYER_CLASSES,
   PLAYER_SKILLS,
+  skillCap,
 } from "./player-classes.ts";
 import { normalizeClassSize } from "./class-size.ts";
 import {
@@ -168,8 +169,9 @@ function defaultFatigueValueSchema(): LivingValueSchema {
 }
 
 // A player's values: the shared ones plus the five attributes, which are
-// public — a D&D sheet is something others may read.
-function playerValueSchema(): LivingValueSchema {
+// public — a D&D sheet is something others may read — and the skills, each
+// metered up to how far this class can take it.
+function playerValueSchema(classId: string): LivingValueSchema {
   const schema = defaultFatigueValueSchema();
   PLAYER_ATTRIBUTES.forEach(function (attribute) {
     schema[attribute] = {
@@ -184,7 +186,7 @@ function playerValueSchema(): LivingValueSchema {
     schema[skill] = {
       kind: "number",
       min: 0,
-      max: 100,
+      max: skillCap(classId, skill),
       labelKey: "living.value." + skill,
       fallbackLabel: skill.charAt(0).toUpperCase() + skill.slice(1),
       visibility: "owner",
@@ -210,7 +212,7 @@ function playerClassRecords(): Record<string, LivingClassRecord> {
         cls.attributes,
         { maxHitPoints: cls.maxHitPoints },
       ),
-      valueSchema: playerValueSchema(),
+      valueSchema: playerValueSchema(cls.id),
       color: cls.color,
       deathClassId: "player_ghost",
       labels: { fi: cls.fiLabel },
@@ -261,7 +263,7 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
       defaultFatigueValueTemplate(),
       newcomerAttributes(),
     ),
-    valueSchema: playerValueSchema(),
+    valueSchema: playerValueSchema("player_human"),
     deathClassId: "player_ghost",
     isDefault: true,
   },

@@ -25,6 +25,7 @@ import {
   skillCap,
 } from "./player-classes.ts";
 import { getEffectiveMap, getOrCreatePlayerWorld } from "./world-bootstrap.ts";
+import { getLivingClass } from "./living-registry.ts";
 import { savePlayerPosition } from "./player-persistence.ts";
 import { loadPlayerInventory, savePlayerInventory } from "./item-storage.ts";
 import {
@@ -96,6 +97,21 @@ describe("growth", () => {
     expect(
       trainSkill(values, "player_laulaja", { id: "soitto", gain: 5 }),
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("the skill meter", () => {
+  test("runs to how far the player's class can take the skill", () => {
+    function meterMax(classId: string, skill: string): unknown {
+      const cls = getLivingClass(classId);
+      return cls && cls.valueSchema && cls.valueSchema[skill]
+        ? cls.valueSchema[skill].max
+        : undefined;
+    }
+
+    expect(meterMax("player_human", "metsastys")).toBe(SKILL_CAP_OTHER);
+    expect(meterMax("player_urho", "metsastys")).toBe(SKILL_CAP_SECONDARY);
+    expect(meterMax("player_erankavija", "metsastys")).toBe(SKILL_CAP_MAIN);
   });
 });
 

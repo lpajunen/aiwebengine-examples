@@ -11,6 +11,7 @@
 
 import {
   VWORLD_ISLAND_INVITE_TABLE,
+  VWORLD_WELCOME_TABLE,
   VWORLD_NPC_ACTIVE_WORLD_TABLE,
   VWORLD_NPC_TABLE,
   VWORLD_NPC_TICK_LEASE_TABLE,
@@ -248,6 +249,14 @@ export function cleanupTestData(): void {
       deleteWorldRowsWhere(
         VWORLD_ISLAND_INVITE_TABLE,
         JSON.stringify({ guest_id: createdUserIds[i] }),
+      );
+      deleteWorldRowsWhere(
+        VWORLD_WELCOME_TABLE,
+        JSON.stringify({ greeter_id: createdUserIds[i] }),
+      );
+      deleteWorldRowsWhere(
+        VWORLD_WELCOME_TABLE,
+        JSON.stringify({ newcomer_id: createdUserIds[i] }),
       );
     }
     for (let i = 0; i < createdWorldIds.length; i++) {

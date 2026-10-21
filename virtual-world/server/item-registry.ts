@@ -303,6 +303,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       "craft_kantele",
       "craft_stone_axe",
       "craft_boat",
+      "welcome_newcomer",
     ],
   },
   blessing_marker: {
@@ -398,6 +399,19 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: ["sow_tree"],
   },
+  // Fished from the boat; the kantele is made from it.
+  pike_jawbone: {
+    id: "pike_jawbone",
+    kind: "world_item",
+    visuals: {
+      color: 0xe6dcc0,
+      labelKey: "item.pike_jawbone.name",
+      fallbackLabel: "Pike's jawbone",
+      size: "small",
+      style: "blade",
+    },
+    actionIds: [],
+  },
   stone: {
     id: "stone",
     kind: "world_item",
@@ -454,7 +468,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.boat.name",
       fallbackLabel: "Boat",
     },
-    actionIds: ["row_to_vainola", "row_home", "row_to_island"],
+    actionIds: ["row_to_vainola", "row_home", "row_to_island", "fish"],
   },
   chest: {
     id: "chest",
@@ -1705,7 +1719,19 @@ function backfillActionClassDefaults(
       existing.logicSpec = def.logicSpec;
       changed = true;
     }
+    // What a built-in costs follows the code for a row nobody owns, so a
+    // recipe can change (the kantele came to need a pike's jawbone); a
+    // creator's row keeps its own price.
+    const costIsCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
     if (existing.cost === undefined && def.cost !== undefined) {
+      existing.cost = def.cost;
+      changed = true;
+    } else if (
+      costIsCodeOwned &&
+      def.cost !== undefined &&
+      JSON.stringify(existing.cost) !== JSON.stringify(def.cost)
+    ) {
       existing.cost = def.cost;
       changed = true;
     }

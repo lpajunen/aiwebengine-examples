@@ -100,6 +100,10 @@ export const VWORLD_ISLAND_INVITE_TABLE = "vworld_island_invites";
 export const ISLAND_INVITE_TTL_MS = 15 * 60 * 1000;
 // A host whose heartbeat is older than this counts as gone from their island.
 export const ISLAND_HOST_STALE_MS = 2 * 60 * 1000;
+// How long a player counts as a newcomer after first rowing to Väinölä, and
+// who has welcomed whom (once per pair). See welcome_newcomer.
+export const NEWCOMER_WINDOW_MS = 15 * 60 * 1000;
+export const VWORLD_WELCOME_TABLE = "vworld_welcomes";
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -151,7 +155,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v13: living class dialogue_json, what it says when talked to.
 // v15: vworld_player_homes, each player's home island and onboarding.
 // v16: vworld_island_invites, who may row to whose island.
-export const VWORLD_SCHEMA_VERSION = 16;
+// v17: vworld_welcomes, who has welcomed which newcomer.
+export const VWORLD_SCHEMA_VERSION = 17;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true
@@ -214,6 +219,9 @@ export const RESERVATION_BLOCK_RANDOM_SPAWN = "block_random_spawn";
 // Paints the reserved tiles back to walkable floor after map generation, so a
 // clearing is actually clear of the trees/rocks the generator scattered.
 export const RESERVATION_CLEAR_TERRAIN = "clear_terrain";
+// Where a player rowing in lands. A world without one lands them in its
+// spawn area. See getArrivalSpawnPosition in player-snapshots.ts.
+export const RESERVATION_ARRIVAL_AREA = "arrival_area";
 
 // The registry strict placement validation checks names against. Lives here
 // rather than in world-reservations.ts so world-placements.ts can validate
@@ -227,6 +235,7 @@ export const RESERVATION_RULES = [
   RESERVATION_PROTECT_LANDMARK,
   RESERVATION_BLOCK_RANDOM_SPAWN,
   RESERVATION_CLEAR_TERRAIN,
+  RESERVATION_ARRIVAL_AREA,
 ];
 
 export function isReservationRule(rule: string): boolean {

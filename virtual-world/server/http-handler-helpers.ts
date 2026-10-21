@@ -1,3 +1,4 @@
+import { isNewcomer } from "./home-island.ts";
 import { isAdminUser } from "./admin-storage.ts";
 import { findFirstLivingItemByTypes } from "./world-domain.ts";
 import { getActiveActionsForUser } from "./active-actions.ts";
@@ -416,6 +417,14 @@ export function heartbeatForUser(userId: string, sessionId: string): any {
       savePlayerInventory(userId, inv);
       broadcastPlayerValuesChanged(worldId, userId, inv.values);
     }
+  }
+
+  // A newcomer stops being one when their window closes, and others stop
+  // being offered to welcome them.
+  if (Number(inv.values.newcomer || 0) && !isNewcomer(userId, Date.now())) {
+    inv.values.newcomer = 0;
+    savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
   }
 
   savePlayerHeartbeatTs(userId, Date.now());

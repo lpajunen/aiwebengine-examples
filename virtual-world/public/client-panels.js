@@ -779,3 +779,14 @@ function handleIslandVisitEndedEvent(payload) {
     false,
   );
 }
+
+/** @param {any} payload */
+function handleWelcomedEvent(payload) {
+  if (!payload) return;
+  showHudToast(
+    fillPlaceholders(t("welcome.welcomed_you", ""), {
+      nick: payload.greeter_nick || shortenId(String(payload.greeter_id || "")),
+    }),
+    false,
+  );
+}

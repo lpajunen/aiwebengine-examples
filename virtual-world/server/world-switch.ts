@@ -7,7 +7,10 @@ import {
   savePlayerPosition,
   savePlayerWorld,
 } from "./player-persistence.ts";
-import { getDefaultSpawnPosition } from "./player-snapshots.ts";
+import {
+  getArrivalSpawnPosition,
+  getDefaultSpawnPosition,
+} from "./player-snapshots.ts";
 import {
   deleteOnlinePresence,
   getEffectiveNick,
@@ -112,7 +115,7 @@ export function sendGuestToVainola(
   switchUserWorld(
     guestId,
     START_WORLD_ID,
-    getDefaultSpawnPosition(START_WORLD_ID, guestId),
+    getArrivalSpawnPosition(START_WORLD_ID, guestId),
   );
   sendRecipientScopedStreamEvent(guestId, "island_visit_ended", {
     host_id: String(hostId),

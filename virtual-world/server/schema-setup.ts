@@ -30,6 +30,7 @@ import {
   VWORLD_PLAYER_MOVE_LEASE_TABLE,
   VWORLD_PLAYER_HOME_TABLE,
   VWORLD_ISLAND_INVITE_TABLE,
+  VWORLD_WELCOME_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1775,6 +1776,39 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     return database.ensureTable(VWORLD_ISLAND_INVITE_TABLE, {
       columns: [],
       uniqueIndexes: [["host_id", "guest_id"]],
+    });
+  });
+
+  // One row per greeter and newcomer: each may welcome each only once.
+  step("createTable", VWORLD_WELCOME_TABLE, function () {
+    return database.ensureTable(VWORLD_WELCOME_TABLE, { columns: [] });
+  });
+  [
+    ["addTextColumn", "greeter_id"],
+    ["addTextColumn", "newcomer_id"],
+    ["addIntegerColumn", "welcomed_at"],
+  ].forEach(function (entry) {
+    step(
+      String(entry[0]),
+      VWORLD_WELCOME_TABLE,
+      function () {
+        return database.ensureTable(VWORLD_WELCOME_TABLE, {
+          columns: [
+            {
+              name: String(entry[1]),
+              type: entry[0] === "addIntegerColumn" ? "integer" : "text",
+              nullable: false,
+            },
+          ],
+        });
+      },
+      String(entry[1]),
+    );
+  });
+  step("addUniqueIndex", VWORLD_WELCOME_TABLE, function () {
+    return database.ensureTable(VWORLD_WELCOME_TABLE, {
+      columns: [],
+      uniqueIndexes: [["greeter_id", "newcomer_id"]],
     });
   });
 

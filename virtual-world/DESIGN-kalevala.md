@@ -90,17 +90,28 @@ departed from the first plan:
 - World ids are now drawn until one names no existing world; with an island per
   player, a random id landing on someone's world was no longer a remote chance.
 
+### Arrival, welcome and the pike — built
+
+- The arrival shore is a 5×3 strip of sand on the river's west bank, east of
+  the oak, with a new reservation rule `arrival_area`. The boat lands there
+  (`getArrivalSpawnPosition`); `return_home` still leads to the oak. The strip
+  names its tiles, because the river is where the village preset draws it for
+  Väinölä's world.
+- The newcomer window is read from `onboardingDoneAt`, which is already the
+  arrival time, so there is no separate `arrived_at`. A public living value
+  `newcomer` is set on first arrival and cleared by the heartbeat once the 15
+  minutes have passed, so `welcome_newcomer`'s `validWhen` offers it only on
+  newcomers. The greeter earns 25 experience, once per pair
+  (`vworld_welcomes`), and the newcomer is told who welcomed them.
+- `fish` is the boat's action, on any faced ocean, lake or river tile
+  (`requireTileState` gained `tileTypes`, any of several). `craft_kantele` now
+  costs a `pike_jawbone`, a birch-bark letter and a juniper bundle (the rune
+  stone dropped out), and sets `values.synty_kantele`. A built-in's cost now
+  follows the code for a row nobody owns, so a recipe can change.
+
 ### Still to build
 
-- An `arrival-shore` placement in Väinölä. Newcomers land at the oak clearing,
-  Väinölä's spawn area, for now.
 - The class choice from the elder on arrival (see 2).
-- `welcome_newcomer`: rewarding the player who greets a newcomer within 15
-  minutes of arrival, once per pair (`vworld_welcomes`), keyed by an
-  `arrived_at` value set on arrival.
-- The pike: `fish` on a faced water tile yields a `pike_jawbone`, and
-  `craft_kantele` comes to cost one — the first kantele was a pike's jaw. It
-  also sets the player's first origin flag, `synty_kantele`.
 
 ### Visiting another's island — built
 

@@ -30,6 +30,7 @@ import {
   RESERVATION_PROTECT_LANDMARK,
   RESERVATION_RULES,
   RESERVATION_SPAWN_AREA,
+  RESERVATION_ARRIVAL_AREA,
 } from "./runtime-config.ts";
 
 export {
@@ -42,6 +43,7 @@ export {
   RESERVATION_PROTECT_LANDMARK,
   RESERVATION_RULES,
   RESERVATION_SPAWN_AREA,
+  RESERVATION_ARRIVAL_AREA,
 };
 
 // Action classes are seeded into the database, and the seeder shallow-merges

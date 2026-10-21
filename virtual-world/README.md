@@ -255,6 +255,13 @@ checked in the world tick. A guest may use only actions marked `guestAllowed`
 (looking, talking, playing, healing, the boat), and may leave items but not
 pick any up. The logic is in `island-invites.ts` and `island-visits.ts`.
 
+The boat lands in Väinölä on the arrival shore by the river (a placement
+with the `arrival_area` reservation). For their first 15 minutes there a
+player is a newcomer, and anyone nearby may `welcome_newcomer` them once, for
+experience. The boat also fishes (`fish`, facing any water): the pike's
+jawbone is what a kantele is made from, and making one sets the player's first
+origin flag, `values.synty_kantele`.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

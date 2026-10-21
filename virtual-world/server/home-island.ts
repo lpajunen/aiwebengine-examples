@@ -1,4 +1,8 @@
-import { VWORLD_PLAYER_HOME_TABLE } from "./runtime-config.ts";
+import {
+  NEWCOMER_WINDOW_MS,
+  VWORLD_PLAYER_HOME_TABLE,
+  VWORLD_WELCOME_TABLE,
+} from "./runtime-config.ts";
 import { querySingleWorldRow, upsertWorldRow } from "./world-db.ts";
 import {
   fromStoredWorldTimestamp,
@@ -85,5 +89,37 @@ export function markOnboardingDone(userId: string): boolean {
   if (!home || home.onboardingDoneAt !== null) return false;
   home.onboardingDoneAt = Date.now();
   savePlayerHome(home);
+  return true;
+}
+
+/**
+ * Whether the player first rowed to Väinölä less than NEWCOMER_WINDOW_MS ago.
+ * A player from before home islands never was a newcomer here.
+ */
+export function isNewcomer(userId: string, now: number): boolean {
+  const home = loadPlayerHome(userId);
+  if (!home || home.onboardingDoneAt === null) return false;
+  return now - home.onboardingDoneAt < NEWCOMER_WINDOW_MS;
+}
+
+/**
+ * Records that the greeter welcomed the newcomer. Returns false when they
+ * already had, so each pair is rewarded once.
+ */
+export function recordWelcome(greeterId: string, newcomerId: string): boolean {
+  const key = {
+    greeter_id: String(greeterId),
+    newcomer_id: String(newcomerId),
+  };
+  if (querySingleWorldRow(VWORLD_WELCOME_TABLE, JSON.stringify(key))) {
+    return false;
+  }
+  upsertWorldRow(
+    VWORLD_WELCOME_TABLE,
+    ["greeter_id", "newcomer_id"],
+    Object.assign({}, key, {
+      welcomed_at: toStoredWorldTimestamp(Date.now()),
+    }),
+  );
   return true;
 }

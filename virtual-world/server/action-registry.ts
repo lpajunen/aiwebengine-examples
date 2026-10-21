@@ -197,6 +197,9 @@ export interface ActionDefinition {
     // tree-action-helpers.ts.
     requireTileState?: Array<{
       tileType: string;
+      // Any of these instead of tileType alone: fishing takes the sea, a lake
+      // or a river alike. Not read together with sourceKind.
+      tileTypes?: string[];
       kind: "present" | "absent";
       errorMessage: string;
       sourceKind?: string;
@@ -1148,6 +1151,23 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     sourceItemIds: ["starter_kit"],
     guestAllowed: true,
   },
+  // Greeting a player in their first minutes in Väinölä, once per pair. The
+  // newcomer flag is set on first arrival and cleared by the heartbeat once
+  // NEWCOMER_WINDOW_MS has passed; see the handler in tree-action-helpers.ts.
+  welcome_newcomer: {
+    id: "welcome_newcomer",
+    labelKey: "tree_action.welcome_newcomer",
+    fallbackLabel: "Welcome",
+    targetKind: "living_nearby",
+    sourceItemIds: ["starter_kit"],
+    guestAllowed: true,
+    experience: { amount: 25 },
+    validWhen: [{ field: "values.newcomer", op: "eq", value: 1 }],
+    execution: {
+      toastMessage: "You welcome the newcomer to Väinölä.",
+      toastMessageKey: "tree_action.welcome_newcomer_toast",
+    },
+  },
   stop_follow: {
     id: "stop_follow",
     labelKey: "tree_action.stop_follow",
@@ -1431,13 +1451,21 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     fallbackLabel: "Craft kantele",
     targetKind: "inventory",
     sourceItemIds: ["starter_kit"],
+    // The first kantele was made from a great pike's jawbone, and making one
+    // is the player's first origin: they now know how the kantele came to be.
     cost: [
+      { itemId: "pike_jawbone", count: 1 },
       { itemId: "birch_bark_letter", count: 1 },
       { itemId: "juniper_bundle", count: 1 },
-      { itemId: "rune_stone", count: 1 },
     ],
     experience: { amount: 30 },
     produces: [{ itemId: "kantele", count: 1 }],
+    livingEffect: {
+      affects: "actor",
+      field: "values.synty_kantele",
+      op: "set",
+      amount: 1,
+    },
     durationMs: 5000,
     execution: {
       successPayload: {
@@ -1621,6 +1649,37 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
   },
+  // Väinämöinen's pike: fished from the boat, on any water faced.
+  fish: {
+    id: "fish",
+    labelKey: "tree_action.fish",
+    fallbackLabel: "Fish",
+    targetKind: "facing_tile",
+    sourceItemIds: ["boat"],
+    fatigueCost: 5,
+    durationMs: 6000,
+    experience: { amount: 5 },
+    produces: [{ itemId: "pike_jawbone", count: 1 }],
+    validation: {
+      requireTileState: [
+        {
+          tileType: "ocean",
+          tileTypes: ["ocean", "lake", "river"],
+          kind: "present",
+          errorMessage: "error.fish_needs_water",
+        },
+      ],
+    },
+    execution: {
+      successPayload: {
+        includeInventory: true,
+      },
+      startToastMessage: "You cast a line into the water.",
+      startToastMessageKey: "tree_action.fish_start_toast",
+      toastMessage: "A great pike! Its jawbone is yours.",
+      toastMessageKey: "tree_action.fish_toast",
+    },
+  },
   // To another player's island, on their invite: the one named by
   // body.host_id, or else the latest open one (see island-visits.ts).
   row_to_island: {
@@ -1704,6 +1763,8 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   row_to_vainola: "travel",
   row_home: "travel",
   row_to_island: "travel",
+  fish: "gather",
+  welcome_newcomer: "social",
   skip_onboarding: "travel",
   // misc
   pray: "misc",

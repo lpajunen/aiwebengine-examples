@@ -3,6 +3,7 @@ import { hashString, isWorldTileWalkable } from "./world-domain.ts";
 import {
   getReservedTiles,
   getSpawnFallbackTile,
+  RESERVATION_ARRIVAL_AREA,
   RESERVATION_SPAWN_AREA,
 } from "./world-reservations.ts";
 import {
@@ -184,7 +185,33 @@ export function getDefaultSpawnPosition(
   worldId: string | number,
   userId: string,
 ): { row: number; col: number; seq: number; rotation: number } {
-  const tiles = getReservedTiles(worldId, RESERVATION_SPAWN_AREA);
+  return spawnPositionInArea(
+    worldId,
+    userId,
+    getReservedTiles(worldId, RESERVATION_SPAWN_AREA),
+  );
+}
+
+/**
+ * Where a player rowing in lands: the world's arrival area, or its spawn area
+ * when it has none.
+ */
+export function getArrivalSpawnPosition(
+  worldId: string | number,
+  userId: string,
+): { row: number; col: number; seq: number; rotation: number } {
+  const shore = getReservedTiles(worldId, RESERVATION_ARRIVAL_AREA);
+  if (shore.length === 0) return getDefaultSpawnPosition(worldId, userId);
+  return spawnPositionInArea(worldId, userId, shore);
+}
+
+// A free walkable tile of `tiles`, picked from a start that depends on the
+// player so arrivals spread out; the world's fallback tile when none is.
+function spawnPositionInArea(
+  worldId: string | number,
+  userId: string,
+  tiles: Array<{ row: number; col: number }>,
+): { row: number; col: number; seq: number; rotation: number } {
   const fallbackAnchor = getSpawnFallbackTile(worldId);
   if (!fallbackAnchor) {
     return { row: 1, col: 1, seq: 0, rotation: 0 };

@@ -11,6 +11,7 @@ import {
   normalizeWorldType,
   ROWS,
   WORLD_TILE_PINE_TREE,
+  WORLD_TILE_SAND,
   WORLD_TYPE_BUILDING,
   WORLD_TYPE_FOREST,
   WORLD_TYPE_ISLAND,
@@ -33,6 +34,7 @@ import {
   WorldClassPlacement,
 } from "./world-placements.ts";
 import {
+  RESERVATION_ARRIVAL_AREA,
   RESERVATION_BLOCK_BUILD,
   RESERVATION_BLOCK_PLANT,
   RESERVATION_BLOCK_RANDOM_SPAWN,
@@ -217,6 +219,14 @@ const OAK_CLEARING_RADIUS = 5;
 const GUILD_DOOR_ROW = OAK_ROW + OAK_CLEARING_RADIUS + 1;
 const GUILD_DOOR_COL = OAK_COL;
 
+// Where boats come ashore: a strip of sand on the river's west bank, east of
+// the oak. The river is where the village preset happens to draw it for
+// Väinölä's world, so the strip names its tiles rather than finding water.
+const SHORE_ROW = OAK_ROW + 1;
+const SHORE_COL = OAK_COL + 4;
+const SHORE_ROWS = 5;
+const SHORE_COLS = 3;
+
 const GUILD_CLASS_ID = "adventurers_guild";
 const GUILD_ROWS = 10;
 const GUILD_COLS = 10;
@@ -227,13 +237,58 @@ const GUILD_ENTRY_COL = 1;
 
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
-const SYSTEM_PLACEMENT_REVISION = 3;
+const SYSTEM_PLACEMENT_REVISION = 4;
 
 // Birdhaven's authored contents, as data rather than the world-ID branches in
 // item-storage.ts. Phase 1 only persists these; phase 3 materializes them and
 // deletes the hard-coded seeding they describe.
+/**
+ * The arrival shore: sand painted over the strip, which is cleared, kept free
+ * of building and planting, and is where a player rowing in lands. The first
+ * tile carries the reservation; the rest only paint sand.
+ */
+function arrivalShorePlacements(): WorldClassPlacement[] {
+  const placements: WorldClassPlacement[] = [];
+  for (let dr = 0; dr < SHORE_ROWS; dr++) {
+    for (let dc = 0; dc < SHORE_COLS; dc++) {
+      const first = dr === 0 && dc === 0;
+      placements.push({
+        id: first ? "arrival-shore" : "arrival-shore-" + dr + "-" + dc,
+        kind: "terrain",
+        classId: WORLD_TILE_SAND,
+        position: {
+          strategy: "exact",
+          row: SHORE_ROW + dr,
+          col: SHORE_COL + dc,
+        },
+        state: {},
+        reservations: first
+          ? [
+              {
+                kind: "rectangle",
+                row: SHORE_ROW,
+                col: SHORE_COL,
+                rows: SHORE_ROWS,
+                cols: SHORE_COLS,
+                rules: [
+                  RESERVATION_CLEAR_TERRAIN,
+                  RESERVATION_BLOCK_PLANT,
+                  RESERVATION_BLOCK_BUILD,
+                  RESERVATION_BLOCK_TERRAIN_FEATURE,
+                  RESERVATION_ARRIVAL_AREA,
+                ],
+              },
+            ]
+          : [],
+      });
+    }
+  }
+  return placements;
+}
+
 function birdhavenPlacements(): WorldClassPlacement[] {
   return [
+    ...arrivalShorePlacements(),
     {
       id: "old-oak",
       kind: "fixture",

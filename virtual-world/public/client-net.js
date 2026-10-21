@@ -1121,6 +1121,9 @@ function initMultiplayer() {
       case "island_visit_ended":
         handleIslandVisitEndedEvent(payload);
         return;
+      case "welcomed":
+        handleWelcomedEvent(payload);
+        return;
       case "follow_ended":
         handleFollowEndedEvent(payload);
         return;

@@ -503,6 +503,9 @@ const DEFAULT_PUBLIC_LIVING_VALUE_KEYS = [
   "fatigue",
   "level",
   "maxHitPoints",
+  // Set for a player's first minutes in Väinölä, so others are offered to
+  // welcome them (welcome_newcomer's validWhen).
+  "newcomer",
   "weaponClass",
 ];
 

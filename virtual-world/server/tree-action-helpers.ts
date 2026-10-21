@@ -33,6 +33,7 @@ import {
   loadUserApproachActions,
 } from "./pending-action-storage.ts";
 import {
+  getArrivalSpawnPosition,
   getCanonicalPlayerState,
   getDefaultSpawnPosition,
   loadWorldPlayers,
@@ -78,8 +79,10 @@ import {
 } from "./world-bootstrap.ts";
 import {
   getHomeIslandOwner,
+  isNewcomer,
   isOnboardingDone,
   markOnboardingDone,
+  recordWelcome,
 } from "./home-island.ts";
 import { isIslandGuest } from "./island-invites.ts";
 import { resolveIslandToVisit } from "./island-visits.ts";
@@ -747,6 +750,7 @@ export function performTreeActionForUser(
 
   type TileStateRule = {
     tileType: string;
+    tileTypes?: string[];
     kind: "present" | "absent";
     errorMessage: string;
     sourceKind?: string;
@@ -818,7 +822,16 @@ export function performTreeActionForUser(
       const mod = mods[row + "_" + col];
       return !!mod && String(mod.tile_type || "") === rule.tileType;
     }
-    return !!map[row] && map[row][col] === worldTileValueForName(rule.tileType);
+    const names =
+      Array.isArray(rule.tileTypes) && rule.tileTypes.length > 0
+        ? rule.tileTypes
+        : [rule.tileType];
+    return (
+      !!map[row] &&
+      names.some(function (name) {
+        return map[row][col] === worldTileValueForName(name);
+      })
+    );
   }
 
   function resolveActionTarget(): {
@@ -1282,9 +1295,14 @@ export function performTreeActionForUser(
     switchUserWorld(
       userId,
       START_WORLD_ID,
-      getDefaultSpawnPosition(START_WORLD_ID, userId),
+      getArrivalSpawnPosition(START_WORLD_ID, userId),
     );
-    if (firstArrival) announceArrival();
+    if (firstArrival) {
+      // Marks them as new for others to greet; the heartbeat clears it.
+      inv.values.newcomer = 1;
+      savePlayerInventory(userId, inv);
+      announceArrival();
+    }
     return {
       status: 200,
       payload: buildConfiguredSuccessPayload({
@@ -1304,7 +1322,7 @@ export function performTreeActionForUser(
     switchUserWorld(
       userId,
       homeWorldId,
-      getDefaultSpawnPosition(homeWorldId, userId),
+      getArrivalSpawnPosition(homeWorldId, userId),
     );
     return {
       status: 200,
@@ -1333,7 +1351,7 @@ export function performTreeActionForUser(
       !switchUserWorld(
         userId,
         visit.islandId,
-        getDefaultSpawnPosition(visit.islandId, userId),
+        getArrivalSpawnPosition(visit.islandId, userId),
       )
     ) {
       return {
@@ -2050,6 +2068,58 @@ export function performTreeActionForUser(
         ),
         target_living_id: targetLivingId,
         target_living_label: targetLivingLabel,
+      }),
+    };
+  }
+
+  // Greeting a newcomer: the greeter is rewarded once per newcomer, and the
+  // newcomer hears who welcomed them.
+  if (action === "welcome_newcomer") {
+    const targetLivingId = String((body && body.target_living_id) || "");
+    const targetPlayer = loadWorldPlayers(worldId)[targetLivingId];
+    if (
+      !targetLivingId ||
+      targetLivingId === userId ||
+      !targetPlayer ||
+      !isWithinTileDistance(
+        targetPlayer.row,
+        targetPlayer.col,
+        canonical.row,
+        canonical.col,
+        NEARBY_TARGET_TILE_DISTANCE,
+      )
+    ) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.target_living_not_found" },
+      };
+    }
+    if (!isNewcomer(targetLivingId, Date.now())) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.not_a_newcomer" },
+      };
+    }
+    if (!recordWelcome(userId, targetLivingId)) {
+      return {
+        status: 200,
+        payload: { ok: false, error: "error.already_welcomed" },
+      };
+    }
+    const newcomerNick = getEffectiveNick(targetLivingId);
+    sendRecipientScopedStreamEvent(targetLivingId, "welcomed", {
+      greeter_id: userId,
+      greeter_nick: getEffectiveNick(userId),
+    });
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.welcome_newcomer_toast",
+          "You welcome " + newcomerNick + " to Väinölä.",
+          { target: newcomerNick },
+        ),
+        target_living_id: targetLivingId,
       }),
     };
   }

@@ -23,7 +23,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_builder: { name: "Rune gate charm" },
       portal: { name: "Rune gate" },
       door: { name: "Door" },
-      spellbook: { name: "Spellbook" },
+      spellbook: { name: "Old spellbook" },
       shaman_talisman: { name: "Shaman's talisman" },
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
@@ -34,7 +34,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Rowan blessing" },
       creator_stone: { name: "Creator's stone" },
       old_oak: { name: "Old oak" },
-      training_dummy: { name: "Training post" },
+      training_dummy: { name: "Wrestling ground" },
       npc_corpse: { name: "Corpse" },
       chest: { name: "Wooden chest" },
       unknown: { name: "Unknown item" },
@@ -161,6 +161,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       return_home: "Travel to the old oak",
       start_anew: "Start anew",
       start_anew_toast: "You wake on your island, someone new.",
+      learn_synty_tuli: "Learn the origin of fire",
+      learn_synty_tuli_toast: "You know the origin of fire.",
       start_anew_confirm:
         "Start anew? Your class, levels, attributes, skills and everything you carry except keepsakes are gone for good.",
       pray: "Pray",
@@ -294,6 +296,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         attribute_points: "Attribute points to spend",
         hit_point_bonus: "Hit points from levels",
         wounded_until: "Wounded, minutes left",
+        synty_kantele: "Origin of the kantele",
+        synty_tuli: "Origin of fire",
         puutyo: "Woodcraft (Puutyö)",
         takominen: "Smithing (Takominen)",
         metsastys: "Hunting (Metsästys)",
@@ -589,7 +593,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       building: { name: "Building" },
       village: { name: "Village" },
       birdhaven: { name: "Väinölä" },
-      adventurers_guild: { name: "Adventurers' guild" },
+      adventurers_guild: { name: "Väinölä's tupa" },
     },
     onboarding: {
       step: {
@@ -617,6 +621,14 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
           urho: "A hero, who stands in front when it comes to a fight.",
         },
         chosen: "Go, then, and grow this land. It is yours as much as mine.",
+        greeting:
+          "Sit a while. Whoever knows how a thing was born has power over it. What would you learn?",
+        ask_synty_tuli: "Teach me the origin of fire.",
+        ask_synty_tuli_paid:
+          "Teach me the origin of fire. (a birch-bark letter)",
+        learned_tuli:
+          "Fire was struck by Ukko in the heavens, from the edge of his sword. Speak to it of its birth, and it will hear you.",
+        farewell: "Nothing today.",
       },
     },
     island: {
@@ -649,6 +661,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       no_attribute_points: "You have no attribute points to spend.",
       attribute_at_maximum: "That attribute is as high as it goes.",
       only_the_dead_start_anew: "Only the dead may start anew.",
+      origin_not_known: "You do not know the origin of fire. Ask the elder.",
+      origin_already_known: "You already know that origin.",
       ask_the_elder: "Ask the elder in Väinölä.",
       not_a_newcomer: "They are not new here any more.",
       already_welcomed: "You have already welcomed them.",
@@ -754,7 +768,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal_builder: { name: "Riimuportin amuletti" },
       portal: { name: "Riimuportti" },
       door: { name: "Ovi" },
-      spellbook: { name: "Loitsukirja" },
+      spellbook: { name: "Vanha loitsukirja" },
       shaman_talisman: { name: "Shamaanin talismaani" },
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
@@ -765,7 +779,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       blessing_marker: { name: "Pihlajansiunaus" },
       creator_stone: { name: "Luojan kivi" },
       old_oak: { name: "Vanha tammi" },
-      training_dummy: { name: "Harjoituspaalu" },
+      training_dummy: { name: "Painikenttä" },
       npc_corpse: { name: "Ruumis" },
       chest: { name: "Puuarkku" },
       unknown: { name: "Tuntematon esine" },
@@ -893,6 +907,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       return_home: "Matkaa vanhalle tammelle",
       start_anew: "Aloita alusta",
       start_anew_toast: "Heräät saarellasi, uutena.",
+      learn_synty_tuli: "Opi tulen synty",
+      learn_synty_tuli_toast: "Tiedät tulen synnyn.",
       start_anew_confirm:
         "Aloitetaanko alusta? Luokkasi, tasosi, ominaisuutesi, taitosi ja kaikki mitä kannat muistoesineitä lukuun ottamatta menetetään lopullisesti.",
       pray: "Rukoile",
@@ -1023,6 +1039,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         attribute_points: "Käyttämättömät ominaisuuspisteet",
         hit_point_bonus: "Osumapisteet tasoista",
         wounded_until: "Haavoittunut, minuutteja jäljellä",
+        synty_kantele: "Kanteleen synty",
+        synty_tuli: "Tulen synty",
         puutyo: "Puutyö",
         takominen: "Takominen",
         metsastys: "Metsästys",
@@ -1321,7 +1339,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       building: { name: "Rakennus" },
       village: { name: "Kylä" },
       birdhaven: { name: "Väinölä" },
-      adventurers_guild: { name: "Seikkailijoiden kilta" },
+      adventurers_guild: { name: "Väinölän tupa" },
     },
     onboarding: {
       step: {
@@ -1350,6 +1368,13 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         },
         chosen:
           "Mene siis ja kasvata tätä maata. Se on yhtä lailla sinun kuin minun.",
+        greeting:
+          "Istu hetkeksi. Joka tietää, miten asia syntyi, sillä on valta siihen. Mitä tahtoisit oppia?",
+        ask_synty_tuli: "Opeta minulle tulen synty.",
+        ask_synty_tuli_paid: "Opeta minulle tulen synty. (tuohikirje)",
+        learned_tuli:
+          "Iski tulta Ukko ylijumala taivahalla, miekkansa terällä. Puhu tulelle sen synnystä, niin se kuulee sinua.",
+        farewell: "En tänään mitään.",
       },
     },
     island: {
@@ -1381,6 +1406,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       no_attribute_points: "Sinulla ei ole ominaisuuspisteitä käytettävänä.",
       attribute_at_maximum: "Ominaisuus on jo niin korkea kuin voi olla.",
       only_the_dead_start_anew: "Vain kuollut voi aloittaa alusta.",
+      origin_not_known: "Et tunne tulen syntyä. Kysy vanhimmalta.",
+      origin_already_known: "Tunnet jo sen synnyn.",
       ask_the_elder: "Kysy Väinölän vanhimmalta.",
       not_a_newcomer: "Hän ei ole enää tulokas.",
       already_welcomed: "Olet jo toivottanut hänet tervetulleeksi.",

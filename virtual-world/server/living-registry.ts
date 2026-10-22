@@ -1,10 +1,13 @@
 import { VWORLD_LIVING_CLASS_TABLE } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
 import {
+  DialogueChoice,
   LivingClassRecord,
   LivingKind,
   LivingValueSchema,
 } from "./world-domain.ts";
+import { learnOriginActionId, ORIGINS } from "./origins.ts";
+import { ActionCondition } from "./action-logic-interpreter.ts";
 import {
   deleteLivingClassRow,
   loadAllLivingClassRows,
@@ -263,12 +266,69 @@ function elderDialogue(): LivingClassRecord["dialogue"] {
         }),
       },
       {
+        // Everyone who has chosen: he teaches the origins he knows.
+        id: "greeting",
+        text: "Sit a while. Whoever knows how a thing was born has power over it. What would you learn?",
+        textKey: "dialogue.elder.greeting",
+        conditions: [{ field: "class_id", op: "ne", value: "player_human" }],
+        choices: originChoices().concat([
+          { text: "Nothing today.", textKey: "dialogue.elder.farewell" },
+        ]),
+      },
+      {
         id: "chosen",
         text: "Go, then, and grow this land. It is yours as much as mine.",
         textKey: "dialogue.elder.chosen",
       },
+      {
+        id: "learned_tuli",
+        text: "Fire was struck by Ukko in the heavens, from the edge of his sword. Speak to it of its birth, and it will hear you.",
+        textKey: "dialogue.elder.learned_tuli",
+      },
     ],
   };
+}
+
+// Asking the elder for an origin (origins.ts): free for the classes it is
+// free for, at its price for the rest, and offered only until it is known.
+function originChoices(): DialogueChoice[] {
+  const choices: DialogueChoice[] = [];
+  ORIGINS.forEach(function (origin) {
+    const unknown: ActionCondition = {
+      field: "values." + origin.valueKey,
+      op: "ne",
+      value: 1,
+    };
+    const ask = {
+      text: "Teach me " + origin.fallbackLabel.toLowerCase() + ".",
+      textKey: "dialogue.elder.ask_synty_" + origin.id,
+      next: "learned_" + origin.id,
+    };
+    origin.freeForClassIds.forEach(function (classId) {
+      choices.push(
+        Object.assign({}, ask, {
+          conditions: [
+            { field: "class_id", op: "eq" as const, value: classId },
+            unknown,
+          ],
+          action: learnOriginActionId(origin.id, true),
+        }),
+      );
+    });
+    choices.push(
+      Object.assign({}, ask, {
+        text: ask.text + " (a birch-bark letter)",
+        textKey: ask.textKey + "_paid",
+        conditions: origin.freeForClassIds
+          .map(function (classId): ActionCondition {
+            return { field: "class_id", op: "ne", value: classId };
+          })
+          .concat([unknown]),
+        action: learnOriginActionId(origin.id, false),
+      }),
+    );
+  });
+  return choices;
 }
 
 const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {

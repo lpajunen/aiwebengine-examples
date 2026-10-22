@@ -200,7 +200,7 @@ a corpse item), and its `reviveClassId` (how a ghost comes back).
 Players also carry `level`, `experience` and `totalExperience`. Actions
 award experience for succeeding; a kill awards the action's experience
 scaled by the target's level. Spending it is itself an action —
-`advance_level` at a guild training post — whose `progression` block drains
+`advance_level` at the wrestling ground in Väinölä's tupa — whose `progression` block drains
 the spendable `experience` (a level costs its own number × 1000) while
 leaving the lifetime `totalExperience` tally alone.
 
@@ -284,7 +284,7 @@ The very best verbs belong to one class: an action class may name the
 `wieldClasses` that can hold it in a hand (the longbow is the woodsman's).
 Anyone may still carry such an item, trade it and hand it on.
 
-A level bought at the training post brings attribute points (one, two on
+A level bought at the wrestling ground brings attribute points (one, two on
 every fourth level), spent with the "+" beside an attribute in the statistics
 panel, and hit points rolled on the class's hit die plus the Kestävyys
 modifier. See `levels.ts`.
@@ -293,6 +293,13 @@ Praying back from death at the old oak costs a tenth of the spendable
 experience and leaves the player wounded for 30 minutes: a fifth off their
 maximum hit points and fatigue recovering at half the rate. Levels,
 attributes and skills are never lost. See `death.ts`.
+
+Spells come from origins (_synnyt_), not books: whoever knows how a thing
+was born has power over it. Firebolt and fireball need the origin of fire
+(`synty_tuli`), which Väinämöinen teaches — for nothing to a sage, for a
+birch-bark letter to anyone else. An origin is a player value; the spells
+read it through their `actorConditions`, which the palette also checks, so
+a spell is not offered to someone who cannot cast it. See `origins.ts`.
 
 A ghost may instead start anew, anywhere: their class, values and every item
 that is not a keepsake are gone, and they wake on their home island as a

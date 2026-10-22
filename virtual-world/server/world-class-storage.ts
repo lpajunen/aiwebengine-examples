@@ -85,7 +85,6 @@ const BUILTIN_ITEM_SPAWNS: WorldClassSpawnEntry[] = [
   { id: "rune_stone", count: 3 },
   { id: "juniper_bundle", count: 3 },
   { id: "birch_bark_letter", count: 3 },
-  { id: "spellbook", count: 3 },
   { id: "shaman_talisman", count: 3 },
   { id: "chest", count: 1 },
 ];
@@ -471,7 +470,9 @@ export function adventurersGuildWorldClassRecord(): WorldClassRecord {
     rows: GUILD_ROWS,
     cols: GUILD_COLS,
     labelKey: "world_class." + GUILD_CLASS_ID + ".name",
-    fallbackLabel: "Adventurers' guild",
+    // Väinölä's tupa: the long house where the village gathers, and where
+    // the wrestling ground is. The id predates the name.
+    fallbackLabel: "Väinölä's tupa",
     // Deliberately empty: the room's contents are authored placements, not
     // ambient population.
     itemSpawns: [],
@@ -480,7 +481,7 @@ export function adventurersGuildWorldClassRecord(): WorldClassRecord {
     generation: null,
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
-    labels: { fi: "Seikkailijoiden kilta" },
+    labels: { fi: "Väinölän tupa" },
   };
 }
 

@@ -359,6 +359,16 @@ Mostly data and translation, so it can run beside 1 and 2.
   Forests have elk and cuckoos instead of horses; the horse class stays.
 - Items: `spellbook` goes, replaced by learned origins. The adventurers' guild
   becomes Väinölä's tupa, and the training post a wrestling ground.
+  **Built:** the tupa and the wrestling ground are new names on the same
+  world class and fixture (`adventurers_guild`, `training_dummy`). Firebolt
+  and fireball come from the starter bundle and need `synty_tuli`, an
+  `actorConditions` entry the palette now checks too. The elder teaches it
+  from a greeting node: two actions per origin (`origins.ts`), one free and
+  limited to the sage, one costing a birch-bark letter for everyone else.
+  The spellbook no longer spawns and grants nothing; books already carried
+  stay as "old spellbooks". Unowned built-in item rows now grant exactly the
+  actions the code lists, and unowned action rows follow the code's
+  `sourceItemIds`.
 - Authored descriptions: `description`/`descriptions` on item classes, shown by
   `examine`, and the same on world classes, replacing the four hash-picked
   flavour lines in `world-domain.ts`. Both are open items in

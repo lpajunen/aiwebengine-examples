@@ -687,7 +687,17 @@ function getValidWhenField(ctx, path) {
  */
 function actionValidForTarget(actionId, target) {
   var def = getRegistryActionDef(actionId);
-  var conds = def && def.valid_when;
+  return conditionsHold(def && def.valid_when, target);
+}
+
+/**
+ * Whether every condition holds for an entity (a target, or the player for
+ * an action's actor conditions). No conditions => true.
+ * @param {Array<{field: string, op: string, value?: *, ref?: string}> | null | undefined} conds
+ * @param {{type?: *, class_id?: *, state?: Record<string, *>, values?: Record<string, *>}} target
+ * @returns {boolean}
+ */
+function conditionsHold(conds, target) {
   if (!Array.isArray(conds) || conds.length === 0) return true;
   var ctx = {
     type: target && target.type,
@@ -736,7 +746,7 @@ function actionValidForTarget(actionId, target) {
 
 /**
  * @param {string} action
- * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string, targetScope?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, skill?: {id: string, min?: number, gain?: number, attribute?: string, affects?: string}, classes?: string[], category?: string} | null}
+ * @returns {{label_key?: string, fallback_label?: string, labels?: Record<string, string>, canonical_id?: string, target_kind?: string, targeting?: {approach?: string, range?: number, rangeShape?: string, areaRadius?: number, rangeFrom?: string, targetScope?: string}, valid_when?: Array<{field: string, op: string, value?: *, ref?: string}>, actor_conditions?: Array<{field: string, op: string, value?: *, ref?: string}>, skill?: {id: string, min?: number, gain?: number, attribute?: string, affects?: string}, classes?: string[], category?: string} | null}
  */
 function getRegistryActionDef(action) {
   if (!ITEM_REGISTRY || !ITEM_REGISTRY.actions) return null;
@@ -1201,7 +1211,8 @@ function isNearbyItemActionApplicable(item, action) {
 /** @returns {string[]} */
 /**
  * Whether the player may use the action at all: their class is among its
- * `classes`, and their skill reaches its `skill.min` — the client mirror of
+ * `classes`, they meet its actor conditions, and their skill reaches its
+ * `skill.min` — the client mirror of
  * the server's checks in performTreeActionForUser, so the palette does not
  * offer what would be refused.
  * @param {string} action
@@ -1214,6 +1225,15 @@ function playerMayUseAction(action) {
   if (Array.isArray(classes) && classes.length > 0) {
     var classId = normalizeClientInventory(playerInventory).class_id || "";
     if (classes.indexOf(classId) === -1) return false;
+  }
+  // Nor what asks something of the player they lack (a spell's origin).
+  if (
+    !conditionsHold(
+      def && def.actor_conditions,
+      normalizeClientInventory(playerInventory),
+    )
+  ) {
+    return false;
   }
   var skill = def && def.skill;
   if (!skill || !(Number(skill.min) > 0)) return true;

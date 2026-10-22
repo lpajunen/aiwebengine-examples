@@ -168,7 +168,7 @@ Give a `portal` placement a destination:
   the relationship when it creates the interior.
 
 `entryPlacementId` names a placement **in the destination class** whose tile the
-traveller arrives on. The guild's return door doubles as its entry point, which
+traveller arrives on. The tupa's return door doubles as its entry point, which
 is why the exterior door names it.
 
 ### The full pattern, end to end

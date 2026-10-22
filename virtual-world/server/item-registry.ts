@@ -1,4 +1,5 @@
 import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
+import { ORIGIN_LEARN_ACTION_IDS } from "./origins.ts";
 import {
   CLASS_OWNED_ITEM_STATE_KEYS,
   MAX_CONTAINER_ITEMS,
@@ -267,16 +268,19 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     },
     actionIds: ["portal_travel"],
   },
+  // Retired: spells come from knowing a thing's origin (synty), taught by
+  // the elder, not from a book. The class stays so books already carried
+  // remain valid items; nothing spawns one and it does nothing.
   spellbook: {
     id: "spellbook",
     kind: "artifact",
     visuals: {
       color: 0x6b3e80,
       labelKey: "item.spellbook.name",
-      fallbackLabel: "Spellbook",
+      fallbackLabel: "Old spellbook",
       style: "book",
     },
-    actionIds: ["firebolt", "fireball"],
+    actionIds: [],
   },
   shaman_talisman: {
     id: "shaman_talisman",
@@ -320,9 +324,11 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       ...PLAYER_CLASSES.map(function (cls) {
         return chooseClassActionId(cls.id);
       }),
-      // Last: seeding appends what a stored row lacks, so a new action goes
-      // at the end to keep the stored order the same as this one.
       "start_anew",
+      // Spells come from knowing the origin of fire, not from a book.
+      "firebolt",
+      "fireball",
+      ...ORIGIN_LEARN_ACTION_IDS,
     ],
   },
   blessing_marker: {
@@ -375,7 +381,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     visuals: {
       color: 0xb08968,
       labelKey: "item.training_dummy.name",
-      fallbackLabel: "Training post",
+      fallbackLabel: "Wrestling ground",
     },
     actionIds: ["advance_level"],
   },
@@ -706,6 +712,9 @@ export function getBootstrapRegistry(): {
       valid_when?: ActionDefinition["validWhen"];
       skill?: ActionDefinition["skill"];
       classes?: string[];
+      actor_conditions?: NonNullable<
+        ActionDefinition["livingEffect"]
+      >["actorConditions"];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -752,6 +761,9 @@ export function getBootstrapRegistry(): {
       valid_when?: ActionDefinition["validWhen"];
       skill?: ActionDefinition["skill"];
       classes?: string[];
+      actor_conditions?: NonNullable<
+        ActionDefinition["livingEffect"]
+      >["actorConditions"];
       category?: string;
       // The tile mod this action writes, so the client can repaint the square
       // itself; replaced the tree_action/house_action pair.
@@ -823,6 +835,11 @@ export function getBootstrapRegistry(): {
       // making the client keep a second copy of it.
       targeting: resolveActionTargeting(action),
       valid_when: action.validWhen,
+      // Checked against the player, so the palette hides what the server
+      // would refuse them (a spell whose origin they do not know).
+      actor_conditions: action.livingEffect
+        ? action.livingEffect.actorConditions
+        : undefined,
       skill: action.skill,
       classes: action.classes,
       category: actionCategory(actionId),
@@ -1025,13 +1042,25 @@ function backfillItemClassDefaults(
       continue;
     }
     let changed = false;
+    // A built-in nobody owns grants exactly the actions the code lists, so
+    // one taken away (the spellbook's spells) goes from the row too. A
+    // claimed row only gains what it lacks.
     const defActionIds = Array.isArray(def.actionIds) ? def.actionIds : [];
-    const missingActionIds = defActionIds.filter(function (id) {
-      return existing.actionIds.indexOf(id) === -1;
-    });
-    if (missingActionIds.length > 0) {
-      existing.actionIds = existing.actionIds.concat(missingActionIds);
-      changed = true;
+    const actionIdsAreCodeOwned =
+      !Array.isArray(existing.ownerIds) || existing.ownerIds.length === 0;
+    if (actionIdsAreCodeOwned) {
+      if (JSON.stringify(existing.actionIds) !== JSON.stringify(defActionIds)) {
+        existing.actionIds = defActionIds.slice();
+        changed = true;
+      }
+    } else {
+      const missingActionIds = defActionIds.filter(function (id) {
+        return existing.actionIds.indexOf(id) === -1;
+      });
+      if (missingActionIds.length > 0) {
+        existing.actionIds = existing.actionIds.concat(missingActionIds);
+        changed = true;
+      }
     }
     // Rows seeded before visual styles existed read back as "block" (the
     // normalizer's default), so a built-in that declares a real style needs
@@ -1854,6 +1883,15 @@ function backfillActionClassDefaults(
         JSON.stringify(def.classes || [])
     ) {
       existing.classes = def.classes ? def.classes.slice() : undefined;
+      changed = true;
+    }
+    // So does which items grant it.
+    if (
+      skillIsCodeOwned &&
+      JSON.stringify(existing.sourceItemIds || []) !==
+        JSON.stringify(def.sourceItemIds || [])
+    ) {
+      existing.sourceItemIds = (def.sourceItemIds || []).slice();
       changed = true;
     }
     // Who may use a built-in on someone else's island follows the code for a

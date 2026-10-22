@@ -10,6 +10,7 @@ import {
   RESERVATION_PROTECT_LANDMARK,
 } from "./runtime-config.ts";
 import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
+import { learnOriginActionId, ORIGINS } from "./origins.ts";
 import { ActionSkill } from "./skills.ts";
 
 // Targeting / aiming spec — see DESIGN-targeting.md. Describes how an action is
@@ -488,8 +489,73 @@ function classChoiceActions(): Record<string, ActionDefinition> {
   return out;
 }
 
+// Learning an origin from the elder (origins.ts): one action at a price, one
+// free for the classes it is free for, each limited to its classes so a
+// player is only ever offered one of them. Answered where the player stands,
+// beside the elder, like the class choice.
+function originLearnActions(): Record<string, ActionDefinition> {
+  const out: Record<string, ActionDefinition> = {};
+  ORIGINS.forEach(function (origin) {
+    const field = "values." + origin.valueKey;
+    [false, true].forEach(function (free) {
+      const id = learnOriginActionId(origin.id, free);
+      out[id] = {
+        id: id,
+        labelKey: "tree_action.learn_synty_" + origin.id,
+        fallbackLabel: "Learn " + origin.fallbackLabel.toLowerCase(),
+        targetKind: "living",
+        sourceItemIds: ["starter_kit"],
+        targeting: {
+          range: NEARBY_TARGET_TILE_DISTANCE,
+          rangeShape: "line",
+          approach: "none",
+        },
+        validWhen: [{ field: "type", op: "eq", value: "npc_elder" }],
+        classes: PLAYER_CLASSES.map(function (cls) {
+          return cls.id;
+        }).filter(function (classId) {
+          return (origin.freeForClassIds.indexOf(classId) !== -1) === free;
+        }),
+        ...(free ? {} : { cost: [{ itemId: origin.costItemId, count: 1 }] }),
+        experience: { amount: 10 },
+        livingEffect: {
+          affects: "actor",
+          field: field,
+          op: "set",
+          amount: 1,
+          actorConditions: [
+            {
+              field: field,
+              op: "ne",
+              value: 1,
+              errorMessage: "error.origin_already_known",
+            },
+          ],
+        },
+        execution: {
+          successPayload: {
+            includeInventory: true,
+          },
+          toastMessage: "You know " + origin.fallbackLabel.toLowerCase() + ".",
+          toastMessageKey: "tree_action.learn_synty_" + origin.id + "_toast",
+        },
+      };
+    });
+  });
+  return out;
+}
+
+// What a spell of fire asks of its caster: to know the origin of fire.
+const KNOWS_THE_ORIGIN_OF_FIRE = {
+  field: "values.synty_tuli",
+  op: "eq" as const,
+  value: 1,
+  errorMessage: "error.origin_not_known",
+};
+
 export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   ...classChoiceActions(),
+  ...originLearnActions(),
   plant: {
     id: "plant",
     labelKey: "tree_action.plant",
@@ -1286,7 +1352,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     labelKey: "tree_action.firebolt",
     fallbackLabel: "Firebolt",
     targetKind: "living_nearby",
-    sourceItemIds: ["spellbook"],
+    sourceItemIds: ["starter_kit"],
     skill: { id: "synnyt", attribute: "tieto", gain: 2, affects: "roll" },
     experience: { amount: 20, onKill: true },
     targeting: {
@@ -1309,6 +1375,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
           value: "player_ghost",
           errorMessage: "error.ghost_cannot_fight",
         },
+        KNOWS_THE_ORIGIN_OF_FIRE,
       ],
       targetConditions: [
         {
@@ -1348,7 +1415,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     labelKey: "tree_action.fireball",
     fallbackLabel: "Fireball",
     targetKind: "point",
-    sourceItemIds: ["spellbook"],
+    sourceItemIds: ["starter_kit"],
     // The strongest spell is the sage's alone.
     classes: ["player_tietaja"],
     skill: { id: "synnyt", attribute: "tieto", gain: 2, affects: "roll" },
@@ -1372,6 +1439,7 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
           value: "player_ghost",
           errorMessage: "error.ghost_cannot_fight",
         },
+        KNOWS_THE_ORIGIN_OF_FIRE,
       ],
       field: "values.currentHitPoints",
       op: "sub",
@@ -1853,6 +1921,8 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   // misc
   pray: "misc",
   start_anew: "misc",
+  learn_synty_tuli: "social",
+  learn_synty_tuli_free: "social",
   advance_level: "misc",
 };
 

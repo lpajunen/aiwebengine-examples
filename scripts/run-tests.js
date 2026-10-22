@@ -207,7 +207,15 @@ async function runTestsByModule(token, scriptUri, modules, options) {
     merged.passed += report.passed;
     merged.failed += report.failed;
     merged.durationMs += report.durationMs;
-    merged.timedOut = merged.timedOut || report.timedOut;
+    if (report.timedOut) {
+      merged.timedOut = true;
+      merged.cases.push({
+        name: "ran out of time; the cases after this point did not run",
+        file: module,
+        status: "failed",
+        durationMs: report.durationMs,
+      });
+    }
     merged.cases.push(...(report.cases || []));
   }
   return { report: merged, status: 200, body: "" };

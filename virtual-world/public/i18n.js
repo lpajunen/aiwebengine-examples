@@ -432,6 +432,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       id_label: "ID",
       label_label: "Name (English)",
       name_fi_label: "Name (Finnish)",
+      description_label: "Description (English)",
+      description_fi_label: "Description (Finnish)",
       kind_label: "Kind",
       size_label: "Size",
       visual_style_label: "Visual style",
@@ -573,12 +575,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       world_suffix: "world",
     },
     world: {
-      flavor_text_0: "A low rune-song lingers between the spruce boughs.",
-      flavor_text_1: "Rowan charms sway softly where the pine paths meet.",
-      flavor_text_2:
-        "The forest floor feels old here, as if someone just finished a quiet verse.",
-      flavor_text_3:
-        "Juniper smoke and birdsong drift through this hidden clearing.",
       traveling: "Traveling…",
     },
     auth: {
@@ -1175,6 +1171,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       id_label: "Tunniste",
       label_label: "Nimi (englanti)",
       name_fi_label: "Nimi (suomi)",
+      description_label: "Kuvaus (englanti)",
+      description_fi_label: "Kuvaus (suomi)",
       kind_label: "Laji",
       size_label: "Koko",
       visual_style_label: "Ulkoasu",
@@ -1316,13 +1314,6 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       world_suffix: "maailma",
     },
     world: {
-      flavor_text_0: "Hiljainen riimulaulu leijuu kuusten oksien lomassa.",
-      flavor_text_1:
-        "Pihlajan suoja-amuletit huojuvat hiljaa siellä, missä männikköpolut kohtaavat.",
-      flavor_text_2:
-        "Metsän pohja tuntuu täällä vanhalta, ikään kuin joku olisi juuri lausunut hiljaisen säkeen.",
-      flavor_text_3:
-        "Katajan savu ja lintujen laulu leijuvat tässä piilotetussa aukiossa.",
       traveling: "Matkalla…",
     },
     auth: {

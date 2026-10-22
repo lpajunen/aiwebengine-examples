@@ -372,7 +372,11 @@ Mostly data and translation, so it can run beside 1 and 2.
 - Authored descriptions: `description`/`descriptions` on item classes, shown by
   `examine`, and the same on world classes, replacing the four hash-picked
   flavour lines in `world-domain.ts`. Both are open items in
-  TODO-storytelling, and the chronicle (6) needs them.
+  TODO-storytelling, and the chronicle (6) needs them. **Built:** each is a
+  `description` (English) and `descriptions` (`{ fi }`), in its own columns,
+  in the class editors, the class routes and the MCP tools. The built-ins'
+  text is `descriptions.ts` and follows the code for rows nobody owns. A
+  world whose class says nothing is described by its base type's class.
 
 ## 4. The event framework
 

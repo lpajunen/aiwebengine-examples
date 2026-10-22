@@ -39,12 +39,11 @@ import {
   getOrCreatePlayerWorld,
   getWorldInfo,
 } from "./world-bootstrap.ts";
-import { getAllWorldClasses } from "./world-class-storage.ts";
 import {
-  getWorldFlavorTextByIndex,
-  getWorldFlavorTextIndex,
-  toPublicLivingSnapshot,
-} from "./world-domain.ts";
+  getAllWorldClasses,
+  getWorldDescription,
+} from "./world-class-storage.ts";
+import { toPublicLivingSnapshot } from "./world-domain.ts";
 import {
   loadWorldHouses,
   loadWorldMods,
@@ -77,8 +76,7 @@ type PageState = {
   initCol: number;
   initSeq: number;
   initRotation: number;
-  worldFlavorText: string;
-  worldFlavorTextIndex: number;
+  worldDescription: ReturnType<typeof getWorldDescription>;
   worldClassId: string;
   // True while the player is still learning on their home island; the client
   // shows the step they are on (renderOnboardingHint in client-panels.js).
@@ -248,10 +246,7 @@ export function buildVirtualWorldPageState(
     initRotation: Number.isFinite(Number(initialPos.rotation))
       ? Number(initialPos.rotation)
       : 0,
-    worldFlavorText: getWorldFlavorTextByIndex(
-      getWorldFlavorTextIndex(worldId),
-    ),
-    worldFlavorTextIndex: getWorldFlavorTextIndex(worldId),
+    worldDescription: getWorldDescription(worldId),
     worldClassId: getWorldInfo(worldId).world_class_id,
     onboarding: !isOnboardingDone(userId),
     islandVisits: buildIslandVisitState(userId),
@@ -330,7 +325,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
       <button class="panel-close" onclick="closeWorldInfoPanel()" data-i18n-title="panel.close" title="Close">×</button>
     </div>
     <div class="world-info-type" id="world-info-type"></div>
-    <div class="world-info-desc" id="world-info-desc" data-i18n-key="world.flavor_text_${state.worldFlavorTextIndex}">${escapeHtml(state.worldFlavorText)}</div>
+    <div class="world-info-desc" id="world-info-desc">${escapeHtml(state.worldDescription.description)}</div>
     <strong class="world-info-legend-title" data-i18n-key="legend.title">Legend</strong>
     <div class="leg" id="legend-ground"><div class="leg-box" style="background:#7ab648;"></div> <span data-i18n-key="legend.forest_floor">Forest Floor</span></div>
     <div class="leg"><div class="leg-box" style="background:#355c34;"></div> <span data-i18n-key="legend.spruce_thicket">Spruce Thicket</span></div>
@@ -466,6 +461,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="ic-id" type="text" placeholder="my_item" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="ic-label" type="text" placeholder="My Item" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="ic-name-fi" type="text" placeholder="Esineeni" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.description_label">Description (English)</span> <textarea id="ic-description" rows="2"></textarea></label>
+        <label><span data-i18n-key="class_editor.description_fi_label">Description (Finnish)</span> <textarea id="ic-description-fi" rows="2"></textarea></label>
         <label><span data-i18n-key="class_editor.kind_label">Kind</span>
           <select id="ic-kind">
             <option value="tool">tool</option>
@@ -654,6 +651,8 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
         <label><span data-i18n-key="class_editor.id_label">ID</span> <input id="wc-id" type="text" placeholder="small_house" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.label_label">Name (English)</span> <input id="wc-label" type="text" placeholder="Small house" autocomplete="off"></label>
         <label><span data-i18n-key="class_editor.name_fi_label">Name (Finnish)</span> <input id="wc-name-fi" type="text" placeholder="Pieni talo" autocomplete="off"></label>
+        <label><span data-i18n-key="class_editor.description_label">Description (English)</span> <textarea id="wc-description" rows="2"></textarea></label>
+        <label><span data-i18n-key="class_editor.description_fi_label">Description (Finnish)</span> <textarea id="wc-description-fi" rows="2"></textarea></label>
         <label><span data-i18n-key="class_editor.base_type_label">Base type</span>
           <select id="wc-base-type">
             <option value="forest">forest</option>
@@ -710,6 +709,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var LIVINGS = ${JSON.stringify(state.livings)};
     var worldId  = ${JSON.stringify(state.worldId)};
     var WORLD_CLASS_ID = ${JSON.stringify(state.worldClassId)};
+    var WORLD_DESCRIPTION = ${JSON.stringify(state.worldDescription)};
     var ONBOARDING = ${JSON.stringify(state.onboarding)};
     var ISLAND_VISITS = ${JSON.stringify(state.islandVisits)};
     var playerId = ${JSON.stringify(state.userId)};

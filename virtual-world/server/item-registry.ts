@@ -1,5 +1,6 @@
 import { chooseClassActionId, PLAYER_CLASSES } from "./player-classes.ts";
 import { ORIGIN_LEARN_ACTION_IDS } from "./origins.ts";
+import { ITEM_DESCRIPTIONS } from "./descriptions.ts";
 import {
   CLASS_OWNED_ITEM_STATE_KEYS,
   MAX_CONTAINER_ITEMS,
@@ -81,6 +82,10 @@ export interface ItemClassRecord {
   stateTemplate: Record<string, unknown>;
   ownerIds: string[];
   labels: ClassLabels;
+  // What `examine` says about it: English, and per-locale overrides shaped
+  // like `labels`. Built-ins take theirs from descriptions.ts.
+  description?: string;
+  descriptions?: ClassLabels;
 }
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
@@ -903,6 +908,10 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     stateTemplate: DEFAULT_STATE_TEMPLATES[def.id] || {},
     ownerIds: [],
     labels: {},
+    description: ITEM_DESCRIPTIONS[def.id] ? ITEM_DESCRIPTIONS[def.id].en : "",
+    descriptions: ITEM_DESCRIPTIONS[def.id]
+      ? { fi: ITEM_DESCRIPTIONS[def.id].fi }
+      : {},
   };
 }
 
@@ -962,6 +971,8 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
       }
     })(),
     labels: normalizeClassLabels(row.labels_json),
+    description: String(row.description || ""),
+    descriptions: normalizeClassLabels(row.descriptions_json),
   };
 }
 
@@ -975,6 +986,8 @@ function itemClassToDbRow(
   non_pickable: number;
   wield_classes_json: string;
   keepsake: number;
+  description: string;
+  descriptions_json: string;
   color: number;
   size: string;
   style: string;
@@ -1003,6 +1016,10 @@ function itemClassToDbRow(
       ? JSON.stringify(record.wieldClasses)
       : "",
     keepsake: record.keepsake ? 1 : 0,
+    description: String(record.description || ""),
+    descriptions_json: JSON.stringify(
+      normalizeClassLabels(record.descriptions),
+    ),
     color: record.visuals.color,
     size: normalizeClassSize(record.visuals.size),
     style: normalizeItemVisualStyle(record.visuals.style),
@@ -1104,6 +1121,18 @@ function backfillItemClassDefaults(
     // So does whether a built-in is a keepsake.
     if (wieldIsCodeOwned && !!existing.keepsake !== !!def.keepsake) {
       existing.keepsake = !!def.keepsake;
+      changed = true;
+    }
+    // And what it says when examined.
+    const desired = itemClassFromDefinition(def);
+    if (
+      wieldIsCodeOwned &&
+      (String(existing.description || "") !== desired.description ||
+        JSON.stringify(existing.descriptions || {}) !==
+          JSON.stringify(desired.descriptions))
+    ) {
+      existing.description = desired.description;
+      existing.descriptions = desired.descriptions;
       changed = true;
     }
     if (changed) {
@@ -1387,6 +1416,8 @@ export interface ItemInspection {
   label_key: string;
   fallback_label: string;
   labels: ClassLabels;
+  description: string;
+  descriptions: ClassLabels;
   size: ClassSize;
   non_pickable: boolean;
   non_droppable: boolean;
@@ -1435,6 +1466,8 @@ export function buildItemInspection(
         ? def.visuals.fallbackLabel
         : type,
     labels: normalizeClassLabels(cls ? cls.labels : {}),
+    description: String((cls && cls.description) || ""),
+    descriptions: normalizeClassLabels(cls ? cls.descriptions : {}),
     size: normalizeClassSize(
       cls ? cls.visuals.size : def ? def.visuals.size : undefined,
     ),

@@ -296,6 +296,17 @@ function renderWorldInfoPanel() {
   requireElementById("world-info-type").textContent = worldClassLabel(
     typeof WORLD_CLASS_ID !== "undefined" ? WORLD_CLASS_ID : "",
   );
+  // What the world's class says about it (its base type's when it says
+  // nothing), in the reader's language.
+  var described =
+    typeof WORLD_DESCRIPTION !== "undefined" && WORLD_DESCRIPTION
+      ? WORLD_DESCRIPTION
+      : { description: "", descriptions: {} };
+  requireElementById("world-info-desc").textContent = localizeLabel(
+    described.descriptions,
+    "",
+    described.description || "",
+  );
 }
 
 function showWorldInfoPanel() {

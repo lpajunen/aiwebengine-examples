@@ -547,14 +547,7 @@ function swapToWorld(state) {
   if (worldIdEl) worldIdEl.textContent = String(worldId);
   requireElementById("pos-col").textContent = String(avatarCol);
   requireElementById("pos-row").textContent = String(avatarRow);
-  var descEl = document.getElementById("world-info-desc");
-  if (descEl) {
-    descEl.setAttribute(
-      "data-i18n-key",
-      "world.flavor_text_" + (Number(state.worldFlavorTextIndex) || 0),
-    );
-    descEl.textContent = String(state.worldFlavorText || "");
-  }
+  WORLD_DESCRIPTION = state.worldDescription;
   applyStaticTranslations();
   updateCamera();
   updateStatsHud();

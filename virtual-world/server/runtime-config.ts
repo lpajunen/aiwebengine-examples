@@ -160,7 +160,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v17: vworld_welcomes, who has welcomed which newcomer.
 // v18: vworld_player_characters, each player's chosen class.
 // v19: item class keepsake, what a player keeps when starting anew.
-export const VWORLD_SCHEMA_VERSION = 19;
+// v20: item and world class description/descriptions_json, authored text.
+export const VWORLD_SCHEMA_VERSION = 20;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

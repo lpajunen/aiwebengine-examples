@@ -8,8 +8,6 @@ import {
   getActionsForItemType,
   getInventoryTreeActions,
   getNPCDisplayName,
-  getWorldFlavorTextByIndex,
-  getWorldFlavorTextIndex,
   hashString,
   buildInventorySelectors,
   findFirstLivingItemByTypes,

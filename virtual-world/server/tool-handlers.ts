@@ -322,6 +322,18 @@ export function virtualWorldManageItemClassesToolHandler(
           : existing
             ? existing.keepsake
             : undefined,
+      description:
+        args.description !== undefined
+          ? String(args.description || "")
+          : existing
+            ? existing.description
+            : undefined,
+      descriptions:
+        args.descriptions !== undefined
+          ? normalizeClassLabels(args.descriptions)
+          : existing
+            ? existing.descriptions
+            : undefined,
       visuals: {
         color: normalizeColorNumber(
           args.color !== undefined
@@ -796,6 +808,14 @@ export function virtualWorldManageWorldClassesToolHandler(
           : [userId],
       labels:
         args.labels !== undefined ? args.labels : existing && existing.labels,
+      description:
+        args.description !== undefined
+          ? args.description
+          : existing && existing.description,
+      descriptions:
+        args.descriptions !== undefined
+          ? args.descriptions
+          : existing && existing.descriptions,
     });
     const placementErrors = validateWorldClassPlacementsForWrite(
       args.placements !== undefined

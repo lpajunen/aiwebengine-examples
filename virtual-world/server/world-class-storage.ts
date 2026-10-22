@@ -5,6 +5,7 @@ import {
   VWORLD_WORLD_TYPE_TABLE,
 } from "./runtime-config.ts";
 import { vwLog } from "./diagnostics.ts";
+import { WORLD_DESCRIPTIONS } from "./descriptions.ts";
 import {
   COLS,
   normalizeWorldDimension,
@@ -72,7 +73,23 @@ export type WorldClassRecord = {
   placementRevision: number;
   ownerIds: string[];
   labels: ClassLabels;
+  // What the world panel says about a world of this class: English, and
+  // per-locale overrides shaped like `labels`. Empty falls back to the base
+  // type's. Built-ins take theirs from descriptions.ts.
+  description?: string;
+  descriptions?: ClassLabels;
 };
+
+/** A built-in's description from descriptions.ts, in record form. */
+function builtinDescription(classId: string): {
+  description: string;
+  descriptions: ClassLabels;
+} {
+  const text = WORLD_DESCRIPTIONS[classId];
+  return text
+    ? { description: text.en, descriptions: { fi: text.fi } }
+    : { description: "", descriptions: {} };
+}
 
 const BUILTIN_ITEM_SPAWNS: WorldClassSpawnEntry[] = [
   { id: "saw", count: 3 },
@@ -114,7 +131,8 @@ const BUILTIN_FOREST_NPC_SPAWNS: WorldClassSpawnEntry[] =
   ]);
 
 /**
- * Makes an unowned built-in's spawn manifests follow the code. Returns
+ * Makes an unowned built-in's spawn manifests and description follow the
+ * code. Returns
  * whether anything changed. A class someone has claimed keeps its own.
  */
 function resyncCodeOwnedSpawns(
@@ -135,6 +153,15 @@ function resyncCodeOwnedSpawns(
     JSON.stringify(existing.npcSpawns) !== JSON.stringify(desired.npcSpawns)
   ) {
     existing.npcSpawns = copySpawnEntries(desired.npcSpawns);
+    changed = true;
+  }
+  if (
+    existing.description !== desired.description ||
+    JSON.stringify(existing.descriptions || {}) !==
+      JSON.stringify(desired.descriptions || {})
+  ) {
+    existing.description = desired.description;
+    existing.descriptions = desired.descriptions;
     changed = true;
   }
   return changed;
@@ -234,6 +261,7 @@ function builtinWorldClassRecord(worldType: string): WorldClassRecord {
     labels: BUILTIN_WORLD_CLASS_LABELS_FI[worldType]
       ? { fi: BUILTIN_WORLD_CLASS_LABELS_FI[worldType] }
       : {},
+    ...builtinDescription(worldType),
   };
 }
 
@@ -457,6 +485,7 @@ function birdhavenWorldClassRecord(): WorldClassRecord {
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
     labels: { fi: "Väinölä" },
+    ...builtinDescription(START_WORLD_CLASS_ID),
   };
 }
 
@@ -482,6 +511,7 @@ export function adventurersGuildWorldClassRecord(): WorldClassRecord {
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
     labels: { fi: "Väinölän tupa" },
+    ...builtinDescription(GUILD_CLASS_ID),
   };
 }
 
@@ -576,6 +606,7 @@ function homeIslandWorldClassRecord(): WorldClassRecord {
     placementRevision: SYSTEM_PLACEMENT_REVISION,
     ownerIds: [],
     labels: { fi: "Kotisaari" },
+    ...builtinDescription(HOME_ISLAND_CLASS_ID),
   };
 }
 
@@ -605,6 +636,8 @@ export function normalizeWorldClassRecord(record: {
   generation?: unknown;
   ownerIds?: unknown;
   labels?: unknown;
+  description?: unknown;
+  descriptions?: unknown;
 }): WorldClassRecord {
   const id = String(record.id || "").trim();
   return {
@@ -623,6 +656,8 @@ export function normalizeWorldClassRecord(record: {
     placementRevision: normalizePlacementRevision(record.placementRevision),
     ownerIds: normalizeOwnerIds(record.ownerIds),
     labels: normalizeClassLabels(record.labels),
+    description: String(record.description || "").trim(),
+    descriptions: normalizeClassLabels(record.descriptions),
   };
 }
 
@@ -665,6 +700,8 @@ function worldClassFromDbRow(row: any): WorldClassRecord {
       }
     })(),
     labels: row.labels_json,
+    description: row.description,
+    descriptions: row.descriptions_json,
   });
 }
 
@@ -685,6 +722,8 @@ function worldClassToDbRow(
   placement_revision: number;
   owner_ids_json: string;
   labels_json: string;
+  description: string;
+  descriptions_json: string;
   created_at: number;
   updated_at: number;
 } {
@@ -704,6 +743,10 @@ function worldClassToDbRow(
     placement_revision: normalizePlacementRevision(record.placementRevision),
     owner_ids_json: JSON.stringify(record.ownerIds || []),
     labels_json: JSON.stringify(normalizeClassLabels(record.labels)),
+    description: String(record.description || ""),
+    descriptions_json: JSON.stringify(
+      normalizeClassLabels(record.descriptions),
+    ),
     created_at: storedTs,
     updated_at: storedTs,
   };
@@ -993,6 +1036,27 @@ export function getWorldClassForWorldId(
     (classId ? getWorldClassWithRefresh(classId) : null) ||
     (worldType ? getWorldClassWithRefresh(worldType) : null)
   );
+}
+
+/**
+ * What the world panel says about a world: its class's description, or the
+ * base type's when the class has none of its own.
+ */
+export function getWorldDescription(worldId: string | number): {
+  description: string;
+  descriptions: ClassLabels;
+} {
+  const cls = getWorldClassForWorldId(worldId);
+  if (cls && cls.description) {
+    return {
+      description: cls.description,
+      descriptions: cls.descriptions || {},
+    };
+  }
+  const base = cls ? getWorldClassWithRefresh(cls.baseType) : null;
+  return base && base.description
+    ? { description: base.description, descriptions: base.descriptions || {} }
+    : { description: "", descriptions: {} };
 }
 
 // Cache-miss-tolerant world class lookup: another instance (or the editor on

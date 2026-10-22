@@ -2,7 +2,7 @@
 
 Richer NPC interaction: roles, conversation, giving an item for a hint, places
 with histories. What exists is authored NPC identity (names, descriptions,
-per-locale), NPCs answering in the player's language, speech bubbles, livings
+per-locale), authored descriptions on item and world classes, NPCs answering in the player's language, speech bubbles, livings
 that hold a post or flee, dialogue trees with per-placement overrides, and
 `livingEffect.affects: "actor"` — the quest flag that lets a conversation
 remember anything.
@@ -77,26 +77,6 @@ From the original question, and still unaddressed. A house is a tile mod with
 a `sourceKind`, and a tile mod has nowhere to hang text. The cheap path is a
 `fixture` item placed inside — a hearth, a sign, a chest — carrying the
 history in its state, which also gives the player something to examine.
-
-That depends on the next item.
-
-### Nothing authored can be examined
-
-`examine` reports an item's class label and its stats. There is no authored
-text anywhere in the item vocabulary: an item class has no `description`, and
-examine has no path that would show one. This is the counterpart of the NPC
-`identity.description`, and it is what "a place with a history"
-would actually read.
-
-### World descriptions are generated, not authored
-
-The original question said "worlds can have descriptions". They cannot: the
-world info panel shows a flavour line picked by `hashString(worldId) % 4` from
-four hardcoded strings in `world-domain.ts`. A world class carries no
-description field at all, so two worlds of the same authored class get
-different randomly-assigned prose, and a creator cannot say anything about the
-place they built. A `description`/`descriptions` pair on `WorldClassRecord`,
-shaped exactly like the NPC identity block, replaces the hash.
 
 ### NPC barks
 

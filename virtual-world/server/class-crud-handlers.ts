@@ -111,6 +111,8 @@ export function createItemClassHandler(context: any) {
       ? body.wieldClasses.map(String)
       : undefined,
     keepsake: !!(body && body.keepsake),
+    description: String((body && body.description) || ""),
+    descriptions: normalizeClassLabels(body && body.descriptions),
     visuals: {
       // 0 is "automatic": the client then falls back to its own per-type
       // default color rather than rendering the item black.
@@ -206,6 +208,14 @@ export function updateItemClassHandler(context: any) {
         : existing.wieldClasses,
     keepsake:
       body && body.keepsake !== undefined ? !!body.keepsake : existing.keepsake,
+    description:
+      body && body.description !== undefined
+        ? String(body.description || "")
+        : existing.description,
+    descriptions:
+      body && body.descriptions !== undefined
+        ? normalizeClassLabels(body.descriptions)
+        : existing.descriptions,
     visuals: {
       color: normalizeColorNumber(
         body && body.visuals && body.visuals.color !== undefined
@@ -978,6 +988,8 @@ export function createWorldClassHandler(context: any) {
     generation: body && body.generation,
     ownerIds: [context.request.auth.userId],
     labels: body && body.labels,
+    description: body && body.description,
+    descriptions: body && body.descriptions,
   });
   // Validated against the *normalized* dimensions, so an out-of-bounds
   // coordinate is reported against the size the class will actually have.
@@ -1085,6 +1097,14 @@ export function updateWorldClassHandler(context: any) {
     placementRevision: existing.placementRevision,
     ownerIds: ownership.ownerIds,
     labels: body && body.labels !== undefined ? body.labels : existing.labels,
+    description:
+      body && body.description !== undefined
+        ? body.description
+        : existing.description,
+    descriptions:
+      body && body.descriptions !== undefined
+        ? body.descriptions
+        : existing.descriptions,
   });
   var updatePlacementErrors = validateWorldClassPlacementsForWrite(
     body && body.placements !== undefined

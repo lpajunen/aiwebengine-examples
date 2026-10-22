@@ -295,6 +295,14 @@ export function registerVirtualWorldRuntime(): void {
         description:
           "Kept when a player starts anew. Only for items that change nothing an action reads (cosmetics, mementos).",
       },
+      description: {
+        type: "string",
+        description: "What examining the item says, in English",
+      },
+      descriptions: {
+        type: "object",
+        description: 'Per-locale descriptions, e.g. {"fi": "..."}',
+      },
       color: {
         type: "number",
         description:
@@ -1059,6 +1067,15 @@ export function registerVirtualWorldRuntime(): void {
         },
         description:
           "Deterministic authored contents (landmarks, structures, fixed NPCs, portals) — distinct from the random itemSpawns/npcSpawns manifests",
+      },
+      description: {
+        type: "string",
+        description:
+          "What the world panel says about a world of this class, in English; empty uses the base type's",
+      },
+      descriptions: {
+        type: "object",
+        description: 'Per-locale descriptions, e.g. {"fi": "..."}',
       },
       generation: {
         type: "object",

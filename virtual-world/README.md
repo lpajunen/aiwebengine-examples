@@ -322,7 +322,9 @@ floor, boundary and wall tiles, then lists passes to run in order —
 built-in presets (forest, island, cave, village, building) are seed data
 reproducing what the original hardcoded world types did; a creator can edit
 any of them or write a new spec from scratch. Worlds are instances of a
-class, and changing a spec regenerates every world of that class.
+class, and changing a spec regenerates every world of that class. A world
+class's `description` (and per-locale `descriptions`) is what the world panel
+says about its worlds; one that says nothing falls back to its base type's.
 
 On top of the world class, the creator defines content classes:
 
@@ -342,6 +344,8 @@ On top of the world class, the creator defines content classes:
   color. A `broadleaf`-style item is a _fixture_: it draws as its own
   standalone mesh and takes the place of whatever terrain feature the map
   would otherwise put on its tile.
+  Its `description` (and per-locale `descriptions`) is what `examine` says
+  about it.
 - **Tile classes** — kinds of terrain and object-layer tiles, as described
   above.
 - **Action classes** — the data-driven logic described above.

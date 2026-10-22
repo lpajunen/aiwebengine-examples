@@ -30,8 +30,6 @@ import {
   getNPCDisplayName,
   getNearbyTileKeys,
   getWorldBoundaryTileName,
-  getWorldFlavorTextByIndex,
-  getWorldFlavorTextIndex,
   getWorldFloorTileName,
   getWorldWallTileName,
   hashString,
@@ -101,17 +99,6 @@ describe("deterministic world flavour", () => {
     expect(hashString("world-42")).toBe(hashString("world-42"));
     expect(hashString("")).toBe(0);
     expect(hashString("zzzzzzzzzzzz")).toBeGreaterThan(-1);
-  });
-
-  test("a world always gets the same flavour text", () => {
-    const index = getWorldFlavorTextIndex("42");
-    expect(index).toBe(getWorldFlavorTextIndex("42"));
-    expect(index).toBeGreaterThan(-1);
-    expect(getWorldFlavorTextByIndex(index).length).toBeGreaterThan(0);
-  });
-
-  test("an out-of-range flavour index yields an empty string, not a crash", () => {
-    expect(getWorldFlavorTextByIndex(99999)).toBe("");
   });
 
   test("an NPC keeps its name across restarts", () => {

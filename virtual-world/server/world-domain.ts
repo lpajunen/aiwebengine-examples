@@ -590,13 +590,6 @@ export const WORLD_TILE_DEFS: Record<WorldTileName, WorldTileDef> = {
   },
 };
 
-const WORLD_FLAVOR_TEXTS = [
-  "A low rune-song lingers between the spruce boughs.",
-  "Rowan charms sway softly where the pine paths meet.",
-  "The forest floor feels old here, as if someone just finished a quiet verse.",
-  "Juniper smoke and birdsong drift through this hidden clearing.",
-];
-
 const NPC_NAME_PREFIXES = [
   "Aino",
   "Ilma",
@@ -636,14 +629,6 @@ export function hashString(value: string): number {
     hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
   }
   return hash >>> 0;
-}
-
-export function getWorldFlavorTextIndex(worldId: string): number {
-  return hashString(worldId) % WORLD_FLAVOR_TEXTS.length;
-}
-
-export function getWorldFlavorTextByIndex(index: number): string {
-  return WORLD_FLAVOR_TEXTS[index] || "";
 }
 
 export function getNPCDisplayName(worldId: string, npcId: string): string {

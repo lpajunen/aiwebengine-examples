@@ -214,7 +214,7 @@ function itemStateStatParts(state, allStats) {
 }
 
 /**
- * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, size?: string, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
+ * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, description?: string, descriptions?: Record<string, string>, size?: string, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
  */
 
 /**
@@ -244,6 +244,18 @@ function showExaminedItemPanel(info) {
     escHtml(t("examine.item_section", "Item")) +
     "</div>";
   html += '<div class="tile-row">' + escHtml(label) + "</div>";
+  // What the item's class says about itself, in the reader's language.
+  var description = localizeLabel(
+    info.descriptions,
+    "",
+    String(info.description || ""),
+  );
+  if (description) {
+    html +=
+      '<div class="tile-row tile-description">' +
+      escHtml(description) +
+      "</div>";
+  }
   if (info.kind) {
     html +=
       '<div class="tile-row">' +

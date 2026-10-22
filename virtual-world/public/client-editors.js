@@ -48,6 +48,41 @@ function buildLabelsPayload(nameFi) {
 }
 
 /**
+ * Fills a class form's two description boxes (`<prefix>-description` and
+ * `<prefix>-description-fi`) from a record, or clears them for null.
+ * @param {string} prefix
+ * @param {{description?: string, descriptions?: Record<string, string>} | null} record
+ */
+function setDescriptionFields(prefix, record) {
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById(prefix + "-description")
+  ).value = String((record && record.description) || "");
+  /** @type {HTMLTextAreaElement} */ (
+    requireElementById(prefix + "-description-fi")
+  ).value = String(
+    (record && record.descriptions && record.descriptions.fi) || "",
+  );
+}
+
+/**
+ * A class form's description boxes, as the record fields the server takes.
+ * @param {string} prefix
+ * @returns {{description: string, descriptions: Record<string, string>}}
+ */
+function readDescriptionFields(prefix) {
+  return {
+    description: /** @type {HTMLTextAreaElement} */ (
+      requireElementById(prefix + "-description")
+    ).value.trim(),
+    descriptions: buildLabelsPayload(
+      /** @type {HTMLTextAreaElement} */ (
+        requireElementById(prefix + "-description-fi")
+      ).value.trim(),
+    ),
+  };
+}
+
+/**
  * Localized display name for an editor-list row of a flat class record
  * (action/living/world — label fields live at the top level).
  * @param {any} cls
@@ -247,6 +282,7 @@ function editItemClass(id) {
         String((ic.visuals && ic.visuals.fallbackLabel) || "");
       /** @type {HTMLInputElement} */ (requireElementById("ic-name-fi")).value =
         String((ic.labels && ic.labels.fi) || "");
+      setDescriptionFields("ic", ic);
       /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
         String(ic.kind || "tool");
       /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
@@ -290,6 +326,7 @@ function cancelItemClassEdit() {
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("ic-label")).value = "";
   /** @type {HTMLInputElement} */ (requireElementById("ic-name-fi")).value = "";
+  setDescriptionFields("ic", null);
   /** @type {HTMLSelectElement} */ (requireElementById("ic-kind")).value =
     "tool";
   /** @type {HTMLSelectElement} */ (requireElementById("ic-size")).value =
@@ -386,6 +423,7 @@ function submitItemClassForm() {
     actionIds: actionIds,
     stateTemplate: stateTemplate,
     labels: buildLabelsPayload(nameFiVal),
+    ...readDescriptionFields("ic"),
   };
   var url = itemClassEditId
     ? "/virtual-world/item-classes/" + encodeURIComponent(itemClassEditId)
@@ -1512,6 +1550,7 @@ function editWorldClass(id) {
         String(wc.fallbackLabel || "");
       /** @type {HTMLInputElement} */ (requireElementById("wc-name-fi")).value =
         String((wc.labels && wc.labels.fi) || "");
+      setDescriptionFields("wc", wc);
       /** @type {HTMLSelectElement} */ (
         requireElementById("wc-base-type")
       ).value = String(wc.baseType || "forest");
@@ -2137,6 +2176,7 @@ function cancelWorldClassEdit() {
   idEl.value = "";
   /** @type {HTMLInputElement} */ (requireElementById("wc-label")).value = "";
   /** @type {HTMLInputElement} */ (requireElementById("wc-name-fi")).value = "";
+  setDescriptionFields("wc", null);
   /** @type {HTMLSelectElement} */ (requireElementById("wc-base-type")).value =
     "forest";
   /** @type {HTMLInputElement} */ (requireElementById("wc-rows")).value = "100";
@@ -2261,6 +2301,7 @@ function submitWorldClassForm() {
     generation: generation,
     placements: worldClassPlacements,
     labels: buildLabelsPayload(nameFiVal),
+    ...readDescriptionFields("wc"),
   };
   var url = worldClassEditId
     ? "/virtual-world/world-classes/" + encodeURIComponent(worldClassEditId)

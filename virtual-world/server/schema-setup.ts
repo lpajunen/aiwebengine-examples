@@ -1208,6 +1208,8 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     ["addIntegerColumn", "non_pickable", false],
     ["addTextColumn", "wield_classes_json", true],
     ["addIntegerColumn", "keepsake", true],
+    ["addTextColumn", "description", true],
+    ["addTextColumn", "descriptions_json", true],
     ["addIntegerColumn", "color", false],
     ["addTextColumn", "size", true],
     ["addTextColumn", "style", true],
@@ -1485,6 +1487,8 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     ["addTextColumn", "npc_spawns_json", true],
     ["addTextColumn", "placements_json", true],
     ["addTextColumn", "generation_json", true],
+    ["addTextColumn", "description", true],
+    ["addTextColumn", "descriptions_json", true],
     // Nullable so the column can be added to already-populated tables; writes
     // always supply a number, since the engine's DB rejects a null INTEGER.
     ["addIntegerColumn", "placement_revision", true],

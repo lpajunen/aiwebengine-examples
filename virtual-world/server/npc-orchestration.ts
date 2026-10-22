@@ -30,6 +30,7 @@ import { tickFollowForWorld } from "./follow-helpers.ts";
 import { loadActiveNPCFighterIds, tickFightForWorld } from "./fight-helpers.ts";
 import { processDueSpawnTimers } from "./spawn-timers.ts";
 import { processDueEvents } from "./events.ts";
+import "./event-catalog.ts";
 import { tickIslandVisitsForWorld } from "./island-visits.ts";
 import {
   FATIGUE_RECOVERY_PER_SECOND,

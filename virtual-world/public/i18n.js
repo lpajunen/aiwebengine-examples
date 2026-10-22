@@ -24,6 +24,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal: { name: "Rune gate" },
       door: { name: "Door" },
       spellbook: { name: "Old spellbook" },
+      sea_shell: { name: "Sea shell" },
+      oak_branch: { name: "Branch of the great oak" },
+      oak_leaf: { name: "Leaf of the great oak" },
       shaman_talisman: { name: "Shaman's talisman" },
       starter_kit: { name: "Wanderer's bundle" },
       kantele: { name: "Kantele" },
@@ -163,6 +166,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       start_anew_toast: "You wake on your island, someone new.",
       learn_synty_tuli: "Learn the origin of fire",
       event_started_toast: "You call everyone together.",
+      learn_synty_tammi: "Learn the origin of the oak",
+      learn_synty_tammi_toast: "You know the origin of the oak.",
+      call_small_man: "Call the small man from the sea",
+      strike_oak: "Strike the oak",
+      strike_oak_toast: "You strike the oak ({amount}).",
+      oak_felled_toast: "The great oak falls!",
       learn_synty_tuli_toast: "You know the origin of fire.",
       start_anew_confirm:
         "Start anew? Your class, levels, attributes, skills and everything you carry except keepsakes are gone for good.",
@@ -233,6 +242,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "is over.",
       },
       reward_taken: "The reward is yours.",
+      great_oak: {
+        name: "The great oak",
+        reward_branch: "A branch: everlasting luck",
+        reward_crown: "The crown: knowledge",
+        reward_leaf: "A leaf: everlasting love",
+      },
     },
     stats: {
       empty: "No statistics.",
@@ -295,6 +310,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_elk: "Elk",
         npc_swan: "Swan",
         npc_cuckoo: "Cuckoo",
+        npc_small_man: "Small man from the sea",
       },
       slot: {
         left_hand: "Left Hand",
@@ -317,6 +333,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         wounded_until: "Wounded, minutes left",
         synty_kantele: "Origin of the kantele",
         synty_tuli: "Origin of fire",
+        synty_tammi: "Origin of the oak",
         puutyo: "Woodcraft (Puutyö)",
         takominen: "Smithing (Takominen)",
         metsastys: "Hunting (Metsästys)",
@@ -652,6 +669,11 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         learned_tuli:
           "Fire was struck by Ukko in the heavens, from the edge of his sword. Speak to it of its birth, and it will hear you.",
         farewell: "Nothing today.",
+        ask_synty_tammi: "Teach me the origin of the oak.",
+        ask_synty_tammi_paid:
+          "Teach me the origin of the oak. (a birch-bark letter)",
+        learned_tammi:
+          "Sampsa sowed the oak, and it grew until it hid the sun and the moon. Only a small man from the sea could fell it. Bring him a shell, and call him.",
       },
     },
     island: {
@@ -694,6 +716,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       event_not_a_participant: "You did not take part.",
       event_reward_taken: "You have already taken your reward.",
       event_no_such_reward: "There is no such reward.",
+      origin_of_the_oak_not_known:
+        "You do not know the origin of the oak. Ask the elder.",
+      need_a_blade_for_the_oak: "You need an axe, a saw or a knife.",
       ask_the_elder: "Ask the elder in Väinölä.",
       not_a_newcomer: "They are not new here any more.",
       already_welcomed: "You have already welcomed them.",
@@ -800,6 +825,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       portal: { name: "Riimuportti" },
       door: { name: "Ovi" },
       spellbook: { name: "Vanha loitsukirja" },
+      sea_shell: { name: "Simpukka" },
+      oak_branch: { name: "Ison tammen oksa" },
+      oak_leaf: { name: "Ison tammen lehvä" },
       shaman_talisman: { name: "Shamaanin talismaani" },
       starter_kit: { name: "Kulkijan nyytti" },
       kantele: { name: "Kantele" },
@@ -940,6 +968,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       start_anew_toast: "Heräät saarellasi, uutena.",
       learn_synty_tuli: "Opi tulen synty",
       event_started_toast: "Kutsut kaikki koolle.",
+      learn_synty_tammi: "Opi tammen synty",
+      learn_synty_tammi_toast: "Tiedät tammen synnyn.",
+      call_small_man: "Kutsu pikku mies merestä",
+      strike_oak: "Iske tammea",
+      strike_oak_toast: "Isket tammea ({amount}).",
+      oak_felled_toast: "Iso tammi kaatuu!",
       learn_synty_tuli_toast: "Tiedät tulen synnyn.",
       start_anew_confirm:
         "Aloitetaanko alusta? Luokkasi, tasosi, ominaisuutesi, taitosi ja kaikki mitä kannat muistoesineitä lukuun ottamatta menetetään lopullisesti.",
@@ -1010,6 +1044,12 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "on ohi.",
       },
       reward_taken: "Palkinto on sinun.",
+      great_oak: {
+        name: "Iso tammi",
+        reward_branch: "Oksa: ikuinen onni",
+        reward_crown: "Latva: tiedon taito",
+        reward_leaf: "Lehvä: ikuinen lempi",
+      },
     },
     stats: {
       empty: "Ei tilastoja.",
@@ -1069,6 +1109,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_elk: "Hirvi",
         npc_swan: "Joutsen",
         npc_cuckoo: "Käki",
+        npc_small_man: "Pikku mies merestä",
       },
       slot: {
         left_hand: "Vasen käsi",
@@ -1091,6 +1132,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         wounded_until: "Haavoittunut, minuutteja jäljellä",
         synty_kantele: "Kanteleen synty",
         synty_tuli: "Tulen synty",
+        synty_tammi: "Tammen synty",
         puutyo: "Puutyö",
         takominen: "Takominen",
         metsastys: "Metsästys",
@@ -1428,6 +1470,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         learned_tuli:
           "Iski tulta Ukko ylijumala taivahalla, miekkansa terällä. Puhu tulelle sen synnystä, niin se kuulee sinua.",
         farewell: "En tänään mitään.",
+        ask_synty_tammi: "Opeta minulle tammen synty.",
+        ask_synty_tammi_paid: "Opeta minulle tammen synty. (tuohikirje)",
+        learned_tammi:
+          "Sampsa kylvi tammen, ja se kasvoi, kunnes peitti päivän ja kuun. Vain pikku mies merestä sai sen kaadetuksi. Tuo hänelle simpukka ja kutsu häntä.",
       },
     },
     island: {
@@ -1469,6 +1515,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       event_not_a_participant: "Et ollut mukana.",
       event_reward_taken: "Olet jo saanut palkintosi.",
       event_no_such_reward: "Sellaista palkintoa ei ole.",
+      origin_of_the_oak_not_known: "Et tunne tammen syntyä. Kysy vanhimmalta.",
+      need_a_blade_for_the_oak: "Tarvitset kirveen, sahan tai puukon.",
       ask_the_elder: "Kysy Väinölän vanhimmalta.",
       not_a_newcomer: "Hän ei ole enää tulokas.",
       already_welcomed: "Olet jo toivottanut hänet tervetulleeksi.",

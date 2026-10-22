@@ -93,13 +93,14 @@ function backToWaiting(
 /**
  * One step of the machine at `now`. `participants` is how many have taken
  * part (counted after the caller enrolled those present at the end of
- * gathering); `roll` is a uniform [0, 1) draw for random readiness.
+ * gathering); `roll` is a uniform [0, 1) draw for random readiness, and
+ * `readyNow` what a "when" event's isReady answered.
  */
 export function advanceEvent(
   def: EventDefinition,
   state: EventState,
   now: number,
-  ctx: { participants: number; roll: number },
+  ctx: { participants: number; roll: number; readyNow?: boolean },
 ): EventTransition {
   switch (state.phase) {
     case "waiting": {
@@ -111,8 +112,10 @@ export function advanceEvent(
           outcome: "",
         };
       }
-      if (ready.kind === "cycle") {
-        if (now < state.readyAt) return unchanged(state);
+      if (ready.kind === "cycle" || ready.kind === "when") {
+        const due =
+          ready.kind === "cycle" ? now >= state.readyAt : !!ctx.readyNow;
+        if (!due) return unchanged(state);
         return {
           state: Object.assign({}, state, { phase: "ready" as EventPhase }),
           effects: ["announce"],

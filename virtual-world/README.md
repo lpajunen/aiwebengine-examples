@@ -317,6 +317,13 @@ they are and sees it with a countdown in the active-actions panel. The rules
 are a pure state machine (`event-machine.ts`); `events.ts` keeps the rows,
 moves them on from the world tick and tells everyone.
 
+The first is the great oak (`great-oak.ts`). It grows in Väinölä over about a
+week, faster the more trees the players plant there. Full grown, it hides
+the sun; someone who knows the origin of the oak calls the small man from the
+sea with a shell from the shore, everyone near strikes the oak until it
+falls, and each who struck chooses a branch (luck), the crown (an origin
+they lack) or a leaf (a keepsake). Then it grows again from an acorn.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

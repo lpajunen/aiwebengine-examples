@@ -280,11 +280,14 @@ function elderDialogue(): LivingClassRecord["dialogue"] {
         text: "Go, then, and grow this land. It is yours as much as mine.",
         textKey: "dialogue.elder.chosen",
       },
-      {
-        id: "learned_tuli",
-        text: "Fire was struck by Ukko in the heavens, from the edge of his sword. Speak to it of its birth, and it will hear you.",
-        textKey: "dialogue.elder.learned_tuli",
-      },
+      // What he says as he teaches each origin.
+      ...ORIGINS.map(function (origin) {
+        return {
+          id: "learned_" + origin.id,
+          text: origin.learnedText,
+          textKey: "dialogue.elder.learned_" + origin.id,
+        };
+      }),
     ],
   };
 }
@@ -530,6 +533,22 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     visualStyle: "birdlike",
     corpseItemId: "npc_corpse",
     behavior: { idleChance: 0.15 },
+  },
+  // The small man risen from the sea, who fells the great oak with the
+  // players (great-oak.ts). Present only while the event runs.
+  npc_small_man: {
+    id: "npc_small_man",
+    kind: "npc",
+    labelKey: "living.class.npc_small_man",
+    fallbackLabel: "Small man from the sea",
+    slotDefinitions: bipedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    size: "small",
+    color: "#c9a227",
+    combatant: false,
+    behavior: { roamRadius: 0, idleChance: 1 },
+    labels: { fi: "Pikku mies merestä" },
   },
   // The animals of the Kalevala's north, each an existing silhouette at its
   // own size and colour. They replaced the chicken and the donkey

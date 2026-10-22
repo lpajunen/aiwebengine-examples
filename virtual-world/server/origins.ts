@@ -17,6 +17,8 @@ export interface Origin {
   // What learning it costs anyone but the classes in freeForClassIds.
   costItemId: string;
   freeForClassIds: string[];
+  // What the elder says as he teaches it.
+  learnedText: string;
 }
 
 export const ORIGINS: Origin[] = [
@@ -26,6 +28,19 @@ export const ORIGINS: Origin[] = [
     fallbackLabel: "The origin of fire",
     costItemId: "birch_bark_letter",
     freeForClassIds: ["player_tietaja"],
+    learnedText:
+      "Fire was struck by Ukko in the heavens, from the edge of his sword. Speak to it of its birth, and it will hear you.",
+  },
+  {
+    // What calls the small man from the sea to fell the great oak
+    // (great-oak.ts).
+    id: "tammi",
+    valueKey: "synty_tammi",
+    fallbackLabel: "The origin of the oak",
+    costItemId: "birch_bark_letter",
+    freeForClassIds: ["player_tietaja"],
+    learnedText:
+      "Sampsa sowed the oak, and it grew until it hid the sun and the moon. Only a small man from the sea could fell it. Bring him a shell, and call him.",
   },
 ];
 

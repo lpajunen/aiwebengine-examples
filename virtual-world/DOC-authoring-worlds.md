@@ -186,6 +186,12 @@ is why the exterior door names it.
 authored doors. It is what lets materialization tell your door from a
 player-built one on the same tile, and adopt the right one.
 
+The same goes for any two `item` or `fixture` placements of one class in a
+world: until each has an instance, materialization adopts by class, so
+without a distinct `state.fixture` apiece they collapse into one item that
+moves from placement to placement. Väinölä's three shells are tagged
+`sea_shell_0`, `sea_shell_2` and `sea_shell_4` for this reason.
+
 ## Applying a class edit to worlds that already exist
 
 Saving a class changes the **template**. Worlds built from it are not touched,

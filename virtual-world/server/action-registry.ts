@@ -1033,6 +1033,26 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
       },
     },
   },
+  // The great oak (great-oak.ts): calling the small man starts the event,
+  // and striking is the work. Each is offered beside the oak only while the
+  // oak's state says so, and the event checks the rest.
+  call_small_man: {
+    id: "call_small_man",
+    labelKey: "tree_action.call_small_man",
+    fallbackLabel: "Call the small man from the sea",
+    targetKind: "current_tile",
+    sourceItemIds: ["old_oak"],
+    validWhen: [{ field: "state.summonable", op: "eq", value: 1 }],
+  },
+  strike_oak: {
+    id: "strike_oak",
+    labelKey: "tree_action.strike_oak",
+    fallbackLabel: "Strike the oak",
+    targetKind: "current_tile",
+    sourceItemIds: ["old_oak"],
+    validWhen: [{ field: "state.felling", op: "eq", value: 1 }],
+    skill: { id: "puutyo", attribute: "voima", gain: 1, affects: "roll" },
+  },
   advance_level: {
     id: "advance_level",
     labelKey: "tree_action.advance_level",
@@ -1923,6 +1943,10 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   start_anew: "misc",
   learn_synty_tuli: "social",
   learn_synty_tuli_free: "social",
+  learn_synty_tammi: "social",
+  learn_synty_tammi_free: "social",
+  call_small_man: "misc",
+  strike_oak: "gather",
   advance_level: "misc",
 };
 

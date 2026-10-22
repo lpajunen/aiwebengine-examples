@@ -1200,11 +1200,20 @@ function treeActionLabel(action) {
  * @returns {boolean}
  */
 function isNearbyItemActionApplicable(item, action) {
-  if (!item || item.type !== "door") return true;
-  var isOpen = !!(item.state && item.state.open === true);
-  if (action === "open_door") return !isOpen;
-  if (action === "close_door") return isOpen;
-  if (action === "door_travel") return isOpen;
+  if (!item) return true;
+  if (item.type === "door") {
+    var isOpen = !!(item.state && item.state.open === true);
+    if (action === "open_door") return !isOpen;
+    if (action === "close_door") return isOpen;
+    if (action === "door_travel") return isOpen;
+    return true;
+  }
+  // A fixture's action is offered when its validWhen holds for the fixture:
+  // the great oak's call and strike follow the oak's own state.
+  var def = getRegistryActionDef(action);
+  if (def && def.target_kind === "current_tile") {
+    return actionValidForTarget(action, item);
+  }
   return true;
 }
 

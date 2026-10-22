@@ -57,6 +57,7 @@ import {
 import { getAllLivingItems, LivingState } from "./world-domain.ts";
 import { isOnboardingDone } from "./home-island.ts";
 import { buildWorldEventsSnapshot } from "./events.ts";
+import "./event-catalog.ts";
 
 type PageState = {
   map: number[][];

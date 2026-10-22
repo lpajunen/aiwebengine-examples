@@ -24,6 +24,7 @@ import {
   spawnItemsForUser,
 } from "./item-storage.ts";
 import { buildActiveWorldPlayers } from "./player-snapshots.ts";
+import { ORIGINS } from "./origins.ts";
 import {
   VWORLD_EVENT_PARTICIPANT_TABLE,
   VWORLD_EVENT_TABLE,
@@ -281,6 +282,19 @@ function giveItems(
   broadcastPlayerValuesChanged(worldId, userId, inv.values);
 }
 
+/** Teaches the player an origin they do not know yet, if there is one. */
+function teachUnknownOrigin(worldId: string, userId: string): void {
+  const inv = loadPlayerInventory(userId);
+  const unknown = ORIGINS.filter(function (origin) {
+    return Number(inv.values[origin.valueKey]) !== 1;
+  });
+  if (unknown.length === 0) return;
+  const origin = unknown[Math.floor(Math.random() * unknown.length)];
+  inv.values[origin.valueKey] = 1;
+  savePlayerInventory(userId, inv);
+  broadcastPlayerValuesChanged(worldId, userId, inv.values);
+}
+
 function isEligible(def: EventDefinition, participant: Participant): boolean {
   return !def.rewardNeedsContribution || participant.contribution > 0;
 }
@@ -293,6 +307,7 @@ function grantReward(
   choiceIndex: number,
 ): void {
   giveItems(worldId, participant.userId, reward.items, reward.experience || 0);
+  if (reward.teachesOrigin) teachUnknownOrigin(worldId, participant.userId);
   database.update(VWORLD_EVENT_PARTICIPANT_TABLE, participant.rowId, {
     reward_choice: choiceIndex,
     rewarded_at: toSeconds(Date.now()),
@@ -332,12 +347,22 @@ const CHAT_LINES: Record<string, string> = {
   failed: "failed.",
 };
 
-/** Tells every player, wherever they are, and writes it in the world's chat. */
+/**
+ * Tells every player, wherever they are, writes it in the world's chat, and
+ * lets the event change the world for its new phase.
+ */
 function announce(
   def: EventDefinition,
   state: EventState,
   outcome: EventOutcome,
 ): void {
+  if (def.hooks && def.hooks.entered) {
+    try {
+      def.hooks.entered(state.worldId, state.phase, outcome);
+    } catch (e) {
+      vwLog("event hook failed", { event_id: def.id, error: String(e) });
+    }
+  }
   sendVirtualWorldStreamEvent(
     "world_event",
     Object.assign(toPublicEvent(def, state), { outcome: outcome }),
@@ -375,6 +400,9 @@ export function advanceDueEvent(
   roll: () => number = Math.random,
 ): EventState {
   const told: Array<{ state: EventState; outcome: EventOutcome }> = [];
+  if (def.hooks && def.hooks.tick) def.hooks.tick(worldId, now);
+  const readyNow =
+    def.ready.kind === "when" ? def.ready.isReady(worldId, now) : false;
   const final = withLockedEvent(def, worldId, now, function (start) {
     let state = start;
     for (let step = 0; step < MAX_STEPS_PER_TICK; step++) {
@@ -385,6 +413,7 @@ export function advanceDueEvent(
       const next = advanceEvent(def, state, now, {
         participants: participants.length,
         roll: roll(),
+        readyNow: readyNow,
       });
       applyEffects(def, worldId, state, next.effects, participants);
       if (next.effects.indexOf("announce") !== -1) {

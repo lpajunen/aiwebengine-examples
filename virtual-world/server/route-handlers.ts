@@ -26,6 +26,7 @@ import {
 } from "./world-switch.ts";
 import { raiseAttributeForUser } from "./levels.ts";
 import { claimEventReward } from "./events.ts";
+import "./event-catalog.ts";
 import {
   buildIslandVisitState,
   inviteToIsland,

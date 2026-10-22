@@ -95,6 +95,8 @@ import { applyReturnToll } from "./death.ts";
 import { startAnewForUser } from "./start-anew.ts";
 import { getEventStartedByAction } from "./event-registry.ts";
 import { startEventForUser } from "./events.ts";
+import "./event-catalog.ts";
+import { oakBranchLuck, strikeOakForUser } from "./great-oak.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -1616,6 +1618,33 @@ export function performTreeActionForUser(
     };
   }
 
+  // The work of felling the great oak (great-oak.ts).
+  if (action === "strike_oak") {
+    const struck = strikeOakForUser(
+      userId,
+      String(worldId),
+      inv,
+      canonical,
+      Date.now(),
+    );
+    if (!struck.ok) {
+      return { status: 200, payload: { ok: false, error: struck.error } };
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...(struck.felled
+          ? toastFields("tree_action.oak_felled_toast", "The great oak falls!")
+          : toastFields(
+              "tree_action.strike_oak_toast",
+              "You strike the oak ({amount}).",
+              { amount: struck.amount },
+            )),
+        inventory: inv,
+      }),
+    };
+  }
+
   if (action === "start_anew") {
     const anew = startAnewForUser(userId);
     if (!anew.ok) {
@@ -2990,9 +3019,12 @@ export function performTreeActionForUser(
     });
 
     if (inventoryProduces.length > 0) {
+      // A skilled hand gathers more, and a branch of the great oak brings
+      // luck (great-oak.ts).
       const bonus =
         actionSkill && actionSkill.affects === "yield"
-          ? extraYield(skillValue(inv.values || {}, actionSkill.id))
+          ? extraYield(skillValue(inv.values || {}, actionSkill.id)) +
+            oakBranchLuck(inv)
           : 0;
       spawnItemsForUser(
         worldId,

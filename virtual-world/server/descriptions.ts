@@ -143,6 +143,18 @@ export const ITEM_DESCRIPTIONS: Record<string, BuiltinDescription> = {
     en: "A wooden chest with an iron hasp.",
     fi: "Puuarkku rautaisella säpillä.",
   },
+  sea_shell: {
+    en: "A shell from Väinölä's shore. Held to the ear, it sounds like someone small calling from the sea.",
+    fi: "Simpukka Väinölän rannalta. Korvalla se kuulostaa kuin joku pieni huutaisi mereltä.",
+  },
+  oak_branch: {
+    en: "A branch of the great oak. Whoever took a branch took everlasting luck.",
+    fi: "Ison tammen oksa. Kenpä siitä oksan otti, se otti ikuisen onnen.",
+  },
+  oak_leaf: {
+    en: "A leaf of the great oak. Whoever took a leaf took everlasting love.",
+    fi: "Ison tammen lehvä. Kenpä lehvästä lehvähti, lehvähti ikuisen lemmen.",
+  },
 };
 
 export const WORLD_DESCRIPTIONS: Record<string, BuiltinDescription> = {

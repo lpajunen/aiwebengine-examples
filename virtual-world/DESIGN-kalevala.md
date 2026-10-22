@@ -550,6 +550,37 @@ An acorn is left where the oak stood, and `growth` starts again from zero.
 **Tests:** each transition, the lapse below the minimum, the reward chosen
 once, a tick under the lease, roles adding up as intended.
 
+### Built
+
+The oak is `great-oak.ts`, registered through `event-catalog.ts`. Where the
+build departed from the plan:
+
+- Readiness is a new kind, `when`: the event asks the oak whether it is full
+  grown, rather than waiting a fixed cycle. Events gained `hooks` — `tick`
+  (the oak grows) and `entered` (the small man rises and leaves, the oak's
+  flags change, the oak falls).
+- Growth is `growth` and `grownAt` in the oak's own state, written only when
+  it passes a whole point. The pace is a week alone, plus the oak's own pace
+  again for every 50 trees in Väinölä. An oak that predates growth counts as
+  full, so the first event was ready the day this shipped.
+- `summonable` and `felling` on the oak are what `call_small_man` and
+  `strike_oak` read through `validWhen`. The client now checks a fixture's
+  action against the fixture's state, so they are offered only then.
+- The origin of the oak is an origin like fire's (`origins.ts`): free to a
+  sage, a birch-bark letter for anyone else. Starting costs a shell; three
+  lie on the arrival shore as placements, and come back when taken.
+- `minParticipants` is 1 for now, with 40 blows' worth of work per
+  participant. A strike is a d20 with Voima and woodcraft against 10: two, a
+  miss one, a natural 20 three. Roles are contribution multipliers: 1.5 for
+  the hero and the smith, 1.25 for the others; the work song, cleared
+  branches and the sage's origin are the reasons, not separate actions yet.
+- The rewards: the branch is an item that gives one more of what a skilled
+  hand gathers, a quarter of the time; the crown teaches an origin the
+  player lacks (`teachesOrigin`) rather than being an item; the leaf is a
+  keepsake. No title yet.
+- The client draws the oak at its growth, from a sapling to twice its size,
+  with a shadow on the ground around it when it is full grown.
+
 ## 6. The chronicle
 
 - A table `vworld_chronicle`: `world_id`, `at`, `kind`, `actors`, `params`.

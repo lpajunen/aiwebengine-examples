@@ -297,7 +297,7 @@ const GUILD_ENTRY_COL = 1;
 
 // Bump whenever the seeded placements below change, so already-seeded system
 // rows get rewritten (see the backfill in rebuildWorldClassCache).
-const SYSTEM_PLACEMENT_REVISION = 5;
+const SYSTEM_PLACEMENT_REVISION = 7;
 
 // Birdhaven's authored contents, as data rather than the world-ID branches in
 // item-storage.ts. Phase 1 only persists these; phase 3 materializes them and
@@ -346,9 +346,34 @@ function arrivalShorePlacements(): WorldClassPlacement[] {
   return placements;
 }
 
+/**
+ * Shells along the water's edge of the shore: they call the small man to the
+ * great oak (great-oak.ts). Placements, so one taken is back the next time the
+ * world loads, and there are always some.
+ */
+function seaShellPlacements(): WorldClassPlacement[] {
+  return [0, 2, 4].map(function (dr) {
+    return {
+      id: "sea-shell-" + dr,
+      kind: "item",
+      classId: "sea_shell",
+      position: {
+        strategy: "exact",
+        row: SHORE_ROW + dr,
+        col: SHORE_COL + SHORE_COLS - 1,
+      },
+      // Its own tag: placements of one class are otherwise adopted as one
+      // and the same item.
+      state: { fixture: "sea_shell_" + dr },
+      reservations: [],
+    };
+  });
+}
+
 function birdhavenPlacements(): WorldClassPlacement[] {
   return [
     ...arrivalShorePlacements(),
+    ...seaShellPlacements(),
     {
       // Väinämöinen, at the head of the shore, where every newcomer lands:
       // he asks them what they are, and the answer is their class.

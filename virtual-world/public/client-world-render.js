@@ -289,12 +289,62 @@ function buildFixtureGroup() {
     if (!item) continue;
     var build = ITEM_FIXTURE_STYLE_BUILDERS[itemVisualStyle(item.type)];
     if (!build) continue;
-    var mesh = build(tileX(col), tileZ(row));
+    var mesh = buildGrowingFixture(build, item, tileX(col), tileZ(row));
     if (!mesh) continue;
     if (!group) group = new THREE.Group();
     group.add(mesh);
   }
   return group;
+}
+
+/**
+ * A fixture whose state carries `growth` (0–100, the great oak) stands at its
+ * size: a sapling at nothing, twice its height when full. Full grown, it
+ * hides the sun: a shadow lies on the ground around it.
+ * @param {(x: number, z: number) => any} build
+ * @param {any} item
+ * @param {number} x
+ * @param {number} z
+ * @returns {any}
+ */
+function buildGrowingFixture(build, item, x, z) {
+  var growth = Number(item && item.state && item.state.growth);
+  if (!isFinite(growth)) return build(x, z);
+  var mesh = build(0, 0);
+  if (!mesh) return null;
+  var size = 0.3 + (Math.max(0, Math.min(100, growth)) / 100) * 1.7;
+  mesh.scale.set(size, size, size);
+  mesh.position.set(x, 0, z);
+  if (growth < 100) return mesh;
+  var holder = new THREE.Group();
+  holder.add(mesh);
+  var shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(TILE * 5, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(x, 0.03, z);
+  holder.add(shadow);
+  return holder;
+}
+
+/**
+ * Rebuilds the fixtures in place, so a change to one (the oak growing or
+ * felled) shows without reloading the world.
+ */
+function rebuildFixtureGroup() {
+  var visible = fixtureGroup ? fixtureGroup.visible : true;
+  if (fixtureGroup) scene.remove(fixtureGroup);
+  fixtureGroup = buildFixtureGroup();
+  if (fixtureGroup) {
+    fixtureGroup.visible = visible;
+    scene.add(fixtureGroup);
+  }
 }
 
 // Ground/spruce/oak meshes are rebuilt from scratch on each world load (boot
@@ -1261,6 +1311,7 @@ function placeDoorOnWall(mesh, row, col, isOpen, scale) {
 }
 
 function rebuildItemMeshes() {
+  rebuildFixtureGroup();
   clearItemMeshes();
   clearItemHighlights();
   for (var tileKey in worldItemsByTile) {

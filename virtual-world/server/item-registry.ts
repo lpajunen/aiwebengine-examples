@@ -376,7 +376,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       // used to be an `item.type === "old_oak"` test in three client passes.
       style: "broadleaf",
     },
-    actionIds: ["pray"],
+    actionIds: ["pray", "call_small_man", "strike_oak"],
   },
   training_dummy: {
     id: "training_dummy",
@@ -433,6 +433,47 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     actionIds: ["sow_tree"],
   },
   // Fished from the boat; the kantele is made from it.
+  // The great oak (great-oak.ts): the shell that calls the small man, and
+  // the branch and leaf a participant may take when it falls.
+  sea_shell: {
+    id: "sea_shell",
+    kind: "world_item",
+    visuals: {
+      color: 0xf2e6d8,
+      labelKey: "item.sea_shell.name",
+      fallbackLabel: "Sea shell",
+      size: "tiny",
+      style: "orb",
+    },
+    actionIds: [],
+  },
+  // Luck: a little more from what a skilled hand gathers (great-oak.ts).
+  oak_branch: {
+    id: "oak_branch",
+    kind: "artifact",
+    visuals: {
+      color: 0x6b4a2a,
+      labelKey: "item.oak_branch.name",
+      fallbackLabel: "Branch of the great oak",
+      size: "small",
+      style: "staff",
+    },
+    actionIds: [],
+  },
+  // Love: a memento, and so kept through a fresh start.
+  oak_leaf: {
+    id: "oak_leaf",
+    kind: "artifact",
+    keepsake: true,
+    visuals: {
+      color: 0x4f8a3a,
+      labelKey: "item.oak_leaf.name",
+      fallbackLabel: "Leaf of the great oak",
+      size: "tiny",
+      style: "plant",
+    },
+    actionIds: [],
+  },
   pike_jawbone: {
     id: "pike_jawbone",
     kind: "world_item",

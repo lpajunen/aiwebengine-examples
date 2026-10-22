@@ -34,6 +34,11 @@ export const ITEM_CHANGE_DEFINITIONS: Record<string, ItemChangeDefinition> = {
     id: "door_state",
     deltaKind: "snapshot",
   },
+  // A fixture whose state changed (the great oak growing or felled).
+  fixture_state: {
+    id: "fixture_state",
+    deltaKind: "snapshot",
+  },
   blessing_place: {
     id: "blessing_place",
     deltaKind: "add",

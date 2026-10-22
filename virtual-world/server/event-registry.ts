@@ -19,7 +19,9 @@ export type EventReadiness =
   // sooner than minIntervalMs after it last ended.
   | { kind: "random"; meanIntervalMs: number; minIntervalMs: number }
   // Always ready; a player start's cooldown is what spaces it out.
-  | { kind: "always" };
+  | { kind: "always" }
+  // Ready when the world says so (the oak fully grown), asked every tick.
+  | { kind: "when"; isReady: (worldId: string, now: number) => boolean };
 
 export type EventStart =
   // Starts by itself once ready.
@@ -40,6 +42,8 @@ export interface EventReward {
   text: string;
   items: Array<{ itemId: string; count: number }>;
   experience?: number;
+  // Teaches the participant an origin they do not know (origins.ts).
+  teachesOrigin?: boolean;
 }
 
 export interface EventDefinition {
@@ -66,6 +70,12 @@ export interface EventDefinition {
   rewards: EventReward[];
   // Only participants who contributed something are rewarded.
   rewardNeedsContribution?: boolean;
+  // What the event does to the world: `tick` before every advance, and
+  // `entered` after each phase change, once the change is written.
+  hooks?: {
+    tick?: (worldId: string, now: number) => void;
+    entered?: (worldId: string, phase: EventPhase, outcome: string) => void;
+  };
 }
 
 export const EVENT_DEFINITIONS: Record<string, EventDefinition> = {};

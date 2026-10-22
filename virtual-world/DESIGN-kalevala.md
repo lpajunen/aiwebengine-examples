@@ -591,6 +591,22 @@ build departed from the plan:
 - It is read by examining the rune stone, and from the welcome page. Needs the
   authored descriptions from 3.
 
+### Built
+
+`chronicle.ts`. Where the build departed from the plan:
+
+- The rows are `world_id`, `at`, `kind` and `actors_json` (user ids); no
+  `params`, since no line needs one yet. A line names its actors by their
+  nicknames when it is read. A world keeps its last 500 lines.
+- Four kinds so far: the oak felled (with everyone who struck it), a first
+  arrival at Väinölä, a house built, a gate raised. The templates are in
+  `chronicle.ts`, eight-syllable trochaic lines in Finnish with an English
+  rendering in the same shape, and are sent to the client already filled in
+  both languages.
+- A rune stone shows the chronicle of the world it stands in when examined.
+  The welcome page shows Väinölä's latest ten lines from the public
+  `GET /virtual-world/chronicle`, which names players by nickname only.
+
 ## 7. More events
 
 On the same framework, cheapest first:

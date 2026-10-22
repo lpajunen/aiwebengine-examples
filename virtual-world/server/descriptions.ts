@@ -52,8 +52,8 @@ export const ITEM_DESCRIPTIONS: Record<string, BuiltinDescription> = {
     fi: "Pihlajanmarjoja langassa. Pihlaja pitää pahat loitolla.",
   },
   rune_stone: {
-    en: "A stone cut with runes nobody living can read aloud.",
-    fi: "Kivi, johon on hakattu riimuja, joita kukaan elävä ei osaa lausua.",
+    en: "A stone cut with runes. Read them, and they tell what has happened here, and who did it.",
+    fi: "Kivi, johon on hakattu riimuja. Lue ne, niin ne kertovat, mitä täällä on tapahtunut ja kuka sen teki.",
   },
   juniper_bundle: {
     en: "Juniper twigs bound together, sharp-scented and good for smoke.",

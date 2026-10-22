@@ -307,6 +307,7 @@ import {
   islandInviteHandler as islandInviteHandlerImpl,
   raiseAttributeHandler as raiseAttributeHandlerImpl,
   eventRewardHandler as eventRewardHandlerImpl,
+  chronicleHandler as chronicleHandlerImpl,
   livingsHandler as livingsHandlerImpl,
   resyncHandler as resyncHandlerImpl,
   currentWorldHandler as currentWorldHandlerImpl,
@@ -550,6 +551,10 @@ function raiseAttributeHandler(context) {
 /** @param {*} context */
 function eventRewardHandler(context) {
   return eventRewardHandlerImpl(context);
+}
+/** @param {*} context */
+function chronicleHandler(context) {
+  return chronicleHandlerImpl(context);
 }
 /** @param {*} context */
 function livingsHandler(context) {

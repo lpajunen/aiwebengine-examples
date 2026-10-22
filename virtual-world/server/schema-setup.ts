@@ -34,6 +34,7 @@ import {
   VWORLD_PLAYER_CHARACTER_TABLE,
   VWORLD_EVENT_TABLE,
   VWORLD_EVENT_PARTICIPANT_TABLE,
+  VWORLD_CHRONICLE_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1924,6 +1925,17 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
       ["addIntegerColumn", "rewarded_at"],
     ],
     [["event_id", "world_id", "user_id"]],
+  );
+  // Each world's chronicle (chronicle.ts).
+  simpleTable(
+    VWORLD_CHRONICLE_TABLE,
+    [
+      ["addTextColumn", "world_id"],
+      ["addIntegerColumn", "at"],
+      ["addTextColumn", "kind"],
+      ["addTextColumn", "actors_json"],
+    ],
+    [],
   );
 
   ensureLateWorldDatabaseSchema(collector);

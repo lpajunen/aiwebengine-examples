@@ -1,5 +1,6 @@
 import { EVENT_DEFINITIONS, EventPhase } from "./event-registry.ts";
-import { contributeToEvent } from "./events.ts";
+import { contributeToEvent, getEventContributors } from "./events.ts";
+import { writeChronicle } from "./chronicle.ts";
 import {
   loadPlayerInventory,
   loadWorldItems,
@@ -199,8 +200,14 @@ function enteredPhase(worldId: string, phase: EventPhase): void {
     felling: phase === "active" ? 1 : 0,
   };
   if (phase === "rewarding") {
-    // Felled: an acorn is left where it stood, and it grows again from
-    // nothing. The small man stays to offer the rewards.
+    // Felled: told in the chronicle with everyone who struck it.
+    writeChronicle(
+      worldId,
+      "oak_felled",
+      getEventContributors(GREAT_OAK_EVENT_ID, worldId),
+    );
+    // An acorn is left where it stood, and it grows again from nothing. The
+    // small man stays to offer the rewards.
     saveOakState(
       worldId,
       oak,

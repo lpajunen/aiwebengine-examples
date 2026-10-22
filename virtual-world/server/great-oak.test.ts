@@ -12,6 +12,8 @@
  */
 
 import { advanceDueEvent, claimEventReward, getEventState } from "./events.ts";
+import { readChronicle } from "./chronicle.ts";
+import { getEffectiveNick } from "./social-state.ts";
 import { EVENT_DEFINITIONS } from "./event-registry.ts";
 import {
   FULL_GROWTH_MS,
@@ -148,6 +150,10 @@ describe("felling the great oak", () => {
     const rewarding = getEventState(def.id, vainola, now)!;
     expect(rewarding.phase).toBe("rewarding");
     expect(theOak(vainola).item.state.growth).toBe(0);
+    // Told in the chronicle, with the one who struck it.
+    const told = readChronicle(vainola, 1)[0];
+    expect(told.kind).toBe("oak_felled");
+    expect(told.lines.en.join(" ")).toContain(getEffectiveNick(userId));
 
     // The crown: an origin they did not know.
     expect(claimEventReward(def.id, userId, vainola, 1, now).ok).toBe(true);

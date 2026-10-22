@@ -324,6 +324,11 @@ sea with a shell from the shore, everyone near strikes the oak until it
 falls, and each who struck chooses a branch (luck), the crown (an origin
 they lack) or a leaf (a keepsake). Then it grows again from an acorn.
 
+What happens is written in each world's chronicle (`chronicle.ts`), in verse
+in the Kalevala's metre: the oak's felling and who struck it, a first
+arrival, a house built, a gate raised. Examining a rune stone reads the
+chronicle of its world, and the welcome page shows Väinölä's.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

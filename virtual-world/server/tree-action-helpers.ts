@@ -97,6 +97,7 @@ import { getEventStartedByAction } from "./event-registry.ts";
 import { startEventForUser } from "./events.ts";
 import "./event-catalog.ts";
 import { oakBranchLuck, strikeOakForUser } from "./great-oak.ts";
+import { readChronicle, writeChronicle } from "./chronicle.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -535,6 +536,7 @@ export function performTreeActionForUser(
     };
     appendWorldChatMessage(START_WORLD_ID, chatMsg);
     sendWorldScopedStreamEvent(START_WORLD_ID, "chat_message", chatMsg);
+    writeChronicle(START_WORLD_ID, "arrival", [userId]);
   }
 
   function withConfiguredToastMessage(payload: any): any {
@@ -724,6 +726,10 @@ export function performTreeActionForUser(
       mods,
     );
     maybeSendConfiguredWorldEvent(row, col, mutation);
+    // A house raised goes in the world's chronicle.
+    if (mutation.sourceKind === "house" && mutation.tileType) {
+      writeChronicle(String(worldId), "house_built", [userId]);
+    }
   }
 
   function maybePersistConfiguredItemMutation(
@@ -1826,7 +1832,13 @@ export function performTreeActionForUser(
           { target: inspection.fallback_label },
         ),
         target_item_id: targetItemId,
-        examined_item: inspection,
+        // A rune stone holds the chronicle of the world it stands in.
+        examined_item:
+          located.item.type === "rune_stone"
+            ? Object.assign({}, inspection, {
+                chronicle: readChronicle(String(worldId), 8),
+              })
+            : inspection,
       }),
     };
   }
@@ -2963,6 +2975,10 @@ export function performTreeActionForUser(
       LINKED_WORLD_SPAWN_COL + (returnOffset ? Number(returnOffset.col) : 0),
       returnItem,
     );
+    // A gate to another land goes in the world's chronicle.
+    if (linkedWorld.itemId === "portal") {
+      writeChronicle(String(worldId), "portal_raised", [userId]);
+    }
 
     return {
       status: 200,

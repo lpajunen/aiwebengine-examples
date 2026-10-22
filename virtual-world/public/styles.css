@@ -55,6 +55,22 @@ body.welcome h1 {
 .play-btn:active {
   transform: translateY(0);
 }
+.chronicle {
+  margin-top: 3rem;
+  max-width: 480px;
+}
+.chronicle h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #d1c7a3;
+  margin-bottom: 1rem;
+}
+.chronicle-entry {
+  font-style: italic;
+  color: #b8b0a0;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
 
 /* ── Game page ──────────────────────────────────────────────────────────── */
 

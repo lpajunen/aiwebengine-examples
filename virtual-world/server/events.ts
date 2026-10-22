@@ -630,6 +630,20 @@ export function getEventState(
   return def ? loadEventState(def, worldId, now) : null;
 }
 
+/** Who has done something for the event this run, first come first. */
+export function getEventContributors(
+  eventId: string,
+  worldId: string,
+): string[] {
+  return loadParticipants(eventId, worldId)
+    .filter(function (p) {
+      return p.contribution > 0;
+    })
+    .map(function (p) {
+      return p.userId;
+    });
+}
+
 /** How much a player has given an event this run, or null if nothing. */
 export function getEventContribution(
   eventId: string,

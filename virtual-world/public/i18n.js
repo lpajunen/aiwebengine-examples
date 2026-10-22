@@ -60,6 +60,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     examine: {
       title: "Examined",
       item_section: "Item",
+      chronicle: "Chronicle",
+      chronicle_empty: "The runes are still blank.",
       properties_section: "Properties",
       kind_label: "Kind:",
       size_label: "Size:",
@@ -861,6 +863,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     examine: {
       title: "Tutkittu",
       item_section: "Esine",
+      chronicle: "Kronikka",
+      chronicle_empty: "Riimut ovat vielä tyhjät.",
       properties_section: "Ominaisuudet",
       kind_label: "Laji:",
       size_label: "Koko:",

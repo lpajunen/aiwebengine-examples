@@ -1164,6 +1164,8 @@ export function registerVirtualWorldRuntime(): void {
     "POST",
   );
   registerRoute("/virtual-world/event-reward", "eventRewardHandler", "POST");
+  registerRoute("/virtual-world/chronicle", "chronicleHandler", "GET");
+  registerFileRoute("/virtual-world/welcome.js", "public/welcome.js");
   registerRoute("/virtual-world/livings", "livingsHandler", "GET");
   registerRoute("/virtual-world/resync", "resyncHandler", "GET");
   registerRoute("/virtual-world/current-world", "currentWorldHandler", "GET");

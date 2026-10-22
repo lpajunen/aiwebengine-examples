@@ -110,6 +110,8 @@ export const VWORLD_PLAYER_CHARACTER_TABLE = "vworld_player_characters";
 // part in its current run.
 export const VWORLD_EVENT_TABLE = "vworld_events";
 export const VWORLD_EVENT_PARTICIPANT_TABLE = "vworld_event_participants";
+// Each world's chronicle (chronicle.ts): what happened and who did it.
+export const VWORLD_CHRONICLE_TABLE = "vworld_chronicle";
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -166,7 +168,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v19: item class keepsake, what a player keeps when starting anew.
 // v20: item and world class description/descriptions_json, authored text.
 // v21: vworld_events and vworld_event_participants, recurring events.
-export const VWORLD_SCHEMA_VERSION = 21;
+// v22: vworld_chronicle, what happened in each world.
+export const VWORLD_SCHEMA_VERSION = 22;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

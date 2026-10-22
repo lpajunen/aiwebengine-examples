@@ -214,7 +214,7 @@ function itemStateStatParts(state, allStats) {
 }
 
 /**
- * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, description?: string, descriptions?: Record<string, string>, size?: string, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
+ * @typedef {{ id: string, type: string, source: string, row?: number, col?: number, slot_id?: string, kind?: string, label_key?: string, fallback_label?: string, labels?: Record<string, string>, description?: string, descriptions?: Record<string, string>, chronicle?: Array<{ at: number, lines: { en: string[], fi: string[] } }>, size?: string, non_pickable?: boolean, non_droppable?: boolean, state?: Record<string, unknown>, contents_count?: number, destination_world_id?: string, destination_world_type?: string }} ExaminedItem
  */
 
 /**
@@ -255,6 +255,27 @@ function showExaminedItemPanel(info) {
       '<div class="tile-row tile-description">' +
       escHtml(description) +
       "</div>";
+  }
+  // A rune stone's chronicle: the latest of what happened here, in verse.
+  if (Array.isArray(info.chronicle)) {
+    html +=
+      '<div class="tile-section-label">' +
+      escHtml(t("examine.chronicle", "Chronicle")) +
+      "</div>";
+    if (info.chronicle.length === 0) {
+      html +=
+        '<div class="tile-row">' +
+        escHtml(t("examine.chronicle_empty", "The runes are still blank.")) +
+        "</div>";
+    }
+    var finnish = resolveLocale() === "fi";
+    info.chronicle.forEach(function (entry) {
+      var lines = finnish ? entry.lines.fi : entry.lines.en;
+      html +=
+        '<div class="tile-row chronicle-entry">' +
+        lines.map(escHtml).join("<br>") +
+        "</div>";
+    });
   }
   if (info.kind) {
     html +=

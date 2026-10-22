@@ -26,6 +26,8 @@ import {
 } from "./world-switch.ts";
 import { raiseAttributeForUser } from "./levels.ts";
 import { claimEventReward } from "./events.ts";
+import { readChronicle } from "./chronicle.ts";
+import { START_WORLD_ID } from "./runtime-config.ts";
 import "./event-catalog.ts";
 import {
   buildIslandVisitState,
@@ -553,6 +555,16 @@ export function islandInviteHandler(context: any) {
   return ResponseBuilder.json(
     Object.assign({}, result, { visits: buildIslandVisitState(userId) }),
   );
+}
+
+/**
+ * Väinölä's chronicle, its latest lines in both languages, for the welcome
+ * page. Public, like the page: it names players by their nicknames only.
+ *
+ * @param {*} context
+ */
+export function chronicleHandler(context: any) {
+  return ResponseBuilder.json({ entries: readChronicle(START_WORLD_ID, 10) });
 }
 
 /**

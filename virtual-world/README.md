@@ -325,8 +325,8 @@ On top of the world class, the creator defines content classes:
   humanoid, wolfish, bearish, doggish, birdlike, equine), a **size** and a
   **color**. Drawing a new silhouette is client work, but every later
   species that reuses one is just a different style/size/color combination:
-  the built-in donkey is the horse's equine recipe with a grey coat, and
-  cost no new artwork.
+  the reindeer and the elk are the horse's equine recipe in other coats and
+  sizes, and cost no new artwork.
 - **Item classes** — kinds of items, with their values and the actions they
   enable. A **kind** (`tool`, `artifact`, `placeable`, `consumable`,
   `container`, `world_item`) decides how the item behaves, and the same

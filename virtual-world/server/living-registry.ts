@@ -374,22 +374,23 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     defaultItems: ["shortbow"],
     corpseItemId: "npc_corpse",
   },
-  // Same humanoid mesh as npc_human, rendered at double scale by its "large"
-  // size — the built-in demonstration that size is a class-level visual knob
-  // rather than a per-species mesh. Peaceful by design: it only fights back,
-  // so dropping giants into the wild preset changes the skyline, not the
-  // difficulty.
+  // Antero Vipunen, the giant who sleeps under the earth and knows the
+  // words Väinämöinen seeks. The humanoid mesh at its "huge" size: size is a
+  // class-level visual knob, not a per-species mesh. Peaceful by design — he
+  // mostly sleeps, and only fights back.
   npc_giant: {
     id: "npc_giant",
     kind: "npc",
     labelKey: "living.class.npc_giant",
-    fallbackLabel: "Giant",
+    fallbackLabel: "Antero Vipunen",
     slotDefinitions: bipedSlotDefinitions(),
     valueTemplate: defaultFatigueValueTemplate(),
     valueSchema: defaultFatigueValueSchema(),
-    size: "large",
+    size: "huge",
+    color: "#6f6a5a",
     corpseItemId: "npc_corpse",
-    behavior: { idleChance: 0.5 },
+    behavior: { idleChance: 0.9 },
+    labels: { fi: "Antero Vipunen" },
   },
   npc_wolf: {
     id: "npc_wolf",
@@ -470,7 +471,96 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     corpseItemId: "npc_corpse",
     behavior: { idleChance: 0.15 },
   },
+  // The animals of the Kalevala's north, each an existing silhouette at its
+  // own size and colour. They replaced the chicken and the donkey
+  // (RETIRED_NPC_CLASS_IDS).
+  npc_reindeer: {
+    id: "npc_reindeer",
+    kind: "npc",
+    labelKey: "living.class.npc_reindeer",
+    fallbackLabel: "Reindeer",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "equine",
+    color: "#8a7a66",
+    corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.4 },
+    labels: { fi: "Poro" },
+  },
+  npc_cow: {
+    id: "npc_cow",
+    kind: "npc",
+    labelKey: "living.class.npc_cow",
+    fallbackLabel: "Cow",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "bearish",
+    color: "#a0522d",
+    corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.6 },
+    labels: { fi: "Lehmä" },
+  },
+  // The elk of Hiisi, shy and big: it keeps its distance from people.
+  npc_elk: {
+    id: "npc_elk",
+    kind: "npc",
+    labelKey: "living.class.npc_elk",
+    fallbackLabel: "Elk",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "equine",
+    size: "large",
+    color: "#4e3826",
+    corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.3, movement: "flee", fleeRadius: 3 },
+    labels: { fi: "Hirvi" },
+  },
+  // The swan of Tuonela's river.
+  npc_swan: {
+    id: "npc_swan",
+    kind: "npc",
+    labelKey: "living.class.npc_swan",
+    fallbackLabel: "Swan",
+    slotDefinitions: bipedLegsOnlySlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "birdlike",
+    color: "#f4f2ea",
+    corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.3, movement: "flee", fleeRadius: 2 },
+    labels: { fi: "Joutsen" },
+  },
+  npc_cuckoo: {
+    id: "npc_cuckoo",
+    kind: "npc",
+    labelKey: "living.class.npc_cuckoo",
+    fallbackLabel: "Cuckoo",
+    slotDefinitions: bipedLegsOnlySlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "birdlike",
+    size: "small",
+    color: "#7f8a93",
+    corpseItemId: "npc_corpse",
+    behavior: { idleChance: 0.2, movement: "flee", fleeRadius: 2 },
+    labels: { fi: "Käki" },
+  },
 };
+
+// NPC classes the Kalevala's animals replaced, and what a living of one
+// becomes when its world loads. The classes stay so their rows remain valid.
+export const RETIRED_NPC_CLASS_IDS: Record<string, string> = {
+  npc_chicken: "npc_cuckoo",
+  npc_donkey: "npc_cow",
+};
+
+/** The class an NPC saved as `classId` is now. */
+export function currentNPCClassId(classId: string): string {
+  return RETIRED_NPC_CLASS_IDS[classId] || classId;
+}
 
 let _livingClassCache: Record<string, LivingClassRecord> | null = null;
 

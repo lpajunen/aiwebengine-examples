@@ -95,18 +95,51 @@ const BUILTIN_WILD_NPC_SPAWNS: WorldClassSpawnEntry[] = [
   { id: "npc_wolf", count: 5 },
   { id: "npc_bear", count: 5 },
   { id: "npc_archer", count: 5 },
-  { id: "npc_giant", count: 2 },
+  // Antero Vipunen: there is only one.
+  { id: "npc_giant", count: 1 },
 ];
 
 const BUILTIN_VILLAGE_NPC_SPAWNS: WorldClassSpawnEntry[] = [
   { id: "npc_human", count: 5 },
   { id: "npc_dog", count: 5 },
-  { id: "npc_chicken", count: 5 },
-  { id: "npc_donkey", count: 3 },
+  { id: "npc_cow", count: 3 },
+  { id: "npc_reindeer", count: 3 },
+  { id: "npc_cuckoo", count: 3 },
+  { id: "npc_swan", count: 2 },
 ];
 
 const BUILTIN_FOREST_NPC_SPAWNS: WorldClassSpawnEntry[] =
-  BUILTIN_WILD_NPC_SPAWNS.concat([{ id: "npc_horse", count: 3 }]);
+  BUILTIN_WILD_NPC_SPAWNS.concat([
+    { id: "npc_elk", count: 3 },
+    { id: "npc_cuckoo", count: 3 },
+  ]);
+
+/**
+ * Makes an unowned built-in's spawn manifests follow the code. Returns
+ * whether anything changed. A class someone has claimed keeps its own.
+ */
+function resyncCodeOwnedSpawns(
+  existing: WorldClassRecord,
+  desired: WorldClassRecord,
+): boolean {
+  if (Array.isArray(existing.ownerIds) && existing.ownerIds.length > 0) {
+    return false;
+  }
+  let changed = false;
+  if (
+    JSON.stringify(existing.itemSpawns) !== JSON.stringify(desired.itemSpawns)
+  ) {
+    existing.itemSpawns = copySpawnEntries(desired.itemSpawns);
+    changed = true;
+  }
+  if (
+    JSON.stringify(existing.npcSpawns) !== JSON.stringify(desired.npcSpawns)
+  ) {
+    existing.npcSpawns = copySpawnEntries(desired.npcSpawns);
+    changed = true;
+  }
+  return changed;
+}
 
 function copySpawnEntries(
   entries: WorldClassSpawnEntry[],
@@ -696,8 +729,8 @@ function rebuildWorldClassCache(logSeed: boolean): void {
     if (record.id) cache[record.id] = record;
   }
 
-  // Seed missing built-ins. Existing rows, including their spawn manifests,
-  // remain authoritative and are changed only through the class APIs.
+  // Seed missing built-ins. An existing row nobody owns has its spawn
+  // manifests follow the code; one someone has claimed keeps its own.
   let patchedRecords = 0;
   for (let i = 0; i < WORLD_TYPES.length; i++) {
     const worldType = WORLD_TYPES[i];
@@ -713,7 +746,10 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       insertedDefaults++;
       continue;
     }
-    let changed = false;
+    let changed = resyncCodeOwnedSpawns(
+      existing,
+      builtinWorldClassRecord(worldType),
+    );
     // Backfill the built-in Finnish name onto rows seeded before it existed,
     // without overwriting a non-empty value a creator may have set.
     const desiredLabelFi = BUILTIN_WORLD_CLASS_LABELS_FI[worldType];
@@ -789,6 +825,7 @@ function rebuildWorldClassCache(logSeed: boolean): void {
       existing.placementRevision = desired.placementRevision;
       changed = true;
     }
+    if (resyncCodeOwnedSpawns(existing, desired)) changed = true;
     if (changed) {
       upsertWorldRow(
         VWORLD_WORLD_CLASS_TABLE,

@@ -350,7 +350,13 @@ Mostly data and translation, so it can run beside 1 and 2.
 
 - NPCs: `npc_giant` becomes Antero Vipunen or Iku-Turso; chickens and donkeys
   give way to reindeer, cows and elk (`equine`/`bearish`), swans and cuckoos
-  (`birdlike`).
+  (`birdlike`). **Built:** `npc_giant` is Antero Vipunen, huge and mostly
+  asleep, one per wild world. The reindeer, cow, elk, swan and cuckoo are
+  classes of their own; the elk, swan and cuckoo keep away from people
+  (`movement: "flee"`). A saved chicken loads as a cuckoo and a donkey as a
+  cow (`RETIRED_NPC_CLASS_IDS`), so existing worlds change too, and the
+  spawn manifests of built-in world classes nobody owns now follow the code.
+  Forests have elk and cuckoos instead of horses; the horse class stays.
 - Items: `spellbook` goes, replaced by learned origins. The adventurers' guild
   becomes Väinölä's tupa, and the training post a wrestling ground.
 - Authored descriptions: `description`/`descriptions` on item classes, shown by

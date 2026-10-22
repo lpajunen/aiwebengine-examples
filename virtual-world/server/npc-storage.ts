@@ -30,6 +30,7 @@ import {
 import {
   getDefaultNPCLivingClassId,
   getLivingClass,
+  currentNPCClassId,
 } from "./living-registry.ts";
 import { getItemStateTemplate } from "./item-registry.ts";
 import { nextWorldItemId } from "./item-storage.ts";
@@ -88,7 +89,7 @@ export function loadWorldNPCs(worldId: string): Record<string, any> {
       if (!row || !row.npc_id) continue;
       const classId =
         typeof row.living_class_id === "string" && row.living_class_id
-          ? String(row.living_class_id)
+          ? currentNPCClassId(String(row.living_class_id))
           : getDefaultNPCLivingClassId();
       const livingClass = getLivingClass(classId);
       let living = createEmptyLivingState(classId);
@@ -262,7 +263,7 @@ export function countNPCsByClass(worldId: string): Record<string, number> {
     if (!row || !row.npc_id) continue;
     const classId =
       typeof row.living_class_id === "string" && row.living_class_id
-        ? String(row.living_class_id)
+        ? currentNPCClassId(String(row.living_class_id))
         : getDefaultNPCLivingClassId();
     counts[classId] = (counts[classId] || 0) + 1;
   }

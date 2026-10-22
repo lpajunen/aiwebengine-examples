@@ -81,7 +81,7 @@ its `behavior`:
 | a shopkeeper who never leaves the counter            | `roamRadius: 0`                       |
 | a gatekeeper who holds the gate and fights intruders | `roamRadius: 0` + `aggressive: true`  |
 | a herd that stays in its meadow                      | `roamRadius: 6`                       |
-| a chicken that scatters when you approach            | `movement: "flee"` (and `fleeRadius`) |
+| a cuckoo that flits off when you approach            | `movement: "flee"` (and `fleeRadius`) |
 | today's behaviour                                    | leave `roamRadius` out                |
 
 There is deliberately no `role` field. A role is a bundle — a guard is "stays

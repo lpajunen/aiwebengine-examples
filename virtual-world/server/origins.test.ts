@@ -17,7 +17,13 @@ import {
   advanceDialogueForUser,
   openDialogueForUser,
 } from "./dialogue-helpers.ts";
-import { loadPlayerInventory, savePlayerInventory } from "./item-storage.ts";
+import {
+  deleteWorldItemById,
+  ensureWorldItems,
+  loadPlayerInventory,
+  loadWorldItems,
+  savePlayerInventory,
+} from "./item-storage.ts";
 import { saveChosenClassId } from "./player-character.ts";
 import { performTreeActionForUser } from "./tree-action-helpers.ts";
 import { getAllLivingItems, isWorldTileWalkable } from "./world-domain.ts";
@@ -56,6 +62,17 @@ function besideTheElder(
   prefix: string,
 ): { userId: string; elderId: string } {
   const worldId = createTestWorld(16, 16);
+  // A cost is paid from the ground around the player before the bag, and a
+  // forest spawns letters at random: none may lie where the asking happens.
+  ensureWorldItems(worldId);
+  const byTile = loadWorldItems(worldId);
+  Object.keys(byTile).forEach(function (key) {
+    (byTile[key] || []).forEach(function (item: any) {
+      if (item && item.type === "birch_bark_letter") {
+        deleteWorldItemById(String(item.id));
+      }
+    });
+  });
   const placed = spawnSingleWorldNPC(worldId, "npc_elder");
   if (!placed) throw new Error("no room for the elder");
   const at = { row: Number(placed.npc.row), col: Number(placed.npc.col) };

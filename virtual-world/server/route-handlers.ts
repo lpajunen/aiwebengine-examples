@@ -25,6 +25,7 @@ import {
   switchUserToStartWorld,
 } from "./world-switch.ts";
 import { raiseAttributeForUser } from "./levels.ts";
+import { claimEventReward } from "./events.ts";
 import {
   buildIslandVisitState,
   inviteToIsland,
@@ -550,6 +551,36 @@ export function islandInviteHandler(context: any) {
           : { ok: false, error: "error.invalid_action" };
   return ResponseBuilder.json(
     Object.assign({}, result, { visits: buildIslandVisitState(userId) }),
+  );
+}
+
+/**
+ * Takes one of the rewards an event offers its participants: body.event_id
+ * and body.choice, the reward's index.
+ *
+ * @param {*} context
+ */
+export function eventRewardHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  const userId = context.request.auth.userId;
+  return ResponseBuilder.json(
+    claimEventReward(
+      String((body && body.event_id) || ""),
+      userId,
+      String(getPlayerWorld(userId) || ""),
+      Number((body && body.choice) || 0),
+      Date.now(),
+    ),
   );
 }
 

@@ -451,6 +451,37 @@ An event names what each class brings, and the event's own actions read the
 participant's class and skills. A group with several classes succeeds sooner
 and earns more; a group of one class still succeeds.
 
+### Built
+
+The framework is in place, with no event in the registry yet: the great oak
+is the first. Where the build departed from the plan:
+
+- `event-registry.ts` holds the definitions, `event-machine.ts` the pure
+  transitions, and `events.ts` the rows, the tick hook (`processDueEvents`,
+  called beside `processDueSpawnTimers` under the NPC tick's lease) and what
+  players do. An event happens in each world of its `worldClassId`.
+- The rows are `vworld_events` (`phase` rather than `state`; no `kind` or
+  `anchor`, which the definition holds) and `vworld_event_participants`.
+  Instead of a `version` column, every change reads the row `forUpdate` in a
+  transaction, as the leases do, so a tick and a starting player cannot both
+  win.
+- Taking part: everyone heard from within `gatherRadius` of the anchor when
+  gathering ends, and anyone who later contributes. `minParticipants` counts
+  them.
+- Work: `goalPerParticipant` times the participants is the goal set when
+  gathering ends; contributions (`contributeToEvent`, counted by the class's
+  `contributionMultiplier` in `roles`) reaching it is success. An event with
+  a goal that runs out of time fails; one without succeeds by lasting.
+- A player start is the event's `start.actionId`: the action does nothing
+  else, and the event checks the anchor, `start.requires` and `start.cost`.
+- One reward goes to everyone who took part when the rewards begin; several
+  are a choice, claimed once from the active-actions panel
+  (`POST /virtual-world/event-reward`). `rewardNeedsContribution` limits them
+  to those who did something.
+- Announcements: a `world_event` on the stream to every player, and a line in
+  the event world's chat. The page starts with every event under way, and
+  the active-actions panel shows each with its countdown.
+
 ## 5. The great oak
 
 The first event on the framework. The Kalevala's second poem: the oak grows

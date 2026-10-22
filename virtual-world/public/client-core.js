@@ -500,6 +500,10 @@ function renderActiveActionsList() {
   // The armed-but-uncast action (aiming) shares this panel so stop and cancel
   // live in one place (UI phase 4).
   if (typeof aimActiveRowHtml === "function") html += aimActiveRowHtml();
+  // Events under way anywhere (client-events.js) go first.
+  if (typeof worldEventRowsHtml === "function") {
+    html = worldEventRowsHtml() + html;
+  }
   if (!html) {
     container.style.display = "none";
     container.innerHTML = "";

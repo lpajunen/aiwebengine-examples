@@ -29,6 +29,7 @@ import { loadWorldPlayers } from "./player-snapshots.ts";
 import { tickFollowForWorld } from "./follow-helpers.ts";
 import { loadActiveNPCFighterIds, tickFightForWorld } from "./fight-helpers.ts";
 import { processDueSpawnTimers } from "./spawn-timers.ts";
+import { processDueEvents } from "./events.ts";
 import { tickIslandVisitsForWorld } from "./island-visits.ts";
 import {
   FATIGUE_RECOVERY_PER_SECOND,
@@ -92,6 +93,7 @@ export function tickWorldNPCs(
   ensureWorldItems(worldId);
   const npcs = ensureWorldNPCs(worldId);
   processDueSpawnTimers(worldId, now);
+  processDueEvents(worldId, now);
   const npcIds = Object.keys(npcs);
   if (npcIds.length === 0) {
     return;

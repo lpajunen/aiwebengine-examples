@@ -106,6 +106,10 @@ export const NEWCOMER_WINDOW_MS = 15 * 60 * 1000;
 export const VWORLD_WELCOME_TABLE = "vworld_welcomes";
 // Each player's chosen class, kept through death. See player-character.ts.
 export const VWORLD_PLAYER_CHARACTER_TABLE = "vworld_player_characters";
+// Recurring events (events.ts): one row per event and world, and who took
+// part in its current run.
+export const VWORLD_EVENT_TABLE = "vworld_events";
+export const VWORLD_EVENT_PARTICIPANT_TABLE = "vworld_event_participants";
 
 export const VWORLD_WORLD_CLASS_TABLE = "vworld_world_classes";
 // One row per authored placement per world — what a world class's placements
@@ -161,7 +165,8 @@ export const VWORLD_SCHEMA_VERSION_TABLE = "vworld_schema_state";
 // v18: vworld_player_characters, each player's chosen class.
 // v19: item class keepsake, what a player keeps when starting anew.
 // v20: item and world class description/descriptions_json, authored text.
-export const VWORLD_SCHEMA_VERSION = 20;
+// v21: vworld_events and vworld_event_participants, recurring events.
+export const VWORLD_SCHEMA_VERSION = 21;
 export const VWORLD_FOLLOW_TABLE = "vworld_follow_state";
 export const VWORLD_FIGHT_TABLE = "vworld_fight_state";
 // Per-tick chance a co-located NPC whose living class has aggressive: true

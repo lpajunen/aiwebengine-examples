@@ -32,6 +32,8 @@ import {
   VWORLD_ISLAND_INVITE_TABLE,
   VWORLD_WELCOME_TABLE,
   VWORLD_PLAYER_CHARACTER_TABLE,
+  VWORLD_EVENT_TABLE,
+  VWORLD_EVENT_PARTICIPANT_TABLE,
   VWORLD_PLAYER_NICK_TABLE,
   VWORLD_PLAYER_POSITION_TABLE,
   VWORLD_PLAYER_WORLD_TABLE,
@@ -1855,6 +1857,74 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
       uniqueIndexes: [["user_id"]],
     });
   });
+
+  // A table of non-null text and integer columns with unique indexes, the
+  // shape of the tables above, declared one step at a time.
+  const simpleTable = function (
+    table: string,
+    columns: Array<[string, string]>,
+    uniqueIndexes: string[][],
+  ): void {
+    step("createTable", table, function () {
+      return database.ensureTable(table, { columns: [] });
+    });
+    columns.forEach(function (entry) {
+      step(
+        entry[0],
+        table,
+        function () {
+          return database.ensureTable(table, {
+            columns: [
+              {
+                name: entry[1],
+                type: entry[0] === "addIntegerColumn" ? "integer" : "text",
+                nullable: false,
+              },
+            ],
+          });
+        },
+        entry[1],
+      );
+    });
+    step("addUniqueIndex", table, function () {
+      return database.ensureTable(table, {
+        columns: [],
+        uniqueIndexes: uniqueIndexes,
+      });
+    });
+  };
+
+  // Recurring events (events.ts): an event's state per world, and who took
+  // part in its current run.
+  simpleTable(
+    VWORLD_EVENT_TABLE,
+    [
+      ["addTextColumn", "event_id"],
+      ["addTextColumn", "world_id"],
+      ["addTextColumn", "phase"],
+      ["addTextColumn", "started_by"],
+      ["addIntegerColumn", "phase_ends_at"],
+      ["addIntegerColumn", "ready_at"],
+      ["addIntegerColumn", "last_ended_at"],
+      ["addIntegerColumn", "checked_at"],
+      ["addTextColumn", "progress_json"],
+      ["addIntegerColumn", "updated_at"],
+    ],
+    [["event_id", "world_id"]],
+  );
+  simpleTable(
+    VWORLD_EVENT_PARTICIPANT_TABLE,
+    [
+      ["addTextColumn", "event_id"],
+      ["addTextColumn", "world_id"],
+      ["addTextColumn", "user_id"],
+      ["addTextColumn", "class_id"],
+      ["addIntegerColumn", "contribution"],
+      ["addIntegerColumn", "reward_choice"],
+      ["addIntegerColumn", "rewarded_at"],
+    ],
+    [["event_id", "world_id", "user_id"]],
+  );
 
   ensureLateWorldDatabaseSchema(collector);
 }

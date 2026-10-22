@@ -93,6 +93,8 @@ import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
 import { applyLevelGains } from "./levels.ts";
 import { applyReturnToll } from "./death.ts";
 import { startAnewForUser } from "./start-anew.ts";
+import { getEventStartedByAction } from "./event-registry.ts";
+import { startEventForUser } from "./events.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -1583,6 +1585,33 @@ export function performTreeActionForUser(
         ),
         inventory: inv,
         class_id: inv.class_id,
+      }),
+    };
+  }
+
+  // An action that starts an event (event-registry.ts) does only that: the
+  // event checks where the player stands, what they know and what they pay.
+  const eventToStart = getEventStartedByAction(action);
+  if (eventToStart) {
+    const started = startEventForUser(
+      eventToStart,
+      userId,
+      String(worldId),
+      inv,
+      canonical,
+      Date.now(),
+    );
+    if (!started.ok) {
+      return { status: 200, payload: { ok: false, error: started.error } };
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.event_started_toast",
+          "You call everyone together.",
+        ),
+        inventory: inv,
       }),
     };
   }

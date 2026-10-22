@@ -10,6 +10,19 @@ declare var PLAYER_INV: any;
 declare var LIVINGS: any[];
 declare var worldId: string;
 declare var WORLD_CLASS_ID: string;
+declare var WORLD_EVENTS: Array<{
+  event_id: string;
+  world_id: string;
+  phase: string;
+  phase_ends_at: number;
+  label_key?: string;
+  fallback_label?: string;
+  labels?: Record<string, string>;
+  started_by_nick?: string;
+  goal?: number;
+  total?: number;
+  rewards?: Array<{ text_key: string; text: string }>;
+}>;
 declare var WORLD_DESCRIPTION: {
   description: string;
   descriptions: Record<string, string>;

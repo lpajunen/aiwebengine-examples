@@ -1130,6 +1130,7 @@ export function registerVirtualWorldRuntime(): void {
     "client-item-actions.js",
     "client-tile-detail.js",
     "client-aiming.js",
+    "client-events.js",
     "client-input.js",
     "client-editors.js",
     "client-main.js",
@@ -1162,6 +1163,7 @@ export function registerVirtualWorldRuntime(): void {
     "raiseAttributeHandler",
     "POST",
   );
+  registerRoute("/virtual-world/event-reward", "eventRewardHandler", "POST");
   registerRoute("/virtual-world/livings", "livingsHandler", "GET");
   registerRoute("/virtual-world/resync", "resyncHandler", "GET");
   registerRoute("/virtual-world/current-world", "currentWorldHandler", "GET");

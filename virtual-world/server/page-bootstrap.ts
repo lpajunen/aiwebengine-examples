@@ -56,6 +56,7 @@ import {
 } from "./item-registry.ts";
 import { getAllLivingItems, LivingState } from "./world-domain.ts";
 import { isOnboardingDone } from "./home-island.ts";
+import { buildWorldEventsSnapshot } from "./events.ts";
 
 type PageState = {
   map: number[][];
@@ -92,6 +93,8 @@ type PageState = {
   livingRegistry?: any;
   worldClassRegistry?: any[];
   activeActions: ActiveActionEntry[];
+  // Every event under way, wherever it is (events.ts).
+  worldEvents: Array<Record<string, unknown>>;
 };
 
 export function ensureStarterKit(userId: string): void {
@@ -251,6 +254,7 @@ export function buildVirtualWorldPageState(
     onboarding: !isOnboardingDone(userId),
     islandVisits: buildIslandVisitState(userId),
     activeActions: activeActions,
+    worldEvents: buildWorldEventsSnapshot(Date.now()),
   };
 
   // The item/living/world-class registries and tile defs are world-independent
@@ -725,6 +729,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
     var LIVING_REGISTRY = ${JSON.stringify(state.livingRegistry)};
     var WORLD_CLASS_REGISTRY = ${JSON.stringify(state.worldClassRegistry)};
     var INITIAL_ACTIVE_ACTIONS = ${JSON.stringify(state.activeActions)};
+    var WORLD_EVENTS = ${JSON.stringify(state.worldEvents)};
   </script>
   <script src="/virtual-world/app-state.js"></script>
   <script src="/virtual-world/auth.js"></script>
@@ -743,6 +748,7 @@ export function renderVirtualWorldPageHtml(state: PageState): string {
   <script src="/virtual-world/client-item-actions.js"></script>
   <script src="/virtual-world/client-tile-detail.js"></script>
   <script src="/virtual-world/client-aiming.js"></script>
+  <script src="/virtual-world/client-events.js"></script>
   <script src="/virtual-world/client-input.js"></script>
   <script src="/virtual-world/client-editors.js"></script>
   <script src="/virtual-world/client-main.js"></script>

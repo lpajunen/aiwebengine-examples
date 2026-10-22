@@ -1093,6 +1093,9 @@ function initMultiplayer() {
       case "item_changed":
         applyItemDeltaFromEvent(payload);
         return;
+      case "world_event":
+        handleWorldEvent(payload);
+        return;
       case "chat_message":
         handleChatMessageEvent(payload);
         return;

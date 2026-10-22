@@ -308,6 +308,15 @@ An item class's `keepsake` says what is kept (the creator's stone, a flower);
 a keepsake must not change anything an action reads. The home island and the
 nickname are untouched. See `start-anew.ts`.
 
+## Events
+
+Recurring events happen in the shared world (`event-registry.ts`): an event
+waits, becomes ready, gathers everyone near its anchor, runs, rewards those
+who took part, and comes round again. Every player hears of one wherever
+they are and sees it with a countdown in the active-actions panel. The rules
+are a pure state machine (`event-machine.ts`); `events.ts` keeps the rows,
+moves them on from the world tick and tells everyone.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

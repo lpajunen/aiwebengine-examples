@@ -287,6 +287,10 @@ function livingValueLabel(classId, valueKey) {
 function formatLivingValue(value, key) {
   if (typeof value === "number") {
     if (key === "fatigue") return String(Math.round(value));
+    // A time the wound heals (death.ts on the server), shown as minutes left.
+    if (key === "woundedUntil") {
+      return String(Math.max(0, Math.ceil((value - Date.now()) / 60000)));
+    }
     return String(Math.round(value * 100) / 100);
   }
   if (typeof value === "boolean") return value ? "true" : "false";

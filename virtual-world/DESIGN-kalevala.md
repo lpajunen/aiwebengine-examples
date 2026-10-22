@@ -142,8 +142,9 @@ use. A class decides where a player starts and how far each skill can go.
 
 ### Built so far
 
-Classes, attributes, the choice, skills, class-only verbs and levels that do
-something; starting anew is still to come. Where the build departed from the
+Classes, attributes, the choice, skills, class-only verbs, levels that do
+something and the toll of returning from death; starting anew is still to
+come. Where the build departed from the
 plan:
 
 - The classes are data in `player-classes.ts`, one living class each
@@ -166,6 +167,11 @@ plan:
   `levels.ts`.
 - The chosen class is kept in `vworld_player_characters`, so a dead player
   prays back to it rather than to a newcomer.
+- Returning takes its toll in `death.ts`. The wound is the player's own
+  `woundedUntil` (milliseconds) rather than a `wounded` state: while it is
+  set, `normalizeLivingValues` takes a fifth off `maxHitPoints` and the
+  heartbeat halves fatigue recovery, and the heartbeat clears it once the
+  time has passed. The statistics panel shows it as minutes left.
 - Skills are owner-visible player values, absent until first used. Each
   class has main skills (cap 100) and secondary ones (cap 60), listed in
   `player-classes.ts`; the rest cap at 30. A use gains `gain × (cap −

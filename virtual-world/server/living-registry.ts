@@ -195,6 +195,13 @@ function playerValueSchema(classId: string): LivingValueSchema {
     fallbackLabel: "Hit points from levels",
     visibility: "owner",
   };
+  // A player back from death is wounded for a while (death.ts).
+  schema.woundedUntil = {
+    kind: "number",
+    labelKey: "living.value.wounded_until",
+    fallbackLabel: "Wounded, minutes left",
+    visibility: "owner",
+  };
   // Skills are the player's own business; a value appears once first used.
   PLAYER_SKILLS.forEach(function (skill) {
     schema[skill] = {

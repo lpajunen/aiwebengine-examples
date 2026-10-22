@@ -12,6 +12,7 @@ import {
   worldTileNameForValue,
   worldTileValueForName,
 } from "./tile-registry.ts";
+import { hasWound, woundedMaxHitPoints } from "./death.ts";
 
 // Tile types now live in their own class repository (tile-registry.ts); these
 // re-exports keep every existing importer pointed at world-domain, which is
@@ -935,6 +936,10 @@ export function normalizeLivingValues(
   const hitPointBonus = Number(out.hitPointBonus);
   if (Number.isFinite(hitPointBonus) && hitPointBonus > 0) {
     out.maxHitPoints = Number(out.maxHitPoints || 0) + hitPointBonus;
+  }
+  // A player back from death is wounded for a while (death.ts).
+  if (hasWound(out)) {
+    out.maxHitPoints = woundedMaxHitPoints(Number(out.maxHitPoints || 0));
   }
   // maxHitPoints is class-owned while currentHitPoints is instance-owned, so
   // lowering a class's maxHitPoints can leave an existing living holding more

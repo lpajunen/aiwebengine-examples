@@ -91,6 +91,7 @@ import {
 } from "./player-classes.ts";
 import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
 import { applyLevelGains } from "./levels.ts";
+import { applyReturnToll } from "./death.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -1589,7 +1590,8 @@ export function performTreeActionForUser(
     // Praying revives whatever class declares a reviveClassId — the inverse
     // of the deathClassId that put the player in it. No class is named here,
     // so a creator's own death form is revived by the same handler. A player
-    // who chose a class returns as that class rather than as a newcomer.
+    // who chose a class returns as that class rather than as a newcomer, and
+    // pays for it (death.ts): experience, and a wound for a while.
     const prayClass = getLivingClassWithRefresh(String(inv.class_id || ""));
     const declaredRevive = prayClass
       ? String(prayClass.reviveClassId || "")
@@ -1599,10 +1601,13 @@ export function performTreeActionForUser(
       : "";
     if (reviveClassId) {
       inv.class_id = reviveClassId;
-      inv.values = Object.assign({}, inv.values, {
-        currentHitPoints: inv.values.maxHitPoints,
-      });
+      const experienceLost = applyReturnToll(inv.values, Date.now());
       savePlayerInventory(userId, inv);
+      // Read back for the revived class's (wounded) maximum, then fill it.
+      const revived = loadPlayerInventory(userId);
+      revived.values.currentHitPoints = revived.values.maxHitPoints;
+      savePlayerInventory(userId, revived);
+      inv.values = revived.values;
       sendWorldScopedStreamEvent(String(worldId), "player_moved", {
         player_id: userId,
         row: canonical.row,
@@ -1617,9 +1622,13 @@ export function performTreeActionForUser(
         payload: buildConfiguredSuccessPayload({
           ...toastFields(
             "tree_action.pray_revived_toast",
-            "You feel alive again!",
+            "You feel alive again, but wounded. You lost " +
+              experienceLost +
+              " experience.",
+            { experience: experienceLost },
           ),
           inventory: inv,
+          experience_lost: experienceLost,
         }),
       };
     }

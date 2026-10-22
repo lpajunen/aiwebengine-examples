@@ -289,6 +289,11 @@ every fourth level), spent with the "+" beside an attribute in the statistics
 panel, and hit points rolled on the class's hit die plus the Kestävyys
 modifier. See `levels.ts`.
 
+Praying back from death at the old oak costs a tenth of the spendable
+experience and leaves the player wounded for 30 minutes: a fifth off their
+maximum hit points and fatigue recovering at half the rate. Levels,
+attributes and skills are never lost. See `death.ts`.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

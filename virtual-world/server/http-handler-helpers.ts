@@ -36,6 +36,7 @@ import {
 } from "./player-persistence.ts";
 import { buildActiveWorldPlayers } from "./player-snapshots.ts";
 import { FATIGUE_RECOVERY_PER_SECOND, LEASE_TTL_MS } from "./runtime-config.ts";
+import { hasWound, woundHasHealed } from "./death.ts";
 import {
   buildOnlinePlayersSnapshot,
   deleteOnlinePresence,
@@ -408,9 +409,13 @@ export function heartbeatForUser(userId: string, sessionId: string): any {
   if (previousHeartbeatTs > 0 && lastMoveTs <= previousHeartbeatTs) {
     const elapsedMs = Date.now() - previousHeartbeatTs;
     const fatigueBefore = Number(inv.values.fatigue || 0);
+    // A wounded player (death.ts) recovers at half the rate.
+    const recoveryPerSecond = hasWound(inv.values)
+      ? FATIGUE_RECOVERY_PER_SECOND / 2
+      : FATIGUE_RECOVERY_PER_SECOND;
     const fatigueAfter = Math.max(
       0,
-      fatigueBefore - (elapsedMs / 1000) * FATIGUE_RECOVERY_PER_SECOND,
+      fatigueBefore - (elapsedMs / 1000) * recoveryPerSecond,
     );
     if (fatigueAfter !== fatigueBefore) {
       inv.values.fatigue = fatigueAfter;
@@ -424,6 +429,15 @@ export function heartbeatForUser(userId: string, sessionId: string): any {
   if (Number(inv.values.newcomer || 0) && !isNewcomer(userId, Date.now())) {
     inv.values.newcomer = 0;
     savePlayerInventory(userId, inv);
+    broadcastPlayerValuesChanged(worldId, userId, inv.values);
+  }
+
+  // A wound from returning (death.ts) heals when its time has passed.
+  if (woundHasHealed(inv.values, Date.now())) {
+    delete inv.values.woundedUntil;
+    savePlayerInventory(userId, inv);
+    const healed = loadPlayerInventory(userId);
+    inv.values = healed.values;
     broadcastPlayerValuesChanged(worldId, userId, inv.values);
   }
 

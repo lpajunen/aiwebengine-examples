@@ -930,6 +930,12 @@ export function normalizeLivingValues(
     if (isClassOwnedLivingValueKey(key)) return;
     out[key] = values[key];
   });
+  // Hit points a player has gained by levels (levels.ts) are their own, on
+  // top of the class's maximum.
+  const hitPointBonus = Number(out.hitPointBonus);
+  if (Number.isFinite(hitPointBonus) && hitPointBonus > 0) {
+    out.maxHitPoints = Number(out.maxHitPoints || 0) + hitPointBonus;
+  }
   // maxHitPoints is class-owned while currentHitPoints is instance-owned, so
   // lowering a class's maxHitPoints can leave an existing living holding more
   // current hit points than its class now allows — clamp rather than letting a

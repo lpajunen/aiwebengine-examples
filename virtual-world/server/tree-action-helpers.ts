@@ -90,6 +90,7 @@ import {
   playerClassForChoiceAction,
 } from "./player-classes.ts";
 import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
+import { applyLevelGains } from "./levels.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -1673,6 +1674,11 @@ export function performTreeActionForUser(
     setFieldValue(context, progression.costField, available - cost);
     setFieldValue(context, progression.field, nextValue);
     inv.values = context.values as Record<string, unknown>;
+    // A new level is more than a number: attribute points and hit points.
+    const levelGains =
+      progression.field === "values.level"
+        ? applyLevelGains(String(inv.class_id || ""), inv.values, nextValue)
+        : null;
     savePlayerInventory(userId, inv);
     broadcastPlayerValuesChanged(worldId, userId, inv.values);
     const toast = progression.toast;
@@ -1692,6 +1698,12 @@ export function performTreeActionForUser(
         inventory: inv,
         new_level: nextValue,
         spent_experience: cost,
+        ...(levelGains
+          ? {
+              attribute_points_gained: levelGains.attributePoints,
+              hit_points_gained: levelGains.hitPoints,
+            }
+          : {}),
       }),
     };
   }

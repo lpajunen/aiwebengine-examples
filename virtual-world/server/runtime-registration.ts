@@ -1135,6 +1135,11 @@ export function registerVirtualWorldRuntime(): void {
   registerRoute("/virtual-world/new-world", "newWorldHandler", "POST");
   registerRoute("/virtual-world/start-world", "startWorldHandler", "POST");
   registerRoute("/virtual-world/island-invite", "islandInviteHandler", "POST");
+  registerRoute(
+    "/virtual-world/raise-attribute",
+    "raiseAttributeHandler",
+    "POST",
+  );
   registerRoute("/virtual-world/livings", "livingsHandler", "GET");
   registerRoute("/virtual-world/resync", "resyncHandler", "GET");
   registerRoute("/virtual-world/current-world", "currentWorldHandler", "GET");

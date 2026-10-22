@@ -284,6 +284,11 @@ The very best verbs belong to one class: an action class may name the
 `wieldClasses` that can hold it in a hand (the longbow is the woodsman's).
 Anyone may still carry such an item, trade it and hand it on.
 
+A level bought at the training post brings attribute points (one, two on
+every fourth level), spent with the "+" beside an attribute in the statistics
+panel, and hit points rolled on the class's hit die plus the Kestävyys
+modifier. See `levels.ts`.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

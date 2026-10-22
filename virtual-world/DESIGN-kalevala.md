@@ -142,9 +142,9 @@ use. A class decides where a player starts and how far each skill can go.
 
 ### Built so far
 
-Classes, attributes, the choice, skills and class-only verbs; levels that do
-something and starting anew are still to come. Where the build departed from
-the plan:
+Classes, attributes, the choice, skills, class-only verbs and levels that do
+something; starting anew is still to come. Where the build departed from the
+plan:
 
 - The classes are data in `player-classes.ts`, one living class each
   (`player_tietaja`, `player_seppa`, `player_laulaja`, `player_erankavija`,
@@ -154,9 +154,16 @@ the plan:
 - The elder is Väinämöinen, an `npc_elder` placed at the head of the arrival
   shore. His conversation asks a newcomer what they are; each answer runs a
   `choose_class_*` action, offered only beside him and only once.
-- Hit points are fixed per class for now (8, 10 or 12): `maxHitPoints` is a
-  class-owned value, so growing it per player by the hit die needs it to
-  become the player's own first.
+- Hit points start at the class's 8, 10 or 12. `maxHitPoints` stays
+  class-owned; what levels add is the player's own `hitPointBonus`, added to
+  it when values are read, so a class can still be retuned. Each level rolls
+  the class's hit die plus the Kestävyys modifier, at least 1 (a newcomer
+  rolls a d8), and raises the current hit points as well.
+- A level gives `attributePoints`, one and two on every fourth, spent one at
+  a time with the "+" beside an attribute in the statistics panel
+  (`POST /virtual-world/raise-attribute`), to at most 20. Raising Kestävyys
+  does not add hit points for levels already taken. The logic is
+  `levels.ts`.
 - The chosen class is kept in `vworld_player_characters`, so a dead player
   prays back to it rather than to a newcomer.
 - Skills are owner-visible player values, absent until first used. Each

@@ -121,7 +121,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         urho: "You are now a hero: the fight and the shield are yours.",
       },
       pray_toast: "You pray hard!",
-      advance_level_toast: "You advance to level {level}!",
+      advance_level_toast:
+        "You advance to level {level}! Spend your new attribute points in Stats.",
       examine_toast: "You examine {target}.",
       attack_miss_toast: "You missed.",
       attack_destroy_toast: "You hit. You destroyed {target}.",
@@ -209,6 +210,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     stats: {
       empty: "No statistics.",
+      raise: "Spend a point here",
     },
     // Class sizes (item + living), see class-size.ts.
     size: {
@@ -279,6 +281,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         kestavyys: "Constitution (Kestävyys)",
         tieto: "Lore (Tieto)",
         sana: "Presence (Sana)",
+        attribute_points: "Attribute points to spend",
+        hit_point_bonus: "Hit points from levels",
         puutyo: "Woodcraft (Puutyö)",
         takominen: "Smithing (Takominen)",
         metsastys: "Hunting (Metsästys)",
@@ -630,6 +634,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       class_already_chosen: "You have already chosen what you are.",
       skill_too_low: "You are not skilled enough for that yet.",
       not_for_your_class: "That belongs to another class.",
+      unknown_attribute: "There is no such attribute.",
+      no_attribute_points: "You have no attribute points to spend.",
+      attribute_at_maximum: "That attribute is as high as it goes.",
       ask_the_elder: "Ask the elder in Väinölä.",
       not_a_newcomer: "They are not new here any more.",
       already_welcomed: "You have already welcomed them.",
@@ -834,7 +841,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         urho: "Olet nyt urho: taistelu ja kilpi ovat sinun.",
       },
       pray_toast: "Rukoilet hartaasti!",
-      advance_level_toast: "Nouset tasolle {level}!",
+      advance_level_toast:
+        "Nouset tasolle {level}! Käytä uudet ominaisuuspisteet Tilastoissa.",
       examine_toast: "Tutkit kohdetta {target}.",
       attack_miss_toast: "Löit huti.",
       attack_destroy_toast: "Osut. Tuhosit kohteen {target}.",
@@ -922,6 +930,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
     },
     stats: {
       empty: "Ei tilastoja.",
+      raise: "Käytä piste tähän",
     },
     size: {
       tiny: "Pikkuruinen",
@@ -989,6 +998,8 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         kestavyys: "Kestävyys",
         tieto: "Tieto",
         sana: "Sana",
+        attribute_points: "Käyttämättömät ominaisuuspisteet",
+        hit_point_bonus: "Osumapisteet tasoista",
         puutyo: "Puutyö",
         takominen: "Takominen",
         metsastys: "Metsästys",
@@ -1343,6 +1354,9 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       class_already_chosen: "Olet jo valinnut, mikä olet.",
       skill_too_low: "Taitosi ei vielä riitä siihen.",
       not_for_your_class: "Se kuuluu toiselle luokalle.",
+      unknown_attribute: "Sellaista ominaisuutta ei ole.",
+      no_attribute_points: "Sinulla ei ole ominaisuuspisteitä käytettävänä.",
+      attribute_at_maximum: "Ominaisuus on jo niin korkea kuin voi olla.",
       ask_the_elder: "Kysy Väinölän vanhimmalta.",
       not_a_newcomer: "Hän ei ole enää tulokas.",
       already_welcomed: "Olet jo toivottanut hänet tervetulleeksi.",

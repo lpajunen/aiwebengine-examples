@@ -181,6 +181,20 @@ function playerValueSchema(classId: string): LivingValueSchema {
       visibility: "public",
     };
   });
+  // What levels leave behind (levels.ts): points not yet spent, and hit
+  // points gained on top of the class's.
+  schema.attributePoints = {
+    kind: "number",
+    labelKey: "living.value.attribute_points",
+    fallbackLabel: "Attribute points",
+    visibility: "owner",
+  };
+  schema.hitPointBonus = {
+    kind: "number",
+    labelKey: "living.value.hit_point_bonus",
+    fallbackLabel: "Hit points from levels",
+    visibility: "owner",
+  };
   // Skills are the player's own business; a value appears once first used.
   PLAYER_SKILLS.forEach(function (skill) {
     schema[skill] = {

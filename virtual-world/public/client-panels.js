@@ -210,9 +210,19 @@ function renderStatisticsPanel() {
     return;
   }
 
+  // Points a level left unspent go on an attribute, one "+" at a time.
+  var canRaise = Number(inv.values && inv.values.attributePoints) >= 1;
   var rows = "";
   for (var lv = 0; lv < livingValueEntries.length; lv++) {
     var entry = livingValueEntries[lv];
+    var raiseBtn =
+      canRaise && PLAYER_ATTRIBUTE_KEYS.indexOf(entry.key) !== -1
+        ? ' <button class="btn-dm" data-attr="' +
+          escapeHtml(entry.key) +
+          '" title="' +
+          escapeHtml(t("stats.raise", "Spend a point here")) +
+          '" onclick="raisePlayerAttribute(this.dataset.attr)">+</button>'
+        : "";
     rows +=
       '<div class="inv-row">' +
       '<span class="label">' +
@@ -224,10 +234,44 @@ function renderStatisticsPanel() {
         entry.value,
         entry.key,
       ) +
+      raiseBtn +
       "</span>" +
       "</div>";
   }
   listDiv.innerHTML = rows;
+}
+
+// The attributes a level's points may go on (levels.ts on the server).
+var PLAYER_ATTRIBUTE_KEYS = [
+  "voima",
+  "ketteryys",
+  "kestavyys",
+  "tieto",
+  "sana",
+];
+
+/** @param {string} attribute */
+function raisePlayerAttribute(attribute) {
+  fetchWithAuth("/virtual-world/raise-attribute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attribute: attribute }),
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (result) {
+      if (!result || !result.ok) {
+        showHudToast(
+          translateServerMessage((result && result.error) || "error"),
+          true,
+        );
+        return;
+      }
+      applyItemStateFromResult(result);
+      if (statsPanelVisible) renderStatisticsPanel();
+    })
+    .catch(function () {});
 }
 
 function showStatisticsPanel() {

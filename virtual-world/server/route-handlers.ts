@@ -24,6 +24,7 @@ import {
   switchUserToNewWorld,
   switchUserToStartWorld,
 } from "./world-switch.ts";
+import { raiseAttributeForUser } from "./levels.ts";
 import {
   buildIslandVisitState,
   inviteToIsland,
@@ -549,6 +550,31 @@ export function islandInviteHandler(context: any) {
           : { ok: false, error: "error.invalid_action" };
   return ResponseBuilder.json(
     Object.assign({}, result, { visits: buildIslandVisitState(userId) }),
+  );
+}
+
+/**
+ * Spends one of the player's attribute points: body.attribute names which.
+ *
+ * @param {*} context
+ */
+export function raiseAttributeHandler(context: any) {
+  const blocked = crossOriginRejection(context);
+  if (blocked) return blocked;
+  if (!context.request.auth || !context.request.auth.isAuthenticated) {
+    return ResponseBuilder.json({ error: "Authentication required" }, 401);
+  }
+  var body;
+  try {
+    body = JSON.parse(context.request.body || "{}");
+  } catch (e) {
+    return ResponseBuilder.json({ error: "Invalid JSON" }, 400);
+  }
+  return ResponseBuilder.json(
+    raiseAttributeForUser(
+      context.request.auth.userId,
+      String((body && body.attribute) || ""),
+    ),
   );
 }
 

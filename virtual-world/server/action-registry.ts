@@ -948,6 +948,25 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     targetKind: "current_tile",
     sourceItemIds: ["old_oak"],
   },
+  // The other way back from death: give up the character and wake on the
+  // home island as a newcomer (start-anew.ts). Offered to a ghost anywhere;
+  // the handler checks the class can be revived from, so a creator's own
+  // death class needs only to be listed here.
+  start_anew: {
+    id: "start_anew",
+    labelKey: "tree_action.start_anew",
+    fallbackLabel: "Start anew",
+    targetKind: "self",
+    sourceItemIds: ["starter_kit"],
+    classes: ["player_ghost"],
+    guestAllowed: true,
+    execution: {
+      successPayload: {
+        includeSwitchedWorld: true,
+        includeWorldId: true,
+      },
+    },
+  },
   advance_level: {
     id: "advance_level",
     labelKey: "tree_action.advance_level",
@@ -1833,6 +1852,7 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   skip_onboarding: "travel",
   // misc
   pray: "misc",
+  start_anew: "misc",
   advance_level: "misc",
 };
 

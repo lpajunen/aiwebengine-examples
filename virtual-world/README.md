@@ -294,6 +294,13 @@ experience and leaves the player wounded for 30 minutes: a fifth off their
 maximum hit points and fatigue recovering at half the rate. Levels,
 attributes and skills are never lost. See `death.ts`.
 
+A ghost may instead start anew, anywhere: their class, values and every item
+that is not a keepsake are gone, and they wake on their home island as a
+newcomer with their bundle and boat, to choose a class again from the elder.
+An item class's `keepsake` says what is kept (the creator's stone, a flower);
+a keepsake must not change anything an action reads. The home island and the
+nickname are untouched. See `start-anew.ts`.
+
 ## Creating a world
 
 World building is class-driven. Content lives in five class repositories —

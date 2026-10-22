@@ -290,6 +290,11 @@ export function registerVirtualWorldRuntime(): void {
         description:
           'Player classes that may hold the item in a hand, e.g. ["player_urho"]; anyone else may carry it but not wield it. Omit for anyone.',
       },
+      keepsake: {
+        type: "boolean",
+        description:
+          "Kept when a player starts anew. Only for items that change nothing an action reads (cosmetics, mementos).",
+      },
       color: {
         type: "number",
         description:

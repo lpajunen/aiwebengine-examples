@@ -316,6 +316,12 @@ export function virtualWorldManageItemClassesToolHandler(
         : existing
           ? existing.wieldClasses
           : undefined,
+      keepsake:
+        args.keepsake !== undefined
+          ? !!args.keepsake
+          : existing
+            ? existing.keepsake
+            : undefined,
       visuals: {
         color: normalizeColorNumber(
           args.color !== undefined

@@ -143,6 +143,18 @@ function postTreeAction(action, extras) {
     openPortalDestinationPicker(action);
     return;
   }
+  // Starting anew gives up the character for good.
+  if (
+    action === "start_anew" &&
+    !window.confirm(
+      t(
+        "tree_action.start_anew_confirm",
+        "Start anew? Your class, levels, attributes, skills and everything you carry except keepsakes are gone for good.",
+      ),
+    )
+  ) {
+    return;
+  }
   fetchWithAuth("/virtual-world/tree-action", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -45,6 +45,9 @@ export interface ItemDefinition {
   // Only players of these classes may hold it in a hand. Others may still
   // carry it, trade it and hand it on. Missing or empty: anyone.
   wieldClasses?: string[];
+  // Kept when a player starts anew (start-anew.ts). A keepsake must not
+  // change anything an action reads: a cosmetic, a memento, a creator's tool.
+  keepsake?: boolean;
   visuals: {
     color: number;
     labelKey: string;
@@ -65,6 +68,7 @@ export interface ItemClassRecord {
   nonDroppable: boolean;
   nonPickable: boolean;
   wieldClasses?: string[];
+  keepsake?: boolean;
   visuals: {
     color: number;
     labelKey: string;
@@ -143,6 +147,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   flower: {
     id: "flower",
     kind: "world_item",
+    // A flower picked is a memento; it changes nothing.
+    keepsake: true,
     visuals: {
       color: 0xec6ea4,
       labelKey: "item.flower.name",
@@ -314,6 +320,9 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       ...PLAYER_CLASSES.map(function (cls) {
         return chooseClassActionId(cls.id);
       }),
+      // Last: seeding appends what a stored row lacks, so a new action goes
+      // at the end to keep the stored order the same as this one.
+      "start_anew",
     ],
   },
   blessing_marker: {
@@ -331,6 +340,9 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
   creator_stone: {
     id: "creator_stone",
     kind: "artifact",
+    // The stone lets its holder author classes; it is the player's, not the
+    // character's.
+    keepsake: true,
     visuals: {
       color: 0x9b5cff,
       labelKey: "item.creator_stone.name",
@@ -862,6 +874,7 @@ function itemClassFromDefinition(def: ItemDefinition): ItemClassRecord {
     nonDroppable: !!def.nonDroppable,
     nonPickable: !!def.nonPickable,
     ...(def.wieldClasses ? { wieldClasses: def.wieldClasses.slice() } : {}),
+    ...(def.keepsake ? { keepsake: true } : {}),
     visuals: {
       color: def.visuals.color,
       labelKey: def.visuals.labelKey,
@@ -901,6 +914,7 @@ function itemClassFromDbRow(row: any): ItemClassRecord {
         return undefined;
       }
     })(),
+    keepsake: row.keepsake === 1 || row.keepsake === true,
     visuals: {
       color: Number(row.color || 0),
       labelKey: String(row.label_key || ""),
@@ -943,6 +957,7 @@ function itemClassToDbRow(
   non_droppable: number;
   non_pickable: number;
   wield_classes_json: string;
+  keepsake: number;
   color: number;
   size: string;
   style: string;
@@ -970,6 +985,7 @@ function itemClassToDbRow(
     wield_classes_json: Array.isArray(record.wieldClasses)
       ? JSON.stringify(record.wieldClasses)
       : "",
+    keepsake: record.keepsake ? 1 : 0,
     color: record.visuals.color,
     size: normalizeClassSize(record.visuals.size),
     style: normalizeItemVisualStyle(record.visuals.style),
@@ -1054,6 +1070,11 @@ function backfillItemClassDefaults(
       existing.wieldClasses = def.wieldClasses
         ? def.wieldClasses.slice()
         : undefined;
+      changed = true;
+    }
+    // So does whether a built-in is a keepsake.
+    if (wieldIsCodeOwned && !!existing.keepsake !== !!def.keepsake) {
+      existing.keepsake = !!def.keepsake;
       changed = true;
     }
     if (changed) {

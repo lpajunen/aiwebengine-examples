@@ -1207,6 +1207,7 @@ function runWorldDatabaseMigration(collector: Array<any> | undefined): void {
     ["addIntegerColumn", "non_droppable", false],
     ["addIntegerColumn", "non_pickable", false],
     ["addTextColumn", "wield_classes_json", true],
+    ["addIntegerColumn", "keepsake", true],
     ["addIntegerColumn", "color", false],
     ["addTextColumn", "size", true],
     ["addTextColumn", "style", true],

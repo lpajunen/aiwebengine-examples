@@ -110,6 +110,7 @@ export function createItemClassHandler(context: any) {
     wieldClasses: Array.isArray(body && body.wieldClasses)
       ? body.wieldClasses.map(String)
       : undefined,
+    keepsake: !!(body && body.keepsake),
     visuals: {
       // 0 is "automatic": the client then falls back to its own per-type
       // default color rather than rendering the item black.
@@ -203,6 +204,8 @@ export function updateItemClassHandler(context: any) {
       body && Array.isArray(body.wieldClasses)
         ? body.wieldClasses.map(String)
         : existing.wieldClasses,
+    keepsake:
+      body && body.keepsake !== undefined ? !!body.keepsake : existing.keepsake,
     visuals: {
       color: normalizeColorNumber(
         body && body.visuals && body.visuals.color !== undefined

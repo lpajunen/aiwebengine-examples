@@ -92,6 +92,7 @@ import {
 import { loadChosenClassId, saveChosenClassId } from "./player-character.ts";
 import { applyLevelGains } from "./levels.ts";
 import { applyReturnToll } from "./death.ts";
+import { startAnewForUser } from "./start-anew.ts";
 import {
   extraYield,
   meetsSkillMin,
@@ -1582,6 +1583,23 @@ export function performTreeActionForUser(
         ),
         inventory: inv,
         class_id: inv.class_id,
+      }),
+    };
+  }
+
+  if (action === "start_anew") {
+    const anew = startAnewForUser(userId);
+    if (!anew.ok) {
+      return { status: 200, payload: { ok: false, error: anew.error } };
+    }
+    return {
+      status: 200,
+      payload: buildConfiguredSuccessPayload({
+        ...toastFields(
+          "tree_action.start_anew_toast",
+          "You wake on your island, someone new.",
+        ),
+        world_id: anew.worldId,
       }),
     };
   }

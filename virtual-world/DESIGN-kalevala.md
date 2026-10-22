@@ -142,9 +142,9 @@ use. A class decides where a player starts and how far each skill can go.
 
 ### Built so far
 
-Classes, attributes, the choice, skills, class-only verbs, levels that do
-something and the toll of returning from death; starting anew is still to
-come. Where the build departed from the
+All of it but titles: classes, attributes, the choice, skills, class-only
+verbs, levels that do something, the toll of returning from death and
+starting anew. Where the build departed from the
 plan:
 
 - The classes are data in `player-classes.ts`, one living class each
@@ -172,6 +172,14 @@ plan:
   set, `normalizeLivingValues` takes a fifth off `maxHitPoints` and the
   heartbeat halves fatigue recovery, and the heartbeat clears it once the
   time has passed. The statistics panel shows it as minutes left.
+- `start_anew` is `classes: ["player_ghost"]`, so the palette offers it to
+  ghosts only, and the handler also requires a class with a `reviveClassId`.
+  It keeps the keepsakes and the bundle and boat every player carries, clears
+  every living value and the `vworld_player_characters` row, and rows the
+  player to their island. The built-in keepsakes are the creator's stone and
+  the flower. A keepsake inside a container that is not one is lost with it.
+- Titles are not built: nothing earns one yet. `vworld_player_titles` comes
+  with the first reward that gives a title (the oak's leaf).
 - Skills are owner-visible player values, absent until first used. Each
   class has main skills (cap 100) and secondary ones (cap 60), listed in
   `player-classes.ts`; the rest cap at 30. A use gains `gain × (cap −

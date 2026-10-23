@@ -5,3 +5,4 @@
 // module imports events.ts, which imports the registry.
 import "./great-oak.ts";
 import "./kantele-concert.ts";
+import "./hiisi-elk.ts";

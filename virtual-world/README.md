@@ -326,7 +326,9 @@ they lack) or a leaf (a keepsake). Then it grows again from an acorn.
 
 Anyone with a kantele may give a concert beneath the oak
 (`kantele-concert.ts`): the animals come to listen, and every listener is
-rested and rewarded.
+rested and rewarded. Every two days the elk of Hiisi's trail shows at the
+oak (`hiisi-elk.ts`): a hunter follows it, and everyone near chases the elk
+down together, each blow their share of its hide.
 
 What happens is written in each world's chronicle (`chronicle.ts`), in verse
 in the Kalevala's metre: the oak's felling and who struck it, a first

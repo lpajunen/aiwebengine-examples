@@ -17,7 +17,12 @@ import {
 // new name.
 
 export type ChronicleKind =
-  "arrival" | "house_built" | "portal_raised" | "oak_felled" | "concert";
+  | "arrival"
+  | "house_built"
+  | "portal_raised"
+  | "oak_felled"
+  | "concert"
+  | "elk_caught";
 
 const CHRONICLE_TEMPLATES: Record<
   ChronicleKind,
@@ -57,6 +62,18 @@ const CHRONICLE_TEMPLATES: Record<
       "Nousi portti vierahalle,",
       "riimuin raotti rajoja;",
       "sen nostatti {actors}.",
+    ],
+  },
+  elk_caught: {
+    en: [
+      "Ran the elk of Hiisi's forest,",
+      "down it fell before the hunters;",
+      "{actors} caught it.",
+    ],
+    fi: [
+      "Juoksi hirvi Hiiden metsän,",
+      "kaatoivat sen kaatajaiset;",
+      "sen saivat {actors}.",
     ],
   },
   concert: {

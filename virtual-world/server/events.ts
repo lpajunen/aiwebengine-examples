@@ -640,6 +640,26 @@ export function getEventState(
   return def ? loadEventState(def, worldId, now) : null;
 }
 
+/**
+ * Harm a player did to a living: when the living is the quarry an event
+ * brought, the harm is the player's work on that event. Called by both ways
+ * of doing harm, fights and spells (fight-helpers.ts), once the harm is done.
+ */
+export function countHarmToQuarry(
+  worldId: string,
+  living: { class_id?: unknown; values?: Record<string, unknown> },
+  playerId: string,
+  harm: number,
+  now: number,
+): void {
+  const broughtBy = String((living.values && living.values.broughtBy) || "");
+  const def = broughtBy ? getEventDefinition(broughtBy) : null;
+  if (!def || !def.quarryClassId) return;
+  if (String(living.class_id || "") !== def.quarryClassId) return;
+  if (!(harm > 0)) return;
+  contributeToEvent(def.id, playerId, worldId, harm, now);
+}
+
 /** Who has done something for the event this run, first come first. */
 export function getEventContributors(
   eventId: string,

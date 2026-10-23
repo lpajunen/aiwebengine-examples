@@ -637,6 +637,20 @@ and `event-livings.ts`, which brings a living beside a spot and sends away
 exactly the ones an event brought (`values.broughtBy`). An always-ready event
 is not shown to players until someone starts it.
 
+### Built: the elk of Hiisi
+
+`hiisi-elk.ts`. Every two days the old oak shows the elk's trail
+(`elkTrail`), and anyone with a little hunting (metsästys 5) can follow it
+(`track_elk`). Everyone near takes part; the elk rises beside the oak and
+flees. Its hit points are the hunt's goal — 25 per hunter — and every point
+of harm a player does it, by fight or by spell, is their share
+(`quarryClassId`, counted by `countHarmToQuarry` from both damage paths in
+`fight-helpers.ts`). Bringing it down is the success; if it outlasts the
+ten minutes it escapes and the hunt fails. Each hunter who struck gets a
+hide and experience, and the chronicle names them. No hunter's title yet,
+and no roles: the elk's hit points are the goal, so a multiplier would let
+the hunt succeed before the elk fell.
+
 ## Order
 
 | #   | Piece                             | Size     | Needs                  |

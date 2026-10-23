@@ -1046,6 +1046,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
     sourceItemIds: ["kantele"],
     guestAllowed: true,
   },
+  // The elk of Hiisi (hiisi-elk.ts): its trail is picked up at the oak,
+  // while the oak says there is one.
+  track_elk: {
+    id: "track_elk",
+    labelKey: "tree_action.track_elk",
+    fallbackLabel: "Track the elk of Hiisi",
+    targetKind: "current_tile",
+    sourceItemIds: ["old_oak"],
+    validWhen: [{ field: "state.elkTrail", op: "eq", value: 1 }],
+  },
   call_small_man: {
     id: "call_small_man",
     labelKey: "tree_action.call_small_man",
@@ -1957,6 +1967,7 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   learn_synty_tammi_free: "social",
   call_small_man: "misc",
   give_concert: "social",
+  track_elk: "misc",
   strike_oak: "gather",
   advance_level: "misc",
 };

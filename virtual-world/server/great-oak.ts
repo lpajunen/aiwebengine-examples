@@ -106,6 +106,18 @@ function saveOakState(
 }
 
 /**
+ * Sets flags on the old oak's state: the oak is Väinölä's gathering place,
+ * and other events beneath it (the elk of Hiisi) offer their actions on it.
+ */
+export function setOakFlags(
+  worldId: string,
+  flags: Record<string, unknown>,
+): void {
+  const oak = findOak(worldId);
+  if (oak) saveOakState(worldId, oak, flags);
+}
+
+/**
  * The tick's growth. Written only when it passes a whole point, so a week's
  * growing is a hundred writes; `grownAt` stays put in between, which keeps
  * the time since then counting.

@@ -376,7 +376,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       // used to be an `item.type === "old_oak"` test in three client passes.
       style: "broadleaf",
     },
-    actionIds: ["pray", "call_small_man", "strike_oak"],
+    actionIds: ["pray", "call_small_man", "strike_oak", "track_elk"],
   },
   training_dummy: {
     id: "training_dummy",
@@ -457,6 +457,19 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       fallbackLabel: "Branch of the great oak",
       size: "small",
       style: "staff",
+    },
+    actionIds: [],
+  },
+  // What the elk of Hiisi leaves each hunter (hiisi-elk.ts).
+  elk_hide: {
+    id: "elk_hide",
+    kind: "world_item",
+    visuals: {
+      color: 0x5a3f28,
+      labelKey: "item.elk_hide.name",
+      fallbackLabel: "Hide of Hiisi's elk",
+      size: "small",
+      style: "scroll",
     },
     actionIds: [],
   },

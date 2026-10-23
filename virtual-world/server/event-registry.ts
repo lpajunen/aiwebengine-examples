@@ -72,6 +72,9 @@ export interface EventDefinition {
   rewards: EventReward[];
   // Only participants who contributed something are rewarded.
   rewardNeedsContribution?: boolean;
+  // A living of this class the event brought is its quarry: harm a player
+  // does it counts as that player's work (events.ts countHarmToQuarry).
+  quarryClassId?: string;
   // What the event does to the world: `tick` before every advance, and
   // `entered` after each phase change, once the change is written.
   hooks?: {
@@ -82,7 +85,7 @@ export interface EventDefinition {
       worldId: string,
       phase: EventPhase,
       outcome: string,
-      state: { startedBy: string },
+      state: { startedBy: string; progress: { goal?: number } },
     ) => void;
   };
 }

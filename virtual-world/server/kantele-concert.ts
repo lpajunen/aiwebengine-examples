@@ -18,7 +18,7 @@ const SHY_LISTENER = "npc_elk";
 function enteredPhase(
   worldId: string,
   phase: EventPhase,
-  state: { startedBy: string },
+  state: { startedBy: string; progress: { goal?: number } },
 ): void {
   const anchor = getEventAnchor(
     EVENT_DEFINITIONS[KANTELE_CONCERT_EVENT_ID],
@@ -79,7 +79,7 @@ EVENT_DEFINITIONS[KANTELE_CONCERT_EVENT_ID] = {
       worldId: string,
       phase: EventPhase,
       outcome: string,
-      state: { startedBy: string },
+      state: { startedBy: string; progress: { goal?: number } },
     ) {
       enteredPhase(worldId, phase, state);
     },

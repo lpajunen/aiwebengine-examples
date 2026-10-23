@@ -550,6 +550,23 @@ const DEFAULT_LIVING_CLASSES: Record<string, LivingClassRecord> = {
     behavior: { roamRadius: 0, idleChance: 1 },
     labels: { fi: "Pikku mies merestä" },
   },
+  // The elk of Hiisi (hiisi-elk.ts): big, dark and quick to flee. It comes
+  // only for the hunt, with as many hit points as the hunt has work to do,
+  // and leaves no carcass: each hunter gets a hide.
+  npc_hiisi_elk: {
+    id: "npc_hiisi_elk",
+    kind: "npc",
+    labelKey: "living.class.npc_hiisi_elk",
+    fallbackLabel: "The elk of Hiisi",
+    slotDefinitions: quadrupedSlotDefinitions(),
+    valueTemplate: defaultFatigueValueTemplate(),
+    valueSchema: defaultFatigueValueSchema(),
+    visualStyle: "equine",
+    size: "large",
+    color: "#2e2118",
+    behavior: { idleChance: 0.1, movement: "flee", fleeRadius: 5 },
+    labels: { fi: "Hiiden hirvi" },
+  },
   // The animals of the Kalevala's north, each an existing silhouette at its
   // own size and colour. They replaced the chicken and the donkey
   // (RETIRED_NPC_CLASS_IDS).

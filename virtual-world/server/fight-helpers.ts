@@ -39,6 +39,7 @@ import {
   sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
 import { getEffectiveMap } from "./world-bootstrap.ts";
+import { countHarmToQuarry } from "./events.ts";
 import { rollBonus, trainSkill } from "./skills.ts";
 import { runInWorldTransaction } from "./world-db.ts";
 import {
@@ -500,6 +501,9 @@ export function applyLivingEffect(
         });
       }
     }
+    if (targetNpc && delta < 0) {
+      countHarmToQuarry(worldId, targetNpc, actorId, -delta, Date.now());
+    }
     return { result: "hit", delta: delta, target_label: targetLabel };
   }
 
@@ -524,6 +528,7 @@ export function applyLivingEffect(
   }
   if (targetNpc) {
     resolveNPCDeath(worldId, targetId, targetNpc);
+    countHarmToQuarry(worldId, targetNpc, actorId, -delta, Date.now());
   } else if (targetInv) {
     const players = loadWorldPlayers(worldId);
     const pos = players[targetId] || { row: 0, col: 0, seq: 0, rotation: 0 };
@@ -627,6 +632,15 @@ function resolveCombatHit(
         target.values,
         target.class_id,
       );
+      if (fight.attacker_type === "player") {
+        countHarmToQuarry(
+          worldId,
+          target,
+          fight.attacker_id,
+          damage,
+          Date.now(),
+        );
+      }
     } else if (targetInv) {
       const attackerLabel =
         fight.attacker_type === "npc"
@@ -700,6 +714,15 @@ function resolveCombatHit(
 
   if (fight.target_type === "npc") {
     resolveNPCDeath(worldId, fight.target_id, target);
+    if (fight.attacker_type === "player") {
+      countHarmToQuarry(
+        worldId,
+        target,
+        fight.attacker_id,
+        currentHitPoints,
+        Date.now(),
+      );
+    }
     // Local map entry must be dropped too so any other attacker's fight
     // targeting this NPC in the same tick sees it as gone (self-heals next
     // check) instead of hitting a row that's already been deleted from DB.

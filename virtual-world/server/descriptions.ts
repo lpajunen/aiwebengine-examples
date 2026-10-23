@@ -151,6 +151,10 @@ export const ITEM_DESCRIPTIONS: Record<string, BuiltinDescription> = {
     en: "A branch of the great oak. Whoever took a branch took everlasting luck.",
     fi: "Ison tammen oksa. Kenpä siitä oksan otti, se otti ikuisen onnen.",
   },
+  elk_hide: {
+    en: "The hide of the elk of Hiisi, which only a chase brought down.",
+    fi: "Hiiden hirven talja, jonka vain ajojahti sai kaatumaan.",
+  },
   oak_leaf: {
     en: "A leaf of the great oak. Whoever took a leaf took everlasting love.",
     fi: "Ison tammen lehvä. Kenpä lehvästä lehvähti, lehvähti ikuisen lemmen.",

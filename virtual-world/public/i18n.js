@@ -25,6 +25,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door: { name: "Door" },
       spellbook: { name: "Old spellbook" },
       sea_shell: { name: "Sea shell" },
+      elk_hide: { name: "Hide of Hiisi's elk" },
       oak_branch: { name: "Branch of the great oak" },
       oak_leaf: { name: "Leaf of the great oak" },
       shaman_talisman: { name: "Shaman's talisman" },
@@ -172,6 +173,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       learn_synty_tammi_toast: "You know the origin of the oak.",
       call_small_man: "Call the small man from the sea",
       give_concert: "Give a concert",
+      track_elk: "Track the elk of Hiisi",
       strike_oak: "Strike the oak",
       strike_oak_toast: "You strike the oak ({amount}).",
       oak_felled_toast: "The great oak falls!",
@@ -245,6 +247,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "is over.",
       },
       reward_taken: "The reward is yours.",
+      hiisi_elk: {
+        name: "The elk of Hiisi",
+        reward: "A hide of Hiisi's elk",
+      },
       kantele_concert: {
         name: "A kantele concert",
         reward: "The song's blessing",
@@ -318,6 +324,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_swan: "Swan",
         npc_cuckoo: "Cuckoo",
         npc_small_man: "Small man from the sea",
+        npc_hiisi_elk: "The elk of Hiisi",
       },
       slot: {
         left_hand: "Left Hand",
@@ -726,6 +733,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       origin_of_the_oak_not_known:
         "You do not know the origin of the oak. Ask the elder.",
       need_a_blade_for_the_oak: "You need an axe, a saw or a knife.",
+      not_enough_hunting: "You cannot read the trail yet: hunt a little first.",
       ask_the_elder: "Ask the elder in Väinölä.",
       not_a_newcomer: "They are not new here any more.",
       already_welcomed: "You have already welcomed them.",
@@ -833,6 +841,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       door: { name: "Ovi" },
       spellbook: { name: "Vanha loitsukirja" },
       sea_shell: { name: "Simpukka" },
+      elk_hide: { name: "Hiiden hirven talja" },
       oak_branch: { name: "Ison tammen oksa" },
       oak_leaf: { name: "Ison tammen lehvä" },
       shaman_talisman: { name: "Shamaanin talismaani" },
@@ -981,6 +990,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       learn_synty_tammi_toast: "Tiedät tammen synnyn.",
       call_small_man: "Kutsu pikku mies merestä",
       give_concert: "Soita kansalle",
+      track_elk: "Seuraa Hiiden hirven jälkiä",
       strike_oak: "Iske tammea",
       strike_oak_toast: "Isket tammea ({amount}).",
       oak_felled_toast: "Iso tammi kaatuu!",
@@ -1054,6 +1064,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "on ohi.",
       },
       reward_taken: "Palkinto on sinun.",
+      hiisi_elk: {
+        name: "Hiiden hirvi",
+        reward: "Hiiden hirven talja",
+      },
       kantele_concert: {
         name: "Kanteleen soitto",
         reward: "Laulun siunaus",
@@ -1124,6 +1138,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         npc_swan: "Joutsen",
         npc_cuckoo: "Käki",
         npc_small_man: "Pikku mies merestä",
+        npc_hiisi_elk: "Hiiden hirvi",
       },
       slot: {
         left_hand: "Vasen käsi",
@@ -1531,6 +1546,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       event_no_such_reward: "Sellaista palkintoa ei ole.",
       origin_of_the_oak_not_known: "Et tunne tammen syntyä. Kysy vanhimmalta.",
       need_a_blade_for_the_oak: "Tarvitset kirveen, sahan tai puukon.",
+      not_enough_hunting: "Et vielä osaa lukea jälkiä: metsästä ensin vähän.",
       ask_the_elder: "Kysy Väinölän vanhimmalta.",
       not_a_newcomer: "Hän ei ole enää tulokas.",
       already_welcomed: "Olet jo toivottanut hänet tervetulleeksi.",

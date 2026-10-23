@@ -270,8 +270,10 @@ function giveItems(
   userId: string,
   items: Array<{ itemId: string; count: number }>,
   experience: number,
+  restoresFatigue = false,
 ): void {
   const inv = loadPlayerInventory(userId);
+  if (restoresFatigue) inv.values.fatigue = 0;
   if (items.length > 0) spawnItemsForUser(worldId, userId, inv, items);
   if (experience > 0) {
     inv.values.experience = Number(inv.values.experience || 0) + experience;
@@ -306,7 +308,13 @@ function grantReward(
   reward: EventReward,
   choiceIndex: number,
 ): void {
-  giveItems(worldId, participant.userId, reward.items, reward.experience || 0);
+  giveItems(
+    worldId,
+    participant.userId,
+    reward.items,
+    reward.experience || 0,
+    !!reward.restoresFatigue,
+  );
   if (reward.teachesOrigin) teachUnknownOrigin(worldId, participant.userId);
   database.update(VWORLD_EVENT_PARTICIPANT_TABLE, participant.rowId, {
     reward_choice: choiceIndex,
@@ -358,7 +366,7 @@ function announce(
 ): void {
   if (def.hooks && def.hooks.entered) {
     try {
-      def.hooks.entered(state.worldId, state.phase, outcome);
+      def.hooks.entered(state.worldId, state.phase, outcome, state);
     } catch (e) {
       vwLog("event hook failed", { event_id: def.id, error: String(e) });
     }
@@ -614,6 +622,8 @@ export function buildWorldEventsSnapshot(
     ).forEach(function (row: any) {
       const state = rowToState(row);
       if (state.phase === "waiting") return;
+      // An event that is always ready is news only once someone starts it.
+      if (state.phase === "ready" && def.ready.kind === "always") return;
       out.push(toPublicEvent(def, state));
     });
   });

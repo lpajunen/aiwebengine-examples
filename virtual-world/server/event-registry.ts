@@ -44,6 +44,8 @@ export interface EventReward {
   experience?: number;
   // Teaches the participant an origin they do not know (origins.ts).
   teachesOrigin?: boolean;
+  // Lifts the participant's fatigue: they are rested.
+  restoresFatigue?: boolean;
 }
 
 export interface EventDefinition {
@@ -74,7 +76,14 @@ export interface EventDefinition {
   // `entered` after each phase change, once the change is written.
   hooks?: {
     tick?: (worldId: string, now: number) => void;
-    entered?: (worldId: string, phase: EventPhase, outcome: string) => void;
+    // `state` is the event's state (event-machine.ts EventState), described
+    // here by what a hook reads so the registry need not import the machine.
+    entered?: (
+      worldId: string,
+      phase: EventPhase,
+      outcome: string,
+      state: { startedBy: string },
+    ) => void;
   };
 }
 

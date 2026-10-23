@@ -4,3 +4,4 @@
 // event imports it. event-registry.ts cannot import them itself: each event
 // module imports events.ts, which imports the registry.
 import "./great-oak.ts";
+import "./kantele-concert.ts";

@@ -171,6 +171,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       learn_synty_tammi: "Learn the origin of the oak",
       learn_synty_tammi_toast: "You know the origin of the oak.",
       call_small_man: "Call the small man from the sea",
+      give_concert: "Give a concert",
       strike_oak: "Strike the oak",
       strike_oak_toast: "You strike the oak ({amount}).",
       oak_felled_toast: "The great oak falls!",
@@ -244,6 +245,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "is over.",
       },
       reward_taken: "The reward is yours.",
+      kantele_concert: {
+        name: "A kantele concert",
+        reward: "The song's blessing",
+      },
       great_oak: {
         name: "The great oak",
         reward_branch: "A branch: everlasting luck",
@@ -975,6 +980,7 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
       learn_synty_tammi: "Opi tammen synty",
       learn_synty_tammi_toast: "Tiedät tammen synnyn.",
       call_small_man: "Kutsu pikku mies merestä",
+      give_concert: "Soita kansalle",
       strike_oak: "Iske tammea",
       strike_oak_toast: "Isket tammea ({amount}).",
       oak_felled_toast: "Iso tammi kaatuu!",
@@ -1048,6 +1054,10 @@ var I18N_MESSAGES = /** @type {Record<string, any>} */ ({
         ended: "on ohi.",
       },
       reward_taken: "Palkinto on sinun.",
+      kantele_concert: {
+        name: "Kanteleen soitto",
+        reward: "Laulun siunaus",
+      },
       great_oak: {
         name: "Iso tammi",
         reward_branch: "Oksa: ikuinen onni",

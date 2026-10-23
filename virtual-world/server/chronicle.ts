@@ -17,7 +17,7 @@ import {
 // new name.
 
 export type ChronicleKind =
-  "arrival" | "house_built" | "portal_raised" | "oak_felled";
+  "arrival" | "house_built" | "portal_raised" | "oak_felled" | "concert";
 
 const CHRONICLE_TEMPLATES: Record<
   ChronicleKind,
@@ -57,6 +57,18 @@ const CHRONICLE_TEMPLATES: Record<
       "Nousi portti vierahalle,",
       "riimuin raotti rajoja;",
       "sen nostatti {actors}.",
+    ],
+  },
+  concert: {
+    en: [
+      "Rang the kantele in Väinölä,",
+      "heard the people, heard the creatures;",
+      "{actors} played it.",
+    ],
+    fi: [
+      "Soi kantele Väinölässä,",
+      "kuuli kansa, kuuli karja;",
+      "sen soitti {actors}.",
     ],
   },
   oak_felled: {

@@ -193,7 +193,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
       labelKey: "item.kantele.name",
       fallbackLabel: "Kantele",
     },
-    actionIds: ["tune", "play_tune"],
+    actionIds: ["tune", "play_tune", "give_concert"],
   },
   rowan_charm: {
     id: "rowan_charm",

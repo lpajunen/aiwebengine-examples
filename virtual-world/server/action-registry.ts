@@ -1036,6 +1036,16 @@ export const ACTION_DEFINITIONS: Record<string, ActionDefinition> = {
   // The great oak (great-oak.ts): calling the small man starts the event,
   // and striking is the work. Each is offered beside the oak only while the
   // oak's state says so, and the event checks the rest.
+  // A kantele concert beneath the old oak (kantele-concert.ts): the event
+  // checks where the player stands and whether it may begin again.
+  give_concert: {
+    id: "give_concert",
+    labelKey: "tree_action.give_concert",
+    fallbackLabel: "Give a concert",
+    targetKind: "self",
+    sourceItemIds: ["kantele"],
+    guestAllowed: true,
+  },
   call_small_man: {
     id: "call_small_man",
     labelKey: "tree_action.call_small_man",
@@ -1946,6 +1956,7 @@ export const ACTION_CATEGORIES: Record<string, string> = {
   learn_synty_tammi: "social",
   learn_synty_tammi_free: "social",
   call_small_man: "misc",
+  give_concert: "social",
   strike_oak: "gather",
   advance_level: "misc",
 };

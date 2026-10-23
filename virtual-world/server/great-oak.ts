@@ -7,24 +7,16 @@ import {
   savePlayerInventory,
   upsertWorldItem,
 } from "./item-storage.ts";
-import {
-  deleteNPCById,
-  loadWorldNPCs,
-  saveWorldNPCs,
-  spawnSingleWorldNPC,
-} from "./npc-storage.ts";
+import { bringLivingBeside, sendAwayLivings } from "./event-livings.ts";
 import { START_WORLD_CLASS_ID } from "./runtime-config.ts";
 import { rollBonus, trainSkill } from "./skills.ts";
 import {
   broadcastItemChange,
   broadcastPlayerValuesChanged,
-  sendWorldScopedStreamEvent,
 } from "./stream-broadcast.ts";
-import { getEffectiveMap } from "./world-bootstrap.ts";
 import {
   countLivingItemsByType,
   isWithinTileDistance,
-  isWorldTileWalkable,
   LivingState,
 } from "./world-domain.ts";
 import { loadWorldTrees } from "./world-mod-storage.ts";
@@ -137,58 +129,9 @@ function isOakGrown(worldId: string): boolean {
 
 // ── The small man ────────────────────────────────────────────────────────
 
-/** He rises beside the oak, on the first free walkable tile around it. */
+/** He rises beside the oak, and goes back to the sea when it is over. */
 function raiseSmallMan(worldId: string, oak: Oak): void {
-  const placed = spawnSingleWorldNPC(worldId, "npc_small_man");
-  if (!placed) return;
-  const map = getEffectiveMap(worldId);
-  const npcs = loadWorldNPCs(worldId);
-  const taken: Record<string, boolean> = {};
-  Object.keys(npcs).forEach(function (id) {
-    if (id !== placed.npcId) taken[npcs[id].row + "_" + npcs[id].col] = true;
-  });
-  for (let radius = 1; radius <= 3; radius++) {
-    for (let dr = -radius; dr <= radius; dr++) {
-      for (let dc = -radius; dc <= radius; dc++) {
-        const row = oak.row + dr;
-        const col = oak.col + dc;
-        if (
-          map[row] &&
-          isWorldTileWalkable(map[row][col]) &&
-          !taken[row + "_" + col]
-        ) {
-          placed.npc.row = row;
-          placed.npc.col = col;
-          saveWorldNPCs(worldId, { [placed.npcId]: placed.npc });
-          sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
-            npc_id: placed.npcId,
-            row: row,
-            col: col,
-            seq: placed.npc.seq,
-            rotation: placed.npc.rotation,
-            state: placed.npc.state,
-            class_id: placed.npc.class_id,
-            values: placed.npc.values,
-          });
-          return;
-        }
-      }
-    }
-  }
-}
-
-/** He goes back to the sea when the event is over. */
-function dismissSmallMen(worldId: string): void {
-  const npcs = loadWorldNPCs(worldId);
-  Object.keys(npcs).forEach(function (id) {
-    if (npcs[id] && npcs[id].class_id === "npc_small_man") {
-      deleteNPCById(id);
-      sendWorldScopedStreamEvent(String(worldId), "npc_moved", {
-        npc_id: id,
-        despawn: true,
-      });
-    }
-  });
+  bringLivingBeside(worldId, "npc_small_man", oak, GREAT_OAK_EVENT_ID);
 }
 
 /** What each phase does to the oak and the shore. */
@@ -217,7 +160,9 @@ function enteredPhase(worldId: string, phase: EventPhase): void {
   }
   saveOakState(worldId, oak, flags);
   if (phase === "gathering") raiseSmallMan(worldId, oak);
-  if (phase === "ready" || phase === "waiting") dismissSmallMen(worldId);
+  if (phase === "ready" || phase === "waiting") {
+    sendAwayLivings(worldId, GREAT_OAK_EVENT_ID);
+  }
 }
 
 // ── Striking ─────────────────────────────────────────────────────────────

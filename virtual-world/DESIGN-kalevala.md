@@ -621,6 +621,22 @@ On the same framework, cheapest first:
 Once there are several, the registry should move into the database as a sixth
 class repository with its own MCP tool, like the other five.
 
+### Built: the kantele concert
+
+`kantele-concert.ts`. Anyone carrying a kantele gives a concert beneath the
+old oak (`give_concert`, the kantele's own action), at most once every half
+hour. Everyone near the oak when it gathers listens; while it plays, a
+reindeer, a swan and a cuckoo come to hear it, and a third of the time an
+elk. Every listener is rested (fatigue to nothing) and gains 15 experience,
+and the chronicle remembers who played. The "rare animal" of the table is
+the shy elk, not a class of its own.
+
+What the concert needed from the framework: an `entered` hook that also
+receives the event's state (who started it), a reward that `restoresFatigue`,
+and `event-livings.ts`, which brings a living beside a spot and sends away
+exactly the ones an event brought (`values.broughtBy`). An always-ready event
+is not shown to players until someone starts it.
+
 ## Order
 
 | #   | Piece                             | Size     | Needs                  |

@@ -19,8 +19,12 @@
  *   schedule?: { state: string, pausedReason: string | null,
  *     nextRunAt: string, lastRunAt: string | null } | null,
  *   unread?: number, filtered?: number, newSince?: number, latest?: string,
- *   rejudgedAt?: string
+ *   rejudgedAt?: string,
+ *   instance?: Digest, instances?: Digest[],
+ *   canPost?: boolean, inboxAvailable?: boolean,
+ *   inbox?: { syncedAt: string | null, problem: string | null } | null
  * }} State
+ * @typedef {{ id: string, label: string }} Digest
  */
 
 const POLL_MS = 60_000;
@@ -28,6 +32,9 @@ const POLL_MS = 60_000;
 const EAGER_POLL_MS = 10_000;
 const EAGER_FOR_MS = 3 * 60_000;
 const TITLE = document.title;
+/** The digest this page shows, from `?instance=`; the first one without. */
+const INSTANCE =
+  new URLSearchParams(location.search).get("instance") || "default";
 
 /**
  * @template {HTMLElement} T
@@ -72,6 +79,15 @@ const el = {
   older: /** @type {HTMLButtonElement} */ (byId("older")),
   pageLabel: byId("page-label"),
   scheduleStatus: byId("schedule-status"),
+  title: byId("title"),
+  digests: byId("digests"),
+  digestLinks: byId("digest-links"),
+  openNewDigest: byId("open-new-digest"),
+  newDigest: /** @type {HTMLFormElement} */ (byId("new-digest")),
+  newDigestLabel: /** @type {HTMLInputElement} */ (byId("new-digest-label")),
+  digestLabel: /** @type {HTMLInputElement} */ (byId("digest-label")),
+  removeDigest: /** @type {HTMLButtonElement} */ (byId("remove-digest")),
+  inboxStatus: byId("inbox-status"),
 };
 
 const view = {
@@ -97,13 +113,26 @@ const view = {
 // ---------------------------------------------------------------------------
 
 /**
+ * `path` for this page's digest.
+ * @param {string} path
+ */
+function forDigest(path) {
+  return (
+    path +
+    (path.indexOf("?") === -1 ? "?" : "&") +
+    "instance=" +
+    encodeURIComponent(INSTANCE)
+  );
+}
+
+/**
  * @param {string} path
  * @param {unknown} [body] sent as JSON with a POST when given
  * @param {string} [method] instead of POST
  * @returns {Promise<any>}
  */
 async function api(path, body, method) {
-  const response = await fetch(path, {
+  const response = await fetch(forDigest(path), {
     credentials: "same-origin",
     ...(body === undefined
       ? {}
@@ -233,7 +262,9 @@ function renderArticle(article) {
 
   const headline = make("h3", "headline");
   const link = document.createElement("a");
-  link.href = "/news-digest/open?id=" + encodeURIComponent(article.id);
+  link.href = forDigest(
+    "/news-digest/open?id=" + encodeURIComponent(article.id),
+  );
   link.target = "_blank";
   link.rel = "noopener";
   link.textContent = article.headline;
@@ -408,14 +439,18 @@ function renderState(state) {
     showNotice(
       "Sign in to read your digest.",
       "Sign in",
-      "/auth/login?redirect=" + encodeURIComponent(location.pathname),
+      "/auth/login?redirect=" +
+        encodeURIComponent(location.pathname + location.search),
     );
     return;
   }
+  renderDigests(state);
   // The engine's consent page, told to come back here whichever way the
   // person leaves it.
   const consent = state.consentUrl
-    ? state.consentUrl + "&redirect=" + encodeURIComponent(location.pathname)
+    ? state.consentUrl +
+      "&redirect=" +
+      encodeURIComponent(location.pathname + location.search)
     : null;
   if (consent) {
     el.grantLink.hidden = false;
@@ -444,8 +479,52 @@ function renderState(state) {
   renderUnread();
   renderFeedStatus(state);
   renderSchedule(state);
+  renderInbox(state);
 }
 
+/**
+ * The person's digests as links, this one marked.
+ * @param {State} state
+ */
+function renderDigests(state) {
+  const digests = state.instances ?? [];
+  const label = state.instance?.label ?? "News digest";
+  el.title.textContent = label;
+  el.digests.hidden = false;
+  el.digestLinks.replaceChildren(
+    ...(digests.length > 1 ? digests : []).map((digest) => {
+      const link = /** @type {HTMLAnchorElement} */ (
+        make("a", "", digest.label)
+      );
+      link.href =
+        digest.id === "default"
+          ? location.pathname
+          : location.pathname + "?instance=" + encodeURIComponent(digest.id);
+      if (digest.id === INSTANCE) link.setAttribute("aria-current", "page");
+      return link;
+    }),
+  );
+  el.removeDigest.hidden = INSTANCE === "default";
+}
+
+/**
+ * Whether this digest posts to the person's agent inbox, and how it went.
+ * @param {State} state
+ */
+function renderInbox(state) {
+  const inbox = state.inbox;
+  const text = !state.inboxAvailable
+    ? ""
+    : !state.canPost
+      ? "You have an agent inbox. To have this digest post its articles there to be sorted, give it the Tools permission too."
+      : inbox?.problem
+        ? `Inbox: the last attempt failed (${inbox.problem}).`
+        : inbox?.syncedAt
+          ? `Articles are also posted to your agent inbox; your answers there sort them here. Last reached at ${timeOfDay(inbox.syncedAt)}.`
+          : "Articles will also be posted to your agent inbox from the next run.";
+  el.inboxStatus.textContent = text;
+  el.inboxStatus.hidden = text === "";
+}
 /** @param {State} state */
 function renderFeedStatus(state) {
   const status = state.feedStatus ?? {};
@@ -504,7 +583,8 @@ function renderNew(state) {
     count === 1
       ? "1 new article — show it"
       : `${count} new articles — show them`;
-  document.title = count > 0 ? `(${count}) ${TITLE}` : TITLE;
+  const title = view.state?.instance?.label ?? TITLE;
+  document.title = count > 0 ? `(${count}) ${title}` : title;
 }
 
 async function refreshState() {
@@ -620,6 +700,7 @@ el.forgetKey.addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 
 function openFeeds() {
+  el.digestLabel.value = view.state?.instance?.label ?? "";
   el.feeds.value = (view.state?.feeds ?? []).join("\n");
   el.interests.value = view.state?.interests ?? "";
   setStatus(el.feedsStatus, "");
@@ -640,6 +721,10 @@ el.saveFeeds.addEventListener("click", async () => {
   el.saveFeeds.disabled = true;
   setStatus(el.feedsStatus, "Saving…");
   try {
+    const label = el.digestLabel.value.trim();
+    if (label && label !== view.state?.instance?.label) {
+      await api("/news-digest/instances", { instance: INSTANCE, label });
+    }
     const saved = await api("/news-digest/feeds", {
       feeds,
       interests: el.interests.value,
@@ -671,6 +756,36 @@ el.runNow.addEventListener("click", async () => {
     setStatus(el.feedsStatus, e instanceof Error ? e.message : String(e), true);
   } finally {
     el.runNow.disabled = false;
+  }
+});
+
+el.openNewDigest.addEventListener("click", () => {
+  el.openNewDigest.hidden = true;
+  el.newDigest.hidden = false;
+  el.newDigestLabel.focus();
+});
+
+el.newDigest.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const made = await api("/news-digest/instances", {
+      label: el.newDigestLabel.value,
+    });
+    location.href =
+      location.pathname + "?instance=" + encodeURIComponent(made.instance.id);
+  } catch (e) {
+    showNotice(e instanceof Error ? e.message : String(e));
+  }
+});
+
+el.removeDigest.addEventListener("click", async () => {
+  const label = view.state?.instance?.label ?? "this digest";
+  if (!confirm(`Remove ${label}, with its feeds and articles?`)) return;
+  try {
+    await api("/news-digest/instances", {}, "DELETE");
+    location.href = location.pathname;
+  } catch (e) {
+    setStatus(el.feedsStatus, e instanceof Error ? e.message : String(e), true);
   }
 });
 

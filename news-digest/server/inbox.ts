@@ -4,7 +4,9 @@
 // rules can be tested on their own.
 //
 // Each run's kept articles join one rolling batch card per digest, answered
-// item by item: Relevant or Not relevant. The batch starts afresh each day,
+// item by item: Relevant, Unsure or Not relevant. Opening an article (its
+// Read button) handles it too, as read; any article can be set aside for
+// Later on its own. The batch starts afresh each day,
 // when it is full, and once the person has finished it. An article the model
 // rates important goes out as a card of its own instead, a few a day at most.
 //
@@ -20,6 +22,7 @@ export const MAX_HIGHLIGHTS = 5;
 const MAX_SUMMARY = 400;
 
 export const RELEVANT = "relevant";
+export const UNSURE = "unsure";
 export const NOT_RELEVANT = "not_relevant";
 
 /** Offered on every card; the inbox shows them beside its Ask field. */
@@ -27,6 +30,7 @@ const SUGGESTED = ["What is the background?", "Why does this matter?"];
 
 const OPTIONS = [
   { id: RELEVANT, label: "Relevant", style: "primary", weight: "feedback" },
+  { id: UNSURE, label: "Unsure", style: "neutral", weight: "feedback" },
   {
     id: NOT_RELEVANT,
     label: "Not relevant",
@@ -165,7 +169,12 @@ function item(a: InboxArticle) {
     id: articleKey(a.id),
     title: a.headline.slice(0, 300),
     summary: a.summary.slice(0, MAX_SUMMARY),
-    links: [{ label: a.source.slice(0, 80) || "Article", url: a.link }],
+    links: [
+      {
+        label: `Read at ${a.source.slice(0, 60) || "the source"}`,
+        url: a.link,
+      },
+    ],
   };
 }
 
@@ -182,9 +191,12 @@ export function batchCard(
     title: `${label}, ${batch.day}`.slice(0, 200),
     summary:
       "Is each one relevant to you? Your answers teach the filter; " +
-      "Not relevant moves an article under Filtered on the digest's page.",
+      "Not relevant moves an article under Filtered on the digest's page. " +
+      "Unsure, or just reading it, teaches nothing.",
     options: OPTIONS,
     items: articles.map(item),
+    allowLater: true,
+    handledByOpening: true,
     suggestedQuestions: SUGGESTED,
   };
 }
@@ -200,6 +212,7 @@ export function highlightCard(a: InboxArticle) {
     facts: [{ label: "Source", value: a.source.slice(0, 200) || "Unknown" }],
     options: OPTIONS,
     allowLater: true,
+    handledByOpening: true,
     priority: "high",
     suggestedQuestions: SUGGESTED,
   };
@@ -207,7 +220,7 @@ export function highlightCard(a: InboxArticle) {
 
 /**
  * What the person's answers do, in order. Relevant and Not relevant sort the
- * article and mark it read; a cleared answer unsorts it; opening it marks it
+ * article and mark it read; Unsure marks it read and takes back any verdict; a cleared answer unsorts it; opening it marks it
  * read; Later counts as wanting it. Expiry and withdrawal mean nothing.
  * Events for articles no longer kept are dropped.
  */
@@ -230,6 +243,10 @@ export function effectsOf(
           id,
           verdict: e.optionId === RELEVANT ? "want" : "skip",
         });
+        effects.push({ kind: "read", id });
+      } else if (e.optionId === UNSURE) {
+        // No verdict, and none left from an earlier answer.
+        effects.push({ kind: "unsort", id });
         effects.push({ kind: "read", id });
       }
     } else if (e.type === "cleared") {

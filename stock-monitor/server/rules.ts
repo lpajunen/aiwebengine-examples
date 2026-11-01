@@ -322,6 +322,7 @@ export function watchlistCard(
       "watchlist's page; Hold takes it off. Nothing is traded.",
     options: RECOMMEND_OPTIONS,
     suggestedQuestions: SUGGESTED,
+    allowLater: true,
     items: watchlist.map((w) => {
       const q = quotes[w.symbol];
       return {
@@ -374,6 +375,7 @@ export function candidatesCard(day: string, symbols: string[]) {
       "Not interested means it is not proposed again.",
     options: CANDIDATE_OPTIONS,
     suggestedQuestions: SUGGESTED,
+    allowLater: true,
     items: symbols.map((symbol) => ({
       id: symbol,
       title: symbol,

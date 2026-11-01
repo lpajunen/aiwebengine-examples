@@ -9,6 +9,7 @@ import {
   MAX_HIGHLIGHTS,
   NOT_RELEVANT,
   RELEVANT,
+  UNSURE,
   articleKey,
   articlesAsked,
   batchCard,
@@ -159,6 +160,13 @@ describe("cards", function () {
     expect(JSON.stringify(card).length < 32 * 1024).toBe(true);
     expect(card.topic).toBe("news-digest:sports");
     expect(card.items[0].id).toBe(articleKey(long[0].id));
+    expect(card.handledByOpening).toBe(true);
+    expect(card.allowLater).toBe(true);
+    expect(card.options.map((o) => o.id)).toEqual([
+      RELEVANT,
+      UNSURE,
+      NOT_RELEVANT,
+    ]);
   });
 
   test("a highlight can wait until later", function () {
@@ -202,6 +210,18 @@ describe("effectsOf", function () {
     ).toEqual([
       { kind: "verdict", id: "b", verdict: "want" },
       { kind: "read", id: "b" },
+    ]);
+  });
+
+  test("unsure reads and takes back a verdict", function () {
+    expect(
+      effectsOf(
+        [{ type: "changed", externalId: "d.1", itemId: a, optionId: UNSURE }],
+        list,
+      ),
+    ).toEqual([
+      { kind: "unsort", id: "a" },
+      { kind: "read", id: "a" },
     ]);
   });
 

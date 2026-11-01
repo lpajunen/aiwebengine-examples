@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stock monitor</title>
+    <link rel="stylesheet" href="/engine/engine.css" />
+    <script src="/engine/engine.js" defer></script>
+    <style>
+      /* The engine's stylesheet supplies tokens, controls, buttons and the
+         menu; this is only what the page adds, against the same --aw-*
+         properties so it follows the engine's look and dark mode. */
+      body {
+        padding: var(--aw-space-5) var(--aw-space-4) 4rem;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        padding-right: 3rem;
+        margin-bottom: var(--aw-space-1);
+      }
+      .sub {
+        color: var(--aw-color-muted);
+        margin: 0 0 var(--aw-space-5);
+      }
+      section {
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-lg);
+        box-shadow: var(--aw-shadow);
+        padding: var(--aw-space-4);
+        margin-bottom: var(--aw-space-4);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--aw-color-muted);
+      }
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+        font-family: var(--aw-font-mono);
+        font-size: 0.85rem;
+      }
+      .row {
+        display: flex;
+        gap: var(--aw-space-2);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--aw-space-3);
+      }
+      .status {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .status.error {
+        color: var(--aw-color-danger);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .stocks li {
+        display: flex;
+        align-items: center;
+        gap: var(--aw-space-3);
+        flex-wrap: wrap;
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-3) 0;
+      }
+      .stocks li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .stocks li:last-child {
+        padding-bottom: 0;
+      }
+      .symbol {
+        font-weight: 600;
+        min-width: 6rem;
+      }
+      .symbol a {
+        color: var(--aw-color-text);
+      }
+      .price {
+        font-variant-numeric: tabular-nums;
+        min-width: 10rem;
+      }
+      .up {
+        color: var(--aw-color-success);
+      }
+      .down {
+        color: var(--aw-color-danger);
+      }
+      /* A move past the stock's own threshold. */
+      .alert {
+        font-weight: 600;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .choices {
+        display: flex;
+        gap: var(--aw-space-1);
+      }
+      .choices button[aria-pressed="true"] {
+        outline: 2px solid var(--aw-color-focus);
+      }
+      .empty {
+        color: var(--aw-color-muted);
+      }
+      .lists {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: var(--aw-space-4);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The watchlist, the key and permissions are changed rarely, so they
+         live in the account menu. -->
+    <aw-account-menu>
+      <button type="button" id="open-settings">Watchlist</button>
+      <button type="button" id="open-key">Finnhub key</button>
+      <a id="grant-link" href="#" hidden>Permissions</a>
+    </aw-account-menu>
+    <main>
+      <h1>Stock monitor</h1>
+      <p class="sub">
+        Your watchlist, checked every 15 minutes, and what you would buy and
+        sell. Nothing is traded; quotes are information, not advice.
+      </p>
+
+      <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <section id="key-panel" hidden>
+        <h2>Your Finnhub key</h2>
+        <p class="status">
+          Quotes come from Finnhub with your own key (a free one is enough). It
+          is stored against your account, encrypted, and never readable by this
+          page or by the script — the engine substitutes it into the request.
+        </p>
+        <div class="row">
+          <input
+            id="key"
+            type="password"
+            autocomplete="off"
+            aria-label="Finnhub API key"
+          />
+        </div>
+        <div class="row">
+          <button id="save-key">Save key</button>
+          <button id="forget-key" class="aw-button--secondary" hidden>
+            Remove key
+          </button>
+          <button id="close-key" class="aw-button--secondary">Close</button>
+          <span id="key-status" class="status"></span>
+        </div>
+      </section>
+
+      <section id="settings-panel" hidden>
+        <h2>Watchlist</h2>
+        <label for="watchlist"
+          >One stock per line, at most 30: its ticker and, if not 5, the day's
+          move in percent that is worth an alert. <code>AAPL</code>,
+          <code>NOKIA.HE 3</code>.</label
+        >
+        <textarea id="watchlist" spellcheck="false"></textarea>
+        <label for="daily-hour"
+          >Hour (UTC) of the day's round: the watchlist and stocks to look
+          at</label
+        >
+        <input id="daily-hour" type="number" min="0" max="23" step="1" />
+        <div class="row">
+          <button id="save-settings">Save</button>
+          <button id="close-settings" class="aw-button--secondary">
+            Close
+          </button>
+          <button id="run-now" class="aw-button--secondary">Check now</button>
+          <span id="settings-status" class="status"></span>
+        </div>
+        <p id="inbox-status" class="status" hidden></p>
+      </section>
+
+      <section>
+        <h2>Watchlist</h2>
+        <ul id="stocks" class="stocks">
+          <li class="empty">Loading…</li>
+        </ul>
+      </section>
+
+      <section class="lists">
+        <div>
+          <h2>Recommended buy</h2>
+          <ul id="buy" class="stocks"></ul>
+        </div>
+        <div>
+          <h2>Recommended sell</h2>
+          <ul id="sell" class="stocks"></ul>
+        </div>
+      </section>
+
+      <section id="candidates-panel" hidden>
+        <h2>Stocks to look at</h2>
+        <p class="status">Peers of the stocks you watch.</p>
+        <ul id="candidates" class="stocks" style="margin-top: var(--aw-space-3)"></ul>
+      </section>
+
+      <p id="run-status" class="status"></p>
+    </main>
+    <script type="module" src="/stock-monitor/app.js"></script>
+  </body>
+</html>

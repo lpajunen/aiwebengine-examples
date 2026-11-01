@@ -82,6 +82,10 @@ export interface InboxState {
   cursor: number;
   /** The last alert per stock: "<day>:<up|down>". */
   alerts: Record<string, string>;
+  /** The day the last day's round reached the inbox. */
+  postedDay?: string;
+  /** Stocks to look at already posted, newest first. */
+  postedCandidates?: string[];
   problem?: string;
   syncedAt?: string;
 }
@@ -193,6 +197,35 @@ export function dailyDue(
   hourUtc: number,
 ): boolean {
   return lastDay !== dayOf(now) && new Date(now).getUTCHours() >= hourUtc;
+}
+
+/**
+ * What the day's round posts to the inbox, if it is due there: the watchlist
+ * card, and the stocks to look at not posted before. Kept apart from when
+ * the peers are fetched, so a round that ran before the inbox could be
+ * reached, or whose post failed, is posted at the next run that reaches it.
+ * Answers the state as it is once posted.
+ */
+export function dailyPosts(
+  state: InboxState,
+  pending: string[],
+  now: string,
+  hourUtc: number,
+): { due: boolean; candidates: string[]; state: InboxState } {
+  if (!dailyDue(state.postedDay ?? "", now, hourUtc)) {
+    return { due: false, candidates: [], state };
+  }
+  const posted = state.postedCandidates ?? [];
+  const candidates = pending.filter((s) => posted.indexOf(s) === -1);
+  return {
+    due: true,
+    candidates,
+    state: {
+      ...state,
+      postedDay: dayOf(now),
+      postedCandidates: candidates.concat(posted).slice(0, 500),
+    },
+  };
 }
 
 /**

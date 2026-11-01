@@ -17,6 +17,7 @@ import {
   askedSymbol,
   candidatesCard,
   dailyDue,
+  dailyPosts,
   effectsOf,
   emptyState,
   formatWatchlist,
@@ -285,5 +286,26 @@ describe("askedSymbol", function () {
   test("is null for a batch as a whole or a card it did not post", function () {
     expect(askedSymbol("w-2026-11-02")).toBeNull();
     expect(askedSymbol("x-1", "AAPL")).toBeNull();
+  });
+});
+
+describe("dailyPosts", function () {
+  test("posts the round once a day, with stocks not posted before", function () {
+    const first = dailyPosts(emptyState(), ["MSFT", "DELL"], NOW, 15);
+    expect(first.due).toBe(true);
+    expect(first.candidates).toEqual(["MSFT", "DELL"]);
+    expect(dailyPosts(first.state, ["MSFT"], LATER, 15).due).toBe(false);
+    const next = dailyPosts(first.state, ["HPQ", "MSFT"], TOMORROW, 15);
+    expect(next.candidates).toEqual(["HPQ"]);
+  });
+
+  test("waits for the hour", function () {
+    expect(dailyPosts(emptyState(), [], NOW, 16).due).toBe(false);
+  });
+
+  test("a round the inbox has not had yet is still due later the same day", function () {
+    // The peers were fetched at an earlier run that could not reach the
+    // inbox; the inbox's own record says nothing was posted today.
+    expect(dailyPosts(emptyState(), ["MSFT"], LATER, 15).due).toBe(true);
   });
 });

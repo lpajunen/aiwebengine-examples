@@ -32,6 +32,7 @@ import {
   askedSymbol,
   candidatesCard,
   dailyDue,
+  dailyPosts,
   dayOf,
   effectsOf,
   emptyState,
@@ -614,15 +615,17 @@ function checkWatchlist(context: HandlerContext): void {
     now,
     current.dailyHourUtc,
   );
-  const candidates = daily ? findCandidates(watchlist, now) : [];
-  if (daily) writeJson("dailyDay", dayOf(now));
+  if (daily) {
+    findCandidates(watchlist, now);
+    writeJson("dailyDay", dayOf(now));
+  }
   writeJson("status", {
     checkedAt: now,
     ...(problems.length > 0
       ? { problem: problems.slice(0, 5).join("; ") }
       : {}),
   });
-  if (inbox) postToInbox(watchlist, quotes, candidates, daily, now);
+  if (inbox) postToInbox(watchlist, quotes, current.dailyHourUtc, now);
 }
 
 // ============================================================================
@@ -689,8 +692,7 @@ function collectAnswers(): void {
 function postToInbox(
   watchlist: Watched[],
   quotes: Record<string, Quote>,
-  candidates: string[],
-  daily: boolean,
+  dailyHourUtc: number,
   now: string,
 ): void {
   const before = readJson<InboxState>("inbox", emptyState());
@@ -704,11 +706,19 @@ function postToInbox(
       const watched = watchlist.find((w) => w.symbol === symbol);
       if (watched) post(alertCard(day, watched, quotes[symbol], current));
     }
-    const state: InboxState = { ...due.state };
-    if (daily) {
+    const daily = dailyPosts(
+      due.state,
+      readJson<string[]>("candidates", []),
+      now,
+      dailyHourUtc,
+    );
+    if (daily.due) {
       post(watchlistCard(day, watchlist, quotes, current));
-      if (candidates.length > 0) post(candidatesCard(day, candidates));
+      if (daily.candidates.length > 0) {
+        post(candidatesCard(day, daily.candidates));
+      }
     }
+    const state: InboxState = { ...daily.state };
     delete state.problem;
     state.syncedAt = now;
     writeJson("inbox", state);

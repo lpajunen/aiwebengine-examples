@@ -96,6 +96,8 @@ interface Settings {
   feeds: string[];
   /** The reader's own words on what they want and do not want. */
   interests?: string;
+  /** Stopped by the person from their agent inbox; not scheduled until resumed. */
+  paused?: boolean;
 }
 
 /** Headlines the reader sorted by hand, newest last. */
@@ -298,11 +300,14 @@ function newsDigestState(context: HandlerContext): HttpResponse {
   let schedule =
     personalTasks.schedules().find((s) => s.key === scheduleKey(inst)) ?? null;
   // A schedule declared before the rotation ran once a day; move it over.
-  if (allowed && schedule && schedule.cron !== null) {
+  // A digest set up before permission was given is scheduled once it is.
+  const unscheduled =
+    !schedule && settings.feeds.length > 0 && !settings.paused;
+  if (allowed && ((schedule && schedule.cron !== null) || unscheduled)) {
     try {
       schedule = declareSchedule(inst);
     } catch (e) {
-      console.warn(`news-digest: moving the schedule over: ${e}`);
+      console.warn(`news-digest: declaring the schedule: ${e}`);
     }
   }
   const articles = readJson<DigestItem[]>(inst, "articles", []);
@@ -373,25 +378,65 @@ function newsDigestSaveFeeds(context: HandlerContext): HttpResponse {
   const inst = instanceOf(context)?.id;
   if (!inst) return fail(404, "No such digest");
   const given = body(context).feeds;
-  const feeds = (Array.isArray(given) ? given : [])
-    .map((url) => String(url).trim())
+  try {
+    const saved = saveSettings(
+      inst,
+      Array.isArray(given) ? given.map(String) : [],
+      String(body(context).interests ?? ""),
+    );
+    return ResponseBuilder.json({ ok: true, ...saved });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return fail(e instanceof SettingsError ? 400 : 403, message);
+  }
+}
+
+/** A setting the person gave that cannot be used; their mistake, not a refusal. */
+class SettingsError extends Error {}
+
+/** Feeds and interests as they are kept, or a SettingsError. */
+function cleanSettings(
+  given: string[],
+  interestsText: string,
+): { feeds: string[]; interests: string } {
+  const feeds = given
+    .map((url) => url.trim())
     .filter((url, i, list) => url !== "" && list.indexOf(url) === i);
   if (feeds.length > MAX_FEEDS) {
-    return fail(400, `At most ${MAX_FEEDS} feeds`);
+    throw new SettingsError(`At most ${MAX_FEEDS} feeds`);
   }
   const bad = feeds.find((url) => !/^https?:\/\/[^\s]+$/.test(url));
-  if (bad) return fail(400, `Not a URL: ${bad}`);
-  const interests = String(body(context).interests ?? "").trim();
+  if (bad) throw new SettingsError(`Not a URL: ${bad}`);
+  const interests = interestsText.trim();
   if (interests.length > MAX_INTERESTS_CHARS) {
-    return fail(400, `Interests: at most ${MAX_INTERESTS_CHARS} characters`);
+    throw new SettingsError(
+      `Interests: at most ${MAX_INTERESTS_CHARS} characters`,
+    );
   }
+  return { feeds, interests };
+}
+
+/**
+ * Saves a digest's feeds and interests, and keeps its schedule to match: one
+ * with feeds and not paused is scheduled, a feed just added is read now, and
+ * changed interests have what was filtered judged again. Without permission
+ * to act for the person the settings are still saved and nothing is
+ * scheduled; their status says what is missing. Throws a SettingsError for
+ * settings that cannot be used.
+ */
+function saveSettings(
+  inst: string,
+  given: string[],
+  interestsText: string,
+): { feeds: string[]; interests: string; rejudge: boolean } {
+  const { feeds, interests } = cleanSettings(given, interestsText);
   const previous = readJson<Settings>(inst, "settings", { feeds: [] });
   const before = previous.feeds;
   const rejudge =
     interests !== (previous.interests ?? "") &&
     secretStorage.exists(SECRET_NAME);
-  try {
-    if (feeds.length === 0) {
+  if (permitted(personalTasks.authorization())) {
+    if (feeds.length === 0 || previous.paused) {
       personalTasks.unschedule(scheduleKey(inst));
     } else {
       declareSchedule(inst);
@@ -411,16 +456,15 @@ function newsDigestSaveFeeds(context: HandlerContext): HttpResponse {
         payload: { instance: inst },
       });
     }
-  } catch (e) {
-    return fail(403, e instanceof Error ? e.message : "Not allowed");
   }
   const settings: Settings = { feeds, interests };
+  if (previous.paused) settings.paused = true;
   personalStorage.setItem(keyOf(inst, "settings"), JSON.stringify(settings));
   const status = readJson<Record<string, FeedStatus>>(inst, "feedStatus", {});
   const kept: Record<string, FeedStatus> = {};
   for (const url of feeds) if (status[url]) kept[url] = status[url];
   personalStorage.setItem(keyOf(inst, "feedStatus"), JSON.stringify(kept));
-  return ResponseBuilder.json({ ok: true, feeds, interests, rejudge });
+  return { feeds, interests, rejudge };
 }
 
 // Every feed, now, rather than at the next run.
@@ -1455,6 +1499,284 @@ function postToInbox(inst: string, added: DigestItem[], now: string): void {
 }
 
 // ============================================================================
+// The agent contract: what an agent inbox calls to set a digest up, see how
+// it is doing, and pause, resume or remove it (docs/guides/agent-inbox.md in
+// aiwebengine-dev). The inbox calls these as the person; the key and the
+// permission are still given on this script's own pages, which status links.
+// ============================================================================
+
+const PAGE = "/news-digest";
+
+const CONFIG_SCHEMA = {
+  type: "object",
+  properties: {
+    label: {
+      type: "string",
+      title: "Name",
+      description: "What this digest is about, e.g. Sports.",
+      maxLength: MAX_LABEL_CHARS,
+    },
+    feeds: {
+      type: "string",
+      title: "Feeds",
+      description: `RSS, Atom or JSON Feed URLs, one per line, at most ${MAX_FEEDS}.`,
+      "x-multiline": true,
+    },
+    interests: {
+      type: "string",
+      title: "Interests",
+      description:
+        "What you want to read, and what you do not, in your own words.",
+      "x-multiline": true,
+      maxLength: MAX_INTERESTS_CHARS,
+    },
+  },
+  required: ["label", "feeds"],
+};
+
+function settingsUrl(inst: string): string {
+  return inst === DEFAULT_INSTANCE
+    ? PAGE
+    : `${PAGE}?instance=${encodeURIComponent(inst)}`;
+}
+
+function newsDigestManifestTool(): unknown {
+  return {
+    name: PRODUCER,
+    label: "News digest",
+    description:
+      "The news you follow, summarised without the clickbait, read every 15 minutes. Its articles come to you to sort as relevant or not, and it learns from what you answer.",
+    config: CONFIG_SCHEMA,
+    instances: "many",
+    maxInstances: MAX_INSTANCES,
+    scopes: ["personal_storage", "write", "secrets", "tools"],
+    secrets: [
+      { name: SECRET_NAME, label: "Anthropic API key", required: true },
+    ],
+    settingsUrl: PAGE,
+    canAnswer: true,
+  };
+}
+
+/** What a digest still needs before it can run, each with where to give it. */
+function missingFor(
+  inst: string,
+): { kind: string; label: string; url?: string }[] {
+  const missing: { kind: string; label: string; url?: string }[] = [];
+  const grant = personalTasks.authorization();
+  if (!permitted(grant) || (grant.scopes ?? []).indexOf("tools") === -1) {
+    missing.push({
+      kind: "consent",
+      label:
+        "Give the digest permission to work while you are away: personal storage, write, secrets and tools",
+      url: grant.consentUrl,
+    });
+  }
+  if (!secretStorage.exists(SECRET_NAME)) {
+    missing.push({
+      kind: "secret",
+      label: "Add your Anthropic API key on the digest's page",
+      url: `${settingsUrl(inst)}#key`,
+    });
+  }
+  if (readJson<Settings>(inst, "settings", { feeds: [] }).feeds.length === 0) {
+    missing.push({
+      kind: "config",
+      label: "Add at least one feed",
+      url: settingsUrl(inst),
+    });
+  }
+  return missing;
+}
+
+/** How a digest is doing, as the inbox shows it. */
+function statusOf(inst: string): unknown {
+  const settings = readJson<Settings>(inst, "settings", { feeds: [] });
+  const schedule =
+    personalTasks.schedules().find((s) => s.key === scheduleKey(inst)) ?? null;
+  const missing = missingFor(inst);
+  const problems = Object.values(
+    readJson<Record<string, FeedStatus>>(inst, "feedStatus", {}),
+  )
+    .map((f) => f.problem)
+    .filter(Boolean);
+  const inbox = readJson<InboxState | null>(inst, "inbox", null);
+  const state = settings.paused
+    ? "paused"
+    : missing.length > 0
+      ? "incomplete"
+      : !schedule
+        ? "ready"
+        : schedule.state === "active"
+          ? "running"
+          : "paused";
+  return {
+    instance: inst,
+    label: instances().find((i) => i.id === inst)?.label ?? DEFAULT_LABEL,
+    settingsUrl: settingsUrl(inst),
+    state,
+    pausedReason: settings.paused
+      ? "Paused by you"
+      : (schedule?.pausedReason ?? null),
+    missing,
+    lastRunAt: schedule?.lastRunAt ?? null,
+    nextRunAt:
+      schedule && schedule.state === "active" ? schedule.nextRunAt : null,
+    problem: inbox?.problem ?? problems[0] ?? null,
+  };
+}
+
+function contractInstance(context: HandlerContext): string {
+  if (!signedIn(context)) throw new Error("Call as a signed-in person");
+  return toolInstance(toolArgs(context));
+}
+
+// Starts a digest, or with `instance` changes one: its name, feeds and
+// interests. Answers its status, which says what is still missing.
+function newsDigestSetupTool(context: HandlerContext): unknown {
+  if (!signedIn(context)) throw new Error("Call as a signed-in person");
+  const args = toolArgs(context);
+  const config = (args.config ?? {}) as Record<string, unknown>;
+  const label = String(config.label ?? "")
+    .trim()
+    .slice(0, MAX_LABEL_CHARS);
+  // Checked before anything is created, so a refused setup leaves nothing.
+  const feedLines =
+    config.feeds !== undefined
+      ? String(config.feeds).split(/\s*\n\s*/)
+      : undefined;
+  if (feedLines !== undefined || config.interests !== undefined) {
+    cleanSettings(feedLines ?? [], String(config.interests ?? ""));
+  }
+  let inst: string;
+  if (args.instance === undefined || args.instance === null) {
+    if (!label) throw new Error("A digest needs a name");
+    // The first digest set up from an inbox takes the default's place when
+    // it has never been used, so nobody starts with an empty one beside it.
+    const first = readJson<Settings>(DEFAULT_INSTANCE, "settings", {
+      feeds: [],
+    });
+    if (instances().length === 1 && first.feeds.length === 0) {
+      inst = DEFAULT_INSTANCE;
+      saveInstances([{ id: DEFAULT_INSTANCE, label }]);
+    } else {
+      inst = createInstance(label).id;
+    }
+  } else {
+    inst = toolInstance(args);
+    if (label) {
+      const list = instances();
+      const found = list.find((i) => i.id === inst);
+      if (found) found.label = label;
+      saveInstances(list);
+    }
+  }
+  if (config.feeds !== undefined || config.interests !== undefined) {
+    const current = readJson<Settings>(inst, "settings", { feeds: [] });
+    saveSettings(
+      inst,
+      feedLines ?? current.feeds,
+      config.interests !== undefined
+        ? String(config.interests)
+        : (current.interests ?? ""),
+    );
+  }
+  return statusOf(inst);
+}
+
+// A digest removed on its page since the inbox learnt of it answers "gone",
+// so the inbox can offer to remove it there too.
+function newsDigestStatusTool(context: HandlerContext): unknown {
+  if (!signedIn(context)) throw new Error("Call as a signed-in person");
+  const named = String(toolArgs(context).instance ?? DEFAULT_INSTANCE);
+  if (!instances().some((i) => i.id === named)) {
+    return { instance: named, state: "gone", missing: [] };
+  }
+  return statusOf(named);
+}
+
+function newsDigestPauseTool(context: HandlerContext): unknown {
+  const inst = contractInstance(context);
+  const settings = readJson<Settings>(inst, "settings", { feeds: [] });
+  personalTasks.unschedule(scheduleKey(inst));
+  personalStorage.setItem(
+    keyOf(inst, "settings"),
+    JSON.stringify({ ...settings, paused: true }),
+  );
+  return statusOf(inst);
+}
+
+// Starts a digest that is paused, or ready but not yet started.
+function newsDigestResumeTool(context: HandlerContext): unknown {
+  const inst = contractInstance(context);
+  const settings = readJson<Settings>(inst, "settings", { feeds: [] });
+  const missing = missingFor(inst);
+  if (missing.length > 0) {
+    throw new Error(`Not yet: ${missing.map((m) => m.label).join("; ")}`);
+  }
+  delete settings.paused;
+  personalStorage.setItem(keyOf(inst, "settings"), JSON.stringify(settings));
+  declareSchedule(inst);
+  personalTasks.enqueue({
+    handler: "buildDigest",
+    payload: { instance: inst },
+  });
+  return statusOf(inst);
+}
+
+function newsDigestRemoveTool(context: HandlerContext): unknown {
+  removeInstance(contractInstance(context));
+  return { removed: true };
+}
+
+function registerContractTools(): void {
+  const instanceOnly = {
+    type: "object",
+    properties: { instance: INSTANCE_SCHEMA },
+    required: ["instance"],
+  };
+  mcpRegistry.registerTool("news_digest_manifest", {
+    description:
+      "What the news digest is, the configuration it takes, and what it needs (permission, key) — for an agent inbox's catalog.",
+    inputSchema: { type: "object", properties: {} },
+    handler: "newsDigestManifestTool",
+  });
+  mcpRegistry.registerTool("news_digest_setup", {
+    description:
+      "Start a digest for the person, or with instance change one. Answers its status, listing what is still missing and where to give it.",
+    inputSchema: {
+      type: "object",
+      properties: { instance: INSTANCE_SCHEMA, config: CONFIG_SCHEMA },
+      required: ["config"],
+    },
+    handler: "newsDigestSetupTool",
+  });
+  mcpRegistry.registerTool("news_digest_status", {
+    description:
+      "How one of the person's digests is doing: running, paused, ready or incomplete, its runs, and what is missing.",
+    inputSchema: instanceOnly,
+    handler: "newsDigestStatusTool",
+  });
+  mcpRegistry.registerTool("news_digest_pause", {
+    description: "Pause one of the person's digests until resumed.",
+    inputSchema: instanceOnly,
+    handler: "newsDigestPauseTool",
+  });
+  mcpRegistry.registerTool("news_digest_resume", {
+    description:
+      "Start a digest that is paused or ready; refused while something is missing.",
+    inputSchema: instanceOnly,
+    handler: "newsDigestResumeTool",
+  });
+  mcpRegistry.registerTool("news_digest_remove", {
+    description:
+      "Remove one of the person's digests with everything it kept; the first is emptied instead.",
+    inputSchema: instanceOnly,
+    handler: "newsDigestRemoveTool",
+  });
+}
+
+// ============================================================================
 // The person's digests
 // ============================================================================
 
@@ -1492,6 +1814,16 @@ function newsDigestSaveInstance(context: HandlerContext): HttpResponse {
   if (list.length >= MAX_INSTANCES) {
     return fail(400, `At most ${MAX_INSTANCES} digests`);
   }
+  const instance = createInstance(label);
+  return ResponseBuilder.json({ instance, instances: instances() });
+}
+
+/** A new digest, under an id made from its name. */
+function createInstance(label: string): Instance {
+  const list = instances();
+  if (list.length >= MAX_INSTANCES) {
+    throw new SettingsError(`At most ${MAX_INSTANCES} digests`);
+  }
   const instance = {
     id: slug(
       label,
@@ -1501,7 +1833,7 @@ function newsDigestSaveInstance(context: HandlerContext): HttpResponse {
   };
   list.push(instance);
   saveInstances(list);
-  return ResponseBuilder.json({ instance, instances: list });
+  return instance;
 }
 
 // Removes a digest with everything it kept. The default one stays.
@@ -1513,16 +1845,25 @@ function newsDigestRemoveInstance(context: HandlerContext): HttpResponse {
     return fail(400, "The first digest cannot be removed");
   }
   try {
-    personalTasks.unschedule(scheduleKey(instance.id));
+    removeInstance(instance.id);
   } catch (e) {
     return fail(403, e instanceof Error ? e.message : "Not allowed");
   }
+  return ResponseBuilder.json({ instances: instances() });
+}
+
+/**
+ * Removes a digest with everything it kept. The default one is emptied
+ * rather than removed: it is the digest the page opens on.
+ */
+function removeInstance(inst: string): void {
+  personalTasks.unschedule(scheduleKey(inst));
   for (const name of DIGEST_KEYS) {
-    personalStorage.removeItem(keyOf(instance.id, name));
+    personalStorage.removeItem(keyOf(inst, name));
   }
-  const list = instances().filter((i) => i.id !== instance.id);
-  saveInstances(list);
-  return ResponseBuilder.json({ instances: list });
+  if (inst !== DEFAULT_INSTANCE) {
+    saveInstances(instances().filter((i) => i.id !== inst));
+  }
 }
 
 // A task acting as the person: the schedule's run reads every feed; one
@@ -1636,6 +1977,7 @@ function recordStatus(
 
 function init(): void {
   registerTools();
+  registerContractTools();
   routeRegistry.registerRoute("/news-digest", { file: "public/index.html" });
   routeRegistry.registerRoute("/news-digest/app.js", {
     file: "public/app.js",

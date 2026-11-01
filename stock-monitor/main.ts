@@ -72,6 +72,8 @@ const MAX_EVENT_CALLS = 10;
 interface Settings {
   watchlist: Watched[];
   dailyHourUtc: number;
+  /** Stopped by the person from their agent inbox; not scheduled until resumed. */
+  paused?: boolean;
 }
 
 interface RunStatus {
@@ -155,7 +157,20 @@ function stockMonitorState(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return ResponseBuilder.json({ signedIn: false });
   const grant = personalTasks.authorization();
   const current = settings();
-  const schedule = personalTasks.schedules().find((s) => s.key === KEY) ?? null;
+  let schedule = personalTasks.schedules().find((s) => s.key === KEY) ?? null;
+  // A watchlist set up before permission was given is scheduled once it is.
+  if (
+    !schedule &&
+    current.watchlist.length > 0 &&
+    !current.paused &&
+    permitted(grant)
+  ) {
+    try {
+      schedule = declareSchedule();
+    } catch (e) {
+      console.warn(`stock-monitor: declaring the schedule: ${e}`);
+    }
+  }
   const inbox = readJson<InboxState | null>("inbox", null);
   return ResponseBuilder.json({
     signedIn: true,
@@ -188,31 +203,53 @@ function stockMonitorState(context: HandlerContext): HttpResponse {
 function stockMonitorSaveWatchlist(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return fail(401, "Sign in first");
   const input = body(context);
-  const { watchlist, errors } = parseWatchlist(String(input.text ?? ""));
-  if (errors.length > 0) return fail(400, errors.join("; "));
-  const hour = Number(input.dailyHourUtc ?? DEFAULT_DAILY_HOUR);
-  if (!(Number.isInteger(hour) && hour >= 0 && hour <= 23)) {
-    return fail(400, "The hour is 0 to 23");
+  try {
+    const count = saveSettings(
+      String(input.text ?? ""),
+      input.dailyHourUtc ?? DEFAULT_DAILY_HOUR,
+    );
+    return ResponseBuilder.json({ ok: true, count });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return fail(e instanceof SettingsError ? 400 : 403, message);
   }
+}
+
+/** A setting the person gave that cannot be used; their mistake, not a refusal. */
+class SettingsError extends Error {}
+
+/**
+ * Saves the watchlist and the hour of the day's round, and keeps the
+ * schedule to match: scheduled with stocks and not paused, and checked at
+ * once. Without permission to act for the person the settings are still
+ * saved and nothing is scheduled; the status says what is missing. Answers
+ * how many stocks are watched.
+ */
+function saveSettings(text: string, hourValue: unknown): number {
+  const { watchlist, errors } = parseWatchlist(text);
+  if (errors.length > 0) throw new SettingsError(errors.join("; "));
+  const hour = Number(hourValue);
+  if (!(Number.isInteger(hour) && hour >= 0 && hour <= 23)) {
+    throw new SettingsError("The hour is 0 to 23");
+  }
+  const paused = settings().paused === true;
   if (permitted(personalTasks.authorization())) {
-    try {
-      if (watchlist.length === 0) {
-        personalTasks.unschedule(KEY);
-      } else {
-        declareSchedule();
-        personalTasks.enqueue({ handler: "checkWatchlist" });
-      }
-    } catch (e) {
-      return fail(403, e instanceof Error ? e.message : "Not allowed");
+    if (watchlist.length === 0 || paused) {
+      personalTasks.unschedule(KEY);
+    } else {
+      declareSchedule();
+      personalTasks.enqueue({ handler: "checkWatchlist" });
     }
   }
-  writeJson("settings", { watchlist, dailyHourUtc: hour });
+  const next: Settings = { watchlist, dailyHourUtc: hour };
+  if (paused) next.paused = true;
+  writeJson("settings", next);
   const watched = new Set(watchlist.map((w) => w.symbol));
   writeJson(
     "candidates",
     readJson<string[]>("candidates", []).filter((s) => !watched.has(s)),
   );
-  return ResponseBuilder.json({ ok: true, count: watchlist.length });
+  return watchlist.length;
 }
 
 // Every quote, now, rather than at the next run.
@@ -503,6 +540,234 @@ function stockMonitorAskTool(context: HandlerContext): unknown {
 }
 
 // ============================================================================
+// The agent contract: what an agent inbox calls to set the watchlist up, see
+// how it is doing, and pause, resume or remove it (docs/guides/agent-inbox.md
+// in aiwebengine-dev). The inbox calls these as the person; the keys and the
+// permission are still given on this script's own page, which status links.
+// One instance per person: the watchlist.
+// ============================================================================
+
+const PAGE = "/stock-monitor";
+
+const CONFIG_SCHEMA = {
+  type: "object",
+  properties: {
+    watchlist: {
+      type: "string",
+      title: "Stocks",
+      description: `One per line, at most ${MAX_WATCHLIST}: the ticker and, if not ${DEFAULT_THRESHOLD}, the day's move in percent worth an alert. AAPL, NOKIA.HE 3.`,
+      "x-multiline": true,
+    },
+    dailyHourUtc: {
+      type: "integer",
+      title: "Hour of the day's round (UTC)",
+      description: "When the day's watchlist and stocks to look at are posted.",
+      minimum: 0,
+      maximum: 23,
+      default: DEFAULT_DAILY_HOUR,
+    },
+  },
+  required: ["watchlist"],
+};
+
+function stockMonitorManifestTool(): unknown {
+  return {
+    name: PRODUCER,
+    label: "Stock watchlist",
+    description:
+      "Your watchlist checked every 15 minutes: an alert when a stock moves past its threshold, the day's watchlist to mark as recommended buy or sell, and peers to look at. Nothing is traded.",
+    config: CONFIG_SCHEMA,
+    instances: "one",
+    scopes: ["personal_storage", "write", "secrets", "tools"],
+    secrets: [
+      { name: SECRET_NAME, label: "Finnhub API key", required: true },
+      {
+        name: AI_SECRET_NAME,
+        label: "Anthropic API key, for answering questions",
+        required: false,
+      },
+    ],
+    settingsUrl: PAGE,
+    canAnswer: true,
+  };
+}
+
+/** What the watchlist still needs before it can run, each with where to give it. */
+function missing(): { kind: string; label: string; url?: string }[] {
+  const found: { kind: string; label: string; url?: string }[] = [];
+  const grant = personalTasks.authorization();
+  if (!permitted(grant) || (grant.scopes ?? []).indexOf("tools") === -1) {
+    found.push({
+      kind: "consent",
+      label:
+        "Give the watchlist permission to work while you are away: personal storage, write, secrets and tools",
+      url: grant.consentUrl,
+    });
+  }
+  if (!secretStorage.exists(SECRET_NAME)) {
+    found.push({
+      kind: "secret",
+      label: "Add your Finnhub API key on the watchlist's page",
+      url: PAGE,
+    });
+  }
+  if (settings().watchlist.length === 0) {
+    found.push({ kind: "config", label: "Add at least one stock", url: PAGE });
+  }
+  return found;
+}
+
+/** How the watchlist is doing, as the inbox shows it. */
+function statusOf(): unknown {
+  const current = settings();
+  const schedule = personalTasks.schedules().find((s) => s.key === KEY) ?? null;
+  const gaps = missing();
+  const state = current.paused
+    ? "paused"
+    : gaps.length > 0
+      ? "incomplete"
+      : !schedule
+        ? "ready"
+        : schedule.state === "active"
+          ? "running"
+          : "paused";
+  return {
+    instance: INSTANCE,
+    label: LABEL,
+    settingsUrl: PAGE,
+    state,
+    pausedReason: current.paused
+      ? "Paused by you"
+      : (schedule?.pausedReason ?? null),
+    missing: gaps,
+    lastRunAt: schedule?.lastRunAt ?? null,
+    nextRunAt:
+      schedule && schedule.state === "active" ? schedule.nextRunAt : null,
+    problem:
+      readJson<InboxState | null>("inbox", null)?.problem ??
+      readJson<RunStatus | null>("status", null)?.problem ??
+      null,
+  };
+}
+
+function contractCall(context: HandlerContext): void {
+  if (!signedIn(context)) throw new Error("Call as a signed-in person");
+  const named = (context.args ?? {}).instance;
+  if (named !== undefined && named !== null && named !== INSTANCE) {
+    throw new Error(`The watchlist is the one instance, "${INSTANCE}"`);
+  }
+}
+
+// Sets up the watchlist or changes it. Answers its status, which says what
+// is still missing.
+function stockMonitorSetupTool(context: HandlerContext): unknown {
+  contractCall(context);
+  const config = ((context.args ?? {}).config ?? {}) as Record<string, unknown>;
+  const current = settings();
+  saveSettings(
+    config.watchlist !== undefined
+      ? String(config.watchlist)
+      : formatWatchlist(current.watchlist),
+    config.dailyHourUtc ?? current.dailyHourUtc,
+  );
+  return statusOf();
+}
+
+function stockMonitorStatusTool(context: HandlerContext): unknown {
+  contractCall(context);
+  return statusOf();
+}
+
+function stockMonitorPauseTool(context: HandlerContext): unknown {
+  contractCall(context);
+  personalTasks.unschedule(KEY);
+  writeJson("settings", { ...settings(), paused: true });
+  return statusOf();
+}
+
+// Starts the watchlist when paused, or ready but not yet started.
+function stockMonitorResumeTool(context: HandlerContext): unknown {
+  contractCall(context);
+  const gaps = missing();
+  if (gaps.length > 0) {
+    throw new Error(`Not yet: ${gaps.map((m) => m.label).join("; ")}`);
+  }
+  const current = settings();
+  delete current.paused;
+  writeJson("settings", current);
+  declareSchedule();
+  personalTasks.enqueue({ handler: "checkWatchlist" });
+  return statusOf();
+}
+
+// Stops the watchlist and forgets it: stocks, quotes, lists and proposals.
+// The keys stay; they are removed on the page.
+function stockMonitorRemoveTool(context: HandlerContext): unknown {
+  contractCall(context);
+  personalTasks.unschedule(KEY);
+  for (const name of [
+    "settings",
+    "quotes",
+    "lists",
+    "refused",
+    "offered",
+    "candidates",
+    "inbox",
+    "status",
+    "dailyDay",
+  ]) {
+    personalStorage.removeItem(name);
+  }
+  return { removed: true };
+}
+
+function registerContractTools(): void {
+  const instanceOnly = {
+    type: "object",
+    properties: { instance: { type: "string" } },
+  };
+  mcpRegistry.registerTool("stock_monitor_manifest", {
+    description:
+      "What the stock watchlist is, the configuration it takes, and what it needs (permission, keys) — for an agent inbox's catalog.",
+    inputSchema: { type: "object", properties: {} },
+    handler: "stockMonitorManifestTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_setup", {
+    description:
+      "Set up or change the person's stock watchlist. Answers its status, listing what is still missing and where to give it.",
+    inputSchema: {
+      type: "object",
+      properties: { instance: { type: "string" }, config: CONFIG_SCHEMA },
+      required: ["config"],
+    },
+    handler: "stockMonitorSetupTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_status", {
+    description:
+      "How the person's watchlist is doing: running, paused, ready or incomplete, its runs, and what is missing.",
+    inputSchema: instanceOnly,
+    handler: "stockMonitorStatusTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_pause", {
+    description: "Pause the person's watchlist until resumed.",
+    inputSchema: instanceOnly,
+    handler: "stockMonitorPauseTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_resume", {
+    description:
+      "Start the watchlist when paused or ready; refused while something is missing.",
+    inputSchema: instanceOnly,
+    handler: "stockMonitorResumeTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_remove", {
+    description:
+      "Stop the person's watchlist and forget its stocks, lists and proposals.",
+    inputSchema: instanceOnly,
+    handler: "stockMonitorRemoveTool",
+  });
+}
+
+// ============================================================================
 // The run
 // ============================================================================
 
@@ -728,6 +993,7 @@ function postToInbox(
 }
 
 function init(): void {
+  registerContractTools();
   mcpRegistry.registerTool("stock_watchlist", {
     description:
       "The person's stock watchlist with the latest quotes, their Recommended buy and sell lists, and stocks proposed to look at.",

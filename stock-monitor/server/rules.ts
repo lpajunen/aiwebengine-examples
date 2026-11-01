@@ -12,7 +12,8 @@
 //   superseded by the next one for that stock, with the same options;
 // - stocks to look at, a batch of peers of the watched ones: Follow adds one
 //   to the watchlist, Not interested means it is not proposed again.
-// Nothing trades; the lists are the person's own record.
+// Nothing trades; the lists are the person's own record. A question asked on
+// any of them (`stock_monitor_ask`) is about the stock askedSymbol names.
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "stock-monitor";
@@ -27,6 +28,9 @@ export const SELL = "sell";
 export const HOLD = "hold";
 export const FOLLOW = "follow";
 export const NOT_INTERESTED = "not_interested";
+
+/** Offered beside the inbox's Ask field. */
+const SUGGESTED = ["What does the company do?", "Any recent news?"];
 
 const RECOMMEND_OPTIONS = [
   { id: BUY, label: "Recommend buy", style: "primary", weight: "feedback" },
@@ -284,6 +288,7 @@ export function watchlistCard(
       "Recommend buy or sell puts a stock on your Recommended list on the " +
       "watchlist's page; Hold takes it off. Nothing is traded.",
     options: RECOMMEND_OPTIONS,
+    suggestedQuestions: SUGGESTED,
     items: watchlist.map((w) => {
       const q = quotes[w.symbol];
       return {
@@ -321,6 +326,7 @@ export function alertCard(
     options: RECOMMEND_OPTIONS,
     allowLater: true,
     priority: "high",
+    suggestedQuestions: ["Why did it move today?"].concat(SUGGESTED),
   };
 }
 
@@ -334,6 +340,7 @@ export function candidatesCard(day: string, symbols: string[]) {
       "Peers of the stocks you watch. Follow adds one to your watchlist; " +
       "Not interested means it is not proposed again.",
     options: CANDIDATE_OPTIONS,
+    suggestedQuestions: SUGGESTED,
     items: symbols.map((symbol) => ({
       id: symbol,
       title: symbol,
@@ -354,6 +361,17 @@ function subject(
     return { card: kind[0] as "w" | "a" | "c", symbol };
   }
   return null;
+}
+
+/**
+ * The stock a question on a card is about: an alert's, or the item asked
+ * about on a batch. Null for a batch asked about as a whole.
+ */
+export function askedSymbol(
+  externalId: string,
+  itemId?: string,
+): string | null {
+  return subject({ type: "asked", externalId, itemId })?.symbol ?? null;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   NOT_RELEVANT,
   RELEVANT,
   articleKey,
+  articlesAsked,
   batchCard,
   effectsOf,
   emptyState,
@@ -237,5 +238,33 @@ describe("effectsOf", function () {
         list,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("articlesAsked", function () {
+  const list = [article("a"), article("b"), article("c")];
+  const state = planPosts(
+    emptyState(),
+    [article("a"), article("b")],
+    NOW,
+  ).state;
+
+  test("finds an item, a highlight and a whole batch", function () {
+    const batchId = state.batch?.externalId ?? "";
+    expect(
+      articlesAsked(state, list, batchId, articleKey("b")).map((a) => a.id),
+    ).toEqual(["b"]);
+    expect(
+      articlesAsked(state, list, `h-${articleKey("c")}`).map((a) => a.id),
+    ).toEqual(["c"]);
+    expect(articlesAsked(state, list, batchId).map((a) => a.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  test("is empty for articles no longer kept or an earlier batch", function () {
+    expect(articlesAsked(state, list, "x", articleKey("gone"))).toEqual([]);
+    expect(articlesAsked(state, list, "2026-10-31.1")).toEqual([]);
   });
 });

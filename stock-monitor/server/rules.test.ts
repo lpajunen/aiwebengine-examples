@@ -14,6 +14,7 @@ import {
   SELL,
   alertCard,
   alertsDue,
+  askedSymbol,
   candidatesCard,
   dailyDue,
   effectsOf,
@@ -271,5 +272,18 @@ describe("recommend", function () {
     expect(lists.sell[0].price).toBe(90);
     lists = recommend(lists, "AAPL", null, null, LATER);
     expect(lists).toEqual({ buy: [], sell: [] });
+  });
+});
+
+describe("askedSymbol", function () {
+  test("names an alert's stock, or the item asked about", function () {
+    expect(askedSymbol("a-2026-11-02-BRK.B")).toBe("BRK.B");
+    expect(askedSymbol("w-2026-11-02", "AAPL")).toBe("AAPL");
+    expect(askedSymbol("c-2026-11-02", "MSFT")).toBe("MSFT");
+  });
+
+  test("is null for a batch as a whole or a card it did not post", function () {
+    expect(askedSymbol("w-2026-11-02")).toBeNull();
+    expect(askedSymbol("x-1", "AAPL")).toBeNull();
   });
 });

@@ -7,6 +7,9 @@
 // item by item: Relevant or Not relevant. The batch starts afresh each day,
 // when it is full, and once the person has finished it. An article the model
 // rates important goes out as a card of its own instead, a few a day at most.
+//
+// A question asked on a card (`news_digest_ask`) is about the articles that
+// card holds: articlesAsked finds them.
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "news-digest";
@@ -18,6 +21,9 @@ const MAX_SUMMARY = 400;
 
 export const RELEVANT = "relevant";
 export const NOT_RELEVANT = "not_relevant";
+
+/** Offered on every card; the inbox shows them beside its Ask field. */
+const SUGGESTED = ["What is the background?", "Why does this matter?"];
 
 const OPTIONS = [
   { id: RELEVANT, label: "Relevant", style: "primary", weight: "feedback" },
@@ -179,6 +185,7 @@ export function batchCard(
       "Not relevant moves an article under Filtered on the digest's page.",
     options: OPTIONS,
     items: articles.map(item),
+    suggestedQuestions: SUGGESTED,
   };
 }
 
@@ -194,6 +201,7 @@ export function highlightCard(a: InboxArticle) {
     options: OPTIONS,
     allowLater: true,
     priority: "high",
+    suggestedQuestions: SUGGESTED,
   };
 }
 
@@ -233,4 +241,32 @@ export function effectsOf(
     }
   }
   return effects;
+}
+
+/**
+ * The articles a question on a card is about: the item it names, a
+ * highlight's article, or for a question on the batch as a whole every
+ * article still in it. Empty when the digest no longer keeps them.
+ */
+export function articlesAsked<T extends InboxArticle>(
+  state: InboxState,
+  articles: T[],
+  externalId: string,
+  itemId?: string,
+): T[] {
+  const byKey = new Map(articles.map((a) => [articleKey(a.id), a]));
+  const key =
+    itemId ?? (externalId.startsWith("h-") ? externalId.slice(2) : undefined);
+  if (key !== undefined) {
+    const a = byKey.get(key);
+    return a ? [a] : [];
+  }
+  if (state.batch && state.batch.externalId === externalId) {
+    const byId = new Map(articles.map((a) => [a.id, a]));
+    return state.batch.ids.flatMap((id) => {
+      const a = byId.get(id);
+      return a ? [a] : [];
+    });
+  }
+  return [];
 }

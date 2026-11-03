@@ -8,7 +8,8 @@
 // its own.
 
 /**
- * @typedef {{ symbol: string, threshold: number }} StockWatched
+ * @typedef {{ symbol: string, threshold: number, group?: string }} StockWatched
+ * @typedef {{ name: string | null, stocks: StockWatched[] }} StockGroup
  * @typedef {{ price: number, changePct: number, previousClose: number,
  *   at: string }} StockQuote
  * @typedef {{ symbol: string, at: string, price: number | null }} StockRecommended
@@ -16,7 +17,7 @@
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
  *   hasKey?: boolean, hasAiKey?: boolean, canPost?: boolean, inboxAvailable?: boolean,
  *   inbox?: { syncedAt: string | null, problem: string | null } | null,
- *   watchlist?: StockWatched[], watchlistText?: string, dailyHourUtc?: number,
+ *   watchlist?: StockWatched[], groups?: StockGroup[], watchlistText?: string, dailyHourUtc?: number,
  *   quotes?: Record<string, StockQuote>,
  *   lists?: { buy: StockRecommended[], sell: StockRecommended[] },
  *   candidates?: string[],
@@ -227,24 +228,30 @@
       );
       return;
     }
-    for (const w of watchlist) {
-      const q = state.quotes?.[w.symbol];
-      const li = make("li");
-      li.append(symbolCell(w.symbol));
-      if (q) {
-        const past = Math.abs(q.changePct) >= w.threshold;
-        const price = make(
-          "span",
-          `${money(q.price)}  ${signed(q.changePct)}`,
-          `price ${q.changePct > 0 ? "up" : q.changePct < 0 ? "down" : ""}${past ? " alert" : ""}`,
-        );
-        price.title = `Previous close ${money(q.previousClose)}; alert at ±${w.threshold} %; ${when(q.at)}`;
-        li.append(price);
-      } else {
-        li.append(make("span", "No quote yet", "price empty"));
+    const groups = state.groups ?? [{ name: null, stocks: watchlist }];
+    for (const group of groups) {
+      if (group.name !== null) {
+        el.stocks.append(make("li", group.name, "group"));
       }
-      li.append(make("span", undefined, "spacer"), choices(w.symbol));
-      el.stocks.append(li);
+      for (const w of group.stocks) {
+        const q = state.quotes?.[w.symbol];
+        const li = make("li");
+        li.append(symbolCell(w.symbol));
+        if (q) {
+          const past = Math.abs(q.changePct) >= w.threshold;
+          const price = make(
+            "span",
+            `${money(q.price)}  ${signed(q.changePct)}`,
+            `price ${q.changePct > 0 ? "up" : q.changePct < 0 ? "down" : ""}${past ? " alert" : ""}`,
+          );
+          price.title = `Previous close ${money(q.previousClose)}; alert at ±${w.threshold} %; ${when(q.at)}`;
+          li.append(price);
+        } else {
+          li.append(make("span", "No quote yet", "price empty"));
+        }
+        li.append(make("span", undefined, "spacer"), choices(w.symbol));
+        el.stocks.append(li);
+      }
     }
   }
 

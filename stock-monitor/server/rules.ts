@@ -4,10 +4,14 @@
 // means. No storage or calls here — main.ts does those — so the rules can be
 // tested on their own.
 //
+// The person may sort the watchlist into groups ("# Nordic" above the stocks
+// in it); each group is listed and posted on its own, and the stocks above
+// any heading are a group of their own without a name.
+//
 // Three cards, each with its own options:
-// - the daily watchlist, a batch with one item per stock: Recommend buy,
-//   Recommend sell or Hold, which put the stock on the person's Recommended
-//   buy or sell list, or take it off both;
+// - the daily watchlist, a batch per group with one item per stock: Recommend
+//   buy, Recommend sell or Hold, which put the stock on the person's
+//   Recommended buy or sell list, or take it off both;
 // - an alert when a stock moves past its threshold, one per stock and day,
 //   superseded by the next one for that stock, with the same options;
 // - stocks to look at, a batch of peers of the watched ones: Follow adds one
@@ -22,6 +26,7 @@ export const MAX_WATCHLIST = 30;
 export const DEFAULT_THRESHOLD = 5;
 /** Stocks proposed per day. */
 export const MAX_CANDIDATES = 5;
+export const MAX_GROUP_CHARS = 40;
 
 export const BUY = "buy";
 export const SELL = "sell";
@@ -54,6 +59,14 @@ export interface Watched {
   symbol: string;
   /** Percent move in a day that is an alert. */
   threshold: number;
+  /** The heading it is listed under, if any: "Nordic". */
+  group?: string;
+}
+
+/** A group of the watchlist; `name` is null for the stocks under no heading. */
+export interface Group {
+  name: string | null;
+  stocks: Watched[];
 }
 
 export interface Quote {
@@ -115,9 +128,42 @@ export function dayOf(iso: string): string {
 }
 
 /**
+ * What tells groups apart, and names one in a card's id: "nordic" for
+ * "Nordic" and "nordic!". Empty for a name with no letters or digits.
+ */
+export function groupKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The watchlist by group: the stocks under no heading first, then each group
+ * in the order it first appears, each keeping the order of its stocks.
+ */
+export function groupsOf(watchlist: Watched[]): Group[] {
+  const groups: Group[] = [{ name: null, stocks: [] }];
+  for (const w of watchlist) {
+    const key = w.group ? groupKey(w.group) : "";
+    let group = key
+      ? groups.find((g) => g.name !== null && groupKey(g.name) === key)
+      : groups[0];
+    if (!group) {
+      group = { name: w.group ?? null, stocks: [] };
+      groups.push(group);
+    }
+    group.stocks.push(w);
+  }
+  return groups.filter((g) => g.stocks.length > 0);
+}
+
+/**
  * The watchlist from what the person typed: one stock per line, a ticker and
- * optionally its alert threshold in percent ("AAPL 3"). Lines that cannot be
- * read are answered as errors, so nothing is dropped silently.
+ * optionally its alert threshold in percent ("AAPL 3"). A line starting with
+ * "#" names the group of the stocks below it; a group named twice is one
+ * group. Lines that cannot be read are answered as errors, so nothing is
+ * dropped silently.
  */
 export function parseWatchlist(text: string): {
   watchlist: Watched[];
@@ -125,9 +171,24 @@ export function parseWatchlist(text: string): {
 } {
   const watchlist: Watched[] = [];
   const errors: string[] = [];
+  let group: string | undefined;
   for (const raw of text.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
+    if (line.startsWith("#")) {
+      const name = line.slice(1).trim().replace(/\s+/g, " ");
+      if (!groupKey(name) || name.length > MAX_GROUP_CHARS) {
+        errors.push(
+          `A group is "# " and a name of at most ${MAX_GROUP_CHARS} characters: "${line.slice(0, 40)}"`,
+        );
+        continue;
+      }
+      // The first spelling of a group names it.
+      group =
+        watchlist.find((w) => w.group && groupKey(w.group) === groupKey(name))
+          ?.group ?? name;
+      continue;
+    }
     const [first, second, ...rest] = line.split(/[\s,;]+/);
     const symbol = first.toUpperCase();
     const threshold =
@@ -145,21 +206,29 @@ export function parseWatchlist(text: string): {
     } else if (watchlist.length >= MAX_WATCHLIST) {
       errors.push(`At most ${MAX_WATCHLIST} stocks; ${symbol} left out`);
     } else {
-      watchlist.push({ symbol, threshold });
+      watchlist.push(
+        group ? { symbol, threshold, group } : { symbol, threshold },
+      );
     }
   }
-  return { watchlist, errors };
+  return { watchlist: groupsOf(watchlist).flatMap((g) => g.stocks), errors };
 }
 
 /** The watchlist written back as the person would type it. */
 export function formatWatchlist(watchlist: Watched[]): string {
-  return watchlist
-    .map((w) =>
-      w.threshold === DEFAULT_THRESHOLD
-        ? w.symbol
-        : `${w.symbol} ${w.threshold}`,
+  return groupsOf(watchlist)
+    .map((g) =>
+      (g.name === null ? [] : [`# ${g.name}`])
+        .concat(
+          g.stocks.map((w) =>
+            w.threshold === DEFAULT_THRESHOLD
+              ? w.symbol
+              : `${w.symbol} ${w.threshold}`,
+          ),
+        )
+        .join("\n"),
     )
-    .join("\n");
+    .join("\n\n");
 }
 
 export function isSymbol(value: unknown): value is string {
@@ -306,17 +375,34 @@ function onList(lists: Lists, symbol: string): string {
   return "";
 }
 
-/** The day's watchlist card: every stock with its price and day's move. */
-export function watchlistCard(
+/**
+ * The day's watchlist cards, one per group: every stock with its price and
+ * day's move. The stocks under no heading keep the card the watchlist had
+ * before it had groups.
+ */
+export function watchlistCards(
   day: string,
   watchlist: Watched[],
   quotes: Record<string, Quote>,
   lists: Lists,
 ) {
+  return groupsOf(watchlist).map((g) =>
+    watchlistCard(g.name, day, g.stocks, quotes, lists),
+  );
+}
+
+function watchlistCard(
+  group: string | null,
+  day: string,
+  watchlist: Watched[],
+  quotes: Record<string, Quote>,
+  lists: Lists,
+) {
+  const key = group === null ? "" : groupKey(group);
   return {
-    externalId: `w-${day}`,
-    topic: `${PRODUCER}:watchlist`,
-    title: `Watchlist, ${day}`,
+    externalId: key ? `w-${day}-${key}` : `w-${day}`,
+    topic: key ? `${PRODUCER}:watchlist:${key}` : `${PRODUCER}:watchlist`,
+    title: `${group ?? "Watchlist"}, ${day}`,
     summary:
       "Recommend buy or sell puts a stock on your Recommended list on the " +
       "watchlist's page; Hold takes it off. Nothing is traded.",
@@ -355,7 +441,7 @@ export function alertCard(
     facts: [
       { label: "Price", value: money(quote.price) },
       { label: "Previous close", value: money(quote.previousClose) },
-    ],
+    ].concat(watched.group ? [{ label: "Group", value: watched.group }] : []),
     links: [quoteLink(watched.symbol)],
     options: RECOMMEND_OPTIONS,
     allowLater: true,

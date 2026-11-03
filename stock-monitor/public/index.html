@@ -81,6 +81,20 @@
       .stocks li:last-child {
         padding-bottom: 0;
       }
+      /* A group's heading inside the watchlist. */
+      .stocks li.group {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--aw-color-muted);
+        padding-top: var(--aw-space-4);
+      }
+      .stocks li.group:first-child {
+        padding-top: 0;
+      }
+      .stocks li.group + li {
+        border-top: 0;
+        padding-top: var(--aw-space-1);
+      }
       .symbol {
         font-weight: 600;
         min-width: 6rem;
@@ -194,7 +208,9 @@
         <label for="watchlist"
           >One stock per line, at most 30: its ticker and, if not 5, the day's
           move in percent that is worth an alert. <code>AAPL</code>,
-          <code>NOKIA.HE 3</code>.</label
+          <code>NOKIA.HE 3</code>. A line <code># Nordic</code> puts the stocks
+          below it in a group of their own, with its own card in your
+          inbox.</label
         >
         <textarea id="watchlist" spellcheck="false"></textarea>
         <label for="daily-hour"

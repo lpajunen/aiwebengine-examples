@@ -8,11 +8,13 @@
 // Every 15 minutes a run acting as them fetches a quote for each stock from
 // Finnhub with their own key, kept as their secret in this script and sent
 // with `{{secret:...}}`. The page at /stock-monitor shows the watchlist with
-// the day's moves, the person's Recommended buy and Recommended sell lists,
-// and peers of the watched stocks to look at.
+// the day's moves, in the groups the person sorted it into, the person's
+// Recommended buy and Recommended sell lists, and peers of the watched stocks
+// to look at. The lists are one record across the groups.
 //
 // Where the person has an agent inbox (`inbox_post` is reachable) and has let
-// runs call tools, the runs also post there: the day's watchlist once a day,
+// runs call tools, the runs also post there: the day's watchlist once a day
+// (a card per group),
 // an alert when a stock moves past its threshold, and the stocks to look at.
 // The next run applies the answers as if pressed here: server/rules.ts.
 //
@@ -37,12 +39,13 @@ import {
   effectsOf,
   emptyState,
   formatWatchlist,
+  groupsOf,
   isSymbol,
   parseWatchlist,
   pickCandidates,
   readQuote,
   recommend,
-  watchlistCard,
+  watchlistCards,
   type InboxEvent,
   type InboxState,
   type Lists,
@@ -185,6 +188,7 @@ function stockMonitorState(context: HandlerContext): HttpResponse {
     hasKey: secretStorage.exists(SECRET_NAME),
     hasAiKey: secretStorage.exists(AI_SECRET_NAME),
     watchlist: current.watchlist,
+    groups: groupsOf(current.watchlist),
     watchlistText: formatWatchlist(current.watchlist),
     dailyHourUtc: current.dailyHourUtc,
     quotes: readJson<Record<string, Quote>>("quotes", {}),
@@ -332,6 +336,7 @@ function dropCandidate(symbol: string): void {
   );
 }
 
+/** A stock followed joins the ones under no heading, at the end. */
 function follow(symbol: string): void {
   const current = settings();
   dropCandidate(symbol);
@@ -555,7 +560,7 @@ const CONFIG_SCHEMA = {
     watchlist: {
       type: "string",
       title: "Stocks",
-      description: `One per line, at most ${MAX_WATCHLIST}: the ticker and, if not ${DEFAULT_THRESHOLD}, the day's move in percent worth an alert. AAPL, NOKIA.HE 3.`,
+      description: `One per line, at most ${MAX_WATCHLIST}: the ticker and, if not ${DEFAULT_THRESHOLD}, the day's move in percent worth an alert. AAPL, NOKIA.HE 3. A line "# Nordic" puts the stocks below it in that group; each group gets its own daily card.`,
       "x-multiline": true,
     },
     dailyHourUtc: {
@@ -978,7 +983,9 @@ function postToInbox(
       dailyHourUtc,
     );
     if (daily.due) {
-      post(watchlistCard(day, watchlist, quotes, current));
+      for (const card of watchlistCards(day, watchlist, quotes, current)) {
+        post(card);
+      }
       if (daily.candidates.length > 0) {
         post(candidatesCard(day, daily.candidates));
       }

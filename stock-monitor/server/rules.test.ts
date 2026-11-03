@@ -21,11 +21,12 @@ import {
   effectsOf,
   emptyState,
   formatWatchlist,
+  groupsOf,
   parseWatchlist,
   pickCandidates,
   readQuote,
   recommend,
-  watchlistCard,
+  watchlistCards,
   type Quote,
 } from "./rules.ts";
 
@@ -57,6 +58,41 @@ describe("parseWatchlist", function () {
     );
     expect(watchlist).toEqual([]);
     expect(errors.length).toBe(4);
+  });
+
+  test("reads groups, ungrouped first, a group named twice as one", function () {
+    const { watchlist, errors } = parseWatchlist(
+      "# Nordic\nNOKIA.HE 3\n#  US   tech \naapl\n# nordic!\nNESTE.HE\nMSFT",
+    );
+    expect(errors).toEqual([]);
+    expect(watchlist).toEqual([
+      { symbol: "NOKIA.HE", threshold: 3, group: "Nordic" },
+      { symbol: "NESTE.HE", threshold: DEFAULT_THRESHOLD, group: "Nordic" },
+      { symbol: "MSFT", threshold: DEFAULT_THRESHOLD, group: "Nordic" },
+      { symbol: "AAPL", threshold: DEFAULT_THRESHOLD, group: "US tech" },
+    ]);
+    expect(formatWatchlist(watchlist)).toBe(
+      "# Nordic\nNOKIA.HE 3\nNESTE.HE\nMSFT\n\n# US tech\nAAPL",
+    );
+  });
+
+  test("lists stocks under no heading first, wherever they were added", function () {
+    const groups = groupsOf([
+      { symbol: "AAPL", threshold: 5, group: "US" },
+      { symbol: "MSFT", threshold: 5 },
+    ]);
+    expect(groups.map((g) => g.name)).toEqual([null, "US"]);
+    expect(
+      formatWatchlist([
+        { symbol: "AAPL", threshold: 5, group: "US" },
+        { symbol: "MSFT", threshold: 5 },
+      ]),
+    ).toBe("MSFT\n\n# US\nAAPL");
+  });
+
+  test("refuses a group without a name", function () {
+    const { errors } = parseWatchlist("#\nAAPL\n# !!\n# " + "x".repeat(41));
+    expect(errors.length).toBe(3);
   });
 
   test("keeps at most the limit", function () {
@@ -160,7 +196,7 @@ describe("cards", function () {
   };
 
   test("the watchlist card has one item per stock", function () {
-    const card = watchlistCard(
+    const [card, ...more] = watchlistCards(
       "2026-11-02",
       [
         { symbol: "AAPL", threshold: 5 },
@@ -169,11 +205,53 @@ describe("cards", function () {
       { AAPL: quote(1.25) },
       lists,
     );
+    expect(more).toEqual([]);
+    expect(card.topic).toBe("stock-monitor:watchlist");
     expect(card.externalId).toBe("w-2026-11-02");
     expect(card.items.map((i) => i.id)).toEqual(["AAPL", "MSFT"]);
     expect(card.items[0].title).toBe("AAPL 100.00 (+1.3 %)");
     expect(card.items[0].summary).toBe("On Recommended buy.");
     expect(card.items[1].title).toBe("MSFT, no quote");
+  });
+
+  test("each group has a card of its own", function () {
+    const cards = watchlistCards(
+      "2026-11-02",
+      [
+        { symbol: "MSFT", threshold: 5 },
+        { symbol: "NOKIA.HE", threshold: 5, group: "Nordic" },
+      ],
+      {},
+      lists,
+    );
+    expect(cards.map((c) => c.externalId)).toEqual([
+      "w-2026-11-02",
+      "w-2026-11-02-nordic",
+    ]);
+    expect(cards[1].topic).toBe("stock-monitor:watchlist:nordic");
+    expect(cards[1].title).toBe("Nordic, 2026-11-02");
+    expect(cards[1].items.map((i) => i.id)).toEqual(["NOKIA.HE"]);
+    expect(askedSymbol(cards[1].externalId, "NOKIA.HE")).toBe("NOKIA.HE");
+    expect(
+      effectsOf([
+        {
+          type: "decided",
+          externalId: cards[1].externalId,
+          itemId: "NOKIA.HE",
+          optionId: BUY,
+        },
+      ]),
+    ).toEqual([{ kind: "recommend", symbol: "NOKIA.HE", list: "buy" }]);
+  });
+
+  test("an alert names the stock's group", function () {
+    const card = alertCard(
+      "2026-11-02",
+      { symbol: "NOKIA.HE", threshold: 5, group: "Nordic" },
+      quote(6),
+      lists,
+    );
+    expect(card.facts[2]).toEqual({ label: "Group", value: "Nordic" });
   });
 
   test("an alert is superseded by the next one for the stock", function () {

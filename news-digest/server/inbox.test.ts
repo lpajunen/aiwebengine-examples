@@ -12,11 +12,13 @@ import {
   UNSURE,
   articleKey,
   articlesAsked,
+  askContext,
   batchCard,
   effectsOf,
   emptyState,
   highlightCard,
   planPosts,
+  searchArticles,
   type InboxArticle,
 } from "./inbox.ts";
 
@@ -286,5 +288,51 @@ describe("articlesAsked", function () {
   test("is empty for articles no longer kept or an earlier batch", function () {
     expect(articlesAsked(state, list, "x", articleKey("gone"))).toEqual([]);
     expect(articlesAsked(state, list, "2026-10-31.1")).toEqual([]);
+  });
+});
+
+describe("askContext", function () {
+  test("says why the card came, with the reader's interests and its articles", function () {
+    const batch = askContext(
+      "2026-11-01.1",
+      [article("a", { link: "javascript:x" }), article("b")],
+      "  No transfer gossip. ",
+      "Sports",
+    );
+    expect(batch.why).toContain("passed the reader's interest filter");
+    expect(batch.facts).toEqual([
+      { label: "Digest", value: "Sports" },
+      { label: "The reader's interests", value: "No transfer gossip." },
+    ]);
+    expect(batch.documents[0].url).toBeUndefined();
+    expect(batch.documents[1]).toEqual({
+      title: "Headline b",
+      url: "https://news.example/b",
+      text: "Summary b\nSource: Example News",
+    });
+    const highlight = askContext(
+      `h-${articleKey("a")}`,
+      [article("a")],
+      "",
+      "Sports",
+    );
+    expect(highlight.why).toContain("rated important");
+    expect(highlight.facts.length).toBe(1);
+  });
+});
+
+describe("searchArticles", function () {
+  test("finds kept articles with every word, leaving out the filtered", function () {
+    const list = [
+      article("a", { headline: "Election called" }),
+      article("b", { headline: "Election result", filtered: "Not interested" }),
+      article("c", { summary: "The election date is set" }),
+    ];
+    expect(searchArticles(list, "ELECTION").map((d) => d.title)).toEqual([
+      "Election called",
+      "Headline c",
+    ]);
+    expect(searchArticles(list, "election date").length).toBe(1);
+    expect(searchArticles(list, "  ")).toEqual([]);
   });
 });

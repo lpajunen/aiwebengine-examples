@@ -17,7 +17,9 @@
 // - stocks to look at, a batch of peers of the watched ones: Follow adds one
 //   to the watchlist, Not interested means it is not proposed again.
 // Nothing trades; the lists are the person's own record. A question asked on
-// any of them (`stock_monitor_ask`) is about the stock askedSymbol names.
+// any of them is answered by the inbox from `stock_monitor_context`:
+// askedAbout says which card and stock it is about, askFacts and whyPosted
+// what the context says of them.
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "stock-monitor";
@@ -482,6 +484,73 @@ function subject(
     return { card: kind[0] as "w" | "a" | "c", symbol };
   }
   return null;
+}
+
+/** Which kind of card an externalId names, if this producer posted it. */
+export function cardKind(externalId: string): "w" | "a" | "c" | null {
+  const kind = externalId.slice(0, 2);
+  return kind === "w-" || kind === "a-" || kind === "c-"
+    ? (kind[0] as "w" | "a" | "c")
+    : null;
+}
+
+/**
+ * Why the producer posted a card, for a question on it: what the inbox's
+ * model reads as the card's reason.
+ */
+export function whyPosted(
+  kind: "w" | "a" | "c",
+  watched: Watched | null,
+  quote: Quote | null,
+): string {
+  if (kind === "a" && watched && quote) {
+    return (
+      `${watched.symbol} moved ${signed(quote.changePct)} today, past the ` +
+      `person's own alert threshold of ${watched.threshold} %. Alerts are ` +
+      "checked every 15 minutes; nothing is traded."
+    );
+  }
+  if (kind === "c") {
+    return (
+      "Peers of stocks the person watches, as the market-data service lists " +
+      "them, proposed to follow. The agent does not judge them."
+    );
+  }
+  return (
+    "The day's watchlist" +
+    (watched?.group ? `, group ${watched.group}` : "") +
+    ", posted once a day so the person can mark stocks as recommended buy " +
+    "or sell, a record of their own. Nothing is traded."
+  );
+}
+
+/** What is known of one stock, as facts for a question about it. */
+export function askFacts(
+  symbol: string,
+  watched: Watched | null,
+  quote: Quote | null,
+  lists: Lists,
+): { label: string; value: string }[] {
+  const facts = [{ label: "Stock", value: symbol }];
+  if (quote) {
+    facts.push(
+      { label: "Price", value: money(quote.price) },
+      { label: "Change today", value: signed(quote.changePct) },
+      { label: "Previous close", value: money(quote.previousClose) },
+      { label: "Quoted at", value: quote.at },
+    );
+  }
+  if (watched) {
+    facts.push({ label: "Alert threshold", value: `${watched.threshold} %` });
+    if (watched.group) facts.push({ label: "Group", value: watched.group });
+  } else {
+    facts.push({ label: "Watched", value: "No" });
+  }
+  facts.push({
+    label: "The person's lists",
+    value: onList(lists, symbol) || "On neither Recommended list.",
+  });
+  return facts;
 }
 
 /**

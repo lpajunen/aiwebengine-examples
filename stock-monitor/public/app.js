@@ -15,7 +15,7 @@
  * @typedef {{ symbol: string, at: string, price: number | null }} StockRecommended
  * @typedef {{
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
- *   hasKey?: boolean, hasAiKey?: boolean, canPost?: boolean, inboxAvailable?: boolean,
+ *   hasKey?: boolean, canPost?: boolean, inboxAvailable?: boolean,
  *   inbox?: { syncedAt: string | null, problem: string | null } | null,
  *   watchlist?: StockWatched[], groups?: StockGroup[], watchlistText?: string, dailyHourUtc?: number,
  *   quotes?: Record<string, StockQuote>,
@@ -52,10 +52,6 @@
     forgetKey: /** @type {HTMLButtonElement} */ (byId("forget-key")),
     closeKey: byId("close-key"),
     keyStatus: byId("key-status"),
-    aiKey: /** @type {HTMLInputElement} */ (byId("ai-key")),
-    saveAiKey: /** @type {HTMLButtonElement} */ (byId("save-ai-key")),
-    forgetAiKey: /** @type {HTMLButtonElement} */ (byId("forget-ai-key")),
-    aiKeyStatus: byId("ai-key-status"),
     settingsPanel: byId("settings-panel"),
     watchlist: /** @type {HTMLTextAreaElement} */ (byId("watchlist")),
     dailyHour: /** @type {HTMLInputElement} */ (byId("daily-hour")),
@@ -385,7 +381,6 @@
       showNotice("Quotes need your own Finnhub key.", "Add your key", "#key");
     }
     el.forgetKey.hidden = !state.hasKey;
-    el.forgetAiKey.hidden = !state.hasAiKey;
     renderStocks();
     renderList(el.buy, state.lists?.buy ?? []);
     renderList(el.sell, state.lists?.sell ?? []);
@@ -475,30 +470,6 @@
       await refresh();
     } catch (e) {
       say(el.keyStatus, String(e instanceof Error ? e.message : e), true);
-    }
-  });
-
-  el.saveAiKey.addEventListener("click", async () => {
-    try {
-      await api("/stock-monitor/key", "POST", {
-        key: el.aiKey.value,
-        which: "ai",
-      });
-      el.aiKey.value = "";
-      say(el.aiKeyStatus, "Saved.");
-      await refresh();
-    } catch (e) {
-      say(el.aiKeyStatus, String(e instanceof Error ? e.message : e), true);
-    }
-  });
-
-  el.forgetAiKey.addEventListener("click", async () => {
-    try {
-      await api("/stock-monitor/key?which=ai", "DELETE");
-      say(el.aiKeyStatus, "Removed.");
-      await refresh();
-    } catch (e) {
-      say(el.aiKeyStatus, String(e instanceof Error ? e.message : e), true);
     }
   });
 

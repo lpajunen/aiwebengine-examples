@@ -10,8 +10,10 @@
 // when it is full, and once the person has finished it. An article the model
 // rates important goes out as a card of its own instead, a few a day at most.
 //
-// A question asked on a card (`news_digest_ask`) is about the articles that
-// card holds: articlesAsked finds them.
+// A question asked on a card is answered by the inbox from the digest's
+// context (`news_digest_context`): askContext gives why the card was posted
+// and the articles it holds, which articlesAsked finds. searchArticles is
+// the read-only tool the inbox may call for more.
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "news-digest";
@@ -38,6 +40,14 @@ const OPTIONS = [
     weight: "feedback",
   },
 ];
+
+/** A document of the context a question is answered from. */
+export interface ContextDocument {
+  title: string;
+  url?: string;
+  text: string;
+  at?: string;
+}
 
 /** The fields of a digest article the inbox needs. */
 export interface InboxArticle {
@@ -286,4 +296,79 @@ export function articlesAsked<T extends InboxArticle>(
     });
   }
   return [];
+}
+
+/** Articles given for one question, and found by one search. */
+export const MAX_CONTEXT_ARTICLES = 12;
+
+/** An article as a question reads it. */
+export type AskArticle = InboxArticle & {
+  originalTitle?: string;
+  published?: string | null;
+};
+
+/** What the inbox's model reads of an article. */
+function articleDocument(a: AskArticle): ContextDocument {
+  const doc: ContextDocument = {
+    title: a.headline,
+    text:
+      a.summary +
+      (a.source ? `\nSource: ${a.source}` : "") +
+      (a.originalTitle && a.originalTitle !== a.headline
+        ? `\nOriginal headline: ${a.originalTitle}`
+        : ""),
+  };
+  if (/^https?:\/\//i.test(a.link)) doc.url = a.link;
+  if (a.published) doc.at = a.published;
+  return doc;
+}
+
+/**
+ * The context a question on a card is answered from: why the digest posted
+ * it, the reader's own interests (what "why was I shown this" turns on), and
+ * the articles asked about.
+ */
+export function askContext(
+  externalId: string,
+  articles: AskArticle[],
+  interests: string,
+  label: string,
+): {
+  why: string;
+  facts: { label: string; value: string }[];
+  documents: ContextDocument[];
+} {
+  const why = externalId.startsWith("h-")
+    ? `An article from ${label} rated important when it was summarised, so it came as a card of its own.`
+    : `New articles from ${label} that passed the reader's interest filter, posted to be sorted as relevant or not; the filter learns from the answers. Headlines and summaries are the digest's own, written to leave out clickbait.`;
+  const facts = [{ label: "Digest", value: label }];
+  if (interests.trim()) {
+    facts.push({ label: "The reader's interests", value: interests.trim() });
+  }
+  return {
+    why,
+    facts,
+    documents: articles.slice(0, MAX_CONTEXT_ARTICLES).map(articleDocument),
+  };
+}
+
+/**
+ * Kept articles, not filtered out, matching every word of `query` in their
+ * headline, summary or source, newest first: what the inbox's model may look
+ * up for background.
+ */
+export function searchArticles(
+  articles: AskArticle[],
+  query: string,
+): ContextDocument[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  return articles
+    .filter((a) => {
+      if (a.filtered) return false;
+      const text = `${a.headline} ${a.summary} ${a.source}`.toLowerCase();
+      return words.every((w) => text.indexOf(w) !== -1);
+    })
+    .slice(0, MAX_CONTEXT_ARTICLES)
+    .map(articleDocument);
 }

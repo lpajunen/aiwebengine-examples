@@ -14,8 +14,10 @@ import {
   SELL,
   alertCard,
   alertsDue,
+  askFacts,
   askedSymbol,
   candidatesCard,
+  cardKind,
   dailyDue,
   dailyPosts,
   effectsOf,
@@ -27,6 +29,7 @@ import {
   readQuote,
   recommend,
   watchlistCards,
+  whyPosted,
   type Quote,
 } from "./rules.ts";
 
@@ -385,5 +388,47 @@ describe("dailyPosts", function () {
     // The peers were fetched at an earlier run that could not reach the
     // inbox; the inbox's own record says nothing was posted today.
     expect(dailyPosts(emptyState(), ["MSFT"], LATER, 15).due).toBe(true);
+  });
+});
+
+describe("context for a question", function () {
+  const lists = {
+    buy: [{ symbol: "AAPL", at: NOW, price: 100 }],
+    sell: [],
+  };
+
+  test("names the kind of card", function () {
+    expect(cardKind("w-2026-11-02-nordic")).toBe("w");
+    expect(cardKind("a-2026-11-02-AAPL")).toBe("a");
+    expect(cardKind("c-2026-11-02")).toBe("c");
+    expect(cardKind("x-1")).toBeNull();
+  });
+
+  test("says why each card was posted", function () {
+    const watched = { symbol: "NOKIA.HE", threshold: 5, group: "Nordic" };
+    expect(whyPosted("a", watched, quote(-6))).toContain(
+      "moved −6.0 % today, past the person's own alert threshold of 5 %",
+    );
+    expect(whyPosted("w", watched, null)).toContain("group Nordic");
+    expect(whyPosted("c", null, null)).toContain("does not judge them");
+  });
+
+  test("gives the quote, the threshold and the lists as facts", function () {
+    const facts = askFacts(
+      "AAPL",
+      { symbol: "AAPL", threshold: 3, group: "US" },
+      quote(1.25),
+      lists,
+    );
+    const value = (label: string) =>
+      facts.find((f) => f.label === label)?.value;
+    expect(value("Change today")).toBe("+1.3 %");
+    expect(value("Group")).toBe("US");
+    expect(value("The person's lists")).toBe("On Recommended buy.");
+    expect(askFacts("MSFT", null, null, lists)).toEqual([
+      { label: "Stock", value: "MSFT" },
+      { label: "Watched", value: "No" },
+      { label: "The person's lists", value: "On neither Recommended list." },
+    ]);
   });
 });

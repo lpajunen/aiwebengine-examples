@@ -14,7 +14,7 @@
  * @typedef {{ checkedAt: string, added: number, problem?: string }} FeedStatus
  * @typedef {{
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
- *   hasKey?: boolean, feeds?: string[], interests?: string,
+ *   hasKey?: boolean, keyUrl?: string, feeds?: string[], interests?: string,
  *   feedStatus?: Record<string, FeedStatus>,
  *   schedule?: { state: string, pausedReason: string | null,
  *     nextRunAt: string, lastRunAt: string | null } | null,
@@ -50,13 +50,7 @@ function byId(id) {
 const el = {
   notice: byId("notice"),
   openFeeds: byId("open-feeds"),
-  openKey: byId("open-key"),
-  keyPanel: byId("key-panel"),
-  key: /** @type {HTMLInputElement} */ (byId("key")),
-  saveKey: /** @type {HTMLButtonElement} */ (byId("save-key")),
-  forgetKey: /** @type {HTMLButtonElement} */ (byId("forget-key")),
-  closeKey: byId("close-key"),
-  keyStatus: byId("key-status"),
+  keyLink: /** @type {HTMLAnchorElement} */ (byId("key-link")),
   grantLink: /** @type {HTMLAnchorElement} */ (byId("grant-link")),
   feedsPanel: byId("feeds-panel"),
   feeds: /** @type {HTMLTextAreaElement} */ (byId("feeds")),
@@ -467,15 +461,19 @@ function renderState(state) {
       "Give permission",
       consent ?? "#",
     );
-  } else if (!state.hasKey) {
+  } else if (!state.hasKey && state.keyUrl) {
     showNotice(
       "Summaries are written with your own Anthropic API key, and none is " +
         "stored yet.",
       "Add your key",
-      "#key",
+      state.keyUrl,
     );
   }
-  renderKey(Boolean(state.hasKey));
+  // The key is entered on the engine's own page, so this page never sees it.
+  if (state.keyUrl) {
+    el.keyLink.hidden = false;
+    el.keyLink.href = state.keyUrl;
+  }
   renderUnread();
   renderFeedStatus(state);
   renderSchedule(state);
@@ -635,67 +633,6 @@ async function poll() {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// The key
-// ---------------------------------------------------------------------------
-
-/** @param {boolean} hasKey */
-function renderKey(hasKey) {
-  el.forgetKey.hidden = !hasKey;
-  el.key.placeholder = hasKey ? "A key is stored" : "sk-ant-...";
-  setStatus(el.keyStatus, hasKey ? "Key stored." : "No key stored yet.");
-}
-
-function openKey() {
-  el.key.value = "";
-  el.keyPanel.hidden = false;
-  el.key.focus();
-}
-
-el.openKey.addEventListener("click", openKey);
-el.closeKey.addEventListener("click", () => {
-  el.keyPanel.hidden = true;
-});
-// The notice's own link opens the panel rather than going anywhere.
-el.notice.addEventListener("click", (event) => {
-  const target = /** @type {HTMLElement} */ (event.target);
-  if (target.closest('a[href="#key"]')) {
-    event.preventDefault();
-    openKey();
-  }
-});
-
-el.saveKey.addEventListener("click", async () => {
-  const key = el.key.value.trim();
-  if (!key) {
-    setStatus(el.keyStatus, "Paste a key first.", true);
-    return;
-  }
-  el.saveKey.disabled = true;
-  try {
-    await api("/news-digest/key", { key });
-    el.key.value = "";
-    el.keyPanel.hidden = true;
-    await refreshState();
-  } catch (e) {
-    setStatus(el.keyStatus, e instanceof Error ? e.message : String(e), true);
-  } finally {
-    el.saveKey.disabled = false;
-  }
-});
-
-el.forgetKey.addEventListener("click", async () => {
-  el.forgetKey.disabled = true;
-  try {
-    await api("/news-digest/key", {}, "DELETE");
-    await refreshState();
-  } catch (e) {
-    setStatus(el.keyStatus, e instanceof Error ? e.message : String(e), true);
-  } finally {
-    el.forgetKey.disabled = false;
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Feeds
 // ---------------------------------------------------------------------------
 
@@ -845,8 +782,7 @@ document.addEventListener("visibilitychange", () => {
     view.listedUpTo = state.latest || "0";
     await loadArticles();
     // Nothing to read until there is something to read from.
-    if (state.granted && !state.hasKey) openKey();
-    else if (state.granted && !state.feeds?.length) openFeeds();
+    if (state.granted && state.hasKey && !state.feeds?.length) openFeeds();
     view.timer = window.setTimeout(poll, POLL_MS);
   } catch (e) {
     el.articles.replaceChildren(

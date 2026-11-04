@@ -15,7 +15,7 @@
  * @typedef {{ symbol: string, at: string, price: number | null }} StockRecommended
  * @typedef {{
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
- *   hasKey?: boolean, canPost?: boolean, inboxAvailable?: boolean,
+ *   hasKey?: boolean, keyUrl?: string, canPost?: boolean, inboxAvailable?: boolean,
  *   inbox?: { syncedAt: string | null, problem: string | null } | null,
  *   watchlist?: StockWatched[], groups?: StockGroup[], watchlistText?: string, dailyHourUtc?: number,
  *   quotes?: Record<string, StockQuote>,
@@ -45,13 +45,7 @@
     notice: byId("notice"),
     grantLink: /** @type {HTMLAnchorElement} */ (byId("grant-link")),
     openSettings: byId("open-settings"),
-    openKey: byId("open-key"),
-    keyPanel: byId("key-panel"),
-    key: /** @type {HTMLInputElement} */ (byId("key")),
-    saveKey: /** @type {HTMLButtonElement} */ (byId("save-key")),
-    forgetKey: /** @type {HTMLButtonElement} */ (byId("forget-key")),
-    closeKey: byId("close-key"),
-    keyStatus: byId("key-status"),
+    keyLink: /** @type {HTMLAnchorElement} */ (byId("key-link")),
     settingsPanel: byId("settings-panel"),
     watchlist: /** @type {HTMLTextAreaElement} */ (byId("watchlist")),
     dailyHour: /** @type {HTMLInputElement} */ (byId("daily-hour")),
@@ -377,10 +371,18 @@
         "Give permission",
         consent ?? "#",
       );
-    } else if (!state.hasKey) {
-      showNotice("Quotes need your own Finnhub key.", "Add your key", "#key");
+    } else if (!state.hasKey && state.keyUrl) {
+      showNotice(
+        "Quotes need your own Finnhub key (a free one is enough).",
+        "Add your key",
+        state.keyUrl,
+      );
     }
-    el.forgetKey.hidden = !state.hasKey;
+    // The key is entered on the engine's own page, so this page never sees it.
+    if (state.keyUrl) {
+      el.keyLink.hidden = false;
+      el.keyLink.href = state.keyUrl;
+    }
     renderStocks();
     renderList(el.buy, state.lists?.buy ?? []);
     renderList(el.sell, state.lists?.sell ?? []);
@@ -404,28 +406,10 @@
     el.watchlist.focus();
   }
 
-  function openKey() {
-    el.keyPanel.hidden = false;
-    el.key.focus();
-  }
-
   el.openSettings.addEventListener("click", openSettings);
   el.closeSettings.addEventListener("click", () => {
     el.settingsPanel.hidden = true;
   });
-  el.openKey.addEventListener("click", openKey);
-  el.closeKey.addEventListener("click", () => {
-    el.keyPanel.hidden = true;
-  });
-  // The notice's own "#key" link opens the panel rather than going anywhere.
-  el.notice.addEventListener("click", (event) => {
-    const target = /** @type {HTMLElement} */ (event.target);
-    if (target.getAttribute("href") === "#key") {
-      event.preventDefault();
-      openKey();
-    }
-  });
-
   el.saveSettings.addEventListener("click", async () => {
     el.saveSettings.disabled = true;
     try {
@@ -452,30 +436,9 @@
     }
   });
 
-  el.saveKey.addEventListener("click", async () => {
-    try {
-      await api("/stock-monitor/key", "POST", { key: el.key.value });
-      el.key.value = "";
-      say(el.keyStatus, "Saved.");
-      await refresh();
-    } catch (e) {
-      say(el.keyStatus, String(e instanceof Error ? e.message : e), true);
-    }
-  });
-
-  el.forgetKey.addEventListener("click", async () => {
-    try {
-      await api("/stock-monitor/key", "DELETE");
-      say(el.keyStatus, "Removed.");
-      await refresh();
-    } catch (e) {
-      say(el.keyStatus, String(e instanceof Error ? e.message : e), true);
-    }
-  });
-
   refresh().then(() => {
-    if (state.granted && !state.hasKey) openKey();
-    else if (state.granted && !(state.watchlist ?? []).length) openSettings();
+    if (state.granted && state.hasKey && !(state.watchlist ?? []).length)
+      openSettings();
   });
   setInterval(refresh, POLL_MS);
 })();

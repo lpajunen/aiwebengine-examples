@@ -141,7 +141,7 @@
          live in the account menu. -->
     <aw-account-menu>
       <button type="button" id="open-settings">Watchlist</button>
-      <button type="button" id="open-key">Keys</button>
+      <a id="key-link" href="#" hidden>Finnhub key</a>
       <a id="grant-link" href="#" hidden>Permissions</a>
     </aw-account-menu>
     <main>
@@ -152,31 +152,6 @@
       </p>
 
       <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
-
-      <section id="key-panel" hidden>
-        <h2>Your Finnhub key</h2>
-        <p class="status">
-          Quotes come from Finnhub with your own key (a free one is enough). It
-          is stored against your account, encrypted, and never readable by this
-          page or by the script — the engine substitutes it into the request.
-        </p>
-        <div class="row">
-          <input
-            id="key"
-            type="password"
-            autocomplete="off"
-            aria-label="Finnhub API key"
-          />
-        </div>
-        <div class="row">
-          <button id="save-key">Save key</button>
-          <button id="forget-key" class="aw-button--secondary" hidden>
-            Remove key
-          </button>
-          <button id="close-key" class="aw-button--secondary">Close</button>
-          <span id="key-status" class="status"></span>
-        </div>
-      </section>
 
       <section id="settings-panel" hidden>
         <h2>Watchlist</h2>
@@ -225,7 +200,11 @@
       <section id="candidates-panel" hidden>
         <h2>Stocks to look at</h2>
         <p class="status">Peers of the stocks you watch.</p>
-        <ul id="candidates" class="stocks" style="margin-top: var(--aw-space-3)"></ul>
+        <ul
+          id="candidates"
+          class="stocks"
+          style="margin-top: var(--aw-space-3)"
+        ></ul>
       </section>
 
       <p id="run-status" class="status"></p>

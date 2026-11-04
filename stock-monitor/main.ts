@@ -190,6 +190,7 @@ function stockMonitorState(context: HandlerContext): HttpResponse {
     },
     consentUrl: grant.consentUrl ?? null,
     hasKey: secretStorage.exists(SECRET_NAME),
+    keyUrl: keyUrl(),
     watchlist: current.watchlist,
     groups: groupsOf(current.watchlist),
     watchlistText: formatWatchlist(current.watchlist),
@@ -274,24 +275,13 @@ function stockMonitorRunNow(context: HandlerContext): HttpResponse {
   return ResponseBuilder.json({ ok: true });
 }
 
-// The person's own Finnhub key. It lands in `user_secrets` under their account, so
-// nobody else's runs can use them and this script cannot read them back.
-function stockMonitorStoreKey(context: HandlerContext): HttpResponse {
-  if (!signedIn(context)) return fail(401, "Sign in first");
-  const key = String(body(context).key ?? "").trim();
-  if (!key) return fail(400, "A key is required");
-  try {
-    secretStorage.setSecret(SECRET_NAME, key);
-  } catch (e) {
-    return fail(400, e instanceof Error ? e.message : String(e));
-  }
-  return ResponseBuilder.json({ ok: true });
-}
-
-function stockMonitorForgetKey(context: HandlerContext): HttpResponse {
-  if (!signedIn(context)) return fail(401, "Sign in first");
-  secretStorage.removeSecret(SECRET_NAME);
-  return ResponseBuilder.json({ ok: true });
+/**
+ * The engine's page where the person stores, replaces or removes their
+ * Finnhub key, coming back here. The key goes straight into `user_secrets`
+ * under their account; this script never handles it.
+ */
+function keyUrl(): string {
+  return secretStorage.entryUrl(SECRET_NAME) + "&redirect=" + PAGE;
 }
 
 // Puts a stock on a Recommended list, or with `list: null` takes it off.
@@ -615,8 +605,8 @@ function missing(): { kind: string; label: string; url?: string }[] {
   if (!secretStorage.exists(SECRET_NAME)) {
     found.push({
       kind: "secret",
-      label: "Add your Finnhub API key on the watchlist's page",
-      url: PAGE,
+      label: "Add your Finnhub API key",
+      url: keyUrl(),
     });
   }
   if (settings().watchlist.length === 0) {
@@ -1003,6 +993,7 @@ function postToInbox(
 }
 
 function init(): void {
+  secretStorage.declare(SECRET_NAME, { label: "Finnhub API key" });
   registerContractTools();
   mcpRegistry.registerTool("stock_watchlist", {
     description:
@@ -1055,14 +1046,6 @@ function init(): void {
   routeRegistry.registerRoute("/stock-monitor/run", {
     handler: "stockMonitorRunNow",
     method: "POST",
-  });
-  routeRegistry.registerRoute("/stock-monitor/key", {
-    handler: "stockMonitorStoreKey",
-    method: "POST",
-  });
-  routeRegistry.registerRoute("/stock-monitor/key", {
-    handler: "stockMonitorForgetKey",
-    method: "DELETE",
   });
   routeRegistry.registerRoute("/stock-monitor/recommend", {
     handler: "stockMonitorRecommend",

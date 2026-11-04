@@ -330,6 +330,7 @@ function newsDigestState(context: HandlerContext): HttpResponse {
     },
     consentUrl: grant.consentUrl ?? null,
     hasKey: secretStorage.exists(SECRET_NAME),
+    keyUrl: keyUrl(inst),
     feeds: settings.feeds,
     interests: settings.interests ?? "",
     feedStatus: readJson<Record<string, FeedStatus>>(inst, "feedStatus", {}),
@@ -491,24 +492,17 @@ function newsDigestRunNow(context: HandlerContext): HttpResponse {
   return ResponseBuilder.json({ ok: true });
 }
 
-// The reader's own key. It lands in `user_secrets` under their account, so
-// nobody else's runs can use it and this script cannot read it back.
-function newsDigestStoreKey(context: HandlerContext): HttpResponse {
-  if (!signedIn(context)) return fail(401, "Sign in first");
-  const key = String(body(context).key ?? "").trim();
-  if (!key) return fail(400, "A key is required");
-  try {
-    secretStorage.setSecret(SECRET_NAME, key);
-  } catch (e) {
-    return fail(400, e instanceof Error ? e.message : String(e));
-  }
-  return ResponseBuilder.json({ hasKey: true });
-}
-
-function newsDigestForgetKey(context: HandlerContext): HttpResponse {
-  if (!signedIn(context)) return fail(401, "Sign in first");
-  secretStorage.removeSecret(SECRET_NAME);
-  return ResponseBuilder.json({ hasKey: secretStorage.exists(SECRET_NAME) });
+/**
+ * The engine's page where the reader stores, replaces or removes their
+ * Anthropic key, coming back to this digest. The key goes straight into
+ * `user_secrets` under their account; this script never handles it.
+ */
+function keyUrl(inst: string): string {
+  return (
+    secretStorage.entryUrl(SECRET_NAME) +
+    "&redirect=" +
+    encodeURIComponent(settingsUrl(inst))
+  );
 }
 
 /** Read ids, kept to the articles still in the list. */
@@ -1550,8 +1544,8 @@ function missingFor(
   if (!secretStorage.exists(SECRET_NAME)) {
     missing.push({
       kind: "secret",
-      label: "Add your Anthropic API key on the digest's page",
-      url: `${settingsUrl(inst)}#key`,
+      label: "Add your Anthropic API key",
+      url: keyUrl(inst),
     });
   }
   if (readJson<Settings>(inst, "settings", { feeds: [] }).feeds.length === 0) {
@@ -1951,6 +1945,7 @@ function recordStatus(
 }
 
 function init(): void {
+  secretStorage.declare(SECRET_NAME, { label: "Anthropic API key" });
   registerTools();
   registerContractTools();
   routeRegistry.registerRoute("/news-digest", { file: "public/index.html" });
@@ -1970,14 +1965,6 @@ function init(): void {
   routeRegistry.registerRoute("/news-digest/run", {
     handler: "newsDigestRunNow",
     method: "POST",
-  });
-  routeRegistry.registerRoute("/news-digest/key", {
-    handler: "newsDigestStoreKey",
-    method: "POST",
-  });
-  routeRegistry.registerRoute("/news-digest/key", {
-    handler: "newsDigestForgetKey",
-    method: "DELETE",
   });
   routeRegistry.registerRoute("/news-digest/open", {
     handler: "newsDigestOpen",

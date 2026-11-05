@@ -17,8 +17,10 @@ import {
   effectsOf,
   emptyState,
   highlightCard,
+  needsWelcome,
   planPosts,
   searchArticles,
+  welcomeCard,
   type InboxArticle,
 } from "./inbox.ts";
 
@@ -179,6 +181,33 @@ describe("cards", function () {
   });
 });
 
+describe("welcome", function () {
+  test("is owed by a new digest, and by one whose welcome failed", function () {
+    expect(needsWelcome(emptyState())).toBe(true);
+    expect(needsWelcome({ ...emptyState(), welcomed: false })).toBe(true);
+    expect(needsWelcome({ ...emptyState(), welcomed: true })).toBe(false);
+  });
+
+  test("is not owed by a digest that reached the inbox before", function () {
+    expect(
+      needsWelcome({ ...emptyState(), syncedAt: "2026-11-01T00:00:00Z" }),
+    ).toBe(false);
+  });
+
+  test("is one card per digest, and its answer changes nothing", function () {
+    const card = welcomeCard("sports", "Sports");
+    expect(card.externalId).toBe("welcome-sports");
+    expect(card.title).toBe("Sports is set up");
+    expect(card.options.length).toBe(1);
+    expect(
+      effectsOf(
+        [{ type: "decided", externalId: card.externalId, optionId: "ok" }],
+        [],
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("effectsOf", function () {
   const list = [article("a"), article("b")];
   const a = articleKey("a");
@@ -227,7 +256,7 @@ describe("effectsOf", function () {
     ]);
   });
 
-  test("clearing unsorts, opening reads, later wants", function () {
+  test("clearing unsorts, opening is a mild positive, later wants", function () {
     expect(
       effectsOf(
         [
@@ -239,7 +268,7 @@ describe("effectsOf", function () {
       ),
     ).toEqual([
       { kind: "unsort", id: "a" },
-      { kind: "read", id: "b" },
+      { kind: "opened", id: "b" },
       { kind: "verdict", id: "a", verdict: "want" },
     ]);
   });

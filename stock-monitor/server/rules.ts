@@ -103,6 +103,8 @@ export interface InboxState {
   postedCandidates?: string[];
   problem?: string;
   syncedAt?: string;
+  /** Whether the welcome card was posted; false while it is still owed. */
+  welcomed?: boolean;
 }
 
 /** An event as `inbox_events` answers it; only the fields used here. */
@@ -422,6 +424,36 @@ function watchlistCard(
         links: [quoteLink(w.symbol)],
       };
     }),
+  };
+}
+
+/**
+ * Whether the watchlist still owes the inbox its welcome card: one never
+ * posted, for a watchlist that has not reached the inbox before. Watchlists
+ * that reached it before welcome cards existed are not welcomed again.
+ */
+export function needsWelcome(state: InboxState): boolean {
+  return state.welcomed === false || (!state.welcomed && !state.syncedAt);
+}
+
+/**
+ * The card the watchlist posts once, on its first run after it is set up:
+ * what will arrive and when. Its answer means nothing.
+ */
+export function welcomeCard(dailyHourUtc: number) {
+  const hour = String(dailyHourUtc).padStart(2, "0");
+  return {
+    externalId: "welcome",
+    title: "Your watchlist is set up",
+    summary:
+      "Your stocks are checked every 15 minutes, and one that moves past " +
+      `its threshold gets an alert. After ${hour}:00 UTC each day comes the ` +
+      "day's watchlist, to put stocks on your Recommended buy or sell list, " +
+      "and peers to look at. Nothing is ever traded. Stocks and thresholds " +
+      "are changed on the watchlist's page.",
+    options: [
+      { id: "ok", label: "Got it", style: "primary", weight: "feedback" },
+    ],
   };
 }
 

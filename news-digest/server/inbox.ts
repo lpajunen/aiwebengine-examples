@@ -73,6 +73,8 @@ export interface InboxState {
   problem?: string;
   /** When the inbox was last reached. */
   syncedAt?: string;
+  /** Whether the welcome card was posted; false while it is still owed. */
+  welcomed?: boolean;
 }
 
 /** An event as `inbox_events` answers it; only the fields used here. */
@@ -87,7 +89,8 @@ export interface InboxEvent {
 export type Effect =
   | { kind: "verdict"; id: string; verdict: "want" | "skip" }
   | { kind: "unsort"; id: string }
-  | { kind: "read"; id: string };
+  | { kind: "read"; id: string }
+  | { kind: "opened"; id: string };
 
 export function emptyState(): InboxState {
   return { cursor: 0, batch: null, highlights: { day: "", ids: [] } };
@@ -211,6 +214,35 @@ export function batchCard(
   };
 }
 
+/**
+ * Whether this digest still owes the inbox its welcome card: one never
+ * posted, for a digest that has not reached the inbox before. Digests that
+ * reached it before welcome cards existed are not welcomed again.
+ */
+export function needsWelcome(state: InboxState): boolean {
+  return state.welcomed === false || (!state.welcomed && !state.syncedAt);
+}
+
+/**
+ * The card a digest posts once, on its first run after it is set up: what
+ * will arrive and what answering does. Its answer means nothing.
+ */
+export function welcomeCard(instance: string, label: string) {
+  return {
+    externalId: `welcome-${instance}`.slice(0, 120),
+    title: `${label} is set up`.slice(0, 200),
+    summary:
+      "Every feed is read every 15 minutes. New articles collect on one " +
+      "card a day, and ones that look important come on cards of their own. " +
+      "Relevant and Not relevant teach the filter what you want; you can " +
+      "also ask a question on any card. Feeds and interests are changed on " +
+      "the digest's page.",
+    options: [
+      { id: "ok", label: "Got it", style: "primary", weight: "feedback" },
+    ],
+  };
+}
+
 /** A card of its own for an article the model rated important. */
 export function highlightCard(a: InboxArticle) {
   const { title, summary, links } = item(a);
@@ -231,7 +263,7 @@ export function highlightCard(a: InboxArticle) {
 /**
  * What the person's answers do, in order. Relevant and Not relevant sort the
  * article and mark it read; Unsure marks it read and takes back any verdict; a cleared answer unsorts it; opening it marks it
- * read; Later counts as wanting it. Expiry and withdrawal mean nothing.
+ * read and is a mild sign of interest; Later counts as wanting it. Expiry and withdrawal mean nothing.
  * Events for articles no longer kept are dropped.
  */
 export function effectsOf(
@@ -262,7 +294,7 @@ export function effectsOf(
     } else if (e.type === "cleared") {
       effects.push({ kind: "unsort", id });
     } else if (e.type === "opened") {
-      effects.push({ kind: "read", id });
+      effects.push({ kind: "opened", id });
     } else if (e.type === "later") {
       effects.push({ kind: "verdict", id, verdict: "want" });
     }

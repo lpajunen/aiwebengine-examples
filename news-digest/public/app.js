@@ -82,6 +82,9 @@ const el = {
   digestLabel: /** @type {HTMLInputElement} */ (byId("digest-label")),
   removeDigest: /** @type {HTMLButtonElement} */ (byId("remove-digest")),
   inboxStatus: byId("inbox-status"),
+  inboxLead: byId("inbox-lead"),
+  inboxLeadInterests: byId("inbox-lead-interests"),
+  inboxLeadSettings: byId("inbox-lead-settings"),
 };
 
 const view = {
@@ -522,6 +525,24 @@ function renderInbox(state) {
           : "Articles will also be posted to your agent inbox from the next run.";
   el.inboxStatus.textContent = text;
   el.inboxStatus.hidden = text === "";
+  el.inboxLead.hidden = !connected(state);
+  const feeds = state.feeds?.length ?? 0;
+  el.inboxLeadInterests.textContent =
+    `${feeds === 1 ? "1 feed" : `${feeds} feeds`}. ` +
+    (state.interests
+      ? `Your interests: ${state.interests}`
+      : "No interests given yet, so every article is kept.");
+}
+
+/**
+ * Whether this digest has reached the person's agent inbox, so the news is
+ * sorted there rather than here.
+ * @param {State} state
+ */
+function connected(state) {
+  return Boolean(
+    state.inboxAvailable && state.canPost && state.inbox?.syncedAt,
+  );
 }
 /** @param {State} state */
 function renderFeedStatus(state) {
@@ -646,6 +667,7 @@ function openFeeds() {
 }
 
 el.openFeeds.addEventListener("click", openFeeds);
+el.inboxLeadSettings.addEventListener("click", openFeeds);
 el.closeFeeds.addEventListener("click", () => {
   el.feedsPanel.hidden = true;
 });
@@ -780,6 +802,11 @@ document.addEventListener("visibilitychange", () => {
       return;
     }
     view.listedUpTo = state.latest || "0";
+    // Sorted in the inbox: what is left to check here is what was filtered.
+    if (connected(state)) {
+      view.filtered = true;
+      renderView();
+    }
     await loadArticles();
     // Nothing to read until there is something to read from.
     if (state.granted && state.hasKey && !state.feeds?.length) openFeeds();

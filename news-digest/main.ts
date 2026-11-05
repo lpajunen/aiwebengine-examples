@@ -46,8 +46,10 @@ import {
   effectsOf,
   emptyState,
   highlightCard,
+  needsWelcome,
   planPosts,
   searchArticles,
+  welcomeCard,
   type InboxEvent,
   type InboxState,
 } from "./server/inbox.ts";
@@ -81,6 +83,8 @@ const MAX_ARTICLES = 500;
 const PAGE_SIZE = 15;
 /** Headlines remembered per verdict, newest kept: examples for the model. */
 const MAX_EXAMPLES = 30;
+/** Headlines remembered as opened: fewer, since they say less. */
+const MAX_OPENED = 15;
 const MAX_INTERESTS_CHARS = 2000;
 const MODEL = "claude-haiku-5-5";
 /** Filtered by the reader's own "Not interested", not by the model. */
@@ -107,6 +111,8 @@ interface Settings {
 interface Examples {
   skipped: string[];
   wanted: string[];
+  /** Opened but not sorted: a weaker sign of interest than `wanted`. */
+  opened?: string[];
 }
 
 interface DigestItem {
@@ -523,11 +529,7 @@ function newsDigestOpen(context: HandlerContext): HttpResponse {
     (a) => a.id === id,
   );
   if (!article) return ResponseBuilder.error(404, "No such article");
-  const read = new Set(readJson<string[]>(inst, "read", []));
-  if (!read.has(id)) {
-    read.add(id);
-    saveRead(inst, read);
-  }
+  noteOpened(inst, id);
   return ResponseBuilder.redirect(article.link, 303);
 }
 
@@ -601,6 +603,7 @@ function applyVerdict(
     skipped: [],
     wanted: [],
   });
+  examples.opened = (examples.opened ?? []).filter((x) => x !== example);
   if (verdict === "skip") {
     article.filtered = SKIPPED_BY_HAND;
     examples.skipped = remember(examples.skipped, example);
@@ -630,8 +633,36 @@ function unsort(inst: string, id: string): void {
   });
   examples.skipped = examples.skipped.filter((x) => x !== example);
   examples.wanted = examples.wanted.filter((x) => x !== example);
+  examples.opened = (examples.opened ?? []).filter((x) => x !== example);
   if (article.filtered === SKIPPED_BY_HAND) delete article.filtered;
   personalStorage.setItem(keyOf(inst, "articles"), JSON.stringify(articles));
+  personalStorage.setItem(keyOf(inst, "examples"), JSON.stringify(examples));
+}
+
+/**
+ * Marks an article read, and remembers it as opened: a milder sign of
+ * interest than wanting it, so it never joins the wanted examples. An article
+ * the reader already sorted keeps that verdict, and one they said they did
+ * not want is not counted.
+ */
+function noteOpened(inst: string, id: string): void {
+  markRead(inst, [id], true);
+  const article = readJson<DigestItem[]>(inst, "articles", []).find(
+    (a) => a.id === id,
+  );
+  if (!article || article.filtered === SKIPPED_BY_HAND) return;
+  const example = `${article.headline} (${article.source})`;
+  const examples = readJson<Examples>(inst, "examples", {
+    skipped: [],
+    wanted: [],
+  });
+  if (examples.wanted.includes(example) || examples.skipped.includes(example)) {
+    return;
+  }
+  examples.opened = (examples.opened ?? [])
+    .filter((x) => x !== example)
+    .concat(example)
+    .slice(-MAX_OPENED);
   personalStorage.setItem(keyOf(inst, "examples"), JSON.stringify(examples));
 }
 
@@ -970,7 +1001,7 @@ function readArticles(items: Candidate[]): void {
 
 /** Both prompts: the reader's words outweigh their hand-sorted examples. */
 const PRECEDENCE =
-  "The reader's own words in <interests> come first. The example headlines show single articles they sorted by hand; where an example seems to contradict their interests, follow the interests and treat the example as about that one story, not its whole topic. A topic the reader names in <interests> is wanted: keep its articles unless they have no substance.";
+  "The reader's own words in <interests> come first. The example headlines show single articles they sorted by hand; where an example seems to contradict their interests, follow the interests and treat the example as about that one story, not its whole topic. A topic the reader names in <interests> is wanted: keep its articles unless they have no substance. Headlines in <opened_articles_like> are ones they only opened: a weaker sign of interest than <wanted_articles_like>, never a reason to skip.";
 
 const SYSTEM = `You write a news digest for one reader who is tired of clickbait.
 For each article you are given, write:
@@ -1043,6 +1074,12 @@ function preferences(interests: string, examples: Examples): string {
   if (examples.wanted.length) {
     parts.push(
       `<wanted_articles_like>\n${examples.wanted.join("\n")}\n</wanted_articles_like>`,
+    );
+  }
+  const opened = examples.opened ?? [];
+  if (opened.length) {
+    parts.push(
+      `<opened_articles_like>\n${opened.join("\n")}\n</opened_articles_like>`,
     );
   }
   return parts.length
@@ -1397,6 +1434,8 @@ function collectAnswers(inst: string): void {
           applyVerdict(inst, effect.id, effect.verdict);
         } else if (effect.kind === "unsort") {
           unsort(inst, effect.id);
+        } else if (effect.kind === "opened") {
+          noteOpened(inst, effect.id);
         } else {
           markRead(inst, [effect.id], true);
         }
@@ -1415,6 +1454,23 @@ function collectAnswers(inst: string): void {
 }
 
 /** Posts a run's articles: to the rolling batch card, or as highlights. */
+/** Posts the welcome card; one that fails is tried again on the next run. */
+function welcome(inst: string): void {
+  const producer = producerOf(inst);
+  let welcomed = true;
+  try {
+    tools.call("inbox_post", {
+      producer,
+      card: welcomeCard(inst, producer.label),
+    });
+  } catch (e) {
+    welcomed = false;
+    console.warn(`news-digest: welcome card: ${e}`);
+  }
+  const state = readJson<InboxState>(inst, "inbox", emptyState());
+  saveInbox(inst, { ...state, welcomed });
+}
+
 function postToInbox(inst: string, added: DigestItem[], now: string): void {
   const before = readJson<InboxState>(inst, "inbox", emptyState());
   const producer = producerOf(inst);
@@ -1859,7 +1915,13 @@ function buildDigest(context: HandlerContext): void {
   // What the person answered in their inbox since the last run counts before
   // this run's articles are judged.
   const inbox = inboxReachable();
-  if (inbox) collectAnswers(inst);
+  if (inbox) {
+    const owed = needsWelcome(
+      readJson<InboxState>(inst, "inbox", emptyState()),
+    );
+    collectAnswers(inst);
+    if (owed) welcome(inst);
+  }
 
   const seenList = readJson<string[]>(inst, "seen", []);
   const seen = new Set(seenList);

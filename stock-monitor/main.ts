@@ -44,11 +44,13 @@ import {
   formatWatchlist,
   groupsOf,
   isSymbol,
+  needsWelcome,
   parseWatchlist,
   pickCandidates,
   readQuote,
   recommend,
   watchlistCards,
+  welcomeCard,
   whyPosted,
   type InboxEvent,
   type InboxState,
@@ -869,7 +871,11 @@ function checkWatchlist(context: HandlerContext): void {
 
   // What the person answered in their inbox counts before this run posts.
   const inbox = inboxReachable();
-  if (inbox) collectAnswers();
+  if (inbox) {
+    const owed = needsWelcome(readJson<InboxState>("inbox", emptyState()));
+    collectAnswers();
+    if (owed) welcome(current.dailyHourUtc);
+  }
 
   const watchlist = settings().watchlist;
   const { quotes, problems } = fetchQuotes(watchlist, now);
@@ -949,6 +955,24 @@ function collectAnswers(): void {
     state.problem = inboxProblem(e);
   }
   writeJson("inbox", state);
+}
+
+/** Posts the welcome card; one that fails is tried again on the next run. */
+function welcome(dailyHourUtc: number): void {
+  let welcomed = true;
+  try {
+    tools.call("inbox_post", {
+      producer: producer(),
+      card: welcomeCard(dailyHourUtc),
+    });
+  } catch (e) {
+    welcomed = false;
+    console.warn(`stock-monitor: welcome card: ${e}`);
+  }
+  writeJson("inbox", {
+    ...readJson<InboxState>("inbox", emptyState()),
+    welcomed,
+  });
 }
 
 /** Posts the alerts due, and once a day the watchlist and stocks to look at. */

@@ -24,11 +24,13 @@ import {
   emptyState,
   formatWatchlist,
   groupsOf,
+  needsWelcome,
   parseWatchlist,
   pickCandidates,
   readQuote,
   recommend,
   watchlistCards,
+  welcomeCard,
   whyPosted,
   type Quote,
 } from "./rules.ts";
@@ -273,6 +275,25 @@ describe("cards", function () {
     const card = candidatesCard("2026-11-02", ["MSFT"]);
     expect(card.options.map((o) => o.id)).toEqual([FOLLOW, NOT_INTERESTED]);
     expect(card.items[0].id).toBe("MSFT");
+  });
+});
+
+describe("welcome", function () {
+  test("is owed by a new watchlist, and by one whose welcome failed", function () {
+    expect(needsWelcome(emptyState())).toBe(true);
+    expect(needsWelcome({ ...emptyState(), welcomed: false })).toBe(true);
+    expect(needsWelcome({ ...emptyState(), welcomed: true })).toBe(false);
+    expect(
+      needsWelcome({ ...emptyState(), syncedAt: "2026-11-01T00:00:00Z" }),
+    ).toBe(false);
+  });
+
+  test("names the hour of the day's round, and its answer changes nothing", function () {
+    const card = welcomeCard(7);
+    expect(card.summary).toContain("07:00 UTC");
+    expect(
+      effectsOf([{ type: "decided", externalId: "welcome", optionId: "ok" }]),
+    ).toEqual([]);
   });
 });
 

@@ -279,6 +279,21 @@
 
       <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
 
+      <!-- With an agent inbox the news is sorted there, so the page leads
+           with what it is sorted by and what the filter took out. -->
+      <section id="inbox-lead" hidden>
+        <h2>Sorted in your agent inbox</h2>
+        <p class="status">
+          New articles go to your agent inbox, and your answers there sort them
+          here. This page is where you say what you want to read, and where you
+          bring back anything the filter got wrong.
+        </p>
+        <p id="inbox-lead-interests" class="status"></p>
+        <div class="row">
+          <button id="inbox-lead-settings">Feeds and interests</button>
+        </div>
+      </section>
+
       <section id="feeds-panel" hidden>
         <h2>Feeds and interests</h2>
         <label for="digest-label">Name of this digest</label>

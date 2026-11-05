@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backlog groomer</title>
+    <link rel="stylesheet" href="/engine/engine.css" />
+    <script src="/engine/engine.js" defer></script>
+    <style>
+      /* The engine's stylesheet supplies tokens, controls, buttons and the
+         menu; this is only what the page adds, against the same --aw-*
+         properties so it follows the engine's look and dark mode. */
+      body {
+        padding: var(--aw-space-5) var(--aw-space-4) 4rem;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        padding-right: 3rem;
+        margin-bottom: var(--aw-space-1);
+      }
+      .sub {
+        color: var(--aw-color-muted);
+        margin: 0 0 var(--aw-space-5);
+      }
+      section {
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-lg);
+        box-shadow: var(--aw-shadow);
+        padding: var(--aw-space-4);
+        margin-bottom: var(--aw-space-4);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--aw-color-muted);
+      }
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+        font-family: var(--aw-font-mono);
+        font-size: 0.85rem;
+      }
+      .row {
+        display: flex;
+        gap: var(--aw-space-2);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--aw-space-3);
+      }
+      .status {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .status.error {
+        color: var(--aw-color-danger);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .changes li {
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-2) 0;
+      }
+      .changes li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .when {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+      }
+      .empty {
+        color: var(--aw-color-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <aw-account-menu>
+      <a id="token-link" href="#" hidden>GitHub token</a>
+      <a id="model-key-link" href="#" hidden>Anthropic key</a>
+      <a id="grant-link" href="#" hidden>Permissions</a>
+    </aw-account-menu>
+    <main>
+      <h1>Backlog groomer</h1>
+      <p class="sub">
+        Once a day it proposes changes to your GitHub issues in your agent
+        inbox: stale issues and duplicates to close, labels to add. Nothing
+        changes on GitHub until you approve it there.
+      </p>
+
+      <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <section>
+        <h2>Settings</h2>
+        <label for="repos"
+          >Repositories, one per line, at most 5: <code>owner/name</code> or
+          the repository's GitHub URL. Closing and commenting notify the people
+          watching them.</label
+        >
+        <textarea id="repos" spellcheck="false"></textarea>
+        <label for="stale-days"
+          >Days untouched before an issue is proposed for closing (0 for
+          never)</label
+        >
+        <input id="stale-days" type="number" min="0" step="1" />
+        <label for="daily-hour">Hour (UTC) of the day's proposals</label>
+        <input id="daily-hour" type="number" min="0" max="23" step="1" />
+        <div class="row">
+          <button id="save">Save</button>
+          <button id="run-now" class="aw-button--secondary">
+            Collect answers now
+          </button>
+          <span id="save-status" class="status"></span>
+        </div>
+        <p id="keys-status" class="status" style="margin-top: var(--aw-space-3)"></p>
+      </section>
+
+      <section>
+        <h2>Waiting for your answer</h2>
+        <ul id="proposals" class="changes">
+          <li class="empty">Loading…</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Changed on GitHub</h2>
+        <p class="status" style="margin-bottom: var(--aw-space-3)">
+          Change your answer in the inbox to undo one.
+        </p>
+        <ul id="applied" class="changes"></ul>
+      </section>
+
+      <p id="run-status" class="status"></p>
+    </main>
+    <script src="/backlog-groomer/app.js"></script>
+  </body>
+</html>

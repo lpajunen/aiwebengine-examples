@@ -282,7 +282,7 @@ describe("cards", function () {
   });
 
   test("leaves out a repository whose name makes the ids too long", function () {
-    const long = { ...stale, repo: `acme/${"x".repeat(100)}` };
+    const long = { ...stale, repo: `${"o".repeat(39)}/${"x".repeat(100)}` };
     expect(fitsInbox(stale, "")).toBe(true);
     expect(fitsInbox(long, "")).toBe(false);
   });

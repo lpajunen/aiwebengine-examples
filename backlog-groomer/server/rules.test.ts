@@ -240,6 +240,7 @@ describe("cards", function () {
     const later = staleCard({ ...stale, updatedAt: "2025-02-01T00:00:00Z" });
     expect(later.externalId).not.toBe(card.externalId);
     expect(later.topic).toBe(card.topic);
+    expect(card.allowLater).toBe(true);
   });
 
   test("links both issues on a duplicate", function () {
@@ -258,6 +259,7 @@ describe("cards", function () {
       reason: "Same stack trace.",
     });
     expect(card.links.length).toBe(2);
+    expect(card.allowLater).toBe(true);
     expect(card.externalId.startsWith("dup:acme:widgets:7:3:")).toBe(true);
   });
 

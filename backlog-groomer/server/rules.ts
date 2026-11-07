@@ -502,6 +502,7 @@ export function staleCard(p: Proposal & { kind: "stale" }) {
     links: [{ label: `Open #${p.number} on GitHub`, url: p.url }],
     boundTo: { label: "Issue", value: `#${p.number} as of ${p.updatedAt}` },
     options: [approve("Close"), reject("Keep open")],
+    allowLater: true,
     suggestedQuestions: SUGGESTED,
   };
 }
@@ -529,6 +530,7 @@ export function duplicateCard(p: Proposal & { kind: "duplicate" }) {
     ],
     boundTo: { label: "Issue", value: `#${p.number} as of ${p.updatedAt}` },
     options: [approve("Close as duplicate"), reject("Not a duplicate")],
+    allowLater: true,
     suggestedQuestions: [
       "How do the two issues differ?",
       "What is this issue about?",

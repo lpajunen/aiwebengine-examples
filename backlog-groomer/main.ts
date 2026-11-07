@@ -999,9 +999,9 @@ class SettingsError extends Error {}
 
 /**
  * Saves the settings and keeps the schedule to match: scheduled with
- * repositories and not paused, and run at once. Without permission the
- * settings are still saved and nothing is scheduled; the status says what is
- * missing.
+ * repositories and not paused, and run at once with a round of proposals
+ * whether or not the day's has run. Without permission the settings are
+ * still saved and nothing is scheduled; the status says what is missing.
  */
 function saveSettings(
   reposText: string,
@@ -1022,6 +1022,9 @@ function saveSettings(
   const next: Settings = { repos, staleDays, dailyHourUtc: hour };
   if (paused) next.paused = true;
   writeJson("settings", next);
+  // New settings (or a key added since) get a round of their own at once,
+  // not the next day's.
+  personalStorage.removeItem("dailyDay");
   if (permitted(personalTasks.authorization())) {
     if (repos.length === 0 || paused) {
       personalTasks.unschedule(KEY);

@@ -646,6 +646,28 @@ export function closingComment(p: Proposal, note: string): string {
   return `${note}${by}`;
 }
 
+/** GitHub's limit on an issue's title. */
+export const MAX_TITLE = 256;
+
+/**
+ * A new issue from what the person wrote in their inbox: the first line is
+ * the title, the rest the body, in their words. Null for nothing written.
+ */
+export function newIssue(text: string): { title: string; body: string } | null {
+  const lines = String(text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
+  const first = lines.findIndex((l) => l.trim() !== "");
+  if (first === -1) return null;
+  return {
+    title: lines[first].trim().slice(0, MAX_TITLE),
+    body: lines
+      .slice(first + 1)
+      .join("\n")
+      .trim(),
+  };
+}
+
 /** Why the groomer posted a card, for a question asked on it. */
 export function whyProposed(p: Proposal): string {
   if (p.kind === "stale") {

@@ -18,6 +18,7 @@ import {
   issueKey,
   labelsCard,
   needsWelcome,
+  newIssue,
   parseRepos,
   pickStale,
   proposalsFrom,
@@ -335,6 +336,20 @@ describe("answers", function () {
       { kind: "clear", key: "stale:a:b:1:9" },
       { kind: "drop", key: "dup:a:b:3:1:9" },
     ]);
+  });
+
+  test("makes a new issue of the first line and the rest", function () {
+    expect(
+      newIssue("\n  Dark mode toggle \r\nOn the queue page.\n\nAnd agents.\n"),
+    ).toEqual({
+      title: "Dark mode toggle",
+      body: "On the queue page.\n\nAnd agents.",
+    });
+    expect(newIssue("Just a title")).toEqual({
+      title: "Just a title",
+      body: "",
+    });
+    expect(newIssue(" \n ")).toBe(null);
   });
 
   test("remembers a rejection once, newest first", function () {

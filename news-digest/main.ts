@@ -49,6 +49,7 @@ import {
   needsWelcome,
   planPosts,
   searchArticles,
+  wakeAt,
   welcomeCard,
   type InboxEvent,
   type InboxState,
@@ -182,6 +183,7 @@ const DIGEST_KEYS = [
   "feedStatus",
   "rejudgedAt",
   "inbox",
+  "wake",
 ];
 
 function readJson<T>(inst: string, name: string, fallback: T): T {
@@ -1749,6 +1751,24 @@ function newsDigestResumeTool(context: HandlerContext): unknown {
   return statusOf(inst);
 }
 
+// The inbox has answers for this digest. Queues a run that reads them, unless
+// one is already queued; it reads the feeds only at their scheduled time.
+function newsDigestWakeTool(context: HandlerContext): unknown {
+  const inst = contractInstance(context);
+  const runAt = wakeAt(
+    personalStorage.getItem(keyOf(inst, "wake")),
+    new Date(),
+  );
+  if (runAt === null) return { queued: false };
+  personalTasks.enqueue({
+    handler: "readInboxAnswers",
+    payload: { instance: inst },
+    runAt,
+  });
+  personalStorage.setItem(keyOf(inst, "wake"), runAt);
+  return { queued: true, runAt };
+}
+
 function newsDigestRemoveTool(context: HandlerContext): unknown {
   removeInstance(contractInstance(context));
   return { removed: true };
@@ -1792,6 +1812,12 @@ function registerContractTools(): void {
       "Start a digest that is paused or ready; refused while something is missing.",
     inputSchema: instanceOnly,
     handler: "newsDigestResumeTool",
+  });
+  mcpRegistry.registerTool("news_digest_wake", {
+    description:
+      "The inbox has answers for this digest: read them soon rather than at the next run. Carries no answer.",
+    inputSchema: instanceOnly,
+    handler: "newsDigestWakeTool",
   });
   mcpRegistry.registerTool("news_digest_remove", {
     description:
@@ -1889,6 +1915,16 @@ function removeInstance(inst: string): void {
   if (inst !== DEFAULT_INSTANCE) {
     saveInstances(instances().filter((i) => i.id !== inst));
   }
+}
+
+// A task acting as the person, queued by a wake: applies the inbox's answers
+// and posts nothing.
+function readInboxAnswers(context: HandlerContext): void {
+  const inst = taskInstance(context);
+  if (inst === null) return;
+  // Cleared first, so an answer given during this run wakes another.
+  personalStorage.removeItem(keyOf(inst, "wake"));
+  if (inboxReachable()) collectAnswers(inst);
 }
 
 // A task acting as the person: the schedule's run reads every feed; one

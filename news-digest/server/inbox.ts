@@ -214,6 +214,19 @@ export function batchCard(
   };
 }
 
+/** How long a wake waits, so answers given in a row are read in one run. */
+export const WAKE_DELAY_MS = 30_000;
+
+/**
+ * When a woken digest reads its answers: `WAKE_DELAY_MS` from now, or null
+ * while an earlier wake is still to run (`pending` is its time), which reads
+ * these too.
+ */
+export function wakeAt(pending: string | null, now: Date): string | null {
+  if (pending !== null && Date.parse(pending) > now.getTime()) return null;
+  return new Date(now.getTime() + WAKE_DELAY_MS).toISOString();
+}
+
 /**
  * Whether this digest still owes the inbox its welcome card: one never
  * posted, for a digest that has not reached the inbox before. Digests that

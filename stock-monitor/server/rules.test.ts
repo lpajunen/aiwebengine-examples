@@ -25,6 +25,8 @@ import {
   formatWatchlist,
   groupsOf,
   needsWelcome,
+  WAKE_DELAY_MS,
+  wakeAt,
   parseWatchlist,
   pickCandidates,
   readQuote,
@@ -294,6 +296,26 @@ describe("welcome", function () {
     expect(
       effectsOf([{ type: "decided", externalId: "welcome", optionId: "ok" }]),
     ).toEqual([]);
+  });
+});
+
+describe("wakeAt", function () {
+  test("queues a run a short while from now when none is waiting", function () {
+    expect(wakeAt(null, new Date(NOW))).toBe(
+      new Date(Date.parse(NOW) + WAKE_DELAY_MS).toISOString(),
+    );
+  });
+
+  test("queues nothing while an earlier wake is still to run", function () {
+    const pending = wakeAt(null, new Date(NOW)) as string;
+    const soon = new Date(Date.parse(NOW) + WAKE_DELAY_MS / 2);
+    expect(wakeAt(pending, soon)).toBe(null);
+  });
+
+  test("queues again once the earlier wake's time has passed", function () {
+    expect(wakeAt(NOW, new Date(LATER))).toBe(
+      new Date(Date.parse(LATER) + WAKE_DELAY_MS).toISOString(),
+    );
   });
 });
 

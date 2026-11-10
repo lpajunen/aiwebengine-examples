@@ -473,6 +473,13 @@ function startDoc(title: string, brief: string): Doc {
   if (!fitsInbox(doc)) throw new Error("Could not name the document");
   saveDoc(doc);
   writeJson("docs", ids.concat([doc.id]));
+  // The welcome card comes before the first draft, not after it.
+  if (
+    needsWelcome(readJson<InboxState>("inbox", emptyState())) &&
+    inboxReachable()
+  ) {
+    welcome();
+  }
   queueWrite(doc);
   return doc;
 }

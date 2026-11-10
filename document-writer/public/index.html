@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Document writer</title>
+    <link rel="stylesheet" href="/engine/engine.css" />
+    <script src="/engine/engine.js" defer></script>
+    <style>
+      /* The engine's stylesheet supplies tokens, controls, buttons and the
+         menu; this is only what the page adds, against the same --aw-*
+         properties so it follows the engine's look and dark mode. */
+      body {
+        padding: var(--aw-space-5) var(--aw-space-4) 4rem;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      h1 {
+        padding-right: 3rem;
+        margin-bottom: var(--aw-space-1);
+      }
+      .sub {
+        color: var(--aw-color-muted);
+        margin: 0 0 var(--aw-space-5);
+      }
+      section {
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-lg);
+        box-shadow: var(--aw-shadow);
+        padding: var(--aw-space-4);
+        margin-bottom: var(--aw-space-4);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--aw-color-muted);
+      }
+      textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+      #editor {
+        min-height: 320px;
+        font-family: var(--aw-font-mono);
+        font-size: 0.85rem;
+      }
+      .row {
+        display: flex;
+        gap: var(--aw-space-2);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--aw-space-3);
+      }
+      .status {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .status.error {
+        color: var(--aw-color-danger);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .list li {
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-2) 0;
+      }
+      .list li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .when {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+      }
+      .empty {
+        color: var(--aw-color-muted);
+      }
+      .doc-text {
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-md, 8px);
+        padding: var(--aw-space-2) var(--aw-space-4);
+        overflow-wrap: anywhere;
+      }
+      .doc-text img {
+        max-width: 100%;
+      }
+      button.link {
+        background: none;
+        border: 0;
+        padding: 0;
+        color: var(--aw-color-link, inherit);
+        text-decoration: underline;
+        cursor: pointer;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <aw-account-menu>
+      <a id="model-key-link" href="#" hidden>Anthropic key</a>
+      <a id="grant-link" href="#" hidden>Permissions</a>
+    </aw-account-menu>
+    <main>
+      <h1>Document writer</h1>
+      <p class="sub">
+        Writes your documents one change at a time. Each change waits in your
+        agent inbox as a diff to approve, change or reject; nothing is kept
+        until you approve it.
+      </p>
+
+      <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <div id="list-view">
+        <section>
+          <h2>Your documents</h2>
+          <ul id="docs" class="list">
+            <li class="empty">Loading…</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>New document</h2>
+          <label for="new-title">Title</label>
+          <input id="new-title" maxlength="120" />
+          <label for="new-brief"
+            >What it is for: audience, purpose, what it must cover</label
+          >
+          <textarea id="new-brief" maxlength="4000"></textarea>
+          <div class="row">
+            <button id="create">Start, with a first draft</button>
+            <span id="create-status" class="status"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2>How you like to write</h2>
+          <label for="style"
+            >Tone, audience, language, length: what every document should
+            follow. Optional.</label
+          >
+          <textarea id="style" maxlength="2000"></textarea>
+          <div class="row">
+            <button id="save-style" class="aw-button--secondary">Save</button>
+            <span id="style-status" class="status"></span>
+          </div>
+        </section>
+      </div>
+
+      <div id="doc-view" hidden>
+        <p><button id="back" class="link">← All documents</button></p>
+        <section>
+          <h2 id="doc-title"></h2>
+          <p id="doc-where" class="status"></p>
+          <p id="doc-problem" class="status error" hidden></p>
+          <div id="doc-text" class="doc-text"></div>
+          <div class="row">
+            <button id="next" class="aw-button--secondary" hidden>
+              What next?
+            </button>
+            <button id="edit" class="aw-button--secondary">Edit it yourself</button>
+            <a id="export" class="aw-button aw-button--secondary" href="#"
+              >Export Markdown</a
+            >
+            <button id="delete" class="aw-button--secondary">Delete</button>
+          </div>
+        </section>
+
+        <section id="editor-section" hidden>
+          <h2>Your edit</h2>
+          <textarea id="editor" spellcheck="true"></textarea>
+          <div class="row">
+            <button id="save-edit">Save as a new revision</button>
+            <button id="cancel-edit" class="aw-button--secondary">Cancel</button>
+            <span id="edit-status" class="status"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2>Ask for a change</h2>
+          <textarea
+            id="wish"
+            placeholder="Add a section on risks; make the opening shorter…"
+          ></textarea>
+          <div class="row">
+            <button id="ask">Ask</button>
+            <span id="ask-status" class="status"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2>Revisions</h2>
+          <ul id="revisions" class="list"></ul>
+          <div id="revision-view" hidden>
+            <p id="revision-title" class="status"></p>
+            <div id="revision-text" class="doc-text"></div>
+          </div>
+        </section>
+      </div>
+
+      <p id="run-status" class="status"></p>
+    </main>
+    <script src="/document-writer/app.js"></script>
+  </body>
+</html>

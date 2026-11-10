@@ -20,6 +20,8 @@ import {
   needsWelcome,
   planPosts,
   searchArticles,
+  WAKE_DELAY_MS,
+  wakeAt,
   welcomeCard,
   type InboxArticle,
 } from "./inbox.ts";
@@ -205,6 +207,25 @@ describe("welcome", function () {
         [],
       ),
     ).toEqual([]);
+  });
+});
+
+describe("wakeAt", function () {
+  test("queues a run a short while from now when none is waiting", function () {
+    const at = wakeAt(null, new Date(NOW));
+    expect(at).toBe(new Date(Date.parse(NOW) + WAKE_DELAY_MS).toISOString());
+  });
+
+  test("queues nothing while an earlier wake is still to run", function () {
+    const pending = wakeAt(null, new Date(NOW)) as string;
+    const soon = new Date(Date.parse(NOW) + WAKE_DELAY_MS / 2);
+    expect(wakeAt(pending, soon)).toBe(null);
+  });
+
+  test("queues again once the earlier wake's time has passed", function () {
+    expect(wakeAt(NOW, new Date(LATER))).toBe(
+      new Date(Date.parse(LATER) + WAKE_DELAY_MS).toISOString(),
+    );
   });
 });
 

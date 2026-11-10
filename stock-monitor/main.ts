@@ -49,6 +49,7 @@ import {
   pickCandidates,
   readQuote,
   recommend,
+  wakeAt,
   watchlistCards,
   welcomeCard,
   whyPosted,
@@ -715,10 +716,22 @@ function stockMonitorRemoveTool(context: HandlerContext): unknown {
     "inbox",
     "status",
     "dailyDay",
+    "wake",
   ]) {
     personalStorage.removeItem(name);
   }
   return { removed: true };
+}
+
+// The inbox has answers for the watchlist. Queues a run that reads them,
+// unless one is already queued; quotes are fetched only at the scheduled time.
+function stockMonitorWakeTool(context: HandlerContext): unknown {
+  contractCall(context);
+  const runAt = wakeAt(personalStorage.getItem("wake"), new Date());
+  if (runAt === null) return { queued: false };
+  personalTasks.enqueue({ handler: "readInboxAnswers", runAt });
+  personalStorage.setItem("wake", runAt);
+  return { queued: true, runAt };
 }
 
 function registerContractTools(): void {
@@ -758,6 +771,12 @@ function registerContractTools(): void {
       "Start the watchlist when paused or ready; refused while something is missing.",
     inputSchema: instanceOnly,
     handler: "stockMonitorResumeTool",
+  });
+  mcpRegistry.registerTool("stock_monitor_wake", {
+    description:
+      "The inbox has answers for the watchlist: read them soon rather than at the next run. Carries no answer.",
+    inputSchema: instanceOnly,
+    handler: "stockMonitorWakeTool",
   });
   mcpRegistry.registerTool("stock_monitor_remove", {
     description:
@@ -857,6 +876,15 @@ function findCandidates(watchlist: Watched[], now: string): string[] {
     );
   }
   return picked;
+}
+
+// A task acting as the person, queued by a wake: applies the inbox's answers
+// and posts nothing.
+function readInboxAnswers(context: HandlerContext): void {
+  void context;
+  // Cleared first, so an answer given during this run wakes another.
+  personalStorage.removeItem("wake");
+  if (inboxReachable()) collectAnswers();
 }
 
 function checkWatchlist(context: HandlerContext): void {

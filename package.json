@@ -7,8 +7,8 @@
     "outdated": "npm outdated || echo '✓ Checked for outdated packages'"
   },
   "devDependencies": {
-    "@types/node": "^25.9.9",
-    "dotenv": "^18.0.9",
-    "minimatch": "^11.0.4"
+    "@types/node": "^26.6.6",
+    "dotenv": "^18.0.10",
+    "minimatch": "^11.0.8"
   }
 }

@@ -279,6 +279,51 @@ const WRITE_SCHEMA = {
  * Asks the model for one change. The first try thinks at medium effort; a
  * retry at low, so it is quicker if the first ran out of time.
  */
+/**
+ * One Messages call: through the person's inbox where there is one, which
+ * pays with the key their plan gives, otherwise with the person's own key.
+ */
+function callModel(request: object): {
+  stop_reason: string;
+  content: { type: string; text?: string }[];
+} {
+  if (inboxReachable()) {
+    try {
+      return tools.call("inbox_model", {
+        producer: producer(),
+        request,
+      }) as ReturnType<typeof callModel>;
+    } catch (e) {
+      // A person whose key is still here rather than at the inbox keeps
+      // working on it.
+      if (!/no-key: /.test(message(e)) || !secretStorage.exists(MODEL_SECRET)) {
+        throw e;
+      }
+    }
+  }
+  const response = fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    timeout: MODEL_TIMEOUT_MS,
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": "{{secret:" + MODEL_SECRET + "}}",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `model: HTTP ${response.status}: ${response.body.slice(0, 200)}`,
+    );
+  }
+  return response.json() as ReturnType<typeof callModel>;
+}
+
+/** Whether there is a model to call: an inbox, or the person's own key. */
+function canUseModel(): boolean {
+  return inboxReachable() || secretStorage.exists(MODEL_SECRET);
+}
+
 function askModel(doc: Doc, text: string): Proposal {
   const pending = doc.pending;
   if (!pending) throw new Error("Nothing to write");
@@ -295,34 +340,16 @@ function askModel(doc: Doc, text: string): Proposal {
     request.feedbackOnIt = pending.feedback;
   }
   if (pending.lastError) request.yourLastTryFailed = pending.lastError;
-  const response = fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    timeout: MODEL_TIMEOUT_MS,
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": "{{secret:" + MODEL_SECRET + "}}",
-      "anthropic-version": "2023-06-01",
+  const answer = callModel({
+    model: MODEL,
+    max_tokens: 16000,
+    output_config: {
+      effort: pending.attempts === 0 ? "medium" : "low",
+      format: { type: "json_schema", schema: WRITE_SCHEMA },
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 16000,
-      output_config: {
-        effort: pending.attempts === 0 ? "medium" : "low",
-        format: { type: "json_schema", schema: WRITE_SCHEMA },
-      },
-      system: WRITE_SYSTEM,
-      messages: [{ role: "user", content: JSON.stringify(request) }],
-    }),
+    system: WRITE_SYSTEM,
+    messages: [{ role: "user", content: JSON.stringify(request) }],
   });
-  if (!response.ok) {
-    throw new Error(
-      `model: HTTP ${response.status}: ${response.body.slice(0, 200)}`,
-    );
-  }
-  const answer = response.json() as {
-    stop_reason: string;
-    content: { type: string; text?: string }[];
-  };
   if (answer.stop_reason === "refusal") throw new Error("the model declined");
   if (answer.stop_reason === "max_tokens")
     throw new Error("the answer was cut off");
@@ -369,7 +396,7 @@ function writeDocument(context: HandlerContext): void {
   delete doc.pending.queuedAt;
   const now = new Date().toISOString();
   const before = headText(doc);
-  if (!secretStorage.exists(MODEL_SECRET)) {
+  if (!canUseModel()) {
     doc.problem = "Store your Anthropic key to have changes written";
     saveDoc(doc);
     return;
@@ -533,7 +560,7 @@ function documentWriterCaptureTool(context: HandlerContext): unknown {
   contractCall(context);
   const args = (context.args ?? {}) as Record<string, unknown>;
   const { title, brief } = readNewDoc(String(args.text ?? ""));
-  if (!secretStorage.exists(MODEL_SECRET)) {
+  if (!canUseModel()) {
     throw new Error("Store your Anthropic key first");
   }
   startDoc(title, brief);
@@ -587,7 +614,8 @@ function documentWriterManifestTool(): unknown {
     instances: "one",
     scopes: ["personal_storage", "write", "secrets", "tools"],
     secrets: [
-      { name: MODEL_SECRET, label: "Anthropic API key", required: true },
+      // Only without an inbox: with one, the inbox's key is used.
+      { name: MODEL_SECRET, label: "Anthropic API key", required: false },
     ],
     settingsUrl: PAGE,
     capture: {
@@ -612,7 +640,7 @@ function missing(): { kind: string; label: string; url?: string }[] {
       url: grant.consentUrl,
     });
   }
-  if (!secretStorage.exists(MODEL_SECRET)) {
+  if (!canUseModel()) {
     found.push({
       kind: "secret",
       label: "Add your Anthropic API key",
@@ -867,7 +895,7 @@ function documentWriterState(context: HandlerContext): HttpResponse {
       syncedAt: inbox.syncedAt ?? null,
       problem: inbox.problem ?? null,
     },
-    hasModelKey: secretStorage.exists(MODEL_SECRET),
+    hasModelKey: canUseModel(),
     modelKeyUrl: keyUrl(MODEL_SECRET),
     style: current.style,
     paused: current.paused === true,
@@ -934,7 +962,7 @@ function documentWriterNew(context: HandlerContext): HttpResponse {
     const { title, brief } = readNewDoc(
       `${String(input.title ?? "").trim()}\n${String(input.brief ?? "")}`,
     );
-    if (!secretStorage.exists(MODEL_SECRET)) {
+    if (!canUseModel()) {
       return fail(400, "Store your Anthropic key first");
     }
     return ResponseBuilder.json({ id: startDoc(title, brief).id });

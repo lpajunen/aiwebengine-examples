@@ -337,7 +337,7 @@ function newsDigestState(context: HandlerContext): HttpResponse {
       problem: inbox.problem ?? null,
     },
     consentUrl: grant.consentUrl ?? null,
-    hasKey: secretStorage.exists(SECRET_NAME),
+    hasKey: canUseModel(),
     keyUrl: keyUrl(inst),
     feeds: settings.feeds,
     interests: settings.interests ?? "",
@@ -444,9 +444,7 @@ function saveSettings(
   const { feeds, interests } = cleanSettings(given, interestsText);
   const previous = readJson<Settings>(inst, "settings", { feeds: [] });
   const before = previous.feeds;
-  const rejudge =
-    interests !== (previous.interests ?? "") &&
-    secretStorage.exists(SECRET_NAME);
+  const rejudge = interests !== (previous.interests ?? "") && canUseModel();
   if (permitted(personalTasks.authorization())) {
     if (feeds.length === 0 || previous.paused) {
       personalTasks.unschedule(scheduleKey(inst));
@@ -486,7 +484,7 @@ function newsDigestRunNow(context: HandlerContext): HttpResponse {
   if (!inst) return fail(404, "No such digest");
   const feeds = readJson<Settings>(inst, "settings", { feeds: [] }).feeds;
   if (feeds.length === 0) return fail(400, "No feeds yet");
-  if (!secretStorage.exists(SECRET_NAME)) {
+  if (!canUseModel()) {
     return fail(400, "Store your API key first");
   }
   try {
@@ -1097,17 +1095,19 @@ function preferences(interests: string, examples: Examples): string {
 function summarise(
   items: Candidate[],
   prefs: string,
+  via: ModelVia,
 ): { summaries: Map<number, Summary>; failed: Set<number>; errors: unknown[] } {
   const starts: number[] = [];
   for (let i = 0; i < items.length; i += BATCH) starts.push(i);
-  const responses = fetchAll(
+  const responses = sendModels(
     starts.map((start) =>
-      modelRequest(
+      modelBody(
         SYSTEM,
         SCHEMA,
         summaryPrompt(items.slice(start, start + BATCH), prefs),
       ),
     ),
+    via,
   );
   const summaries = new Map<number, Summary>();
   const failed = new Set<number>();
@@ -1213,6 +1213,7 @@ function retranslate(
   items: Candidate[],
   prefs: string,
   summaries: Map<number, Summary>,
+  via: ModelVia,
 ): void {
   const wrong: number[] = [];
   summaries.forEach((s, i) => {
@@ -1223,6 +1224,7 @@ function retranslate(
   const again = summarise(
     wrong.map((i) => items[i]),
     prefs,
+    via,
   ).summaries;
   wrong.forEach((i, k) => {
     const item = items[i];
@@ -1240,53 +1242,108 @@ function retranslate(
   });
 }
 
-/** One structured answer from the model, on the reader's own key. */
-function askModel<T>(system: string, schema: object, content: string): T {
-  const request = modelRequest(system, schema, content);
-  return modelAnswer<T>(fetch(request.url, request.options));
-}
+/**
+ * Where model calls go: through the person's inbox, which pays with the key
+ * their plan gives, or with the reader's own key here. `null` is the latter.
+ */
+type ModelVia = ReturnType<typeof producerOf> | null;
 
-function modelRequest(
-  system: string,
-  schema: object,
-  content: string,
-): { url: string; options: FetchOptions } {
-  return {
-    url: "https://api.anthropic.com/v1/messages",
-    options: {
-      method: "POST",
-      timeout: 40_000,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": "{{secret:" + SECRET_NAME + "}}",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 16000,
-        thinking: { type: "adaptive" },
-        // A summary needs little thought; thinking counts toward max_tokens.
-        output_config: {
-          effort: "low",
-          format: { type: "json_schema", schema },
-        },
-        system,
-        messages: [{ role: "user", content }],
-      }),
-    },
-  };
-}
-
-function modelAnswer<T>(response: FetchResponse): T {
-  if (!response.ok) {
-    throw new Error(
-      `model: HTTP ${response.status}: ${response.body.slice(0, 300)}`,
-    );
-  }
-  const message = response.json() as {
+/** One model answer, or why there is none, in place of its request. */
+interface ModelReply {
+  message?: {
     stop_reason: string;
     content: { type: string; text?: string }[];
   };
+  error?: string;
+}
+
+function modelVia(inst: string): ModelVia {
+  return inboxReachable() ? producerOf(inst) : null;
+}
+
+/** Whether there is a model to call: an inbox, or the reader's own key. */
+function canUseModel(): boolean {
+  return inboxReachable() || secretStorage.exists(SECRET_NAME);
+}
+
+/** One structured answer from the model. */
+function askModel<T>(
+  system: string,
+  schema: object,
+  content: string,
+  via: ModelVia,
+): T {
+  return modelAnswer<T>(
+    sendModels([modelBody(system, schema, content)], via)[0],
+  );
+}
+
+function modelBody(system: string, schema: object, content: string): object {
+  return {
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    // A summary needs little thought; thinking counts toward max_tokens.
+    output_config: {
+      effort: "low",
+      format: { type: "json_schema", schema },
+    },
+    system,
+    messages: [{ role: "user", content }],
+  };
+}
+
+/** The requests, sent together; each reply in its request's place. */
+function sendModels(bodies: object[], via: ModelVia): ModelReply[] {
+  if (via) {
+    let replies: ModelReply[];
+    try {
+      replies = (
+        tools.call("inbox_model", {
+          producer: via,
+          requests: bodies,
+        }) as { responses: ModelReply[] }
+      ).responses;
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      replies = bodies.map(() => ({ error }));
+    }
+    // A reader whose key is still here rather than at the inbox keeps
+    // working on it.
+    const noKey = replies.every((r) => /no-key: /.test(r.error ?? ""));
+    if (!noKey || !secretStorage.exists(SECRET_NAME)) return replies;
+  }
+  return fetchAll(
+    bodies.map((body) => ({
+      url: "https://api.anthropic.com/v1/messages",
+      options: {
+        method: "POST",
+        timeout: 40_000,
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "{{secret:" + SECRET_NAME + "}}",
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(body),
+      },
+    })),
+  ).map((response): ModelReply => {
+    try {
+      if (!response.ok) {
+        return {
+          error: `model: HTTP ${response.status}: ${response.body.slice(0, 300)}`,
+        };
+      }
+      return { message: response.json() as ModelReply["message"] };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+}
+
+function modelAnswer<T>(reply: ModelReply): T {
+  if (reply.error !== undefined) throw new Error(reply.error);
+  const message = reply.message!;
   if (message.stop_reason === "refusal") throw new Error("model: declined");
   if (message.stop_reason === "max_tokens") throw new Error("model: cut off");
   const text = message.content.find((block) => block.type === "text")?.text;
@@ -1326,7 +1383,7 @@ const JUDGE_SCHEMA = {
 // they now want returns to the news. Their own "Not interested" stands.
 function rejudgeFiltered(context: HandlerContext): void {
   const inst = taskInstance(context);
-  if (inst === null || !secretStorage.exists(SECRET_NAME)) return;
+  if (inst === null || !canUseModel()) return;
   const settings = readJson<Settings>(inst, "settings", { feeds: [] });
   const candidates = readJson<DigestItem[]>(inst, "articles", [])
     .filter((a) => a.filtered && a.filtered !== SKIPPED_BY_HAND)
@@ -1348,6 +1405,7 @@ function rejudgeFiltered(context: HandlerContext): void {
       JUDGE_SYSTEM,
       JUDGE_SCHEMA,
       `${prefs}\n\nSay whether to keep each article. Answer with its id.\n\n${listed}`,
+      modelVia(inst),
     );
     const verdicts = new Map<string, { keep: boolean; reason: string }>();
     for (const v of answer.items) {
@@ -1379,6 +1437,9 @@ function modelProblem(e: unknown): string {
   if (/HTTP 429\b/.test(message)) {
     return "Model: rate limited or out of credit on your API key";
   }
+  // The inbox's refusals name their kind: no-key, lapsed.
+  const refused = /(?:^|: )(no-key|lapsed): (.*)$/.exec(message);
+  if (refused) return `Inbox: ${refused[2]}`.slice(0, 200);
   const detail = /"message":"([^"]*)"/.exec(message)?.[1];
   return `Model: ${detail ?? message.replace(/^model: /, "")}`.slice(0, 200);
 }
@@ -1574,7 +1635,8 @@ function newsDigestManifestTool(): unknown {
     maxInstances: MAX_INSTANCES,
     scopes: ["personal_storage", "write", "secrets", "tools"],
     secrets: [
-      { name: SECRET_NAME, label: "Anthropic API key", required: true },
+      // Only without an inbox: with one, the inbox's key is used.
+      { name: SECRET_NAME, label: "Anthropic API key", required: false },
     ],
     settingsUrl: PAGE,
     ask: {
@@ -1599,7 +1661,7 @@ function missingFor(
       url: grant.consentUrl,
     });
   }
-  if (!secretStorage.exists(SECRET_NAME)) {
+  if (!canUseModel()) {
     missing.push({
       kind: "secret",
       label: "Add your Anthropic API key",
@@ -1940,9 +2002,9 @@ function buildDigest(context: HandlerContext): void {
     : settings.feeds;
   if (feeds.length === 0) return;
   const now = new Date().toISOString();
-  if (!secretStorage.exists(SECRET_NAME)) {
-    // Nothing is taken in without a key to summarise it with, so it is all
-    // still new when one is stored.
+  if (!canUseModel()) {
+    // Nothing is taken in without a model to summarise it with, so it is all
+    // still new when there is one.
     const problems = new Map(feeds.map((url) => [url, "No API key stored"]));
     recordStatus(inst, feeds, [], problems, now);
     return;
@@ -1972,8 +2034,9 @@ function buildDigest(context: HandlerContext): void {
       settings.interests ?? "",
       readJson<Examples>(inst, "examples", { skipped: [], wanted: [] }),
     );
-    const { summaries, failed, errors } = summarise(items, prefs);
-    retranslate(items, prefs, summaries);
+    const via = inbox ? producerOf(inst) : null;
+    const { summaries, failed, errors } = summarise(items, prefs, via);
+    retranslate(items, prefs, summaries, via);
     // A failed batch is said on each feed it held up, and its articles stay
     // unseen for the next run. When nothing came back the run fails, so the
     // queue retries it and repeated failure pauses the schedule.

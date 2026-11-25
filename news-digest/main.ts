@@ -51,6 +51,7 @@ import {
   searchArticles,
   wakeAt,
   welcomeCard,
+  UNTITLED,
   type InboxEvent,
   type InboxState,
 } from "./server/inbox.ts";
@@ -946,7 +947,7 @@ function collect(
       fresh.push({
         id: item.id,
         feed: url,
-        title: item.title ?? "(untitled)",
+        title: item.title?.trim() || UNTITLED,
         link: item.link,
         source,
         published: item.published ?? item.updated,
@@ -1428,14 +1429,20 @@ function rejudgeFiltered(context: HandlerContext): void {
   );
 }
 
-/** A failed model call, as the reader can act on it. */
-function modelProblem(e: unknown): string {
+/**
+ * A failed model call, as the reader can act on it. Through the inbox the
+ * key is the one stored there, not this page's.
+ */
+function modelProblem(e: unknown, viaInbox: boolean): string {
   const message = e instanceof Error ? e.message : String(e);
+  const key = viaInbox ? "the API key in your agent inbox" : "your API key";
   if (/HTTP 401\b/.test(message)) {
-    return "Model: your API key was refused; store it again under API key";
+    return viaInbox
+      ? "Model: the API key in your agent inbox was refused; store it again there under Agents"
+      : "Model: your API key was refused; store it again under API key";
   }
   if (/HTTP 429\b/.test(message)) {
-    return "Model: rate limited or out of credit on your API key";
+    return `Model: rate limited or out of credit on ${key}`;
   }
   // The inbox's refusals name their kind: no-key, lapsed.
   const refused = /(?:^|: )(no-key|lapsed): (.*)$/.exec(message);
@@ -2041,7 +2048,7 @@ function buildDigest(context: HandlerContext): void {
     // unseen for the next run. When nothing came back the run fails, so the
     // queue retries it and repeated failure pauses the schedule.
     if (errors.length > 0) {
-      const problem = modelProblem(errors[0]);
+      const problem = modelProblem(errors[0], via !== null);
       items.forEach((item, i) => {
         if (failed.has(i)) problems.set(item.feed, problem);
       });
@@ -2058,7 +2065,9 @@ function buildDigest(context: HandlerContext): void {
       const s = summaries.get(i);
       added.push({
         id: item.id,
-        headline: s?.headline ?? item.title,
+        // The model can answer an empty headline; the inbox refuses a card
+        // with an untitled item.
+        headline: s?.headline.trim() || item.title,
         summary: s?.summary ?? item.text.slice(0, 300),
         originalTitle: item.title,
         link: item.link,

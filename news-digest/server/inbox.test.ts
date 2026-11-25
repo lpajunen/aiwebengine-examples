@@ -10,6 +10,7 @@ import {
   NOT_RELEVANT,
   RELEVANT,
   UNSURE,
+  UNTITLED,
   articleKey,
   articlesAsked,
   askContext,
@@ -173,6 +174,17 @@ describe("cards", function () {
       UNSURE,
       NOT_RELEVANT,
     ]);
+  });
+
+  test("an article without a headline is still titled", function () {
+    const card = batchCard(
+      "sports",
+      "Sports",
+      { externalId: "2026-11-01.1", day: "2026-11-01" },
+      [article("a", { headline: "  " }), article("b")],
+    );
+    expect(card.items[0].title).toBe(UNTITLED);
+    expect(card.items[1].title).toBe("Headline b");
   });
 
   test("a highlight can wait until later", function () {

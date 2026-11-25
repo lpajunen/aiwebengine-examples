@@ -22,6 +22,8 @@ export const MAX_BATCH = 30;
 /** Highlight cards per digest per day. */
 export const MAX_HIGHLIGHTS = 5;
 const MAX_SUMMARY = 400;
+/** An article whose feed and model gave no headline. */
+export const UNTITLED = "(untitled)";
 
 export const RELEVANT = "relevant";
 export const UNSURE = "unsure";
@@ -180,7 +182,8 @@ export function planPosts(
 function item(a: InboxArticle) {
   return {
     id: articleKey(a.id),
-    title: a.headline.slice(0, 300),
+    // The inbox refuses an item without a title.
+    title: (a.headline.trim() || UNTITLED).slice(0, 300),
     summary: a.summary.slice(0, MAX_SUMMARY),
     links: [
       {

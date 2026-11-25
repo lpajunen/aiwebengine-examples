@@ -196,7 +196,7 @@ describe("cards", function () {
     );
     expect(card.items[0].links[1]).toEqual({
       label: "Source text",
-      url: "/news-digest/text?instance=sports&id=a%20b",
+      url: `/news-digest/text?instance=sports&id=${articleKey("a b")}`,
       handles: false,
     });
   });

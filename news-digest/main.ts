@@ -41,6 +41,7 @@
 import {
   PRODUCER,
   articlesAsked,
+  articleKey,
   askContext,
   batchCard,
   effectsOf,
@@ -561,9 +562,10 @@ function newsDigestText(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return ResponseBuilder.error(401, "Sign in first");
   const inst = instanceOf(context)?.id;
   if (!inst) return ResponseBuilder.error(404, "No such digest");
+  // The page links by id, an inbox card by the shorter key.
   const id = context.request?.query?.id ?? "";
   const article = readJson<DigestItem[]>(inst, "articles", []).find(
-    (a) => a.id === id,
+    (a) => a.id === id || articleKey(a.id) === id,
   );
   if (!article) return ResponseBuilder.error(404, "No such article");
   const back =
@@ -571,7 +573,7 @@ function newsDigestText(context: HandlerContext): HttpResponse {
       ? "/news-digest"
       : `/news-digest?instance=${encodeURIComponent(inst)}`;
   return ResponseBuilder.html(
-    sourceTextPage(article, readSourceText(inst, id), back),
+    sourceTextPage(article, readSourceText(inst, article.id), back),
   );
 }
 

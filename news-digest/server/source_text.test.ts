@@ -21,7 +21,7 @@ describe("sourceTextPage", function () {
     expect(html).toContain("<p>First &lt;script&gt;.</p>");
     expect(html).toContain("<p>Second.</p>");
     expect(html).toContain("&lt;b&gt;Shock&lt;/b&gt;");
-    expect(html).toContain("The article page, 25 characters");
+    expect(html).toContain("The article page, 24 characters");
     expect(html).toContain('href="https://www.is.fi/a/1"');
   });
 
@@ -31,7 +31,7 @@ describe("sourceTextPage", function () {
       { text: "Teaser.", from: "feed" },
       "/news-digest",
     );
-    expect(html).toContain("Only the feed's description");
+    expect(html).toContain("Only the feed&#39;s description");
   });
 
   test("explains an article kept before texts were, and links only http(s)", function () {

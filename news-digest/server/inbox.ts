@@ -23,8 +23,11 @@ import {
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "news-digest";
-/** Articles in one batch card; the inbox caps a card's size. */
-export const MAX_BATCH = 30;
+/**
+ * Articles in one batch card; the inbox caps a card at 32 KB, and a full one
+ * of the longest articles comes to about 29 KB.
+ */
+export const MAX_BATCH = 25;
 /** Highlight cards per digest per day. */
 export const MAX_HIGHLIGHTS = 5;
 const MAX_SUMMARY = 400;
@@ -199,7 +202,8 @@ function item(instance: string, a: InboxArticle) {
       // Beside the article, not reading it: opening it answers nothing.
       {
         label: "Source text",
-        url: sourceTextPath(instance, a.id),
+        // By its key, which is short: every byte counts on a full card.
+        url: sourceTextPath(instance, articleKey(a.id)),
         handles: false,
       },
     ],

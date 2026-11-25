@@ -15,6 +15,12 @@
 // and the articles it holds, which articlesAsked finds. searchArticles is
 // the read-only tool the inbox may call for more.
 
+import {
+  sourceDescription,
+  sourceTextPath,
+  type SourceText,
+} from "./source_text.ts";
+
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "news-digest";
 /** Articles in one batch card; the inbox caps a card's size. */
@@ -179,7 +185,7 @@ export function planPosts(
   };
 }
 
-function item(a: InboxArticle) {
+function item(instance: string, a: InboxArticle) {
   return {
     id: articleKey(a.id),
     // The inbox refuses an item without a title.
@@ -189,6 +195,12 @@ function item(a: InboxArticle) {
       {
         label: `Read at ${a.source.slice(0, 60) || "the source"}`,
         url: a.link,
+      },
+      // Beside the article, not reading it: opening it answers nothing.
+      {
+        label: "Source text",
+        url: sourceTextPath(instance, a.id),
+        handles: false,
       },
     ],
   };
@@ -210,7 +222,7 @@ export function batchCard(
       "Not relevant moves an article under Filtered on the digest's page. " +
       "Unsure, or just reading it, teaches nothing.",
     options: OPTIONS,
-    items: articles.map(item),
+    items: articles.map((a) => item(instance, a)),
     allowLater: true,
     handledByOpening: true,
     suggestedQuestions: SUGGESTED,
@@ -260,8 +272,8 @@ export function welcomeCard(instance: string, label: string) {
 }
 
 /** A card of its own for an article the model rated important. */
-export function highlightCard(a: InboxArticle) {
-  const { title, summary, links } = item(a);
+export function highlightCard(instance: string, a: InboxArticle) {
+  const { title, summary, links } = item(instance, a);
   return {
     externalId: `h-${articleKey(a.id)}`,
     title,
@@ -353,6 +365,8 @@ export const MAX_CONTEXT_ARTICLES = 12;
 export type AskArticle = InboxArticle & {
   originalTitle?: string;
   published?: string | null;
+  /** The text it was summarised from, for a question on its card. */
+  sourceText?: SourceText;
 };
 
 /** What the inbox's model reads of an article. */
@@ -364,6 +378,9 @@ function articleDocument(a: AskArticle): ContextDocument {
       (a.source ? `\nSource: ${a.source}` : "") +
       (a.originalTitle && a.originalTitle !== a.headline
         ? `\nOriginal headline: ${a.originalTitle}`
+        : "") +
+      (a.sourceText
+        ? `\n\nThe text the summary was written from (${sourceDescription(a.sourceText).toLowerCase()}):\n${a.sourceText.text}`
         : ""),
   };
   if (/^https?:\/\//i.test(a.link)) doc.url = a.link;

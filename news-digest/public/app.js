@@ -284,6 +284,17 @@ function renderArticle(article) {
   meta.append(
     make("span", "original", `originally “${article.originalTitle}”`),
   );
+  const sourceLink = /** @type {HTMLAnchorElement} */ (
+    make("a", "source-text")
+  );
+  sourceLink.href = forDigest(
+    "/news-digest/text?id=" + encodeURIComponent(article.id),
+  );
+  sourceLink.target = "_blank";
+  sourceLink.rel = "noopener";
+  sourceLink.textContent = "Source text";
+  sourceLink.title = "The text the summary was written from";
+  meta.append(sourceLink);
   if (!view.filtered) {
     const skip = /** @type {HTMLButtonElement} */ (
       make("button", "aw-button--secondary aw-button--small skip")

@@ -55,6 +55,11 @@ import {
   type InboxEvent,
   type InboxState,
 } from "./server/inbox.ts";
+import {
+  sourceTextPage,
+  type SourceFrom,
+  type SourceText,
+} from "./server/source_text.ts";
 
 const KEY = "news-digest";
 /** The first digest, which keeps the storage keys of the time before there were several. */
@@ -160,6 +165,8 @@ interface Candidate {
   /** The feed's own section names for it, e.g. "Sport". */
   categories: string[];
   text: string;
+  /** Whether `text` is the article page's or only the feed's. */
+  from: SourceFrom;
 }
 
 /** A language tag such as "fi" or "en-GB", or null for anything else. */
@@ -195,6 +202,33 @@ function readJson<T>(inst: string, name: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+// The text each kept article was summarised from, one key per article so the
+// article list every run rewrites stays small. Removed with the article.
+
+function sourceKey(inst: string, id: string): string {
+  return keyOf(inst, `text:${id}`);
+}
+
+function readSourceText(inst: string, id: string): SourceText | null {
+  const raw = personalStorage.getItem(sourceKey(inst, id));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SourceText;
+  } catch {
+    return null;
+  }
+}
+
+/** Every source text a digest keeps, for removing it. */
+function sourceKeys(inst: string): string[] {
+  const prefix = sourceKey(inst, "");
+  const keys: string[] = [];
+  for (const key of personalStorage.keys()) {
+    if (key.startsWith(prefix)) keys.push(key);
+  }
+  return keys;
 }
 
 function fail(status: number, error: string): HttpResponse {
@@ -521,6 +555,26 @@ function saveRead(inst: string, read: Set<string>): void {
 }
 
 // Following an article's link marks it read on the way to the original.
+// The text an article was summarised from, as a page: linked from each
+// article here and in the inbox. The reader's own storage, so only theirs.
+function newsDigestText(context: HandlerContext): HttpResponse {
+  if (!signedIn(context)) return ResponseBuilder.error(401, "Sign in first");
+  const inst = instanceOf(context)?.id;
+  if (!inst) return ResponseBuilder.error(404, "No such digest");
+  const id = context.request?.query?.id ?? "";
+  const article = readJson<DigestItem[]>(inst, "articles", []).find(
+    (a) => a.id === id,
+  );
+  if (!article) return ResponseBuilder.error(404, "No such article");
+  const back =
+    inst === DEFAULT_INSTANCE
+      ? "/news-digest"
+      : `/news-digest?instance=${encodeURIComponent(inst)}`;
+  return ResponseBuilder.html(
+    sourceTextPage(article, readSourceText(inst, id), back),
+  );
+}
+
 function newsDigestOpen(context: HandlerContext): HttpResponse {
   if (!signedIn(context)) return ResponseBuilder.error(401, "Sign in first");
   const inst = instanceOf(context)?.id;
@@ -788,7 +842,10 @@ function newsDigestContextTool(context: HandlerContext): unknown {
     readJson<DigestItem[]>(inst, "articles", []),
     externalId,
     typeof args.itemId === "string" ? args.itemId : undefined,
-  );
+  ).map((a) => {
+    const sourceText = readSourceText(inst, a.id);
+    return sourceText ? { ...a, sourceText } : a;
+  });
   if (about.length === 0) {
     throw new Error("The digest no longer keeps the articles on that card");
   }
@@ -954,6 +1011,7 @@ function collect(
         language: languageTag(feed.language),
         categories: item.categories,
         text: item.content ?? item.summary ?? "",
+        from: "feed",
       });
     }
   });
@@ -992,6 +1050,7 @@ function readArticles(items: Candidate[]): void {
         item.language = languageTag(article?.language) ?? item.language;
         if (article && article.text.length > item.text.length) {
           item.text = article.text.slice(0, MAX_ARTICLE_CHARS);
+          item.from = "page";
         }
       } catch (e) {
         console.warn(`news-digest: ${item.link}: ${e}`);
@@ -1580,7 +1639,7 @@ function postToInbox(inst: string, added: DigestItem[], now: string): void {
         }
       }
     }
-    for (const a of plan.highlights) post(highlightCard(a));
+    for (const a of plan.highlights) post(highlightCard(inst, a));
     delete plan.state.problem;
     plan.state.syncedAt = now;
     saveInbox(inst, plan.state);
@@ -1981,6 +2040,7 @@ function removeInstance(inst: string): void {
   for (const name of DIGEST_KEYS) {
     personalStorage.removeItem(keyOf(inst, name));
   }
+  for (const key of sourceKeys(inst)) personalStorage.removeItem(key);
   if (inst !== DEFAULT_INSTANCE) {
     saveInstances(instances().filter((i) => i.id !== inst));
   }
@@ -2078,10 +2138,20 @@ function buildDigest(context: HandlerContext): void {
         ...(s && s.keep && s.important ? { important: true } : {}),
       });
     });
-    const articles = added
-      .concat(readJson<DigestItem[]>(inst, "articles", []))
-      .slice(0, MAX_ARTICLES);
+    const all = added.concat(readJson<DigestItem[]>(inst, "articles", []));
+    const articles = all.slice(0, MAX_ARTICLES);
     personalStorage.setItem(keyOf(inst, "articles"), JSON.stringify(articles));
+    // Exactly what the model was sent, so a summary can be checked against it.
+    for (const item of taken) {
+      const kept: SourceText = {
+        text: item.text.slice(0, MAX_ARTICLE_CHARS),
+        from: item.from,
+      };
+      personalStorage.setItem(sourceKey(inst, item.id), JSON.stringify(kept));
+    }
+    for (const dropped of all.slice(MAX_ARTICLES)) {
+      personalStorage.removeItem(sourceKey(inst, dropped.id));
+    }
     // Remembered only once summarised: a failed run leaves them for the next.
     const remembered = seenList.concat(taken.map((item) => item.id));
     personalStorage.setItem(
@@ -2138,6 +2208,9 @@ function init(): void {
   });
   routeRegistry.registerRoute("/news-digest/open", {
     handler: "newsDigestOpen",
+  });
+  routeRegistry.registerRoute("/news-digest/text", {
+    handler: "newsDigestText",
   });
   routeRegistry.registerRoute("/news-digest/verdict", {
     handler: "newsDigestVerdict",

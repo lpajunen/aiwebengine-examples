@@ -187,8 +187,22 @@ describe("cards", function () {
     expect(card.items[1].title).toBe("Headline b");
   });
 
+  test("each article links to its source text, which answers nothing", function () {
+    const card = batchCard(
+      "sports",
+      "Sports",
+      { externalId: "2026-11-01.1", day: "2026-11-01" },
+      [article("a b")],
+    );
+    expect(card.items[0].links[1]).toEqual({
+      label: "Source text",
+      url: "/news-digest/text?instance=sports&id=a%20b",
+      handles: false,
+    });
+  });
+
   test("a highlight can wait until later", function () {
-    const card = highlightCard(article("a"));
+    const card = highlightCard("sports", article("a"));
     expect(card.externalId).toBe(`h-${articleKey("a")}`);
     expect(card.allowLater).toBe(true);
     expect(card.links[0].url).toBe("https://news.example/a");
@@ -380,6 +394,17 @@ describe("askContext", function () {
     );
     expect(highlight.why).toContain("rated important");
     expect(highlight.facts.length).toBe(1);
+  });
+
+  test("gives the text an article was summarised from", function () {
+    const [doc] = askContext(
+      "2026-11-01.1",
+      [{ ...article("a"), sourceText: { text: "Full text.", from: "feed" } }],
+      "",
+      "Sports",
+    ).documents;
+    expect(doc.text).toContain("only the feed's description");
+    expect(doc.text.endsWith("\nFull text.")).toBe(true);
   });
 });
 

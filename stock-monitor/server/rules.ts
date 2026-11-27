@@ -21,7 +21,7 @@
 // askedAbout says which card and stock it is about, askFacts and whyPosted
 // what the context says of them.
 
-import type { InboxEvent } from "./inbox_kit.ts";
+import { type InboxEvent as KitInboxEvent } from "./inbox_kit.ts";
 
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "stock-monitor";
@@ -109,9 +109,8 @@ export interface InboxState {
   welcomed?: boolean;
 }
 
-/** An event as `inbox_events` answers it; only the fields used here. */
 /** What the person did on a card, as the inbox hands it over. */
-export type { InboxEvent };
+export type InboxEvent = KitInboxEvent;
 
 /** What an answer does to the person's lists and watchlist. */
 export type Effect =

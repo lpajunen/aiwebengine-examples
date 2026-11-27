@@ -149,7 +149,16 @@ export function planPosts(
     .filter((a) => a.important)
     .slice(0, Math.max(0, MAX_HIGHLIGHTS - used.length));
   const highlighted = new Set(highlights.map((a) => a.id));
-  const rest = kept.filter((a) => !highlighted.has(a.id)).map((a) => a.id);
+  // An article already on today's batch is not added again: a run that
+  // failed after the batch was posted reads the same articles as new.
+  const onBatch = new Set(
+    state.batch && state.batch.day === today ? state.batch.ids : [],
+  );
+  const rest = unique(
+    kept
+      .filter((a) => !highlighted.has(a.id) && !onBatch.has(a.id))
+      .map((a) => a.id),
+  );
 
   let batch = state.batch;
   if (rest.length > 0) {
@@ -168,7 +177,7 @@ export function planPosts(
         ids: rest.slice(0, MAX_BATCH),
       };
     } else {
-      batch = { ...batch, ids: rest.concat(batch.ids) };
+      batch = { ...batch, ids: unique(rest.concat(batch.ids)) };
     }
   }
   return {
@@ -183,6 +192,11 @@ export function planPosts(
     batchIds: rest.length > 0 && batch ? batch.ids : null,
     highlights,
   };
+}
+
+/** `ids` in order, each once. */
+function unique(ids: string[]): string[] {
+  return Array.from(new Set(ids));
 }
 
 function item(instance: string, a: InboxArticle) {
@@ -223,7 +237,15 @@ export function batchCard(
       "Not relevant moves an article under Filtered on the digest's page. " +
       "Unsure, or just reading it, teaches nothing.",
     options: OPTIONS,
-    items: articles.map((a) => item(instance, a)),
+    // Each article once: the inbox refuses a card whose items repeat, and a
+    // batch stored before repeats were kept out may still hold one.
+    items: articles
+      .filter(
+        (a, i) =>
+          articles.findIndex((b) => articleKey(b.id) === articleKey(a.id)) ===
+          i,
+      )
+      .map((a) => item(instance, a)),
     allowLater: true,
     handledByOpening: true,
     suggestedQuestions: SUGGESTED,

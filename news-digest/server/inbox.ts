@@ -15,7 +15,7 @@
 // and the articles it holds, which articlesAsked finds. searchArticles is
 // the read-only tool the inbox may call for more.
 
-import type { InboxEvent } from "./inbox_kit.ts";
+import type { InboxEvent as KitInboxEvent } from "./inbox_kit.ts";
 
 import {
   sourceDescription,
@@ -91,7 +91,7 @@ export interface InboxState {
 }
 
 /** What the person did on a card, as the inbox hands it over. */
-export type { InboxEvent };
+export type InboxEvent = KitInboxEvent;
 
 /** What an answer does to the digest. */
 export type Effect =

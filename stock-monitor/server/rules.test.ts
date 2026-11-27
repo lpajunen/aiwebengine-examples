@@ -17,6 +17,9 @@ import {
   askFacts,
   askedSymbol,
   candidatesCard,
+  marketCap,
+  peerSources,
+  readProfile,
   cardKind,
   dailyDue,
   dailyPosts,
@@ -276,6 +279,38 @@ describe("cards", function () {
     expect(card.options.map((o) => o.id)).toEqual([FOLLOW, NOT_INTERESTED]);
     expect(card.items[0].id).toBe("MSFT");
   });
+
+  test("a stock to look at names its company, what it is and why", function () {
+    const card = candidatesCard("2026-11-02", ["MSFT", "ORCL"], {
+      MSFT: {
+        peerOf: ["AAPL", "GOOGL"],
+        company: {
+          name: "Microsoft Corp",
+          industry: "Technology",
+          country: "US",
+          marketCapM: 3_100_000,
+          currency: "USD",
+          url: "https://www.microsoft.com",
+        },
+        quote: {
+          price: 410.5,
+          changePct: 1.24,
+          previousClose: 405.5,
+          at: NOW,
+        },
+      },
+    });
+    const [msft, orcl] = card.items;
+    expect(msft.title).toBe("MSFT · Microsoft Corp");
+    expect(msft.summary).toBe(
+      "Technology · US · market cap 3.1 T USD. 410.50 (+1.2 % today). " +
+        "A peer of AAPL and GOOGL on your watchlist.",
+    );
+    expect(msft.links.map((l) => l.label)).toEqual(["Quote", "Company site"]);
+    // Nothing known yet: the ticker, and the reason in general.
+    expect(orcl.title).toBe("ORCL");
+    expect(orcl.summary).toBe("A peer of a stock on your watchlist.");
+  });
 });
 
 describe("welcome", function () {
@@ -409,6 +444,60 @@ describe("dailyPosts", function () {
     // The peers were fetched at an earlier run that could not reach the
     // inbox; the inbox's own record says nothing was posted today.
     expect(dailyPosts(emptyState(), ["MSFT"], LATER, 15).due).toBe(true);
+  });
+});
+
+describe("stocks to look at", function () {
+  test("each picked stock names the watched stocks it is a peer of", function () {
+    expect(
+      peerSources(
+        [
+          ["MSFT", "ORCL"],
+          ["MSFT", "SAP"],
+        ],
+        ["AAPL", "GOOGL"],
+        ["MSFT", "SAP", "NOK"],
+      ),
+    ).toEqual({ MSFT: ["AAPL", "GOOGL"], SAP: ["GOOGL"], NOK: [] });
+  });
+
+  test("a profile reads the fields the card shows, and none is null", function () {
+    expect(
+      readProfile({
+        name: "Nokia Oyj",
+        finnhubIndustry: "Communications",
+        country: "FI",
+        exchange: "NASDAQ HELSINKI",
+        marketCapitalization: 21_500,
+        currency: "EUR",
+        weburl: "https://www.nokia.com/",
+        logo: "ignored",
+      }),
+    ).toEqual({
+      name: "Nokia Oyj",
+      industry: "Communications",
+      country: "FI",
+      exchange: "NASDAQ HELSINKI",
+      marketCapM: 21_500,
+      currency: "EUR",
+      url: "https://www.nokia.com/",
+    });
+    expect(readProfile({})).toBe(null);
+    expect(readProfile({ name: "X", weburl: "javascript:alert(1)" })).toEqual({
+      name: "X",
+    });
+  });
+
+  test("market capitalisation reads in millions, billions or trillions", function () {
+    expect(marketCap(3_100_000, "USD")).toBe("3.1 T USD");
+    expect(marketCap(21_500, "EUR")).toBe("21.5 B EUR");
+    expect(marketCap(840)).toBe("840 M");
+  });
+
+  test("a question on one says which stocks it is a peer of", function () {
+    expect(whyPosted("c", null, null, { peerOf: ["AAPL"] })).toContain(
+      "A peer of AAPL on the person's watchlist.",
+    );
   });
 });
 

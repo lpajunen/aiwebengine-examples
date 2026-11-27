@@ -13,6 +13,10 @@
  * @typedef {{ price: number, changePct: number, previousClose: number,
  *   at: string }} StockQuote
  * @typedef {{ symbol: string, at: string, price: number | null }} StockRecommended
+ * @typedef {{ name?: string, industry?: string, country?: string,
+ *   marketCapM?: number, currency?: string, url?: string }} StockCompany
+ * @typedef {{ peerOf: string[], company?: StockCompany | null,
+ *   quote?: StockQuote | null }} StockCandidateInfo
  * @typedef {{
  *   signedIn: boolean, granted?: boolean, consentUrl?: string | null,
  *   hasKey?: boolean, keyUrl?: string, canPost?: boolean, inboxAvailable?: boolean,
@@ -21,6 +25,7 @@
  *   quotes?: Record<string, StockQuote>,
  *   lists?: { buy: StockRecommended[], sell: StockRecommended[] },
  *   candidates?: string[],
+ *   candidateInfo?: Record<string, StockCandidateInfo>,
  *   status?: { checkedAt: string, problem?: string } | null,
  *   schedule?: { state: string, pausedReason: string | null,
  *     nextRunAt: string, lastRunAt: string | null } | null
@@ -282,13 +287,42 @@
     }
   }
 
+  /**
+   * What a stock to look at is and why it is proposed, in one line.
+   * @param {StockCandidateInfo | undefined} info
+   * @returns {string}
+   */
+  function candidateDetails(info) {
+    if (!info) return "";
+    const company = info.company ?? {};
+    const parts = [company.industry, company.country].filter(Boolean);
+    if (company.marketCapM) {
+      const m = company.marketCapM;
+      const [value, unit] =
+        m >= 1e6 ? [m / 1e6, "T"] : m >= 1e3 ? [m / 1e3, "B"] : [m, "M"];
+      parts.push(
+        `market cap ${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${unit}` +
+          (company.currency ? ` ${company.currency}` : ""),
+      );
+    }
+    const peers = info.peerOf ?? [];
+    if (peers.length > 0) parts.push(`peer of ${peers.join(", ")}`);
+    return parts.join(" · ");
+  }
+
   function renderCandidates() {
     const candidates = state.candidates ?? [];
     el.candidatesPanel.hidden = candidates.length === 0;
     el.candidates.replaceChildren();
     for (const symbol of candidates) {
       const li = make("li");
-      li.append(symbolCell(symbol), make("span", undefined, "spacer"));
+      const info = (state.candidateInfo ?? {})[symbol];
+      const about = make("span", undefined, "candidate");
+      about.append(symbolCell(symbol));
+      if (info?.company?.name) about.append(` ${info.company.name}`);
+      const details = candidateDetails(info);
+      if (details) about.append(make("span", details, "status candidate-why"));
+      li.append(about, make("span", undefined, "spacer"));
       /** @type {[string, string, string][]} */
       const verdicts = [
         ["Follow", "follow", "aw-button--small"],

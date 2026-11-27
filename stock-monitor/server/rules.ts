@@ -351,6 +351,103 @@ export function pickCandidates(
   return picked;
 }
 
+/**
+ * Which watched stocks each picked one is a peer of: `peers[i]` are the
+ * peers of `sources[i]`.
+ */
+export function peerSources(
+  peers: string[][],
+  sources: string[],
+  picked: string[],
+): Record<string, string[]> {
+  const found: Record<string, string[]> = {};
+  for (const symbol of picked) {
+    found[symbol] = sources.filter((_, i) => (peers[i] ?? []).includes(symbol));
+  }
+  return found;
+}
+
+/** What the market-data service says a company is. */
+export interface Company {
+  name?: string;
+  industry?: string;
+  country?: string;
+  exchange?: string;
+  /** Market capitalisation in millions of `currency`. */
+  marketCapM?: number;
+  currency?: string;
+  url?: string;
+}
+
+/** What is kept about a stock proposed to look at. */
+export interface CandidateInfo {
+  /** The watched stocks it is a peer of. */
+  peerOf: string[];
+  company?: Company | null;
+  quote?: Quote | null;
+}
+
+/**
+ * A company from the market-data service's profile ({name,
+ * finnhubIndustry, country, exchange, marketCapitalization, currency,
+ * weburl}), or null for a symbol it has no profile for, which it answers
+ * with an empty object.
+ */
+export function readProfile(body: unknown): Company | null {
+  if (!body || typeof body !== "object") return null;
+  const p = body as Record<string, unknown>;
+  const text = (value: unknown, max: number) =>
+    typeof value === "string" && value.trim()
+      ? value.trim().slice(0, max)
+      : undefined;
+  const company: Company = {};
+  const name = text(p.name, 120);
+  const industry = text(p.finnhubIndustry, 80);
+  const country = text(p.country, 40);
+  const exchange = text(p.exchange, 80);
+  const currency = text(p.currency, 8);
+  const url = text(p.weburl, 300);
+  if (name) company.name = name;
+  if (industry) company.industry = industry;
+  if (country) company.country = country;
+  if (exchange) company.exchange = exchange;
+  if (currency) company.currency = currency;
+  if (url && /^https?:\/\//i.test(url)) company.url = url;
+  if (
+    typeof p.marketCapitalization === "number" &&
+    p.marketCapitalization > 0
+  ) {
+    company.marketCapM = p.marketCapitalization;
+  }
+  return Object.keys(company).length > 0 ? company : null;
+}
+
+/** A market capitalisation given in millions: "2.9 T USD", "840 M EUR". */
+export function marketCap(millions: number, currency?: string): string {
+  const [value, unit] =
+    millions >= 1_000_000
+      ? [millions / 1_000_000, "T"]
+      : millions >= 1_000
+        ? [millions / 1_000, "B"]
+        : [millions, "M"];
+  const shown = value >= 100 ? value.toFixed(0) : value.toFixed(1);
+  return `${shown} ${unit}${currency ? ` ${currency}` : ""}`;
+}
+
+/** "AAPL", "AAPL and MSFT", "AAPL, MSFT and NOK". */
+function listed(symbols: string[]): string {
+  if (symbols.length <= 1) return symbols.join("");
+  return `${symbols.slice(0, -1).join(", ")} and ${symbols[symbols.length - 1]}`;
+}
+
+/** Why a stock is proposed, as its item and a question on it say it. */
+export function proposedBecause(info: CandidateInfo | undefined): string {
+  const peerOf = info?.peerOf ?? [];
+  return peerOf.length > 0
+    ? `A peer of ${listed(peerOf)} on your watchlist.`
+    : "A peer of a stock on your watchlist.";
+}
+
 /** "+4.2 %", "−3.0 %". */
 export function signed(pct: number): string {
   const sign = pct > 0 ? "+" : pct < 0 ? "−" : "±";
@@ -482,7 +579,11 @@ export function alertCard(
 }
 
 /** Peers of the watched stocks, proposed to follow. */
-export function candidatesCard(day: string, symbols: string[]) {
+export function candidatesCard(
+  day: string,
+  symbols: string[],
+  info: Record<string, CandidateInfo> = {},
+) {
   return {
     externalId: `c-${day}`,
     topic: `${PRODUCER}:candidates`,
@@ -493,11 +594,38 @@ export function candidatesCard(day: string, symbols: string[]) {
     options: CANDIDATE_OPTIONS,
     suggestedQuestions: SUGGESTED,
     allowLater: true,
-    items: symbols.map((symbol) => ({
-      id: symbol,
-      title: symbol,
-      links: [quoteLink(symbol)],
-    })),
+    items: symbols.map((symbol) => candidateItem(symbol, info[symbol])),
+  };
+}
+
+/**
+ * One stock to look at: its company, what it is, its price today, and which
+ * watched stocks it is a peer of.
+ */
+function candidateItem(symbol: string, info: CandidateInfo | undefined) {
+  const company = info?.company ?? null;
+  const quote = info?.quote ?? null;
+  const about = [
+    company?.industry,
+    company?.country,
+    company?.marketCapM !== undefined
+      ? `market cap ${marketCap(company.marketCapM, company.currency)}`
+      : undefined,
+  ].filter(Boolean);
+  const summary = [
+    about.length > 0 ? `${about.join(" · ")}.` : "",
+    quote ? `${money(quote.price)} (${signed(quote.changePct)} today).` : "",
+    proposedBecause(info),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const links = [quoteLink(symbol)];
+  if (company?.url) links.push({ label: "Company site", url: company.url });
+  return {
+    id: symbol,
+    title: company?.name ? `${symbol} · ${company.name}` : symbol,
+    summary,
+    links,
   };
 }
 
@@ -531,6 +659,7 @@ export function whyPosted(
   kind: "w" | "a" | "c",
   watched: Watched | null,
   quote: Quote | null,
+  candidate?: CandidateInfo,
 ): string {
   if (kind === "a" && watched && quote) {
     return (
@@ -541,6 +670,12 @@ export function whyPosted(
   }
   if (kind === "c") {
     return (
+      (candidate
+        ? proposedBecause(candidate).replace(
+            "your watchlist",
+            "the person's watchlist",
+          ) + " "
+        : "") +
       "Peers of stocks the person watches, as the market-data service lists " +
       "them, proposed to follow. The agent does not judge them."
     );

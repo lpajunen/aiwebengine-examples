@@ -35,6 +35,8 @@ import {
   askFacts,
   askedSymbol,
   candidatesCard,
+  peerSources,
+  readProfile,
   cardKind,
   dailyDue,
   dailyPosts,
@@ -52,6 +54,7 @@ import {
   watchlistCards,
   welcomeCard,
   whyPosted,
+  type CandidateInfo,
   type InboxEvent,
   type InboxState,
   type Lists,
@@ -206,6 +209,7 @@ function stockMonitorState(context: HandlerContext): HttpResponse {
     quotes: readJson<Record<string, Quote>>("quotes", {}),
     lists: lists(),
     candidates: readJson<string[]>("candidates", []),
+    candidateInfo: candidateInfo(),
     status: readJson<RunStatus | null>("status", null),
     schedule: schedule && {
       state: schedule.state,
@@ -375,7 +379,10 @@ function stockWatchlistTool(context: HandlerContext): unknown {
       quote: quotes[w.symbol] ?? null,
     })),
     recommended: lists(),
-    toLookAt: readJson<string[]>("candidates", []),
+    toLookAt: readJson<string[]>("candidates", []).map((symbol) => ({
+      symbol,
+      ...candidateInfo()[symbol],
+    })),
   };
 }
 
@@ -521,14 +528,15 @@ function stockMonitorContextTool(context: HandlerContext): unknown {
     };
   }
   const watched = watchlist.find((w) => w.symbol === symbol) ?? null;
-  const quote = quotes[symbol] ?? null;
+  const candidate = kind === "c" ? candidateInfo()[symbol] : undefined;
+  const quote = quotes[symbol] ?? candidate?.quote ?? null;
   const [profile, news] = readFinnhub([
     `/stock/profile2?symbol=${encodeURIComponent(symbol)}`,
     newsPath(symbol, NEWS_DAYS),
   ]);
   const company = profileDocument(symbol, profile);
   return {
-    why: whyPosted(kind, watched, quote),
+    why: whyPosted(kind, watched, quote, candidate),
     facts: askFacts(symbol, watched, quote, current),
     documents: (company ? [company] : []).concat(newsDocuments(news)),
     at,
@@ -871,12 +879,74 @@ function findCandidates(watchlist: Watched[], now: string): string[] {
   );
   if (picked.length > 0) {
     writeJson("offered", picked.concat(offered).slice(0, MAX_OFFERED));
-    writeJson(
-      "candidates",
-      picked.concat(readJson<string[]>("candidates", [])).slice(0, 20),
+    const candidates = picked
+      .concat(readJson<string[]>("candidates", []))
+      .slice(0, 20);
+    writeJson("candidates", candidates);
+    const why = peerSources(
+      peers,
+      sources.map((w) => w.symbol),
+      picked,
     );
+    const info = candidateInfo();
+    for (const symbol of picked) info[symbol] = { peerOf: why[symbol] ?? [] };
+    saveCandidateInfo(info, candidates);
   }
   return picked;
+}
+
+/** What is kept about the stocks to look at, by symbol. */
+function candidateInfo(): Record<string, CandidateInfo> {
+  return readJson<Record<string, CandidateInfo>>("candidateInfo", {});
+}
+
+/** Keeps what is known of the stocks still to look at, and nothing else. */
+function saveCandidateInfo(
+  info: Record<string, CandidateInfo>,
+  candidates: string[],
+): void {
+  const kept: Record<string, CandidateInfo> = {};
+  for (const symbol of candidates) {
+    if (info[symbol]) kept[symbol] = info[symbol];
+  }
+  writeJson("candidateInfo", kept);
+}
+
+/**
+ * Reads each stock's company profile, once, and today's quote, so the card
+ * says what the company is. One the service cannot answer is posted with
+ * what is known.
+ */
+function enrichCandidates(
+  symbols: string[],
+  now: string,
+): Record<string, CandidateInfo> {
+  const info = candidateInfo();
+  const needProfile = symbols.filter((s) => info[s]?.company === undefined);
+  const paths = needProfile
+    .map((s) => `/stock/profile2?symbol=${encodeURIComponent(s)}`)
+    .concat(symbols.map((s) => `/quote?symbol=${encodeURIComponent(s)}`));
+  const answers = readFinnhub(paths);
+  needProfile.forEach((symbol, i) => {
+    // A failed read is tried again with the next card; an empty profile is
+    // the service having none.
+    if (answers[i] === null) return;
+    info[symbol] = {
+      ...info[symbol],
+      peerOf: info[symbol]?.peerOf ?? [],
+      company: readProfile(answers[i]),
+    };
+  });
+  symbols.forEach((symbol, i) => {
+    const quote = readQuote(answers[needProfile.length + i], now);
+    info[symbol] = {
+      ...info[symbol],
+      peerOf: info[symbol]?.peerOf ?? [],
+      quote,
+    };
+  });
+  saveCandidateInfo(info, readJson<string[]>("candidates", []));
+  return info;
 }
 
 // A task acting as the person, queued by a wake: applies the inbox's answers
@@ -1013,7 +1083,13 @@ function postToInbox(
         send(card);
       }
       if (daily.candidates.length > 0) {
-        send(candidatesCard(day, daily.candidates));
+        send(
+          candidatesCard(
+            day,
+            daily.candidates,
+            enrichCandidates(daily.candidates, now),
+          ),
+        );
       }
     }
     const state: InboxState = { ...daily.state };

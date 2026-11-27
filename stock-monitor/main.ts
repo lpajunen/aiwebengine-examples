@@ -35,6 +35,7 @@ import {
   askFacts,
   askedSymbol,
   candidatesCard,
+  latestHeadline,
   peerSources,
   readProfile,
   cardKind,
@@ -55,6 +56,7 @@ import {
   welcomeCard,
   whyPosted,
   type CandidateInfo,
+  type Company,
   type InboxEvent,
   type InboxState,
   type Lists,
@@ -912,37 +914,71 @@ function saveCandidateInfo(
   writeJson("candidateInfo", kept);
 }
 
+/** How long a company's profile is kept before it is read again. */
+const PROFILE_MAX_AGE_MS = 7 * 86_400_000;
+
 /**
- * Reads each stock's company profile, once, and today's quote, so the card
- * says what the company is. One the service cannot answer is posted with
- * what is known.
+ * The company behind each stock, from the market-data service's profile:
+ * read once and kept a week, so a card can say what a ticker is. A read that
+ * failed is tried again next time; null is a stock the service has no
+ * profile for.
+ */
+function companiesFor(
+  symbols: string[],
+  now: string,
+): Record<string, Company | null> {
+  const kept = readJson<
+    Record<string, { company: Company | null; at: string }>
+  >("companies", {});
+  const wanted = Array.from(new Set(symbols));
+  const stale = wanted.filter(
+    (s) =>
+      !kept[s] || Date.parse(now) - Date.parse(kept[s].at) > PROFILE_MAX_AGE_MS,
+  );
+  if (stale.length > 0) {
+    const answers = readFinnhub(
+      stale.map((s) => `/stock/profile2?symbol=${encodeURIComponent(s)}`),
+    );
+    stale.forEach((symbol, i) => {
+      if (answers[i] !== null) {
+        kept[symbol] = { company: readProfile(answers[i]), at: now };
+      }
+    });
+    // Only the stocks still watched or proposed.
+    const keep = new Set(
+      settings()
+        .watchlist.map((w) => w.symbol)
+        .concat(readJson<string[]>("candidates", [])),
+    );
+    for (const symbol of Object.keys(kept)) {
+      if (!keep.has(symbol)) delete kept[symbol];
+    }
+    writeJson("companies", kept);
+  }
+  const found: Record<string, Company | null> = {};
+  for (const symbol of wanted) found[symbol] = kept[symbol]?.company ?? null;
+  return found;
+}
+
+/**
+ * What the card says of each stock to look at: its company, and today's
+ * quote. One the service cannot answer is posted with what is known.
  */
 function enrichCandidates(
   symbols: string[],
   now: string,
 ): Record<string, CandidateInfo> {
   const info = candidateInfo();
-  const needProfile = symbols.filter((s) => info[s]?.company === undefined);
-  const paths = needProfile
-    .map((s) => `/stock/profile2?symbol=${encodeURIComponent(s)}`)
-    .concat(symbols.map((s) => `/quote?symbol=${encodeURIComponent(s)}`));
-  const answers = readFinnhub(paths);
-  needProfile.forEach((symbol, i) => {
-    // A failed read is tried again with the next card; an empty profile is
-    // the service having none.
-    if (answers[i] === null) return;
-    info[symbol] = {
-      ...info[symbol],
-      peerOf: info[symbol]?.peerOf ?? [],
-      company: readProfile(answers[i]),
-    };
-  });
+  const companies = companiesFor(symbols, now);
+  const answers = readFinnhub(
+    symbols.map((s) => `/quote?symbol=${encodeURIComponent(s)}`),
+  );
   symbols.forEach((symbol, i) => {
-    const quote = readQuote(answers[needProfile.length + i], now);
     info[symbol] = {
       ...info[symbol],
       peerOf: info[symbol]?.peerOf ?? [],
-      quote,
+      company: companies[symbol],
+      quote: readQuote(answers[i], now),
     };
   });
   saveCandidateInfo(info, readJson<string[]>("candidates", []));
@@ -1068,18 +1104,41 @@ function postToInbox(
   const send = (card: unknown) => post(producer(), card);
   try {
     const due = alertsDue(before, watchlist, quotes, now);
-    for (const symbol of due.symbols) {
-      const watched = watchlist.find((w) => w.symbol === symbol);
-      if (watched) send(alertCard(day, watched, quotes[symbol], current));
-    }
     const daily = dailyPosts(
       due.state,
       readJson<string[]>("candidates", []),
       now,
       dailyHourUtc,
     );
+    // What each ticker is, for every card about to go out.
+    const companies = companiesFor(
+      due.symbols.concat(daily.due ? watchlist.map((w) => w.symbol) : []),
+      now,
+    );
+    // The latest news about a stock that moved: usually why it did.
+    const news = readFinnhub(due.symbols.map((s) => newsPath(s, 2)));
+    due.symbols.forEach((symbol, i) => {
+      const watched = watchlist.find((w) => w.symbol === symbol);
+      if (!watched) return;
+      send(
+        alertCard(
+          day,
+          watched,
+          quotes[symbol],
+          current,
+          companies[symbol],
+          latestHeadline(news[i]),
+        ),
+      );
+    });
     if (daily.due) {
-      for (const card of watchlistCards(day, watchlist, quotes, current)) {
+      for (const card of watchlistCards(
+        day,
+        watchlist,
+        quotes,
+        current,
+        companies,
+      )) {
         send(card);
       }
       if (daily.candidates.length > 0) {

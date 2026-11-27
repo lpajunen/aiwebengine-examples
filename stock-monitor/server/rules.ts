@@ -434,6 +434,55 @@ export function marketCap(millions: number, currency?: string): string {
   return `${shown} ${unit}${currency ? ` ${currency}` : ""}`;
 }
 
+/** What a company is, in a line: "Semiconductors · US · market cap 38 B USD". */
+export function companyLine(company: Company | null | undefined): string {
+  if (!company) return "";
+  return [
+    company.industry,
+    company.country,
+    company.marketCapM !== undefined
+      ? `market cap ${marketCap(company.marketCapM, company.currency)}`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** "MPWR · Monolithic Power Systems Inc", or the ticker alone. */
+function named(symbol: string, company: Company | null | undefined): string {
+  return company?.name ? `${symbol} · ${company.name}` : symbol;
+}
+
+/** The newest news item about a stock, as a card shows it. */
+export interface Headline {
+  title: string;
+  source?: string;
+  url?: string;
+}
+
+/**
+ * The newest item of the market-data service's company news (an array of
+ * {headline, source, url, datetime}), or null when there is none.
+ */
+export function latestHeadline(news: unknown): Headline | null {
+  if (!Array.isArray(news)) return null;
+  const items = (news as Record<string, unknown>[])
+    .filter((n) => n && typeof n.headline === "string" && n.headline.trim())
+    .sort((a, b) => Number(b.datetime ?? 0) - Number(a.datetime ?? 0));
+  const first = items[0];
+  if (!first) return null;
+  const headline: Headline = {
+    title: String(first.headline).trim().slice(0, 200),
+  };
+  if (typeof first.source === "string" && first.source.trim()) {
+    headline.source = first.source.trim().slice(0, 60);
+  }
+  if (typeof first.url === "string" && /^https?:\/\//i.test(first.url)) {
+    headline.url = first.url.slice(0, 500);
+  }
+  return headline;
+}
+
 /** "AAPL", "AAPL and MSFT", "AAPL, MSFT and NOK". */
 function listed(symbols: string[]): string {
   if (symbols.length <= 1) return symbols.join("");
@@ -483,9 +532,10 @@ export function watchlistCards(
   watchlist: Watched[],
   quotes: Record<string, Quote>,
   lists: Lists,
+  companies: Record<string, Company | null> = {},
 ) {
   return groupsOf(watchlist).map((g) =>
-    watchlistCard(g.name, day, g.stocks, quotes, lists),
+    watchlistCard(g.name, day, g.stocks, quotes, lists, companies),
   );
 }
 
@@ -495,6 +545,7 @@ function watchlistCard(
   watchlist: Watched[],
   quotes: Record<string, Quote>,
   lists: Lists,
+  companies: Record<string, Company | null>,
 ) {
   const key = group === null ? "" : groupKey(group);
   return {
@@ -509,12 +560,17 @@ function watchlistCard(
     allowLater: true,
     items: watchlist.map((w) => {
       const q = quotes[w.symbol];
+      const company = companies[w.symbol];
+      const about = companyLine(company);
+      const summary = [about ? `${about}.` : "", onList(lists, w.symbol)]
+        .filter(Boolean)
+        .join(" ");
       return {
         id: w.symbol,
         title: q
-          ? `${w.symbol} ${money(q.price)} (${signed(q.changePct)})`
-          : `${w.symbol}, no quote`,
-        summary: onList(lists, w.symbol) || undefined,
+          ? `${named(w.symbol, company)} ${money(q.price)} (${signed(q.changePct)})`
+          : `${named(w.symbol, company)}, no quote`,
+        summary: summary || undefined,
         links: [quoteLink(w.symbol)],
       };
     }),
@@ -557,20 +613,34 @@ export function alertCard(
   watched: Watched,
   quote: Quote,
   lists: Lists,
+  company: Company | null = null,
+  headline: Headline | null = null,
 ) {
   const direction = quote.changePct > 0 ? "up" : "down";
+  const about = companyLine(company);
+  const links = [quoteLink(watched.symbol)];
+  if (company?.url) links.push({ label: "Company site", url: company.url });
+  if (headline?.url) links.push({ label: "The news", url: headline.url });
   return {
     externalId: `a-${day}-${watched.symbol}`,
     topic: `${PRODUCER}:${watched.symbol}`,
-    title: `${watched.symbol} ${direction} ${signed(quote.changePct)} today`,
-    summary:
-      `Past your ${watched.threshold} % threshold. ` +
+    title: `${named(watched.symbol, company)} ${direction} ${signed(quote.changePct)} today`,
+    summary: [
+      about ? `${about}.` : "",
+      `Past your ${watched.threshold} % threshold.`,
       onList(lists, watched.symbol),
+      headline
+        ? `Latest news: “${headline.title}”` +
+          (headline.source ? ` (${headline.source}).` : ".")
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
     facts: [
       { label: "Price", value: money(quote.price) },
       { label: "Previous close", value: money(quote.previousClose) },
     ].concat(watched.group ? [{ label: "Group", value: watched.group }] : []),
-    links: [quoteLink(watched.symbol)],
+    links,
     options: RECOMMEND_OPTIONS,
     allowLater: true,
     priority: "high",
@@ -605,15 +675,9 @@ export function candidatesCard(
 function candidateItem(symbol: string, info: CandidateInfo | undefined) {
   const company = info?.company ?? null;
   const quote = info?.quote ?? null;
-  const about = [
-    company?.industry,
-    company?.country,
-    company?.marketCapM !== undefined
-      ? `market cap ${marketCap(company.marketCapM, company.currency)}`
-      : undefined,
-  ].filter(Boolean);
+  const about = companyLine(company);
   const summary = [
-    about.length > 0 ? `${about.join(" · ")}.` : "",
+    about ? `${about}.` : "",
     quote ? `${money(quote.price)} (${signed(quote.changePct)} today).` : "",
     proposedBecause(info),
   ]
@@ -623,7 +687,7 @@ function candidateItem(symbol: string, info: CandidateInfo | undefined) {
   if (company?.url) links.push({ label: "Company site", url: company.url });
   return {
     id: symbol,
-    title: company?.name ? `${symbol} · ${company.name}` : symbol,
+    title: named(symbol, company),
     summary,
     links,
   };

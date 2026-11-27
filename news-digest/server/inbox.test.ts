@@ -82,6 +82,31 @@ describe("planPosts", function () {
     expect(second.state.batch?.externalId).toBe("2026-11-01.1");
   });
 
+  test("an article read again after a failed run is not listed twice", function () {
+    const first = planPosts(emptyState(), [article("a"), article("b")], NOW);
+    const again = planPosts(
+      first.state,
+      [article("a"), article("c"), article("c")],
+      LATER,
+    );
+    expect(again.batchIds).toEqual(["c", "a", "b"]);
+    // Nothing new at all: the batch is not posted again.
+    expect(planPosts(again.state, [article("a")], LATER).batchIds).toBe(null);
+  });
+
+  test("a batch stored with a repeat posts each article once", function () {
+    const card = batchCard(
+      "sports",
+      "Sports",
+      { externalId: "2026-11-01.1", day: "2026-11-01" },
+      [article("a"), article("b"), article("a")],
+    );
+    expect(card.items.map((i) => i.id)).toEqual([
+      articleKey("a"),
+      articleKey("b"),
+    ]);
+  });
+
   test("starts afresh the next day", function () {
     const first = planPosts(emptyState(), [article("a")], NOW);
     const next = planPosts(first.state, [article("b")], TOMORROW);

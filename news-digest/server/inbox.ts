@@ -15,7 +15,7 @@
 // and the articles it holds, which articlesAsked finds. searchArticles is
 // the read-only tool the inbox may call for more.
 
-import type { InboxEvent as KitInboxEvent } from "./inbox_kit.ts";
+import { type InboxEvent as KitInboxEvent } from "./inbox_kit.ts";
 
 import {
   sourceDescription,

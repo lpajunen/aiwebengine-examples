@@ -7,7 +7,7 @@
 # This repository is the tooling source, so sync-tooling and check-tooling are
 # no-ops here and do the copying in the repositories that consume it.
 
-.PHONY: all upload-virtual-world upload-virtual-world-dry-run upload-import-example \
+.PHONY: all sync-inbox-kit check-inbox-kit upload-virtual-world upload-virtual-world-dry-run upload-import-example \
         set-script-hosts set-script-hosts-dry-run \
         check-virtual-world check-virtual-world-candidate
 
@@ -16,6 +16,26 @@ all: types fetch-openapi format
 
 include .aiwebengine/verify.mk
 include scripts/tooling.mk
+
+# The agent inbox kit: one source in inbox-kit/, copied verbatim into each
+# producer's server/ (scripts cannot import from one another). Change the
+# source, then sync; verify fails on a copy that drifted.
+INBOX_KIT_FILES = inbox_kit.ts inbox_kit.test.ts
+INBOX_PRODUCERS = news-digest stock-monitor backlog-groomer document-writer
+
+sync-inbox-kit:
+	@for d in $(INBOX_PRODUCERS); do \
+	  for f in $(INBOX_KIT_FILES); do cp inbox-kit/$$f $$d/server/$$f; done; \
+	done; echo "✓ inbox kit copied to $(INBOX_PRODUCERS)"
+
+check-inbox-kit:
+	@status=0; for d in $(INBOX_PRODUCERS); do \
+	  for f in $(INBOX_KIT_FILES); do \
+	    cmp -s inbox-kit/$$f $$d/server/$$f || { echo "✗ $$d/server/$$f differs from inbox-kit/$$f (make sync-inbox-kit)"; status=1; }; \
+	  done; \
+	done; [ $$status -eq 0 ] && echo "✓ Inbox kit"; exit $$status
+
+verify: check-inbox-kit
 
 # WORLD_HOST is the hostname the virtual-world example is published on.
 export WORLD_HOST ?= world.softagen.com

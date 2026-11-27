@@ -52,6 +52,16 @@ import {
   type Proposal,
   type Revision,
 } from "./server/rules.ts";
+import {
+  collect,
+  inboxProblem,
+  inboxReachable,
+  model,
+  post,
+  queueWake,
+  wakeDone,
+  withdraw,
+} from "./server/inbox_kit.ts";
 
 const KEY = "document-writer";
 const PAGE = "/document-writer";
@@ -60,8 +70,6 @@ const MODEL_SECRET = "ANTHROPIC_API_KEY";
 const MODEL = "claude-haiku-5-5";
 /** A model call's budget: a run has 60 seconds. */
 const MODEL_TIMEOUT_MS = 45_000;
-/** Events read per call; a run reads until it has them all. */
-const MAX_EVENT_CALLS = 10;
 /** A wake runs this long after an answer, so a few answers are read together. */
 const WAKE_DELAY_MS = 5_000;
 /** A queued write that has not run in this long is queued again. */
@@ -199,12 +207,8 @@ function carryOut(doc: Doc, out: Outcome): void {
   if (out.note) writeJson("notes", remember(notes(), out.note));
   saveDoc(doc);
   try {
-    for (const externalId of out.withdraw) {
-      tools.call("inbox_withdraw", { producer: producer(), externalId });
-    }
-    for (const card of out.post) {
-      tools.call("inbox_post", { producer: producer(), card });
-    }
+    for (const externalId of out.withdraw) withdraw(producer(), externalId);
+    for (const card of out.post) post(producer(), card);
   } catch (e) {
     doc.problem = inboxProblem(e);
     saveDoc(doc);
@@ -289,10 +293,7 @@ function callModel(request: object): {
 } {
   if (inboxReachable()) {
     try {
-      return tools.call("inbox_model", {
-        producer: producer(),
-        request,
-      }) as ReturnType<typeof callModel>;
+      return model(producer(), request) as ReturnType<typeof callModel>;
     } catch (e) {
       // A person whose key is still here rather than at the inbox keeps
       // working on it.
@@ -367,7 +368,7 @@ function askModel(doc: Doc, text: string): Proposal {
 // a write for each document with a change waiting.
 function tendDocuments(context: HandlerContext): void {
   void context;
-  personalStorage.removeItem("wake");
+  wakeDone("wake");
   const now = new Date().toISOString();
   if (!inboxReachable()) {
     writeJson("status", {
@@ -420,20 +421,18 @@ function collectAnswers(): void {
   const state = readJson<InboxState>("inbox", emptyState());
   const now = new Date().toISOString();
   try {
-    for (let i = 0; i < MAX_EVENT_CALLS; i++) {
-      const answer = tools.call("inbox_events", {
-        producer: producer(),
-        since: state.cursor,
-      }) as { events: InboxEvent[]; cursor: number };
-      for (const event of answer.events) {
+    const apply = (events: InboxEvent[]) => {
+      for (const event of events) {
         const id = docOfCard(event.externalId);
         const doc = id ? loadDoc(id) : null;
         if (doc) carryOut(doc, onEvent(doc, event, now, headText(doc)));
       }
-      state.cursor = answer.cursor;
+    };
+    const save = (cursor: number) => {
+      state.cursor = cursor;
       writeJson("inbox", state);
-      if (answer.events.length === 0) break;
-    }
+    };
+    collect(producer(), state.cursor, apply, save);
     delete state.problem;
     state.syncedAt = now;
   } catch (e) {
@@ -446,15 +445,6 @@ function collectAnswers(): void {
 // The agent inbox
 // ============================================================================
 
-function inboxReachable(): boolean {
-  try {
-    return tools.list("inbox_post").some((t) => t.name === "inbox_post");
-  } catch {
-    // No "tools" in the grant, so this run cannot call tools at all.
-    return false;
-  }
-}
-
 function producer() {
   return {
     name: PRODUCER,
@@ -464,14 +454,10 @@ function producer() {
   };
 }
 
-function inboxProblem(e: unknown): string {
-  return `Inbox: ${message(e)}`.slice(0, 200);
-}
-
 function welcome(): void {
   let welcomed = true;
   try {
-    tools.call("inbox_post", { producer: producer(), card: welcomeCard() });
+    post(producer(), welcomeCard());
   } catch (e) {
     welcomed = false;
     console.warn(`document-writer: welcome card: ${e}`);
@@ -576,14 +562,11 @@ function documentWriterCaptureTool(context: HandlerContext): unknown {
 // next scheduled run. Queues one run, however many answers there are.
 function documentWriterWakeTool(context: HandlerContext): unknown {
   contractCall(context);
-  const pending = personalStorage.getItem("wake");
-  if (pending !== null && Date.parse(pending) > Date.now()) {
-    return { queued: false };
-  }
-  const runAt = new Date(Date.now() + WAKE_DELAY_MS).toISOString();
-  personalTasks.enqueue({ handler: "tendDocuments", runAt });
-  personalStorage.setItem("wake", runAt);
-  return { queued: true, runAt };
+  return queueWake({
+    key: "wake",
+    handler: "tendDocuments",
+    delayMs: WAKE_DELAY_MS,
+  });
 }
 
 // ============================================================================
@@ -1010,10 +993,7 @@ function documentWriterDelete(context: HandlerContext): HttpResponse {
   if (!doc) return fail(404, "No such document");
   if (doc.open) {
     try {
-      tools.call("inbox_withdraw", {
-        producer: producer(),
-        externalId: doc.open.externalId,
-      });
+      withdraw(producer(), doc.open.externalId);
     } catch (e) {
       console.warn(`document-writer: withdrawing ${doc.open.externalId}: ${e}`);
     }

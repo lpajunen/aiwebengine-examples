@@ -73,6 +73,12 @@ import {
   type Settings,
   type Suggestions,
 } from "./server/rules.ts";
+import {
+  collect,
+  inboxProblem,
+  inboxReachable,
+  post,
+} from "./server/inbox_kit.ts";
 
 const KEY = "backlog-groomer";
 const INSTANCE = "backlog";
@@ -87,8 +93,6 @@ const API = "https://api.github.com";
 /** Open issues read per repository: the oldest, and the most recently active. */
 const OLDEST = 30;
 const RECENT = 60;
-/** Events read per call; a run reads until it has them all. */
-const MAX_EVENT_CALLS = 10;
 /** Tries an answer gets when GitHub fails, before it is given up. */
 const MAX_TRIES = 3;
 /** Changes kept for the page and for reversing, newest first. */
@@ -540,13 +544,12 @@ function dailyRound(current: Settings, now: string): string[] {
   });
 
   const posted = proposals();
-  const post = (card: unknown) =>
-    tools.call("inbox_post", { producer: producer(), card });
+  const send = (card: unknown) => post(producer(), card);
   try {
     for (const p of stale.concat(duplicates)) {
       if (!fitsInbox(p, day)) continue;
-      if (p.kind === "stale") post(staleCard(p));
-      else if (p.kind === "duplicate") post(duplicateCard(p));
+      if (p.kind === "stale") send(staleCard(p));
+      else if (p.kind === "duplicate") send(duplicateCard(p));
       else continue;
       posted[cardIds(p, day).externalId] = p;
       writeJson("proposals", posted);
@@ -555,7 +558,7 @@ function dailyRound(current: Settings, now: string): string[] {
       kind: "label";
     })[];
     if (labelled.length > 0) {
-      post(labelsCard(day, labelled));
+      send(labelsCard(day, labelled));
       for (const p of labelled) {
         const ids = cardIds(p, day);
         posted[storeKey(ids.externalId, ids.itemId)] = p;
@@ -576,21 +579,19 @@ function dailyRound(current: Settings, now: string): string[] {
 function collectAnswers(): void {
   const state = readJson<InboxState>("inbox", emptyState());
   try {
-    for (let i = 0; i < MAX_EVENT_CALLS; i++) {
-      const answer = tools.call("inbox_events", {
-        producer: producer(),
-        since: state.cursor,
-      }) as { events: InboxEvent[]; cursor: number };
+    const enqueue = (events: InboxEvent[]) => {
       const queue = readJson<Queued[]>("queue", []);
-      for (const effect of effectsOf(answer.events)) {
+      for (const effect of effectsOf(events)) {
         queue.push({ effect, tries: 0 });
       }
-      // Saved together, so an answer is queued once.
       writeJson("queue", queue);
-      state.cursor = answer.cursor;
+    };
+    // Saved after each round's answers are queued, so an answer is queued once.
+    const save = (cursor: number) => {
+      state.cursor = cursor;
       writeJson("inbox", state);
-      if (answer.events.length === 0) break;
-    }
+    };
+    collect(producer(), state.cursor, enqueue, save);
     delete state.problem;
     state.syncedAt = new Date().toISOString();
   } catch (e) {
@@ -738,7 +739,7 @@ function apply(key: string, p: Proposal, note: string): void {
 function repropose(p: Proposal): void {
   if (p.kind !== "duplicate" || !fitsInbox(p, "")) return;
   try {
-    tools.call("inbox_post", { producer: producer(), card: duplicateCard(p) });
+    post(producer(), duplicateCard(p));
     writeJson("proposals", { ...proposals(), [cardIds(p, "").externalId]: p });
   } catch (e) {
     console.warn(`backlog-groomer: reposting ${p.repo}#${p.number}: ${e}`);
@@ -763,16 +764,6 @@ function reverse(done: Done): void {
 // The agent inbox
 // ============================================================================
 
-/** Whether an inbox is reachable from this run. */
-function inboxReachable(): boolean {
-  try {
-    return tools.list("inbox_post").some((t) => t.name === "inbox_post");
-  } catch {
-    // No "tools" in the grant, so this run cannot call tools at all.
-    return false;
-  }
-}
-
 function producer() {
   return {
     name: PRODUCER,
@@ -782,18 +773,11 @@ function producer() {
   };
 }
 
-function inboxProblem(e: unknown): string {
-  return `Inbox: ${message(e)}`.slice(0, 200);
-}
-
 /** Posts the welcome card; one that fails is tried again on the next run. */
 function welcome(current: Settings): void {
   let welcomed = true;
   try {
-    tools.call("inbox_post", {
-      producer: producer(),
-      card: welcomeCard(current),
-    });
+    post(producer(), welcomeCard(current));
   } catch (e) {
     welcomed = false;
     console.warn(`backlog-groomer: welcome card: ${e}`);

@@ -21,6 +21,8 @@
 // askedAbout says which card and stock it is about, askFacts and whyPosted
 // what the context says of them.
 
+import type { InboxEvent } from "./inbox_kit.ts";
+
 /** The name this producer posts under; the inbox's allow-list names it. */
 export const PRODUCER = "stock-monitor";
 export const MAX_WATCHLIST = 30;
@@ -108,12 +110,8 @@ export interface InboxState {
 }
 
 /** An event as `inbox_events` answers it; only the fields used here. */
-export interface InboxEvent {
-  type: string;
-  externalId: string;
-  itemId?: string;
-  optionId?: string | null;
-}
+/** What the person did on a card, as the inbox hands it over. */
+export type { InboxEvent };
 
 /** What an answer does to the person's lists and watchlist. */
 export type Effect =
@@ -425,19 +423,6 @@ function watchlistCard(
       };
     }),
   };
-}
-
-/** How long a wake waits, so answers given in a row are read in one run. */
-export const WAKE_DELAY_MS = 30_000;
-
-/**
- * When a woken watchlist reads its answers: `WAKE_DELAY_MS` from now, or null
- * while an earlier wake is still to run (`pending` is its time), which reads
- * these too.
- */
-export function wakeAt(pending: string | null, now: Date): string | null {
-  if (pending !== null && Date.parse(pending) > now.getTime()) return null;
-  return new Date(now.getTime() + WAKE_DELAY_MS).toISOString();
 }
 
 /**

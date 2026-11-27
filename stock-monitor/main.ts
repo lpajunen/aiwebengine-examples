@@ -49,7 +49,6 @@ import {
   pickCandidates,
   readQuote,
   recommend,
-  wakeAt,
   watchlistCards,
   welcomeCard,
   whyPosted,
@@ -59,6 +58,14 @@ import {
   type Quote,
   type Watched,
 } from "./server/rules.ts";
+import {
+  collect,
+  inboxProblem,
+  inboxReachable,
+  post,
+  queueWake,
+  wakeDone,
+} from "./server/inbox_kit.ts";
 
 const KEY = "stock-monitor";
 const INSTANCE = "watchlist";
@@ -76,8 +83,6 @@ const API = "https://finnhub.io/api/v1";
 /** Watched stocks whose peers are asked for each day. */
 const PEER_SOURCES = 3;
 const MAX_OFFERED = 500;
-/** Events read per call; a run reads until it has them all. */
-const MAX_EVENT_CALLS = 10;
 
 interface Settings {
   watchlist: Watched[];
@@ -727,11 +732,7 @@ function stockMonitorRemoveTool(context: HandlerContext): unknown {
 // unless one is already queued; quotes are fetched only at the scheduled time.
 function stockMonitorWakeTool(context: HandlerContext): unknown {
   contractCall(context);
-  const runAt = wakeAt(personalStorage.getItem("wake"), new Date());
-  if (runAt === null) return { queued: false };
-  personalTasks.enqueue({ handler: "readInboxAnswers", runAt });
-  personalStorage.setItem("wake", runAt);
-  return { queued: true, runAt };
+  return queueWake({ key: "wake", handler: "readInboxAnswers" });
 }
 
 function registerContractTools(): void {
@@ -883,7 +884,7 @@ function findCandidates(watchlist: Watched[], now: string): string[] {
 function readInboxAnswers(context: HandlerContext): void {
   void context;
   // Cleared first, so an answer given during this run wakes another.
-  personalStorage.removeItem("wake");
+  wakeDone("wake");
   if (inboxReachable()) collectAnswers();
 }
 
@@ -929,16 +930,6 @@ function checkWatchlist(context: HandlerContext): void {
 // The agent inbox
 // ============================================================================
 
-/** Whether an inbox is reachable from this run. */
-function inboxReachable(): boolean {
-  try {
-    return tools.list("inbox_post").some((t) => t.name === "inbox_post");
-  } catch {
-    // No "tools" in the grant, so this run cannot call tools at all.
-    return false;
-  }
-}
-
 function producer() {
   return {
     name: PRODUCER,
@@ -948,20 +939,12 @@ function producer() {
   };
 }
 
-function inboxProblem(e: unknown): string {
-  return `Inbox: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
-}
-
 /** Applies what the person answered in the inbox since the last run. */
 function collectAnswers(): void {
   const state = readJson<InboxState>("inbox", emptyState());
   try {
-    for (let call = 0; call < MAX_EVENT_CALLS; call++) {
-      const answer = tools.call("inbox_events", {
-        producer: producer(),
-        since: state.cursor,
-      }) as { events: InboxEvent[]; cursor: number };
-      for (const effect of effectsOf(answer.events)) {
+    const apply = (events: InboxEvent[]) => {
+      for (const effect of effectsOf(events)) {
         if (effect.kind === "recommend") {
           applyRecommend(effect.symbol, effect.list);
         } else if (effect.kind === "follow") {
@@ -972,11 +955,13 @@ function collectAnswers(): void {
           reconsider(effect.symbol);
         }
       }
-      // Saved each round, so answers applied are not applied again.
-      state.cursor = answer.cursor;
+    };
+    // Saved each round, so answers applied are not applied again.
+    const save = (cursor: number) => {
+      state.cursor = cursor;
       writeJson("inbox", state);
-      if (answer.events.length === 0) break;
-    }
+    };
+    collect(producer(), state.cursor, apply, save);
     delete state.problem;
     state.syncedAt = new Date().toISOString();
   } catch (e) {
@@ -989,10 +974,7 @@ function collectAnswers(): void {
 function welcome(dailyHourUtc: number): void {
   let welcomed = true;
   try {
-    tools.call("inbox_post", {
-      producer: producer(),
-      card: welcomeCard(dailyHourUtc),
-    });
+    post(producer(), welcomeCard(dailyHourUtc));
   } catch (e) {
     welcomed = false;
     console.warn(`stock-monitor: welcome card: ${e}`);
@@ -1013,13 +995,12 @@ function postToInbox(
   const before = readJson<InboxState>("inbox", emptyState());
   const day = dayOf(now);
   const current = lists();
-  const post = (card: unknown) =>
-    tools.call("inbox_post", { producer: producer(), card });
+  const send = (card: unknown) => post(producer(), card);
   try {
     const due = alertsDue(before, watchlist, quotes, now);
     for (const symbol of due.symbols) {
       const watched = watchlist.find((w) => w.symbol === symbol);
-      if (watched) post(alertCard(day, watched, quotes[symbol], current));
+      if (watched) send(alertCard(day, watched, quotes[symbol], current));
     }
     const daily = dailyPosts(
       due.state,
@@ -1029,10 +1010,10 @@ function postToInbox(
     );
     if (daily.due) {
       for (const card of watchlistCards(day, watchlist, quotes, current)) {
-        post(card);
+        send(card);
       }
       if (daily.candidates.length > 0) {
-        post(candidatesCard(day, daily.candidates));
+        send(candidatesCard(day, daily.candidates));
       }
     }
     const state: InboxState = { ...daily.state };

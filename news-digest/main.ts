@@ -50,12 +50,20 @@ import {
   needsWelcome,
   planPosts,
   searchArticles,
-  wakeAt,
   welcomeCard,
   UNTITLED,
   type InboxEvent,
   type InboxState,
 } from "./server/inbox.ts";
+import {
+  collect as collectEvents,
+  inboxProblem,
+  inboxReachable,
+  models,
+  post,
+  queueWake,
+  wakeDone,
+} from "./server/inbox_kit.ts";
 import {
   sourceTextPage,
   type SourceFrom,
@@ -1360,12 +1368,7 @@ function sendModels(bodies: object[], via: ModelVia): ModelReply[] {
   if (via) {
     let replies: ModelReply[];
     try {
-      replies = (
-        tools.call("inbox_model", {
-          producer: via,
-          requests: bodies,
-        }) as { responses: ModelReply[] }
-      ).responses;
+      replies = models(via, bodies) as ModelReply[];
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       replies = bodies.map(() => ({ error }));
@@ -1519,19 +1522,6 @@ function modelProblem(e: unknown, viaInbox: boolean): string {
 // page. A failure is recorded for the page and never fails the run.
 // ============================================================================
 
-/** Events read per call; a run reads until it has them all. */
-const MAX_EVENT_CALLS = 10;
-
-/** Whether an inbox is reachable from this run. */
-function inboxReachable(): boolean {
-  try {
-    return tools.list("inbox_post").some((t) => t.name === "inbox_post");
-  } catch {
-    // No "tools" in the grant, so this run cannot call tools at all.
-    return false;
-  }
-}
-
 function producerOf(inst: string) {
   const label = instances().find((i) => i.id === inst)?.label ?? DEFAULT_LABEL;
   return {
@@ -1546,21 +1536,13 @@ function saveInbox(inst: string, state: InboxState): void {
   personalStorage.setItem(keyOf(inst, "inbox"), JSON.stringify(state));
 }
 
-function inboxProblem(e: unknown): string {
-  return `Inbox: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
-}
-
 /** Applies what the person answered in the inbox since the last run. */
 function collectAnswers(inst: string): void {
   const state = readJson<InboxState>(inst, "inbox", emptyState());
   try {
-    for (let call = 0; call < MAX_EVENT_CALLS; call++) {
-      const answer = tools.call("inbox_events", {
-        producer: producerOf(inst),
-        since: state.cursor,
-      }) as { events: InboxEvent[]; cursor: number };
+    const apply = (events: InboxEvent[]) => {
       const articles = readJson<DigestItem[]>(inst, "articles", []);
-      for (const effect of effectsOf(answer.events, articles)) {
+      for (const effect of effectsOf(events, articles)) {
         if (effect.kind === "verdict") {
           applyVerdict(inst, effect.id, effect.verdict);
         } else if (effect.kind === "unsort") {
@@ -1571,11 +1553,13 @@ function collectAnswers(inst: string): void {
           markRead(inst, [effect.id], true);
         }
       }
-      // Saved each round, so answers applied are not applied again.
-      state.cursor = answer.cursor;
+    };
+    // Saved each round, so answers applied are not applied again.
+    const save = (cursor: number) => {
+      state.cursor = cursor;
       saveInbox(inst, state);
-      if (answer.events.length === 0) break;
-    }
+    };
+    collectEvents(producerOf(inst), state.cursor, apply, save);
     delete state.problem;
     state.syncedAt = new Date().toISOString();
   } catch (e) {
@@ -1590,10 +1574,7 @@ function welcome(inst: string): void {
   const producer = producerOf(inst);
   let welcomed = true;
   try {
-    tools.call("inbox_post", {
-      producer,
-      card: welcomeCard(inst, producer.label),
-    });
+    post(producer, welcomeCard(inst, producer.label));
   } catch (e) {
     welcomed = false;
     console.warn(`news-digest: welcome card: ${e}`);
@@ -1610,15 +1591,14 @@ function postToInbox(inst: string, added: DigestItem[], now: string): void {
     const articles = new Map(
       readJson<DigestItem[]>(inst, "articles", []).map((a) => [a.id, a]),
     );
-    const post = (card: unknown) =>
-      tools.call("inbox_post", { producer, card }) as { status: string };
+    const send = (card: unknown) => post(producer, card);
     if (plan.batchIds && plan.state.batch) {
       const listed = (ids: string[]) =>
         ids.flatMap((id) => {
           const a = articles.get(id);
           return a ? [a] : [];
         });
-      const posted = post(
+      const posted = send(
         batchCard(
           inst,
           producer.label,
@@ -1630,7 +1610,7 @@ function postToInbox(inst: string, added: DigestItem[], now: string): void {
       if (posted.status !== "open") {
         plan = planPosts(before, added, now, true);
         if (plan.batchIds && plan.state.batch) {
-          post(
+          send(
             batchCard(
               inst,
               producer.label,
@@ -1641,7 +1621,7 @@ function postToInbox(inst: string, added: DigestItem[], now: string): void {
         }
       }
     }
-    for (const a of plan.highlights) post(highlightCard(inst, a));
+    for (const a of plan.highlights) send(highlightCard(inst, a));
     delete plan.state.problem;
     plan.state.syncedAt = now;
     saveInbox(inst, plan.state);
@@ -1885,18 +1865,11 @@ function newsDigestResumeTool(context: HandlerContext): unknown {
 // one is already queued; it reads the feeds only at their scheduled time.
 function newsDigestWakeTool(context: HandlerContext): unknown {
   const inst = contractInstance(context);
-  const runAt = wakeAt(
-    personalStorage.getItem(keyOf(inst, "wake")),
-    new Date(),
-  );
-  if (runAt === null) return { queued: false };
-  personalTasks.enqueue({
+  return queueWake({
+    key: keyOf(inst, "wake"),
     handler: "readInboxAnswers",
     payload: { instance: inst },
-    runAt,
   });
-  personalStorage.setItem(keyOf(inst, "wake"), runAt);
-  return { queued: true, runAt };
 }
 
 function newsDigestRemoveTool(context: HandlerContext): unknown {
@@ -2054,7 +2027,7 @@ function readInboxAnswers(context: HandlerContext): void {
   const inst = taskInstance(context);
   if (inst === null) return;
   // Cleared first, so an answer given during this run wakes another.
-  personalStorage.removeItem(keyOf(inst, "wake"));
+  wakeDone(keyOf(inst, "wake"));
   if (inboxReachable()) collectAnswers(inst);
 }
 

@@ -17,6 +17,7 @@ import {
   askFacts,
   askedSymbol,
   candidatesCard,
+  latestHeadline,
   marketCap,
   peerSources,
   readProfile,
@@ -274,6 +275,60 @@ describe("cards", function () {
     expect(card.allowLater).toBe(true);
   });
 
+  test("an alert says what the company is and the latest news about it", function () {
+    const card = alertCard(
+      "2026-11-02",
+      { symbol: "MPWR", threshold: 5 },
+      quote(5.9),
+      lists,
+      {
+        name: "Monolithic Power Systems Inc",
+        industry: "Semiconductors",
+        country: "US",
+        marketCapM: 38_200,
+        currency: "USD",
+        url: "https://www.monolithicpower.com",
+      },
+      {
+        title: "Monolithic Power beats estimates on data-centre demand",
+        source: "Reuters",
+        url: "https://example.com/mpwr",
+      },
+    );
+    expect(card.title).toBe(
+      "MPWR · Monolithic Power Systems Inc up +5.9 % today",
+    );
+    expect(card.summary).toBe(
+      "Semiconductors · US · market cap 38.2 B USD. Past your 5 % threshold. " +
+        "Latest news: “Monolithic Power beats estimates on data-centre " +
+        "demand” (Reuters).",
+    );
+    expect(card.links.map((l) => l.label)).toEqual([
+      "Quote",
+      "Company site",
+      "The news",
+    ]);
+  });
+
+  test("the watchlist names each company and what it is", function () {
+    const [card] = watchlistCards(
+      "2026-11-02",
+      [{ symbol: "MPWR", threshold: 5 }],
+      { MPWR: quote(1) },
+      lists,
+      {
+        MPWR: {
+          name: "Monolithic Power Systems Inc",
+          industry: "Semiconductors",
+        },
+      },
+    );
+    expect(card.items[0].title).toMatch(
+      /^MPWR · Monolithic Power Systems Inc /,
+    );
+    expect(card.items[0].summary).toBe("Semiconductors.");
+  });
+
   test("stocks to look at offer Follow and Not interested", function () {
     const card = candidatesCard("2026-11-02", ["MSFT"]);
     expect(card.options.map((o) => o.id)).toEqual([FOLLOW, NOT_INTERESTED]);
@@ -448,6 +503,18 @@ describe("dailyPosts", function () {
 });
 
 describe("stocks to look at", function () {
+  test("the latest headline is the newest item with one", function () {
+    expect(
+      latestHeadline([
+        { headline: "Older", datetime: 100, source: "A", url: "https://a" },
+        { headline: "", datetime: 300 },
+        { headline: "Newest", datetime: 200, source: "B", url: "ftp://b" },
+      ]),
+    ).toEqual({ title: "Newest", source: "B" });
+    expect(latestHeadline([])).toBe(null);
+    expect(latestHeadline({ error: "x" })).toBe(null);
+  });
+
   test("each picked stock names the watched stocks it is a peer of", function () {
     expect(
       peerSources(

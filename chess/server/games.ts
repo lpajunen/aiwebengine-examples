@@ -442,6 +442,14 @@ function nextCard(game: Game, kind: "move" | "over", now: string): OpenCard {
   };
 }
 
+/**
+ * Moves for a card's Markdown: a leading "1. " would start a numbered list,
+ * so its dot is escaped.
+ */
+export function markdownMoves(text: string): string {
+  return text.replace(/^(\d+)\. /, "$1\\. ");
+}
+
 /** "11… Nf6" or "12. e4": the last move, numbered. */
 export function lastMoveText(r: Replayed): string | null {
   const i = r.sans.length - 1;
@@ -488,7 +496,7 @@ export function moveCard(game: Game, r: Replayed, nowMs: number): unknown {
   const moves = moveList(r.sans, recent - (recent % 2));
   const body = [
     `![The board${last ? ` after ${last}` : ""}](${boardOf(game, r)})`,
-    moves ? `${recent > 0 ? "… " : ""}${moves}` : "",
+    moves ? `${recent > 0 ? "… " : ""}${markdownMoves(moves)}` : "",
     "Type your move in the field and press Play: Nf3, exd5, O-O, e8=Q. Or open the board to play there.",
   ]
     .filter(Boolean)
@@ -585,7 +593,7 @@ export function overCard(game: Game, r: Replayed): unknown {
     summary: `${game.result} after ${r.pos.fullmove - (r.pos.turn === WHITE ? 1 : 0)} moves, against ${opponent(game).toLowerCase()}.${levelNote}`,
     body: {
       kind: "markdown",
-      text: `![The final position](${boardOf(game, r)})\n\n${moveList(r.sans)} ${game.result}`,
+      text: `![The final position](${boardOf(game, r)})\n\n${markdownMoves(moveList(r.sans))} ${game.result}`,
     },
     links: [
       {

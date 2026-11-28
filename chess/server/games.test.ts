@@ -101,6 +101,8 @@ describe("cards", () => {
     reply(g);
     const card: AnyCard = settle(g, T0).post[0];
     expect(card.title).toMatch(/^Your move after 1\. /);
+    // Not a numbered list in the body's Markdown.
+    expect(card.body.text).toMatch(/\n\n1\\\. /);
     expect(card.body.text).toContain("f=1");
   });
 

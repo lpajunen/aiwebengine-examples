@@ -26,6 +26,7 @@
 /schemas
 /scripts
 /SECURITY.md
+/tools
 /tsconfig.json
 /tsconfig.public.json
 /types

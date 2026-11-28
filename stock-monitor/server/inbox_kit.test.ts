@@ -9,6 +9,7 @@ import {
   collect,
   inboxProblem,
   inboxReachable,
+  notBeforeOf,
   post,
   queueWake,
   wakeAt,
@@ -179,6 +180,26 @@ describe("waking", () => {
     expect(wakeAt(new Date(NOW - 1).toISOString(), now)).not.toBe(null);
     expect(wakeAt(new Date(NOW + 1).toISOString(), now)).toBe(null);
     expect(wakeAt(null, now, 5_000)).toBe(new Date(NOW + 5_000).toISOString());
+  });
+
+  test("a held answer is read once it is released", () => {
+    const now = new Date(NOW);
+    const release = new Date(NOW + 60_000).toISOString();
+    expect(wakeAt(null, now, 30_000, release)).toBe(
+      new Date(NOW + 61_000).toISOString(),
+    );
+    // A run already queued before the release would miss it: queue another.
+    const soon = new Date(NOW + 30_000).toISOString();
+    expect(wakeAt(soon, now, 30_000, release)).toBe(
+      new Date(NOW + 61_000).toISOString(),
+    );
+    // One queued after it reads it too.
+    expect(
+      wakeAt(new Date(NOW + 90_000).toISOString(), now, 30_000, release),
+    ).toBe(null);
+    expect(notBeforeOf({ notBefore: release })).toBe(release);
+    expect(notBeforeOf({ notBefore: "soon" })).toBe(undefined);
+    expect(notBeforeOf(undefined)).toBe(undefined);
   });
 
   test("an inbox problem is short and says where it came from", () => {

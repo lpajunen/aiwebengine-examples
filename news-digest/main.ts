@@ -61,6 +61,7 @@ import {
   inboxReachable,
   models,
   post,
+  notBeforeOf,
   queueWake,
   wakeDone,
 } from "./server/inbox_kit.ts";
@@ -1869,6 +1870,7 @@ function newsDigestWakeTool(context: HandlerContext): unknown {
     key: keyOf(inst, "wake"),
     handler: "readInboxAnswers",
     payload: { instance: inst },
+    notBefore: notBeforeOf(context.args),
   });
 }
 

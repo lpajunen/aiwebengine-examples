@@ -158,17 +158,36 @@ export function models(
 }
 
 /**
- * When a woken producer runs: `delayMs` from now, or null while a run queued
- * by an earlier wake is still to come (`pending` is its time) and will read
- * these answers too.
+ * When a woken producer runs: `delayMs` from now, and not before
+ * `notBefore` (when the inbox holds a consequential answer until then); or
+ * null while a run queued by an earlier wake is still to come (`pending` is
+ * its time) and will read these answers too.
  */
 export function wakeAt(
   pending: string | null,
   now: Date,
   delayMs: number = WAKE_DELAY_MS,
+  notBefore?: string | null,
 ): string | null {
-  if (pending !== null && Date.parse(pending) > now.getTime()) return null;
-  return new Date(now.getTime() + delayMs).toISOString();
+  const held = notBefore ? Date.parse(notBefore) : NaN;
+  // The first moment a run sees these answers.
+  const earliest = Number.isNaN(held) ? now.getTime() : held + 1_000;
+  if (pending !== null) {
+    const queued = Date.parse(pending);
+    if (queued > now.getTime() && queued >= earliest) return null;
+  }
+  return new Date(Math.max(now.getTime() + delayMs, earliest)).toISOString();
+}
+
+/**
+ * The `notBefore` a wake was called with: the inbox holds an answer until
+ * then, so a run before it would not see it.
+ */
+export function notBeforeOf(args: unknown): string | undefined {
+  const value = (args as { notBefore?: unknown } | null)?.notBefore;
+  return typeof value === "string" && !Number.isNaN(Date.parse(value))
+    ? value
+    : undefined;
 }
 
 /**
@@ -183,13 +202,20 @@ export function queueWake(
     handler: string;
     payload?: Record<string, unknown>;
     delayMs?: number;
+    /** From the wake's arguments (`notBeforeOf(context.args)`). */
+    notBefore?: string;
   },
   deps?: InboxDeps,
 ): { queued: boolean; runAt?: string } {
   const storage = deps?.storage ?? personalStorage;
   const tasks = deps?.tasks ?? personalTasks;
   const now = new Date(deps?.now ? deps.now() : Date.now());
-  const runAt = wakeAt(storage.getItem(options.key), now, options.delayMs);
+  const runAt = wakeAt(
+    storage.getItem(options.key),
+    now,
+    options.delayMs,
+    options.notBefore,
+  );
   if (runAt === null) return { queued: false };
   tasks.enqueue({
     handler: options.handler,

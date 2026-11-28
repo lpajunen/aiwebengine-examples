@@ -58,6 +58,7 @@ import {
   inboxReachable,
   model,
   post,
+  notBeforeOf,
   queueWake,
   wakeDone,
   withdraw,
@@ -566,6 +567,7 @@ function documentWriterWakeTool(context: HandlerContext): unknown {
     key: "wake",
     handler: "tendDocuments",
     delayMs: WAKE_DELAY_MS,
+    notBefore: notBeforeOf(context.args),
   });
 }
 

@@ -68,6 +68,7 @@ import {
   inboxProblem,
   inboxReachable,
   post,
+  notBeforeOf,
   queueWake,
   wakeDone,
 } from "./server/inbox_kit.ts";
@@ -742,7 +743,11 @@ function stockMonitorRemoveTool(context: HandlerContext): unknown {
 // unless one is already queued; quotes are fetched only at the scheduled time.
 function stockMonitorWakeTool(context: HandlerContext): unknown {
   contractCall(context);
-  return queueWake({ key: "wake", handler: "readInboxAnswers" });
+  return queueWake({
+    key: "wake",
+    handler: "readInboxAnswers",
+    notBefore: notBeforeOf(context.args),
+  });
 }
 
 function registerContractTools(): void {

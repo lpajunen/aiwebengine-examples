@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chess</title>
+    <link rel="stylesheet" href="/engine/engine.css" />
+    <script src="/engine/engine.js" defer></script>
+    <style>
+      /* The engine's stylesheet supplies tokens, controls, buttons and the
+         menu; this is only what the page adds, against the same --aw-*
+         properties so it follows the engine's look and dark mode. */
+      body {
+        padding: var(--aw-space-5) var(--aw-space-4) 4rem;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      h1 {
+        padding-right: 3rem;
+        margin-bottom: var(--aw-space-1);
+      }
+      .sub {
+        color: var(--aw-color-muted);
+        margin: 0 0 var(--aw-space-5);
+      }
+      section {
+        background: var(--aw-color-surface);
+        border: 1px solid var(--aw-color-border);
+        border-radius: var(--aw-radius-lg);
+        box-shadow: var(--aw-shadow);
+        padding: var(--aw-space-4);
+        margin-bottom: var(--aw-space-4);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--aw-color-muted);
+      }
+      .row {
+        display: flex;
+        gap: var(--aw-space-2);
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: var(--aw-space-3);
+      }
+      .status {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+      .status.error {
+        color: var(--aw-color-danger);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .list li {
+        border-top: 1px solid var(--aw-color-border);
+        padding: var(--aw-space-2) 0;
+        display: flex;
+        justify-content: space-between;
+        gap: var(--aw-space-2);
+        align-items: center;
+      }
+      .list li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .when {
+        color: var(--aw-color-muted);
+        font-size: 0.85rem;
+      }
+      .empty {
+        color: var(--aw-color-muted);
+      }
+      .play {
+        display: grid;
+        grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+        gap: var(--aw-space-4);
+        align-items: start;
+      }
+      @media (max-width: 720px) {
+        .play {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .board {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 4px;
+        overflow: hidden;
+        user-select: none;
+      }
+      .board img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .grid {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
+      }
+      .grid button {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        border-radius: 0;
+        min-height: 0;
+        cursor: default;
+        position: relative;
+      }
+      .grid button.mine {
+        cursor: pointer;
+      }
+      .grid button.selected {
+        background: rgba(40, 120, 220, 0.35);
+      }
+      .grid button.target {
+        cursor: pointer;
+      }
+      .grid button.target::after {
+        content: "";
+        position: absolute;
+        inset: 38%;
+        border-radius: 50%;
+        background: rgba(20, 60, 140, 0.45);
+      }
+      .grid button:focus-visible {
+        outline: 3px solid var(--aw-color-link, #2a6fdb);
+        outline-offset: -3px;
+      }
+      .moves {
+        font-family: var(--aw-font-mono);
+        font-size: 0.85rem;
+        line-height: 1.6;
+        max-height: 14rem;
+        overflow: auto;
+        overflow-wrap: anywhere;
+      }
+      .turn {
+        font-weight: 600;
+        margin: 0 0 var(--aw-space-2);
+      }
+      #promote[hidden] {
+        display: none;
+      }
+      button.link {
+        background: none;
+        border: 0;
+        padding: 0;
+        color: var(--aw-color-link, inherit);
+        text-decoration: underline;
+        cursor: pointer;
+        font: inherit;
+      }
+      #move-text {
+        max-width: 9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <aw-account-menu>
+      <a id="grant-link" href="#" hidden>Permissions</a>
+    </aw-account-menu>
+    <main>
+      <h1>Chess</h1>
+      <p class="sub">
+        Correspondence chess against the agent. When it is your move, a card in
+        your agent inbox shows the board; type your move there, or play here.
+        The agent gets stronger as you win.
+      </p>
+
+      <p id="notice" class="aw-notice aw-notice--warn" hidden></p>
+
+      <div id="list-view" hidden>
+        <section>
+          <h2>Your games</h2>
+          <ul id="games" class="list"></ul>
+        </section>
+        <section>
+          <h2>New game</h2>
+          <div class="row">
+            <button type="button" class="aw-button" data-new="w">
+              Play White
+            </button>
+            <button type="button" class="aw-button" data-new="b">
+              Play Black
+            </button>
+            <button type="button" class="aw-button" data-new="">Either</button>
+          </div>
+          <div class="row">
+            <label for="level">Opponent strength</label>
+            <select id="level">
+              <option value="1">1: a beginner</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5: its best</option>
+            </select>
+            <span class="when">Moves up when you win, down when you lose.</span>
+          </div>
+          <p id="new-status" class="status" role="status"></p>
+        </section>
+      </div>
+
+      <div id="game-view" hidden>
+        <p><button type="button" id="back" class="link">← All games</button></p>
+        <section>
+          <div class="play">
+            <div>
+              <div class="board">
+                <img id="board-img" alt="" />
+                <div id="grid" class="grid"></div>
+              </div>
+              <div id="promote" class="row" hidden>
+                <span>Promote to</span>
+                <button type="button" class="aw-button" data-promo="q">Queen</button>
+                <button type="button" class="aw-button" data-promo="r">Rook</button>
+                <button type="button" class="aw-button" data-promo="b">Bishop</button>
+                <button type="button" class="aw-button" data-promo="n">Knight</button>
+              </div>
+            </div>
+            <div>
+              <p id="turn" class="turn" role="status" aria-live="polite"></p>
+              <p id="game-note" class="status"></p>
+              <form id="move-form" class="row">
+                <label for="move-text">Move</label>
+                <input id="move-text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nf3" />
+                <button type="submit" class="aw-button aw-button--primary">Play</button>
+              </form>
+              <div class="row">
+                <button type="button" id="draw" class="aw-button">Offer a draw</button>
+                <button type="button" id="resign" class="aw-button aw-button--danger">Resign</button>
+                <button type="button" id="delete" class="aw-button" hidden>Delete game</button>
+              </div>
+              <p id="game-status" class="status" role="status"></p>
+              <h2 style="margin-top: var(--aw-space-4)">Moves</h2>
+              <p id="moves" class="moves"></p>
+              <p><a id="pgn" href="#" download="game.pgn">Download the PGN</a></p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script src="/chess/app.js"></script>
+  </body>
+</html>

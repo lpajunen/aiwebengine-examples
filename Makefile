@@ -21,7 +21,7 @@ include scripts/tooling.mk
 # producer's server/ (scripts cannot import from one another). Change the
 # source, then sync; verify fails on a copy that drifted.
 INBOX_KIT_FILES = inbox_kit.ts inbox_kit.test.ts
-INBOX_PRODUCERS = news-digest stock-monitor backlog-groomer document-writer
+INBOX_PRODUCERS = news-digest stock-monitor backlog-groomer document-writer chess
 
 sync-inbox-kit:
 	@for d in $(INBOX_PRODUCERS); do \

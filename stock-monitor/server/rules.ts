@@ -37,6 +37,7 @@ export const SELL = "sell";
 export const HOLD = "hold";
 export const FOLLOW = "follow";
 export const NOT_INTERESTED = "not_interested";
+export const REMOVE = "remove";
 
 /** Offered beside the inbox's Ask field. */
 const SUGGESTED = ["What does the company do?", "Any recent news?"];
@@ -107,6 +108,8 @@ export interface InboxState {
   syncedAt?: string;
   /** Whether the welcome card was posted; false while it is still owed. */
   welcomed?: boolean;
+  /** What the Recommended lists last posted showed: `listsSignature`. */
+  listsPosted?: string;
 }
 
 /** What the person did on a card, as the inbox hands it over. */
@@ -553,8 +556,9 @@ function watchlistCard(
     topic: key ? `${PRODUCER}:watchlist:${key}` : `${PRODUCER}:watchlist`,
     title: `${group ?? "Watchlist"}, ${day}`,
     summary:
-      "Recommend buy or sell puts a stock on your Recommended list on the " +
-      "watchlist's page; Hold takes it off. Nothing is traded.",
+      "Recommend buy or sell puts a stock on your Recommended list, kept " +
+      "with this agent in your inbox and on the watchlist's page; Hold " +
+      "takes it off. Nothing is traded.",
     options: RECOMMEND_OPTIONS,
     suggestedQuestions: SUGGESTED,
     allowLater: true,
@@ -693,25 +697,111 @@ function candidateItem(symbol: string, info: CandidateInfo | undefined) {
   };
 }
 
-/** The stock a card or item is about, and which kind of card it is. */
-function subject(
-  e: InboxEvent,
-): { card: "w" | "a" | "c"; symbol: string } | null {
-  const kind = e.externalId.slice(0, 2);
-  // "a-2026-11-01-ACME"
-  const symbol = kind === "a-" ? e.externalId.slice(2 + 11) : (e.itemId ?? "");
-  if (!isSymbol(symbol)) return null;
-  if (kind === "w-" || kind === "a-" || kind === "c-") {
-    return { card: kind[0] as "w" | "a" | "c", symbol };
+/**
+ * The kinds of card the watchlist posts: the day's watchlist, an alert, the
+ * stocks to look at, and a Recommended list.
+ */
+export type CardKind = "w" | "a" | "c" | "l";
+
+/**
+ * What the Recommended lists show, for posting them again only when it
+ * changes: which stocks are on them, and the day (so prices move daily).
+ */
+export function listsSignature(lists: Lists, day: string): string {
+  return [
+    day,
+    lists.buy.map((r) => r.symbol).join(","),
+    lists.sell.map((r) => r.symbol).join(","),
+  ].join("|");
+}
+
+/**
+ * The Recommended buy and sell lists as standing cards: on the agent's own
+ * page in the inbox, never expiring, each stock with today's price and how
+ * it moved since it was put on the list. Remove takes one off.
+ */
+export function listCards(
+  lists: Lists,
+  quotes: Record<string, Quote>,
+  companies: Record<string, Company | null> = {},
+) {
+  return [
+    listCard(BUY, lists.buy, quotes, companies),
+    listCard(SELL, lists.sell, quotes, companies),
+  ];
+}
+
+function listCard(
+  which: "buy" | "sell",
+  entries: Recommended[],
+  quotes: Record<string, Quote>,
+  companies: Record<string, Company | null>,
+) {
+  const name = which === BUY ? "Recommended buy" : "Recommended sell";
+  const card: Record<string, unknown> = {
+    externalId: `l-${which}`,
+    title: name,
+    standing: true,
+    summary:
+      entries.length > 0
+        ? `Stocks you marked as ${which === BUY ? "worth buying" : "worth selling"}, ` +
+          "your own record. Remove takes one off. Nothing is traded."
+        : `Nothing on it yet. Recommend ${which} on the day's watchlist or ` +
+          "an alert puts a stock here.",
+    items: entries.map((r) =>
+      listItem(r, quotes[r.symbol], companies[r.symbol]),
+    ),
+  };
+  if (entries.length > 0) {
+    card.options = [
+      { id: REMOVE, label: "Remove", style: "negative", weight: "feedback" },
+    ];
+    card.suggestedQuestions = SUGGESTED;
+  } else {
+    card.level = "know";
   }
-  return null;
+  return card;
+}
+
+function listItem(
+  r: Recommended,
+  quote: Quote | undefined,
+  company: Company | null | undefined,
+) {
+  const about = companyLine(company);
+  const since =
+    quote && r.price
+      ? `, at ${money(r.price)}; ${signed(((quote.price - r.price) / r.price) * 100)} since`
+      : "";
+  return {
+    id: r.symbol,
+    title: quote
+      ? `${named(r.symbol, company)} ${money(quote.price)} (${signed(quote.changePct)} today)`
+      : named(r.symbol, company),
+    summary: [
+      about ? `${about}.` : "",
+      `On the list since ${dayOf(r.at)}${since}.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    links: [quoteLink(r.symbol)],
+  };
+}
+
+/** The stock a card or item is about, and which kind of card it is. */
+function subject(e: InboxEvent): { card: CardKind; symbol: string } | null {
+  const card = cardKind(e.externalId);
+  // "a-2026-11-01-ACME"
+  const symbol = card === "a" ? e.externalId.slice(2 + 11) : (e.itemId ?? "");
+  if (!card || !isSymbol(symbol)) return null;
+  return { card, symbol };
 }
 
 /** Which kind of card an externalId names, if this producer posted it. */
-export function cardKind(externalId: string): "w" | "a" | "c" | null {
+export function cardKind(externalId: string): CardKind | null {
   const kind = externalId.slice(0, 2);
-  return kind === "w-" || kind === "a-" || kind === "c-"
-    ? (kind[0] as "w" | "a" | "c")
+  return kind === "w-" || kind === "a-" || kind === "c-" || kind === "l-"
+    ? (kind[0] as CardKind)
     : null;
 }
 
@@ -720,7 +810,7 @@ export function cardKind(externalId: string): "w" | "a" | "c" | null {
  * model reads as the card's reason.
  */
 export function whyPosted(
-  kind: "w" | "a" | "c",
+  kind: CardKind,
   watched: Watched | null,
   quote: Quote | null,
   candidate?: CandidateInfo,
@@ -730,6 +820,13 @@ export function whyPosted(
       `${watched.symbol} moved ${signed(quote.changePct)} today, past the ` +
       `person's own alert threshold of ${watched.threshold} %. Alerts are ` +
       "checked every 15 minutes; nothing is traded."
+    );
+  }
+  if (kind === "l") {
+    return (
+      "The person's Recommended buy or sell list: their own record of " +
+      "stocks they would buy or sell, kept by this agent and shown with " +
+      "today's price. Nothing is traded."
     );
   }
   if (kind === "c") {
@@ -806,7 +903,15 @@ export function effectsOf(events: InboxEvent[]): Effect[] {
     if (!about) continue;
     const { card, symbol } = about;
     const answered = e.type === "decided" || e.type === "changed";
-    if (card === "c") {
+    if (card === "l") {
+      // Remove takes it off; clearing that puts it back on the same list.
+      const list = e.externalId === "l-sell" ? SELL : BUY;
+      if (answered && e.optionId === REMOVE) {
+        effects.push({ kind: "recommend", symbol, list: null });
+      } else if (e.type === "cleared") {
+        effects.push({ kind: "recommend", symbol, list });
+      }
+    } else if (card === "c") {
       if (answered && e.optionId === FOLLOW) {
         effects.push({ kind: "follow", symbol });
       } else if (answered && e.optionId === NOT_INTERESTED) {

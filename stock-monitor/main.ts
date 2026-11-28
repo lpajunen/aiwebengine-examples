@@ -47,6 +47,8 @@ import {
   formatWatchlist,
   groupsOf,
   isSymbol,
+  listCards,
+  listsSignature,
   needsWelcome,
   parseWatchlist,
   pickCandidates,
@@ -503,7 +505,11 @@ function stockMonitorContextTool(context: HandlerContext): unknown {
     const stocks =
       kind === "c"
         ? readJson<string[]>("candidates", [])
-        : watchlist.map((w) => w.symbol);
+        : kind === "l"
+          ? (externalId === "l-sell" ? current.sell : current.buy).map(
+              (r) => r.symbol,
+            )
+          : watchlist.map((w) => w.symbol);
     return {
       why: whyPosted(kind, null, null),
       documents: [
@@ -996,7 +1002,14 @@ function readInboxAnswers(context: HandlerContext): void {
   void context;
   // Cleared first, so an answer given during this run wakes another.
   wakeDone("wake");
-  if (inboxReachable()) collectAnswers();
+  if (inboxReachable()) {
+    collectAnswers();
+    // A stock removed shows as gone at once, not at the next quote check.
+    postLists(
+      readJson<Record<string, Quote>>("quotes", {}),
+      new Date().toISOString(),
+    );
+  }
 }
 
 function checkWatchlist(context: HandlerContext): void {
@@ -1034,7 +1047,10 @@ function checkWatchlist(context: HandlerContext): void {
       ? { problem: problems.slice(0, 5).join("; ") }
       : {}),
   });
-  if (inbox) postToInbox(watchlist, quotes, current.dailyHourUtc, now);
+  if (inbox) {
+    postToInbox(watchlist, quotes, current.dailyHourUtc, now);
+    postLists(quotes, now);
+  }
 }
 
 // ============================================================================
@@ -1163,6 +1179,32 @@ function postToInbox(
   } catch (e) {
     writeJson("inbox", { ...before, problem: inboxProblem(e) });
   }
+}
+
+/**
+ * Posts the Recommended lists as standing cards when what they show has
+ * changed: a stock put on or taken off, or a new day's prices.
+ */
+function postLists(quotes: Record<string, Quote>, now: string): void {
+  const current = lists();
+  const signature = listsSignature(current, dayOf(now));
+  if (readJson<InboxState>("inbox", emptyState()).listsPosted === signature) {
+    return;
+  }
+  let problem: string | undefined;
+  try {
+    const symbols = current.buy.concat(current.sell).map((r) => r.symbol);
+    const companies = companiesFor(symbols, now);
+    for (const card of listCards(current, quotes, companies)) {
+      post(producer(), card);
+    }
+  } catch (e) {
+    problem = inboxProblem(e);
+  }
+  const state = readJson<InboxState>("inbox", emptyState());
+  if (problem) state.problem = problem;
+  else state.listsPosted = signature;
+  writeJson("inbox", state);
 }
 
 function init(): void {

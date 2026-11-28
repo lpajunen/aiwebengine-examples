@@ -11,6 +11,7 @@ import {
   HOLD,
   MAX_WATCHLIST,
   NOT_INTERESTED,
+  REMOVE,
   SELL,
   alertCard,
   alertsDue,
@@ -28,6 +29,8 @@ import {
   emptyState,
   formatWatchlist,
   groupsOf,
+  listCards,
+  listsSignature,
   needsWelcome,
   parseWatchlist,
   pickCandidates,
@@ -607,5 +610,67 @@ describe("context for a question", function () {
       { label: "Watched", value: "No" },
       { label: "The person's lists", value: "On neither Recommended list." },
     ]);
+  });
+});
+
+describe("the Recommended lists", function () {
+  const LISTS = {
+    buy: [{ symbol: "AAPL", at: NOW, price: 80 }],
+    sell: [],
+  };
+
+  test("are standing cards, each stock with its price and move since", function () {
+    const [buy, sell] = listCards(
+      LISTS,
+      { AAPL: quote(1.5) },
+      {
+        AAPL: {
+          name: "Apple Inc",
+          industry: "Technology",
+          country: "US",
+        },
+      },
+    ) as any[];
+    expect(buy.externalId).toBe("l-buy");
+    expect(buy.standing).toBe(true);
+    expect(buy.options.map((o: any) => o.id)).toEqual([REMOVE]);
+    expect(buy.items[0].id).toBe("AAPL");
+    expect(buy.items[0].title).toContain("Apple Inc");
+    expect(buy.items[0].summary).toContain("at 80.00; +25.0 % since");
+    // An empty list only says how a stock gets there.
+    expect(sell.externalId).toBe("l-sell");
+    expect(sell.items).toEqual([]);
+    expect(sell.options).toBe(undefined);
+    expect(sell.level).toBe("know");
+  });
+
+  test("Remove takes a stock off, and clearing it puts it back on that list", function () {
+    expect(
+      effectsOf([
+        {
+          type: "decided",
+          externalId: "l-buy",
+          itemId: "AAPL",
+          optionId: REMOVE,
+        },
+        { type: "cleared", externalId: "l-sell", itemId: "NOK" },
+        { type: "opened", externalId: "l-buy", itemId: "AAPL" },
+      ]),
+    ).toEqual([
+      { kind: "recommend", symbol: "AAPL", list: null },
+      { kind: "recommend", symbol: "NOK", list: "sell" },
+    ]);
+    expect(cardKind("l-buy")).toBe("l");
+    expect(askedSymbol("l-sell", "NOK")).toBe("NOK");
+    expect(whyPosted("l", null, null)).toContain("Nothing is traded");
+  });
+
+  test("are posted again when a stock comes or goes, or on a new day", function () {
+    const today = listsSignature(LISTS, "2026-11-02");
+    expect(listsSignature(LISTS, "2026-11-02")).toBe(today);
+    expect(listsSignature(LISTS, "2026-11-03")).not.toBe(today);
+    expect(listsSignature({ buy: [], sell: LISTS.buy }, "2026-11-02")).not.toBe(
+      today,
+    );
   });
 });
